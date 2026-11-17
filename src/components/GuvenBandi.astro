@@ -1,0 +1,28 @@
+---
+import Ikon from './Ikon.astro';
+import type { IkonAdi } from '../lib/sema';
+import { formatTL } from '../lib/fiyat';
+const k = Astro.locals.katalog;
+const s = k.site;
+const maddeler: { ikon: IkonAdi; baslik: string; metin: string; href?: string }[] = [
+  { ikon: 'kalkan', baslik: 'Orijinal ürün', metin: 'Faturalı gönderim' },
+  { ikon: 'belge', baslik: '2 yıl garanti', metin: 'Üretici garantisi' },
+  { ikon: 'kargo', baslik: 'Kargo bedava', metin: `${formatTL(s.kargo.ucretsizEsik)} üzeri` },
+  { ikon: 'saat', baslik: 'Aynı gün kargo', metin: `${s.kargo.kesimSaati}:00'e kadar` },
+  { ikon: 'kilit', baslik: 'Güvenli ödeme', metin: '3D Secure' },
+  { ikon: 'whatsapp', baslik: 'WhatsApp destek', metin: s.telefonGorunen, href: k.whatsapp('Merhaba, bir sorum var.') },
+];
+---
+<section class="guven" aria-label="Alışveriş güvenceleri">
+  <ul class="container guven__liste">
+    {maddeler.map((m) => (
+      <li>
+        {m.href ? (
+          <a href={m.href} target="_blank" rel="noopener" class="guven__wa"><Ikon ad={m.ikon} boyut={24} /><span><strong>{m.baslik}</strong><span>{m.metin}</span></span></a>
+        ) : (
+          <><Ikon ad={m.ikon} boyut={24} /><span><strong>{m.baslik}</strong><span>{m.metin}</span></span></>
+        )}
+      </li>
+    ))}
+  </ul>
+</section>

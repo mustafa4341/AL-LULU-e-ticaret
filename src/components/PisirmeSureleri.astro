@@ -1,0 +1,35 @@
+---
+/* "Bugün ne pişirmek istersiniz?" — ilk 4 yemek vurgulu; karta dokununca kademe, miktar ve not açılır.
+   Yalnızca üreticinin resmi tablosundaki süreler (panelden girilir; sırayı panelde belirlersiniz). */
+import Ikon from './Ikon.astro';
+import type { Urun } from '../lib/sema';
+interface Props { urun: Urun }
+const { urun } = Astro.props;
+---
+{urun.pisirme.length > 0 && (
+  <section class="pisirme-panel" aria-labelledby="pisirme-baslik" data-reveal>
+    <div class="pisirme-panel__bas">
+      <span class="pisirme-panel__ikon"><Ikon ad="saat" boyut={20} /></span>
+      <div>
+        <h2 id="pisirme-baslik">Bugün ne pişirmek istersiniz?</h2>
+        <p>Örnek pişirme süreleri · ayrıntı için karta dokunun</p>
+      </div>
+    </div>
+    <ul class="pisirme-ray">
+      {urun.pisirme.map((p, i) => (
+        <li>
+          <button type="button" class:list={['pisirme-kucuk', { 'is-vurgu': i < 4 }]} data-pisirme-kart aria-expanded="false">
+            <span class="pisirme-kucuk__sure">{p.sure}</span>
+            <span class="pisirme-kucuk__yemek">{p.yemek}</span>
+            <span class="pisirme-kucuk__detay">
+              {p.kademe && <span>{p.kademe}. kademe{p.kademe === '1' ? ' (hassas)' : ' (hızlı)'}</span>}
+              {p.miktar && <span>Yaklaşık {p.miktar} için</span>}
+              <span>Süre sarı halka görününce başlar</span>
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+    <p class="pisirme-panel__not">{urun.pisirmeNotu ?? ''} Basınca ulaşma ve basınç boşaltma süreleri bu sürelere dahil değildir.</p>
+  </section>
+)}

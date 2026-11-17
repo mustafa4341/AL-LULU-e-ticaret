@@ -1,0 +1,61 @@
+---
+/* Kategori paneli — mobilde alt menüdeki "Kategoriler" ile açılır (alttan kayan panel). */
+import Ikon from './Ikon.astro';
+import { formatTL } from '../lib/fiyat';
+
+const k = Astro.locals.katalog;
+const kategoriler = k.gorunurKategoriler({ menu: true });
+const amiral = k.urunBul(k.anaSayfa.hero.urunId);
+const amiralGorsel = amiral ? k.anaGorsel(amiral) : undefined;
+const setSayisi = k.tumSetler().length;
+---
+<aside class="cekmece cekmece--alt" id="kategori-paneli" role="dialog" aria-modal="true" aria-labelledby="kategori-baslik" data-cekmece tabindex="-1" hidden>
+  <div class="cekmece__tutamac" aria-hidden="true"></div>
+  <div class="cekmece__bas">
+    <h2 id="kategori-baslik" class="cekmece__baslik">Kategoriler</h2>
+    <button class="icon-btn" type="button" data-cekmece-kapat aria-label="Kapat"><Ikon ad="kapat" boyut={22} /></button>
+  </div>
+  <div class="cekmece__govde">
+    {amiral && (
+      <a class="menu-amiral" href={`/urun/${amiral.id}`}>
+        {amiralGorsel && <img src={amiralGorsel.src} alt="" width="72" height="96" loading="lazy" />}
+        <span>
+          <span class="menu-amiral__ust">Öne çıkan</span>
+          <span class="menu-amiral__ad">{amiral.marka} {amiral.kisaAd}</span>
+          <span class="menu-amiral__fiyat">{formatTL(amiral.fiyat)}</span>
+        </span>
+        <Ikon ad="sag" boyut={18} />
+      </a>
+    )}
+    <ul class="menu-liste">
+      {kategoriler.map((kat) => {
+        const n = k.kategoriUrunleri(kat.id).length;
+        return (
+          <li>
+            <a href={`/kategori/${kat.id}`}>
+              <span class="menu-ikon"><Ikon ad={kat.ikon} boyut={20} /></span>
+              <span class="menu-ad">{kat.ad}</span>
+              {n > 0 ? <span class="menu-sayi">{n}</span> : <span class="menu-yakinda">Yakında</span>}
+              <Ikon ad="sag" boyut={16} class="menu-ok" />
+            </a>
+          </li>
+        );
+      })}
+      <li>
+        <a href="/urunler"><span class="menu-ikon"><Ikon ad="grid" boyut={20} /></span><span class="menu-ad">Tüm ürünler</span><Ikon ad="sag" boyut={16} class="menu-ok" /></a>
+      </li>
+    </ul>
+    {setSayisi > 0 && (
+      <a class="menu-firsat" href="/setler">
+        <Ikon ad="etiket" boyut={20} />
+        <span><strong>Setler & Fırsatlar</strong><br /><span class="small">Birlikte alın, set fiyatıyla kazanın</span></span>
+        <Ikon ad="sag" boyut={16} />
+      </a>
+    )}
+    <div class="menu-yardim">
+      <a href="/siparis-takip"><Ikon ad="kargo" boyut={18} />Sipariş takip</a>
+      <a href="/#sss"><Ikon ad="belge" boyut={18} />Sık sorulanlar</a>
+      <a href={`mailto:${k.site.eposta}`}><Ikon ad="eposta" boyut={18} />{k.site.eposta}</a>
+    </div>
+  </div>
+</aside>

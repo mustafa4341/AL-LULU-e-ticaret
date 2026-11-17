@@ -1,0 +1,327 @@
+/* Al Lulu Home — arayüz davranışları: çekmeceler, galeri, kargo sayacı, alt çubuk, animasyonlar */
+import { katalog } from './katalog';
+import { track } from './analitik';
+
+const $ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector<T>(s);
+const $$ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => Array.from(r.querySelectorAll<T>(s));
+
+export const azHareket = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if (/[?&]dev\b/.test(location.search)) document.documentElement.classList.add('dev');
+
+/* ---------------- Toast ---------------- */
+let toastZaman: number | undefined;
+export function toast(mesaj: string, baglanti?: { metin: string; href?: string; cekmece?: string }): void {
+  const el = $('[data-toast]');
+  if (!el) return;
+  el.innerHTML = '';
+  const s = document.createElement('span');
+  s.textContent = mesaj;
+  el.appendChild(s);
+  if (baglanti) {
+    const a = document.createElement(baglanti.href ? 'a' : 'button');
+    a.className = 'toast__link';
+    a.textContent = baglanti.metin;
+    if (baglanti.href) (a as HTMLAnchorElement).href = baglanti.href;
+    else { (a as HTMLButtonElement).type = 'button'; a.setAttribute('data-cekmece-ac', baglanti.cekmece ?? 'sepet'); }
+    el.appendChild(a);
+  }
+  el.classList.add('is-visible');
+  window.clearTimeout(toastZaman);
+  toastZaman = window.setTimeout(() => el.classList.remove('is-visible'), 3200);
+}
+
+/* ---------------- Sepete uçuş animasyonu ---------------- */
+export function sepeteUcur(kaynak: Element | null): void {
+  if (azHareket || !kaynak) return;
+  const hedefler = $$('[data-sepet-hedef]').filter((h) => h.offsetParent !== null);
+  const hedef = hedefler[hedefler.length - 1];
+  const img = kaynak.matches('img') ? (kaynak as HTMLImageElement) : kaynak.querySelector<HTMLImageElement>('img');
+  if (!hedef || !img) return;
+  const a = img.getBoundingClientRect(), b = hedef.getBoundingClientRect();
+  if (!a.width) return;
+  const kopya = img.cloneNode() as HTMLImageElement;
+  kopya.className = 'ucan-gorsel';
+  Object.assign(kopya.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
+  document.body.appendChild(kopya);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+  const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  const anim = kopya.animate(
+    [
+      { transform: 'translate(0,0) scale(1)', opacity: 1 },
+      { transform: `translate(${dx * 0.55}px, ${dy * 0.35 - 60}px) scale(.55)`, opacity: 0.95, offset: 0.55 },
+      { transform: `translate(${dx}px, ${dy}px) scale(.08)`, opacity: 0.4 },
+    ],
+    { duration: 720, easing: 'cubic-bezier(.5,0,.3,1)' },
+  );
+  anim.onfinish = () => {
+    kopya.remove();
+    hedef.classList.remove('is-salla');
+    void hedef.offsetWidth;
+    hedef.classList.add('is-salla');
+  };
+}
+
+/* ---------------- Çekmeceler (kategori paneli + sepet) ---------------- */
+const perde = $('[data-perde]');
+let acik: HTMLElement | null = null;
+let oncekiOdak: HTMLElement | null = null;
+
+const odaklanabilir = (kok: HTMLElement) =>
+  $$<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])', kok).filter((e) => e.offsetParent !== null);
+
+export function cekmeceAc(id: string, odak?: HTMLElement | null): void {
+  const el = document.getElementById(id);
+  if (!el || !perde) return;
+  if (acik === el) return;
+  if (acik) cekmeceKapat(true);
+  oncekiOdak = document.activeElement as HTMLElement;
+  el.hidden = false;
+  perde.hidden = false;
+  void el.offsetWidth;
+  el.classList.add('is-open');
+  perde.classList.add('is-open');
+  document.documentElement.classList.add('kilitli');
+  $$(`[data-cekmece-ac="${id}"]`).forEach((b) => b.setAttribute('aria-expanded', 'true'));
+  acik = el;
+  const hedef: HTMLElement = odak ?? $<HTMLElement>('[data-cekmece-kapat]', el) ?? el;
+  hedef.focus({ preventScroll: true });
+  el.dispatchEvent(new CustomEvent('cekmece:acildi'));
+}
+
+export function cekmeceKapat(hemen = false): void {
+  const el = acik;
+  if (!el || !perde) return;
+  acik = null;
+  el.classList.remove('is-open');
+  perde.classList.remove('is-open');
+  document.documentElement.classList.remove('kilitli');
+  $$(`[data-cekmece-ac="${el.id}"]`).forEach((b) => b.setAttribute('aria-expanded', 'false'));
+  const bitir = () => { if (acik !== el) { el.hidden = true; if (!acik) perde.hidden = true; } };
+  if (hemen || azHareket) bitir(); else window.setTimeout(bitir, 300);
+  if (!hemen) oncekiOdak?.focus?.({ preventScroll: true });
+}
+
+document.addEventListener('click', (e) => {
+  const t = (e.target as Element).closest<HTMLElement>('[data-cekmece-ac], [data-cekmece-kapat], [data-perde], .cekmece a[href]');
+  if (!t) return;
+  if (t.hasAttribute('data-cekmece-ac')) {
+    const id = t.getAttribute('data-cekmece-ac')!;
+    if (acik?.id === id) cekmeceKapat(); else cekmeceAc(id);
+    if (id === 'kategori-paneli') track('menu_open');
+  } else if (t.hasAttribute('data-cekmece-kapat') || t.hasAttribute('data-perde')) {
+    cekmeceKapat();
+  } else {
+    const url = new URL((t as HTMLAnchorElement).href, location.href);
+    if (url.pathname === location.pathname && url.hash) cekmeceKapat(true);
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (!acik) return;
+  if (e.key === 'Escape') { cekmeceKapat(); return; }
+  if (e.key === 'Tab') {
+    const f = odaklanabilir(acik);
+    if (!f.length) return;
+    const ilk = f[0]!, son = f[f.length - 1]!;
+    if (e.shiftKey && document.activeElement === ilk) { e.preventDefault(); son.focus(); }
+    else if (!e.shiftKey && document.activeElement === son) { e.preventDefault(); ilk.focus(); }
+  }
+});
+
+// Mobilde alttan açılan panelleri aşağı kaydırarak kapat
+$$('.cekmece').forEach((el) => {
+  let y0 = 0, d = 0, aktif = false;
+  $$('.cekmece__tutamac, .cekmece__bas', el).forEach((z) => {
+    z.addEventListener('touchstart', (e) => { y0 = e.touches[0]!.clientY; d = 0; aktif = window.innerWidth < 700; if (aktif) el.style.transition = 'none'; }, { passive: true });
+    z.addEventListener('touchmove', (e) => { if (!aktif) return; d = Math.max(0, e.touches[0]!.clientY - y0); el.style.transform = `translateY(${d}px)`; }, { passive: true });
+    z.addEventListener('touchend', () => { if (!aktif) return; aktif = false; el.style.transition = ''; el.style.transform = ''; if (d > 80) cekmeceKapat(); });
+  });
+});
+
+/* ---------------- Duyuru şeridi ---------------- */
+(() => {
+  const m = $$('.duyuru__madde');
+  if (m.length < 2 || azHareket) return;
+  let i = 0;
+  window.setInterval(() => {
+    if (document.hidden) return;
+    m[i]!.classList.remove('is-active'); m[i]!.setAttribute('aria-hidden', 'true');
+    i = (i + 1) % m.length;
+    m[i]!.classList.add('is-active'); m[i]!.removeAttribute('aria-hidden');
+  }, 3800);
+})();
+
+/* ---------------- Header: mobilde aşağı kayarken gizle ---------------- */
+(() => {
+  const h = $('[data-header]');
+  if (!h) return;
+  const mobil = window.matchMedia('(max-width: 899px)');
+  let sonY = window.scrollY, bekliyor = false;
+  window.addEventListener('scroll', () => {
+    if (bekliyor) return;
+    bekliyor = true;
+    requestAnimationFrame(() => {
+      const y = window.scrollY;
+      h.classList.toggle('is-golgeli', y > 8);
+      const altMenu = $('[data-alt-menu]');
+      if (mobil.matches && !acik) {
+        if (y > sonY + 6 && y > 160) { h.classList.add('is-hidden'); altMenu?.classList.add('is-gizli'); }
+        else if (y < sonY - 6) { h.classList.remove('is-hidden'); altMenu?.classList.remove('is-gizli'); }
+      } else { h.classList.remove('is-hidden'); altMenu?.classList.remove('is-gizli'); }
+      sonY = y; bekliyor = false;
+    });
+  }, { passive: true });
+})();
+
+/* ---------------- Kaydırınca beliren içerik ---------------- */
+(() => {
+  const ogeler = $$('[data-reveal]');
+  if (!ogeler.length) return;
+  if (azHareket || !('IntersectionObserver' in window)) { ogeler.forEach((o) => o.classList.add('gorundu')); return; }
+  const g = new IntersectionObserver((girdiler) => {
+    girdiler.forEach((gi) => {
+      if (!gi.isIntersecting) return;
+      const el = gi.target as HTMLElement;
+      const kardesler = el.parentElement ? Array.from(el.parentElement.children).filter((c) => c.hasAttribute('data-reveal')) : [];
+      el.style.transitionDelay = `${Math.min(kardesler.indexOf(el), 6) * 60}ms`;
+      el.classList.add('gorundu');
+      g.unobserve(el);
+    });
+  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  ogeler.forEach((o) => g.observe(o));
+})();
+
+/* ---------------- Galeri ---------------- */
+$$('[data-galeri]').forEach((gal) => {
+  const ray = $('[data-galeri-ray]', gal)!;
+  const slaytlar = $$('.galeri__slayt', ray);
+  if (slaytlar.length < 2) return;
+  const kucukler = $$('[data-galeri-kucuk]', gal);
+  const noktalar = $$('.galeri__noktalar span', gal);
+  const sayac = $('[data-galeri-sayac]', gal);
+  let aktif = 0, goruldu = false;
+  const isaretle = (i: number) => {
+    aktif = i;
+    noktalar.forEach((n, j) => n.classList.toggle('is-active', j === i));
+    kucukler.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'true' : 'false'));
+    if (sayac) sayac.textContent = `${i + 1} / ${slaytlar.length}`;
+    gal.dataset.aktif = String(i);
+    if (i > 0 && !goruldu) { goruldu = true; track('view_item_gallery'); }
+  };
+  const git = (i: number) => {
+    i = (i + slaytlar.length) % slaytlar.length;
+    ray.scrollTo({ left: slaytlar[i]!.offsetLeft - ray.offsetLeft, behavior: azHareket ? 'auto' : 'smooth' });
+    isaretle(i);
+  };
+  let raf = 0;
+  ray.addEventListener('scroll', () => {
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(() => {
+      const i = Math.round(ray.scrollLeft / ray.clientWidth);
+      if (i !== aktif) isaretle(Math.max(0, Math.min(slaytlar.length - 1, i)));
+    });
+  }, { passive: true });
+  kucukler.forEach((b, i) => { b.addEventListener('click', () => git(i)); b.addEventListener('mouseenter', () => git(i)); });
+  $('[data-galeri-onceki]', gal)?.addEventListener('click', () => git(aktif - 1));
+  $('[data-galeri-sonraki]', gal)?.addEventListener('click', () => git(aktif + 1));
+  ray.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowRight') { e.preventDefault(); git(aktif + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); git(aktif - 1); }
+  });
+});
+
+/* ---------------- Kargo sayacı (gerçek kesim saatine göre, Türkiye saati) ---------------- */
+(() => {
+  const kutular = $$('[data-kargo-sayac]');
+  if (!kutular.length) return;
+  const isGunu = (d: Date) => d.getDay() !== 0 && d.getDay() !== 6; // resmi tatiller dahil değil
+  const isGunuEkle = (d: Date, n: number) => { const x = new Date(d); while (n > 0) { x.setDate(x.getDate() + 1); if (isGunu(x)) n--; } return x; };
+  const gunAy = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+  const gunAdi = new Intl.DateTimeFormat('tr-TR', { weekday: 'long' });
+  const { kesimSaati, teslimGun } = katalog.kargo;
+  const guncelle = () => {
+    const simdi = new Date();
+    const kesim = new Date(simdi); kesim.setHours(kesimSaati, 0, 0, 0);
+    const bugun = isGunu(simdi) && simdi < kesim;
+    const kargoGunu = bugun ? simdi : isGunuEkle(simdi, 1);
+    let satir: string;
+    if (bugun) {
+      const dk = Math.max(1, Math.ceil((kesim.getTime() - simdi.getTime()) / 60000));
+      const sa = Math.floor(dk / 60), kalan = dk % 60;
+      satir = `<span class="sayac-sure"><strong>${sa ? `${sa} saat ${kalan} dakika` : `${kalan} dakika`}</strong></span> içinde sipariş verirsen <span class="gun-rozet">Bugün</span> kargoda`;
+    } else {
+      const yarin = new Date(simdi); yarin.setDate(yarin.getDate() + 1);
+      const gun = kargoGunu.toDateString() === yarin.toDateString() ? 'Yarın' : gunAdi.format(kargoGunu);
+      // "14:00'e kadar aynı gün kargo" duyurusuyla çelişmesin: neden bugün değil, açıkça söyle
+      const neden = isGunu(simdi) ? `Bugünkü kargo ${kesimSaati}:00'te çıktı.` : 'Hafta sonu kargo çıkmıyor.';
+      satir = `${neden} Şimdi sipariş verirsen <span class="gun-rozet">${gun}</span> kargoda`;
+    }
+    const bas = isGunuEkle(kargoGunu, teslimGun[0]), son = isGunuEkle(kargoGunu, teslimGun[1]);
+    const aralik = bas.getMonth() === son.getMonth() ? `${bas.getDate()}–${gunAy.format(son)}` : `${gunAy.format(bas)} – ${gunAy.format(son)}`;
+    kutular.forEach((k) => {
+      const s = $('[data-kargo-satir]', k); if (s) s.innerHTML = satir;
+      const t = $('[data-teslim-aralik]', k); if (t) t.textContent = aralik;
+      const t2 = $('[data-teslim-tarih]', k); if (t2) t2.textContent = aralik;
+    });
+  };
+  guncelle();
+  window.setInterval(guncelle, 30000);
+})();
+
+/* ---------------- Ürün sayfası: mobil alt satın alma çubuğu ---------------- */
+(() => {
+  const cubuk = $('[data-alt-cubuk]');
+  const cta = $('[data-ana-cta]');
+  if (!cubuk || !cta || !('IntersectionObserver' in window)) return;
+  let ctaGorunur = true, sonda = false;
+  const guncelle = () => {
+    const goster = !ctaGorunur && !sonda;
+    cubuk.classList.toggle('is-visible', goster);
+    cubuk.setAttribute('aria-hidden', goster ? 'false' : 'true');
+    $$('button, a', cubuk).forEach((b) => (b.tabIndex = goster ? 0 : -1));
+  };
+  // Buton TAM görünmüyorsa (yarım kesikse) alttaki çubuk çıksın
+  new IntersectionObserver(([e]) => { ctaGorunur = !!e && e.intersectionRatio >= 0.95; guncelle(); }, { threshold: [0, 0.5, 0.95, 1] }).observe(cta);
+  const f = $('#footer');
+  if (f) new IntersectionObserver(([e]) => { sonda = !!e?.isIntersecting; guncelle(); }).observe(f);
+})();
+
+/* ---------------- Fırsat geri sayımı (panelde girilen GERÇEK bitiş saati) ---------------- */
+(() => {
+  const sayaclar = $$('[data-firsat-sayac]').filter((s) => s.dataset.firsatSayac);
+  if (!sayaclar.length) return;
+  const iki = (n: number) => String(n).padStart(2, '0');
+  const tik = () => {
+    const simdi = Date.now();
+    let biten = false;
+    sayaclar.forEach((s) => {
+      const kalan = Date.parse(s.dataset.firsatSayac!) - simdi;
+      const hedef = $('[data-firsat-sure]', s);
+      if (kalan <= 0) { s.classList.add('is-bitti'); biten = true; return; }
+      const sn = Math.floor(kalan / 1000), g = Math.floor(sn / 86400);
+      const metin = `${g ? g + 'g ' : ''}${iki(Math.floor((sn % 86400) / 3600))}:${iki(Math.floor((sn % 3600) / 60))}:${iki(sn % 60)}`;
+      if (hedef) hedef.textContent = metin;
+    });
+    // Fırsat bittiyse fiyatlar değişir: sayfayı bir kez yenile
+    if (biten && !sessionStorage.getItem('firsat-yenilendi')) {
+      try { sessionStorage.setItem('firsat-yenilendi', '1'); } catch { /* yok */ }
+      window.setTimeout(() => location.reload(), 800);
+    }
+  };
+  tik();
+  window.setInterval(tik, 1000);
+})();
+
+/* ---------------- Pişirme kartları: dokununca detay ---------------- */
+document.addEventListener('click', (e) => {
+  const kart = (e.target as Element).closest<HTMLElement>('[data-pisirme-kart]');
+  if (!kart) return;
+  const acik = kart.getAttribute('aria-expanded') === 'true';
+  kart.setAttribute('aria-expanded', String(!acik));
+  if (!acik) track('cooking_time_open', { yemek: kart.querySelector('.pisirme-kucuk__yemek')?.textContent });
+});
+
+/* ---------------- SSS takibi ---------------- */
+$$<HTMLDetailsElement>('[data-sss] details').forEach((d) => {
+  d.addEventListener('toggle', () => { if (d.open) track('faq_open', { question: d.querySelector('summary')?.textContent?.trim() }); });
+});

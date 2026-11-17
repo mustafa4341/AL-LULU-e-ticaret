@@ -1,0 +1,46 @@
+---
+import type { Urun } from '../lib/sema';
+import Ikon from './Ikon.astro';
+import Fiyat from './Fiyat.astro';
+import GorselYok from './GorselYok.astro';
+import FirsatSayaci from './FirsatSayaci.astro';
+
+interface Props {
+  urun: Urun;
+  konum?: string;
+  oncelikliYukle?: boolean;
+}
+const { urun, konum = 'liste', oncelikliYukle = false } = Astro.props;
+const k = Astro.locals.katalog;
+const gorsel = k.anaGorsel(urun);
+const bilgi = k.fiyatBilgisi(urun);
+const rozet = k.rozetler(urun);
+const stokta = k.stoktaMi(urun);
+const kat = k.kategoriBul(urun.kategoriler[0]!);
+const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
+---
+<article class:list={["kart", { "kart--firsat": !!bilgi.firsat }]} data-urun-kart data-fiyat={siralamaFiyati} data-reveal>
+  <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
+    {gorsel ? (
+      <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-ucus-gorsel />
+    ) : (
+      <GorselYok ikon={kat?.ikon} />
+    )}
+    {urun.durum === 'taslak' && <span class="rozet rozet--taslak kart__taslak">Örnek</span>}
+    {rozet.damga && <span class="damga"><span>{rozet.damga}</span></span>}
+    {rozet.serit && <span class="kart__serit"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>}
+  </a>
+  <div class="kart__govde">
+    <h3 class="kart__ad"><a href={`/urun/${urun.id}`}><strong lang="en">{urun.marka}</strong> {urun.ad}</a></h3>
+    {bilgi.firsat && <FirsatSayaci etiket="Fırsat" bitis={bilgi.firsat.bitis} boyut="kucuk" />}
+    {!bilgi.firsat && rozet.kucuk.length > 0 && <p class="kart__bilgi"><Ikon ad="kalkan" boyut={14} />{rozet.kucuk[0]}</p>}
+    <Fiyat bilgi={bilgi} boyut="kucuk" />
+  </div>
+  {stokta ? (
+    <button class="kart__ekle" type="button" data-sepete-ekle data-tip="urun" data-id={urun.id} data-konum={konum} data-hizli aria-label={`${urun.kisaAd} sepete ekle`}>
+      <Ikon ad="canta" boyut={16} /><span data-etiket>Sepete Ekle</span>
+    </button>
+  ) : (
+    <button class="kart__ekle" type="button" disabled>Tükendi</button>
+  )}
+</article>

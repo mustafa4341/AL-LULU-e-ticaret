@@ -1,0 +1,107 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import Ikon from '../../../components/Ikon.astro';
+import { magazaGuncelle, magazaOku, siparisGuncelle, siparisleriOku } from '../../../lib/depo';
+import { durumDegisti } from '../../../lib/bildirim';
+import { formatTL } from '../../../lib/fiyat';
+import { istegeBagli, metin } from '../../../lib/form';
+import { SIPARIS_DURUMLARI, SIPARIS_DURUM_ADLARI, SiparisDurumSema, type Siparis } from '../../../lib/sema';
+
+const no = Astro.params.no ?? '';
+let hatalar: string[] = [];
+const basari = Astro.url.searchParams.get('ok');
+let s = (await siparisleriOku()).find((x) => x.no === no);
+if (!s) return Astro.redirect('/yonetim/siparisler');
+
+/** Ödeme alındığında stok düşülür; iptalde geri eklenir. */
+const STOK_DUSEN = new Set(['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi']);
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  let durumHam = metin(f, 'durum');
+  const takipNo = istegeBagli(f, 'kargoTakip');
+  // Takip numarası ilk kez girildiyse ve sipariş henüz yoldaysa: otomatik "Kargoda"
+  if (takipNo && !s.kargoTakip && ['odeme-bekliyor', 'odendi', 'hazirlaniyor'].includes(durumHam)) durumHam = 'kargoda';
+  const yeni = SiparisDurumSema.safeParse(durumHam);
+  if (!yeni.success) hatalar = ['Geçersiz durum'];
+  else {
+    try {
+      const onceki = s.durum;
+      const stokDus = STOK_DUSEN.has(yeni.data) && !s.stokDusuldu;
+      const stokIade = yeni.data === 'iptal' && s.stokDusuldu;
+      if (stokDus || stokIade) {
+        const isaret = stokDus ? -1 : 1;
+        await magazaGuncelle((m) => {
+          for (const kalem of s!.kalemler) for (const p of kalem.parcalar) {
+            const u = m.urunler.find((x) => x.id === p.urunId);
+            if (u) u.stok = Math.max(0, u.stok + isaret * p.adet * kalem.adet);
+          }
+        });
+      }
+      s = await siparisGuncelle(no, (x: Siparis) => {
+        x.durum = yeni.data;
+        x.kargoTakip = takipNo;
+        if (takipNo) x.kargoFirma = x.kargoFirma || undefined;
+        x.yoneticiNotu = istegeBagli(f, 'yoneticiNotu');
+        if (stokDus) x.stokDusuldu = true;
+        if (stokIade) x.stokDusuldu = false;
+        if (onceki !== yeni.data) x.gecmis.push({ tarih: new Date().toISOString(), durum: yeni.data });
+      });
+      if (onceki !== yeni.data) {
+        const m = await magazaOku();
+        durumDegisti(s, m.site, new URL(`/siparis/${s.no}?t=${s.token}`, Astro.url.origin).href).catch(() => undefined);
+      }
+      return Astro.redirect(`/yonetim/siparisler/${no}?ok=${encodeURIComponent('Sipariş güncellendi' + (stokDus ? ' · stok düşüldü' : stokIade ? ' · stok geri eklendi' : ''))}`);
+    } catch (e) {
+      hatalar = [(e as Error).message];
+    }
+  }
+}
+const m = await magazaOku();
+const telWa = '90' + s.musteri.tel.replace(/^0/, '');
+const waMusteri = `https://wa.me/${telWa}?text=${encodeURIComponent(`Merhaba ${s.musteri.ad}, ${m.site.ad} — ${s.no} numaralı siparişiniz hakkında yazıyoruz.`)}`;
+const tarih = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+---
+<Yonetim baslik={`Sipariş ${s.no}`} aktif="siparisler" basari={basari} hatalar={hatalar}>
+  <p style="margin:-8px 0 14px"><a href="/yonetim/siparisler">← Siparişler</a> · <a href={`/siparis/${s.no}?t=${s.token}`} target="_blank" rel="noopener">Müşterinin gördüğü sayfa ↗</a> · <a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`} target="_blank" rel="noopener">Onaylanan sözleşmeler ↗</a></p>
+  <div class="y-izgara y-izgara--2">
+    <section class="y-kart">
+      <h2>Müşteri</h2>
+      <p style="margin-top:6px"><strong>{s.musteri.ad} {s.musteri.soyad}</strong></p>
+      <p><a href={`tel:${s.musteri.tel}`}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a href={`mailto:${s.musteri.eposta}`}>{s.musteri.eposta}</a></>}</p>
+      <p class="muted" style="margin-top:6px">{s.teslimat.adres}, {s.teslimat.ilce} / {s.teslimat.il}</p>
+      {s.teslimat.not && <p class="muted">Not: {s.teslimat.not}</p>}
+      <p class="muted" style="margin-top:6px">Fatura: {s.fatura.tip === 'kurumsal' ? `${s.fatura.firma} · ${s.fatura.vd} · ${s.fatura.vno}` : 'Bireysel'}{s.fatura.adres && ` · ${s.fatura.adres}`}</p>
+      <a class="btn btn--wa btn--kucuk" style="margin-top:10px" href={waMusteri} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={18} />Müşteriye WhatsApp'tan yaz</a>
+    </section>
+    <section class="y-kart">
+      <h2>Ürünler</h2>
+      <div class="toplamlar" style="margin-top:8px">
+        {s.kalemler.map((x) => <div><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}{x.sku && <span class="muted"> ({x.sku})</span>}</span><span>{formatTL(x.toplam)}</span></div>)}
+        {s.setIndirimi > 0 && <div class="kazanc"><span>Set indirimi</span><span>−{formatTL(s.setIndirimi)}</span></div>}
+        {s.sepetIndirimi > 0 && <div class="kazanc"><span>Sepette indirim</span><span>−{formatTL(s.sepetIndirimi)}</span></div>}
+        <div><span>Kargo</span><span>{s.kargo ? formatTL(s.kargo) : 'Bedava'}</span></div>
+        <div class="genel"><span>Toplam</span><span>{formatTL(s.toplam)}</span></div>
+      </div>
+    </section>
+  </div>
+
+  <form method="post" class="y-kart">
+    <h2>Durum</h2>
+    <p class="y-aciklama">"Ödendi" ve sonrasına geçince stok otomatik düşülür; "İptal"de geri eklenir. Durum değişince müşteriye SMS/e-posta gider (ayarlıysa).</p>
+    <div class="y-secimler">
+      {SIPARIS_DURUMLARI.map((d) => <label class="y-secim"><input type="radio" name="durum" value={d} checked={s!.durum === d} />{SIPARIS_DURUM_ADLARI[d]}</label>)}
+    </div>
+    <div class="y-izgara y-izgara--2" style="margin-top:12px">
+      <div class="y-alan"><label for="kargoTakip">Kargo takip numarası <span class="y-ipucu">girince sipariş "Kargoda" olur, müşteri sayfasında takip butonu çıkar</span></label><input id="kargoTakip" name="kargoTakip" value={s.kargoTakip ?? ''} />
+        {s.kargoTakip && <a class="y-ipucu" href={m.site.kargo.takipUrl.replace('{kod}', encodeURIComponent(s.kargoTakip))} target="_blank" rel="noopener">{m.site.kargo.firma} sitesinde aç ↗</a>}</div>
+      <div class="y-alan"><label for="yoneticiNotu">İç not</label><input id="yoneticiNotu" name="yoneticiNotu" value={s.yoneticiNotu ?? ''} /></div>
+    </div>
+    <div style="text-align:right;margin-top:12px"><button class="btn btn--sepet" type="submit"><Ikon ad="tik" />Güncelle</button></div>
+  </form>
+
+  <section class="y-kart">
+    <h2>Geçmiş</h2>
+    <ul class="y-gecmis">{[...s.gecmis].reverse().map((g) => <li><span>{tarih.format(new Date(g.tarih))}</span><span>{SIPARIS_DURUM_ADLARI[g.durum]}</span></li>)}</ul>
+  </section>
+</Yonetim>

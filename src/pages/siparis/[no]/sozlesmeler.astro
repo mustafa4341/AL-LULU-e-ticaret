@@ -1,0 +1,27 @@
+---
+import Base from '../../../layouts/Base.astro';
+import { siparisleriOku, sozlesmeOku } from '../../../lib/depo';
+const k = Astro.locals.katalog;
+const no = Astro.params.no ?? '';
+const s = (await siparisleriOku()).find((x) => x.no === no);
+const token = Astro.url.searchParams.get('t');
+if (!s || !token || token !== s.token) return Astro.rewrite('/404');
+const kayit = await sozlesmeOku(no);
+const onay = kayit ? new Date(kayit.onayTarihi).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'long', timeStyle: 'medium' }) : '';
+---
+<Base baslik={`Sözleşmeler · ${no} | ${k.site.ad}`} aciklama="Sipariş sözleşmeleri" indekslenmesin sade>
+  <div class="container belge">
+    <p class="eyebrow"><a href={`/siparis/${no}?t=${token}`}>← Sipariş {no}</a></p>
+    <h1>Siparişinize ait sözleşmeler</h1>
+    {kayit ? (
+      <>
+        <p class="belge-ust">Onay: {onay} · Sürüm {kayit.surum}. Bu sayfayı yazdırabilir veya PDF olarak kaydedebilirsiniz.</p>
+        <button class="btn btn--cizgi" type="button" onclick="window.print()" style="margin-top:12px">Yazdır / PDF kaydet</button>
+        <section><h2 class="belge-ana">Ön Bilgilendirme Formu</h2><article class="belge-metin" set:html={kayit.onBilgilendirme} /></section>
+        <section><h2 class="belge-ana">Mesafeli Satış Sözleşmesi</h2><article class="belge-metin" set:html={kayit.mesafeliSatis} /></section>
+      </>
+    ) : (
+      <p>Bu sipariş için kayıtlı sözleşme metni bulunamadı. Güncel metinler: <a href="/yasal/mesafeli-satis-sozlesmesi">Mesafeli Satış Sözleşmesi</a>, <a href="/yasal/on-bilgilendirme-formu">Ön Bilgilendirme Formu</a>.</p>
+    )}
+  </div>
+</Base>

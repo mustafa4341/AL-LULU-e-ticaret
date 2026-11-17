@@ -1,0 +1,10 @@
+---
+import type { IkonAdi } from '../lib/sema';
+interface Props {
+  ad: IkonAdi;
+  boyut?: number;
+  class?: string;
+}
+const { ad, boyut = 20, class: cls } = Astro.props;
+---
+<svg width={boyut} height={boyut} class={cls} aria-hidden="true" focusable="false"><use href={`#i-${ad}`} /></svg>

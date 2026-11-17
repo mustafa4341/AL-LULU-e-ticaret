@@ -1,0 +1,315 @@
+/**
+ * Al Lulu Home — sepet (tarayıcıda; fiyat saklanmaz, her seferinde katalogdan hesaplanır).
+ * Hesap lib/fiyat.ts → sepetHesapla ile yapılır; sunucu siparişi alırken AYNI fonksiyonla yeniden hesaplar.
+ */
+import { formatTL, katalog, setBul, urunBul } from './katalog';
+import { sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
+import { cekmeceAc, sepeteUcur, toast } from './ui';
+import { track } from './analitik';
+
+export type { KalemTipi, SepetKalemi };
+const ANAHTAR = 'allulu_sepet_v2';
+export const DEGISTI = 'sepet:degisti';
+
+const anahtar = (k: { tip: KalemTipi; id: string }) => `${k.tip}:${k.id}`;
+const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+const ikonSvg = (ad: string, b = 20) => `<svg width="${b}" height="${b}" aria-hidden="true"><use href="#i-${ad}"/></svg>`;
+
+/* ---------------- Durum ---------------- */
+function oku(): SepetKalemi[] {
+  try {
+    const ham = JSON.parse(localStorage.getItem(ANAHTAR) || '[]');
+    if (!Array.isArray(ham)) return [];
+    return ham.filter((k) => k && (k.tip === 'urun' || k.tip === 'set') && typeof k.id === 'string' && Number.isInteger(k.adet) && k.adet > 0)
+      .filter((k) => (k.tip === 'urun' ? !!urunBul(k.id) : !!setBul(k.id)));
+  } catch { return []; }
+}
+let kalemler: SepetKalemi[] = oku();
+
+function kaydet(): void {
+  try { localStorage.setItem(ANAHTAR, JSON.stringify(kalemler)); } catch { /* gizli sekme */ }
+  yansit();
+
+/* ---------------- Sepet hatırlatma: geri gelen ziyaretçiye nazik bir kart ---------------- */
+(() => {
+  if (/^\/(odeme|siparis)/.test(location.pathname) || !kalemler.length) return;
+  let gosterildi = false;
+  try { gosterildi = !!sessionStorage.getItem('sepet-hatirlatma'); } catch { /* yok */ }
+  const dahili = document.referrer && new URL(document.referrer).host === location.host;
+  if (gosterildi || dahili) return;
+  window.setTimeout(() => {
+    const o = sepetOzeti();
+    if (!o.satirlar.length) return;
+    try { sessionStorage.setItem('sepet-hatirlatma', '1'); } catch { /* yok */ }
+    const ilk = o.satirlar[0]!;
+    const kart = document.createElement('div');
+    kart.className = 'hatirlatma';
+    kart.setAttribute('role', 'status');
+    kart.innerHTML = `
+      ${ilk.gorsel ? `<img src="${ilk.gorsel}" alt="">` : `<span class="oneri__yok">${ikonSvg(ilk.ikon, 22)}</span>`}
+      <div class="hatirlatma__metin"><strong>Sepetin seni bekliyor</strong>${o.adet} ürün · ${formatTL(o.toplam)}</div>
+      <button class="btn btn--sepet btn--kucuk" type="button" data-cekmece-ac="sepet">Tamamla</button>
+      <button class="hatirlatma__kapat" type="button" aria-label="Kapat">${ikonSvg('kapat', 14)}</button>`;
+    document.body.appendChild(kart);
+    requestAnimationFrame(() => kart.classList.add('is-visible'));
+    const kapat = () => { kart.classList.remove('is-visible'); window.setTimeout(() => kart.remove(), 400); };
+    kart.addEventListener('click', (e) => { if ((e.target as Element).closest('.hatirlatma__kapat, [data-cekmece-ac]')) kapat(); });
+    window.setTimeout(kapat, 12000);
+  }, 2500);
+})();
+  document.dispatchEvent(new CustomEvent(DEGISTI));
+}
+window.addEventListener('storage', (e) => { if (e.key === ANAHTAR) { kalemler = oku(); yansit(); document.dispatchEvent(new CustomEvent(DEGISTI)); } });
+
+export const sepetKalemleri = (): readonly SepetKalemi[] => kalemler;
+export const sepetOzeti = () => sepetHesapla(kalemler, katalog);
+export function sepetiBosalt(): void { kalemler = []; kaydet(); }
+
+export function eklenebilir(tip: KalemTipi, id: string): number {
+  const kul = urunKullanimi(kalemler, katalog);
+  if (tip === 'urun') { const u = urunBul(id); return u ? Math.max(0, u.maxAdet - (kul.get(id) ?? 0)) : 0; }
+  const s = setBul(id);
+  if (!s) return 0;
+  return Math.min(...s.kalemler.map((k) => { const u = urunBul(k.urunId); return u ? Math.floor(Math.max(0, u.maxAdet - (kul.get(k.urunId) ?? 0)) / k.adet) : 0; }));
+}
+
+export function ekle(tip: KalemTipi, id: string, adet = 1): number {
+  const n = Math.min(adet, eklenebilir(tip, id));
+  if (n <= 0) { toast('Bu üründen daha fazla ekleyemezsiniz (stok/sipariş limiti).'); return 0; }
+  const m = kalemler.find((k) => k.tip === tip && k.id === id);
+  if (m) m.adet += n; else kalemler.push({ tip, id, adet: n });
+  kaydet();
+  const s = sepetHesapla([{ tip, id, adet: n }], katalog).satirlar[0];
+  if (s) track('add_to_cart', { currency: 'TRY', value: s.toplam, items: [{ item_id: s.sku ?? s.id, item_name: s.ad, price: s.birimFiyat, quantity: n }] });
+  return n;
+}
+
+export function adetAyarla(tip: KalemTipi, id: string, adet: number): void {
+  const k = kalemler.find((x) => x.tip === tip && x.id === id);
+  if (!k) return;
+  const yeni = Math.max(0, Math.min(k.adet + eklenebilir(tip, id), adet));
+  if (yeni === 0) { kalemler = kalemler.filter((x) => x !== k); track('remove_from_cart', { item_id: id }); }
+  else k.adet = yeni;
+  kaydet();
+}
+
+/* ---------------- Görünüm ---------------- */
+export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
+  const anah = anahtar(s);
+  const eklenir = eklenebilir(s.tip, s.id) > 0;
+  // Üstü çizili tutar: set → ayrı ayrı fiyat; sepette indirim → liste fiyatı; yoksa gerçek kampanyada önceki fiyat
+  const onceki = s.tip === 'urun' ? urunBul(s.id)?.onceki : undefined;
+  const once = s.birimAyriAyri ? s.birimAyriAyri * s.adet : s.indirim ? s.birimFiyat * s.adet : onceki ? onceki * s.adet : 0;
+  return `
+    <div class="kalem">
+      <a class="kalem__gorsel" href="${s.href}" tabindex="-1" aria-hidden="true">${s.gorsel ? `<img src="${s.gorsel}" alt="" width="72" height="88">` : ikonSvg(s.ikon, 28)}</a>
+      <div>
+        <a class="kalem__ad" href="${s.href}">${s.tip === 'set' ? 'Set: ' : ''}${esc(s.ad)}</a>
+        ${s.icerik ? `<div class="kalem__icerik">${esc(s.icerik)}</div>` : ''}
+        ${s.sepetteYuzde ? `<div class="kalem__sepette">${ikonSvg('canta', 13)} Sepette %${s.sepetteYuzde} indirim uygulandı</div>` : ''}
+        <div class="kalem__satir">
+          ${duzenlenebilir ? `<div class="adet adet--kucuk" role="group" aria-label="${esc(s.ad)} adet">
+            <button type="button" data-kalem-eksi="${anah}" aria-label="${s.adet > 1 ? 'Adedi azalt' : 'Sepetten çıkar'}">${ikonSvg(s.adet > 1 ? 'eksi' : 'cop', 16)}</button>
+            <span class="adet__deger" aria-live="polite">${s.adet}</span>
+            <button type="button" data-kalem-arti="${anah}" aria-label="Adedi artır"${eklenir ? '' : ' disabled'}>${ikonSvg('arti', 16)}</button>
+          </div>` : `<span class="muted small">${s.adet} adet</span>`}
+          <div class="kalem__fiyat">${once ? `<s>${formatTL(once)}</s>` : ''}<span class="${once ? 'fiyat--indirimli' : ''}">${formatTL(s.toplam)}</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+export function toplamlarHtml(o: ReturnType<typeof sepetOzeti>): string {
+  // Gerçek kampanya avantajı (fiyat geçmişinden doğrulanmış önceki fiyata göre); toplam hesabını değiştirmez, yalnızca bilgi
+  const kampanya = o.satirlar.reduce((t, s) => {
+    const onceki = s.tip === 'urun' ? urunBul(s.id)?.onceki : undefined;
+    return t + (onceki && onceki > s.birimFiyat ? (onceki - s.birimFiyat) * s.adet : 0);
+  }, 0);
+  const avantaj = o.setIndirimi + o.sepetIndirimi + kampanya;
+  return `
+    <div><span>Ürünler</span><span>${formatTL(o.urunlerToplami)}</span></div>
+    ${o.setIndirimi ? `<div class="kazanc"><span>Set indirimi</span><span>−${formatTL(o.setIndirimi)}</span></div>` : ''}
+    ${o.sepetIndirimi ? `<div class="kazanc"><span>Sepette indirim</span><span>−${formatTL(o.sepetIndirimi)}</span></div>` : ''}
+    <div><span>Kargo</span><span>${o.kargo ? formatTL(o.kargo) : '<strong class="yesil">Bedava</strong>'}</span></div>
+    <div class="genel"><span>Toplam</span><span>${formatTL(o.toplam)}</span></div>
+    ${avantaj > 0 ? `<p class="toplam-kazanc">${ikonSvg('etiket', 16)} Bu siparişte <strong>${formatTL(avantaj)}</strong> avantaj</p>` : ''}`;
+}
+
+function oneriBul() {
+  const kul = urunKullanimi(kalemler, katalog);
+  for (const id of kul.keys()) {
+    const aday = urunBul(id)?.birlikte.map(urunBul).find((x) => !!x && !kul.has(x.id) && eklenebilir('urun', x.id) > 0);
+    if (aday) return aday;
+  }
+  return undefined;
+}
+
+function yansit(): void {
+  const o = sepetOzeti();
+  document.querySelectorAll<HTMLElement>('[data-sepet-sayi]').forEach((el) => {
+    const once = el.textContent;
+    el.textContent = String(o.adet);
+    el.dataset.bos = o.adet ? 'false' : 'true';
+    if (once !== String(o.adet) && o.adet) { el.classList.remove('is-bump'); void el.offsetWidth; el.classList.add('is-bump'); }
+  });
+  document.querySelectorAll('[data-cekmece-ac="sepet"]').forEach((b) => b.setAttribute('aria-label', o.adet ? `Sepeti aç, ${o.adet} ürün` : 'Sepeti aç, sepet boş'));
+
+  const govde = document.querySelector<HTMLElement>('[data-sepet-govde]');
+  const alt = document.querySelector<HTMLElement>('[data-sepet-alt]');
+  const sayi = document.querySelector<HTMLElement>('[data-sepet-baslik-sayi]');
+  if (!govde || !alt) return;
+  if (sayi) sayi.textContent = o.adet ? `(${o.adet})` : '';
+
+  if (!o.satirlar.length) {
+    const hero = urunBul(katalog.heroId);
+    govde.innerHTML = `
+      <div class="bos-sepet">
+        <div class="bos-sepet__ikon">${ikonSvg('canta', 40)}</div>
+        <p><strong>Sepetiniz boş</strong></p>
+        ${hero ? `<button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id="${hero.id}" data-konum="bos-sepet">${esc(hero.kisaAd)} ekle · ${formatTL(hero.fiyat)}</button>` : ''}
+        <p style="margin-top:12px"><a href="/urunler">Tüm ürünlere göz atın</a></p>
+      </div>`;
+    alt.hidden = true;
+    return;
+  }
+  alt.hidden = false;
+  const esik = katalog.kargo.ucretsizEsik;
+  const kargoKutusu = o.kargoyaKalan > 0
+    ? `<div class="kargo-ilerleme"><span>${ikonSvg('kargo', 18)} Kargo bedava için <strong>${formatTL(o.kargoyaKalan)}</strong> daha ekleyin</span><div class="kargo-ilerleme__bar"><span style="width:${Math.min(100, Math.round((o.araToplam / esik) * 100))}%"></span></div></div>`
+    : `<div class="kargo-ilerleme is-tamam">${ikonSvg('tik', 18)} <span><strong>Kargo bedava!</strong></span></div>`;
+  const oneri = oneriBul();
+  const oneriHtml = oneri ? `
+    <div class="oneri"><p class="oneri__baslik">Bununla iyi gider</p>
+      <div class="oneri__oge">
+        ${oneri.gorsel ? `<img src="${oneri.gorsel}" alt="" width="48" height="56">` : `<span class="oneri__yok">${ikonSvg(oneri.ikon, 22)}</span>`}
+        <div><div class="oneri__ad">${esc(oneri.kisaAd)}</div><div class="oneri__fiyat">${formatTL(oneri.fiyat)}</div></div>
+        <button class="btn btn--sepet btn--kucuk" type="button" data-sepete-ekle data-tip="urun" data-id="${oneri.id}" data-konum="sepet-oneri" data-sessiz>${ikonSvg('arti', 16)}Ekle</button>
+      </div></div>` : '';
+
+  govde.innerHTML = kargoKutusu + o.satirlar.map((s) => satirHtml(s)).join('') + oneriHtml;
+  alt.innerHTML = `
+    <div class="toplamlar">${toplamlarHtml(o)}</div>
+    <a class="btn btn--sepet btn--block btn--buyuk" href="/odeme" data-odemeye-gec>${ikonSvg('kilit', 18)}Ödemeye Geç · ${formatTL(o.toplam)}</a>
+    <button class="btn btn--ghost btn--block" type="button" data-cekmece-kapat>Alışverişe devam et</button>`;
+}
+
+/* ---------------- Tıklamalar ---------------- */
+let mesgul = false;
+function adetKaynagi(btn: HTMLElement): number {
+  const el = btn.dataset.adetKaynak ? document.querySelector<HTMLElement>(btn.dataset.adetKaynak) : null;
+  const n = el ? parseInt(el.textContent || '1', 10) : 1;
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+function geriBildirim(btn: HTMLElement): void {
+  const et = btn.querySelector<HTMLElement>('[data-etiket]');
+  const eski = et?.textContent;
+  btn.classList.add('is-added');
+  if (et) et.textContent = 'Eklendi ✓';
+  window.setTimeout(() => { btn.classList.remove('is-added'); if (et && eski) et.textContent = eski; }, 1500);
+}
+function kaynakGorsel(btn: HTMLElement): Element | null {
+  const kart = btn.closest('[data-urun-kart]');
+  if (kart) return kart.querySelector('[data-ucus-gorsel]');
+  const hero = btn.closest('.hero');
+  if (hero) return hero.querySelector('[data-ucus-gorsel]');
+  return document.querySelector('.urun-ust [data-ucus-gorsel]');
+}
+
+document.addEventListener('click', (e) => {
+  const t = (e.target as Element).closest<HTMLElement>('[data-sepete-ekle], [data-hemen-al], [data-kalem-arti], [data-kalem-eksi], [data-odemeye-gec]');
+  if (!t) return;
+
+  if (t.hasAttribute('data-sepete-ekle')) {
+    if (mesgul) return;
+    mesgul = true; window.setTimeout(() => (mesgul = false), 500);
+    const n = ekle((t.dataset.tip as KalemTipi) || 'urun', t.dataset.id!, adetKaynagi(t));
+    if (!n) return;
+    geriBildirim(t);
+    sepeteUcur(kaynakGorsel(t));
+    try { navigator.vibrate?.(12); } catch { /* desteklenmiyor */ }
+    // Listeden hızlı ekleme: gezinmeyi bölme, bildirim göster. Ürün sayfası/hero: sepeti aç.
+    if (t.hasAttribute('data-hizli') || t.hasAttribute('data-sessiz')) {
+      toast('Sepete eklendi', { metin: 'Sepete git', cekmece: 'sepet' });
+      return;
+    }
+    window.setTimeout(() => {
+      document.querySelector('[data-sepet-bildirim]')?.classList.add('is-visible');
+      cekmeceAc('sepet', document.querySelector<HTMLElement>('[data-odemeye-gec]'));
+    }, 380);
+    return;
+  }
+
+  if (t.hasAttribute('data-hemen-al')) {
+    const tip = (t.dataset.tip as KalemTipi) || 'urun', id = t.dataset.id!;
+    const istenen = adetKaynagi(t);
+    const mevcut = kalemler.find((k) => k.tip === tip && k.id === id)?.adet ?? 0;
+    if (mevcut < istenen) ekle(tip, id, istenen - mevcut);
+    track('quick_buy_click', { item_id: id });
+    if (kalemler.length) { t.classList.add('is-yukleniyor'); location.href = '/odeme'; }
+    return;
+  }
+
+  const ana = t.dataset.kalemArti || t.dataset.kalemEksi;
+  if (ana) {
+    const [tip, ...p] = ana.split(':');
+    const k = kalemler.find((x) => x.tip === tip && x.id === p.join(':'));
+    if (k) {
+      adetAyarla(k.tip, k.id, k.adet + (t.hasAttribute('data-kalem-arti') ? 1 : -1));
+      // Tutar değişimini görünür kıl
+      document.querySelectorAll(`[data-kalem-arti="${ana}"]`).forEach((b) => {
+        b.closest('.kalem')?.querySelector('.kalem__fiyat')?.classList.add('is-guncellendi');
+      });
+      document.querySelectorAll('.toplamlar .genel span:last-child').forEach((el) => el.classList.add('is-guncellendi'));
+    }
+    return;
+  }
+
+  if (t.hasAttribute('data-odemeye-gec')) track('begin_checkout', { currency: 'TRY', value: sepetOzeti().toplam });
+});
+
+document.getElementById('sepet')?.addEventListener('cekmece:acildi', () => {
+  window.setTimeout(() => document.querySelector('[data-sepet-bildirim]')?.classList.remove('is-visible'), 3500);
+});
+
+/* Ürün sayfası adet seçici */
+document.querySelectorAll<HTMLElement>('[data-adet-secici]').forEach((kutu) => {
+  const deger = kutu.querySelector<HTMLElement>('[data-adet-deger]')!;
+  const azalt = kutu.querySelector<HTMLButtonElement>('[data-adet-azalt]')!;
+  const artir = kutu.querySelector<HTMLButtonElement>('[data-adet-artir]')!;
+  const maks = parseInt(kutu.dataset.maks || '5', 10);
+  let n = 1;
+  const goster = () => { deger.textContent = String(n); azalt.disabled = n <= 1; artir.disabled = n >= maks; };
+  azalt.addEventListener('click', () => { n = Math.max(1, n - 1); goster(); });
+  artir.addEventListener('click', () => { n = Math.min(maks, n + 1); goster(); });
+  goster();
+});
+
+yansit();
+
+/* ---------------- Sepet hatırlatma: geri gelen ziyaretçiye nazik bir kart ---------------- */
+(() => {
+  if (/^\/(odeme|siparis)/.test(location.pathname) || !kalemler.length) return;
+  let gosterildi = false;
+  try { gosterildi = !!sessionStorage.getItem('sepet-hatirlatma'); } catch { /* yok */ }
+  const dahili = document.referrer && new URL(document.referrer).host === location.host;
+  if (gosterildi || dahili) return;
+  window.setTimeout(() => {
+    const o = sepetOzeti();
+    if (!o.satirlar.length) return;
+    try { sessionStorage.setItem('sepet-hatirlatma', '1'); } catch { /* yok */ }
+    const ilk = o.satirlar[0]!;
+    const kart = document.createElement('div');
+    kart.className = 'hatirlatma';
+    kart.setAttribute('role', 'status');
+    kart.innerHTML = `
+      ${ilk.gorsel ? `<img src="${ilk.gorsel}" alt="">` : `<span class="oneri__yok">${ikonSvg(ilk.ikon, 22)}</span>`}
+      <div class="hatirlatma__metin"><strong>Sepetin seni bekliyor</strong>${o.adet} ürün · ${formatTL(o.toplam)}</div>
+      <button class="btn btn--sepet btn--kucuk" type="button" data-cekmece-ac="sepet">Tamamla</button>
+      <button class="hatirlatma__kapat" type="button" aria-label="Kapat">${ikonSvg('kapat', 14)}</button>`;
+    document.body.appendChild(kart);
+    requestAnimationFrame(() => kart.classList.add('is-visible'));
+    const kapat = () => { kart.classList.remove('is-visible'); window.setTimeout(() => kart.remove(), 400); };
+    kart.addEventListener('click', (e) => { if ((e.target as Element).closest('.hatirlatma__kapat, [data-cekmece-ac]')) kapat(); });
+    window.setTimeout(kapat, 12000);
+  }, 2500);
+})();

@@ -1,0 +1,15 @@
+---
+import type { SSSMaddesi } from '../lib/sema';
+interface Props {
+  maddeler: SSSMaddesi[];
+}
+const { maddeler } = Astro.props;
+---
+<div class="sss" data-sss>
+  {maddeler.map((m) => (
+    <details>
+      <summary>{m.soru}</summary>
+      <div class="sss__cevap"><p>{m.cevap}</p></div>
+    </details>
+  ))}
+</div>

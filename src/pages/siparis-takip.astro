@@ -1,0 +1,70 @@
+---
+import Base from '../layouts/Base.astro';
+import Ikon from '../components/Ikon.astro';
+import { siparisleriOku } from '../lib/depo';
+import { SMS_BAGLI } from '../lib/altyapi';
+
+const k = Astro.locals.katalog;
+let hata = '';
+const kayit = globalThis as unknown as { __takipDenemeleri?: Map<string, number[]> };
+const denemeler: Map<string, number[]> = (kayit.__takipDenemeleri ??= new Map<string, number[]>());
+if (Astro.request.method === 'POST') {
+  const ip = Astro.clientAddress;
+  const simdi = Date.now();
+  const onceki = (denemeler.get(ip) ?? []).filter((t) => simdi - t < 600_000);
+  denemeler.set(ip, [...onceki, simdi]);
+  if (onceki.length >= 10) {
+    hata = 'Çok fazla deneme yaptınız. Lütfen 10 dakika sonra tekrar deneyin.';
+  } else {
+    const f = await Astro.request.formData();
+    const no = String(f.get('no') ?? '').trim().toUpperCase();
+    let tel = String(f.get('tel') ?? '').replace(/\D/g, '');
+    if (tel.startsWith('90') && tel.length === 12) tel = tel.slice(2);
+    if (tel.length === 10) tel = '0' + tel;
+    const s = (await siparisleriOku()).find((x) => x.no === no && x.musteri.tel === tel);
+    if (s) return Astro.redirect(`/siparis/${s.no}?t=${s.token}`);
+    hata = 'Bu sipariş numarası ve telefonla eşleşen bir sipariş bulunamadı.';
+  }
+}
+---
+<Base baslik={`Sipariş takip | ${k.site.ad}`} aciklama="Hesap gerekmeden siparişinizi takip edin." indekslenmesin>
+  <div class="container siparis-sonuc">
+    <div class="kart-kutu" data-siparislerim hidden>
+      <h2>Bu cihazdan verdiğiniz siparişler</h2>
+      <div class="siparislerim" data-siparislerim-liste></div>
+    </div>
+
+    <div class="kart-kutu">
+      <h1 style="font-size:34px">Sipariş takip</h1>
+      <p class="muted" style="margin:6px 0 16px">Hesap gerekmez. Sipariş numaranız sipariş sonrası ekranda yazar{SMS_BAGLI ? ' ve size SMS ile gönderilir' : ''} (ör. AL261117-1234).</p>
+      {hata && <p class="hata-ozeti is-visible" role="alert">{hata}</p>}
+      <form method="post" class="alanlar">
+        <div class="alan"><label for="no">Sipariş numarası</label><input id="no" name="no" required autocomplete="off" placeholder="AL261117-1234" /></div>
+        <div class="alan"><label for="tel">Cep telefonu</label><input id="tel" name="tel" type="tel" inputmode="tel" required autocomplete="tel-national" placeholder="05xx xxx xx xx" /></div>
+        <button class="btn btn--sepet btn--block" type="submit"><Ikon ad="kargo" />Siparişimi göster</button>
+      </form>
+      <a class="odeme-yardim" href={k.whatsapp('Merhaba, siparişimi takip etmek istiyorum.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={20} />Numaranızı bulamıyor musunuz? WhatsApp'tan yazın</a>
+    </div>
+  </div>
+
+  <script is:inline>
+    (function () {
+      var liste = [];
+      try { liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]'); } catch (e) {}
+      if (!liste.length) return;
+      var kutu = document.querySelector('[data-siparislerim]');
+      var alan = document.querySelector('[data-siparislerim-liste]');
+      var tl = new Intl.NumberFormat('tr-TR');
+      var tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
+      liste.forEach(function (s) {
+        if (!/^AL[0-9]{6}-[0-9]{4}$/.test(s.no) || !/^[a-f0-9]{32}$/.test(s.t)) return;
+        var a = document.createElement('a');
+        a.href = '/siparis/' + s.no + '?t=' + s.t;
+        var sol = document.createElement('span'); sol.textContent = s.no + ' · ' + tarih.format(new Date(s.tarih));
+        var sag = document.createElement('span'); sag.textContent = tl.format(s.toplam) + ' TL ›';
+        a.appendChild(sol); a.appendChild(sag); alan.appendChild(a);
+      });
+      if (alan.children.length) kutu.hidden = false;
+    })();
+  </script>
+</Base>

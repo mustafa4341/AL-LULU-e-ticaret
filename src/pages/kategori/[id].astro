@@ -1,0 +1,15 @@
+---
+import Base from '../../layouts/Base.astro';
+import UrunListesi from '../../components/UrunListesi.astro';
+const k = Astro.locals.katalog;
+const kategori = k.gorunurKategoriler().find((x) => x.id === Astro.params.id);
+if (!kategori) return Astro.rewrite('/404');
+const urunler = k.kategoriUrunleri(kategori.id);
+---
+<Base baslik={`${kategori.ad} | ${k.site.ad}`} aciklama={kategori.aciklama} aktif={kategori.id}>
+  <div class="container">
+    <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li><a href="/urunler">Ürünler</a></li><li aria-current="page">{kategori.ad}</li></ol></nav>
+    <header class="liste-bas"><h1>{kategori.ad}</h1><p>{kategori.aciklama}</p></header>
+    <UrunListesi urunler={urunler} aktif={kategori.id} />
+  </div>
+</Base>

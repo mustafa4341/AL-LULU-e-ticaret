@@ -1,0 +1,110 @@
+---
+import Base from '../../layouts/Base.astro';
+import Ikon from '../../components/Ikon.astro';
+import { siparisleriOku } from '../../lib/depo';
+import { formatTL } from '../../lib/fiyat';
+import { SIPARIS_DURUM_ADLARI } from '../../lib/sema';
+import { ODEME_BAGLI, bildirimKanali } from '../../lib/altyapi';
+
+const k = Astro.locals.katalog;
+const s = (await siparisleriOku()).find((x) => x.no === Astro.params.no);
+const token = Astro.url.searchParams.get('t');
+if (!s || !token || token !== s.token) return Astro.rewrite('/404');
+const yeni = Astro.url.searchParams.has('yeni');
+const asamalar = ['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi'] as const;
+const sira = asamalar.indexOf(s.durum as (typeof asamalar)[number]);
+const wa = k.whatsapp(`Merhaba, ${s.no} numaralı siparişim hakkında bilgi almak istiyorum.`);
+const takipUrl = s.kargoTakip ? k.kargoTakipUrl(s.kargoTakip) : undefined;
+const tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+const kayit = JSON.stringify({ no: s.no, t: s.token, tarih: s.tarih, toplam: s.toplam });
+/* Ödeme alınmadan "Siparişiniz alındı/onaylandı" denmez: başlık ve ikon siparişin gerçek durumunu söyler. */
+const odendi = sira >= 0;
+const kanal = bildirimKanali(!!s.musteri.eposta);
+const telGorunen = s.musteri.tel.replace(/^(\d{4})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4');
+---
+<Base baslik={`Sipariş ${s.no} | ${k.site.ad}`} aciklama="Sipariş durumu" indekslenmesin sade>
+  <div class="container siparis-sonuc">
+    <div class="siparis-tamam">
+      {yeni && odendi && (
+        <>
+          <div class="siparis-tamam__ikon">
+            <svg class="ciz-tik" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          </div>
+          <h1>Siparişiniz onaylandı</h1>
+          <p class="muted" style="margin-top:8px">Teşekkür ederiz {s.musteri.ad}. Ödemeniz alındı.{kanal && <> Kargo bilgileriniz {kanal} ile gelecek.</>}</p>
+        </>
+      )}
+      {yeni && !odendi && s.durum !== 'iptal' && (
+        <>
+          <div class="siparis-tamam__ikon siparis-tamam__ikon--bekliyor"><Ikon ad="saat" boyut={36} /></div>
+          <h1>Sipariş kaydınız oluşturuldu</h1>
+          <p class="muted" style="margin-top:8px">Teşekkür ederiz {s.musteri.ad}. <strong>Ödeme henüz alınmadı</strong>; siparişiniz ödeme bekliyor olarak kaydedildi.</p>
+        </>
+      )}
+      {!yeni && <h1>Sipariş durumu</h1>}
+      <span class="siparis-no">{s.no}</span>
+      <p class:list={['siparis-durum', { 'siparis-durum--bekliyor': s.durum === 'odeme-bekliyor' }]}>{SIPARIS_DURUM_ADLARI[s.durum]}</p>
+      {s.durum !== 'iptal' && (
+        <>
+          <div class="durum-cizgi" aria-hidden="true">{asamalar.map((_, i) => <span class:list={{ 'is-tamam': i <= sira }} />)}</div>
+          <div class="durum-adlari" aria-hidden="true">{asamalar.map((a) => <span>{SIPARIS_DURUM_ADLARI[a]}</span>)}</div>
+        </>
+      )}
+
+      {takipUrl && (
+        <div class="kargo-bilgi">
+          <p><strong>{s.kargoFirma || k.site.kargo.firma}</strong> · Takip no: <strong>{s.kargoTakip}</strong></p>
+          <a class="btn btn--sepet btn--block" href={takipUrl} target="_blank" rel="noopener"><Ikon ad="kargo" boyut={20} />Kargonu takip et</a>
+        </div>
+      )}
+
+      {s.durum === 'odeme-bekliyor' && !ODEME_BAGLI && (
+        <p class="taslak-not" style="text-align:left">Kartınızdan ücret alınmadı. Online ödeme altyapımız henüz devrede değil; bu kayıt ödeme alınana kadar kesinleşmiş sipariş sayılmaz. Sorunuz olursa WhatsApp'tan yazabilirsiniz.</p>
+      )}
+
+      {yeni && (
+        <p class="taslak-not" style="text-align:left;background:#F0F6FF;color:#1E3A5F">
+          <strong>Siparişinizi nasıl takip edersiniz?</strong> Hesap gerekmez: bu sayfa bu cihazda kayıtlı kalır ve
+          <a href="/siparis-takip">Sipariş Takip</a> sayfasında listelenir. Başka bir cihazdan sipariş numaranız ve telefonunuzla açabilirsiniz.
+        </p>
+      )}
+      <a class="btn btn--wa" style="margin-top:14px" href={wa} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={22} />WhatsApp'tan bilgi al</a>
+    </div>
+
+    <div class="kart-kutu">
+      <h2>Sipariş geçmişi</h2>
+      <ol class="zaman-cizelgesi">
+        {[...s.gecmis].reverse().map((g) => <li><span>{SIPARIS_DURUM_ADLARI[g.durum]}{g.not && <span class="muted"> · {g.not}</span>}</span><time datetime={g.tarih}>{tarih.format(new Date(g.tarih))}</time></li>)}
+      </ol>
+    </div>
+
+    <div class="kart-kutu">
+      <h2>Ürünler</h2>
+      <div class="toplamlar">
+        {s.kalemler.map((x) => <div class="siparis-kalem"><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}</span><span class="siparis-kalem__tutar">{formatTL(x.toplam)}</span></div>)}
+      </div>
+      <div class="toplamlar" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+        {s.setIndirimi > 0 && <div class="kazanc"><span>Set indirimi</span><span>−{formatTL(s.setIndirimi)}</span></div>}
+        {s.sepetIndirimi > 0 && <div class="kazanc"><span>Sepette indirim</span><span>−{formatTL(s.sepetIndirimi)}</span></div>}
+        <div><span>Kargo</span><span>{s.kargo ? formatTL(s.kargo) : 'Bedava'}</span></div>
+        <div class="genel"><span>Toplam</span><span>{formatTL(s.toplam)}</span></div>
+      </div>
+    </div>
+    <div class="kart-kutu">
+      <h2>Teslimat</h2>
+      <p>{s.musteri.ad} {s.musteri.soyad} · <span style="white-space:nowrap">{telGorunen}</span></p>
+      <p class="muted">{s.teslimat.adres}, {s.teslimat.ilce} / {s.teslimat.il}</p>
+    </div>
+    <p style="text-align:center;margin-top:20px"><a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`}>Onayladığınız sözleşmeler</a> · <a href="/">Alışverişe devam et</a></p>
+  </div>
+
+  <script is:inline define:vars={{ kayit, yeni }}>
+    // Hesapsız takip: bu cihazdan verilen siparişleri hatırla
+    try {
+      const k = JSON.parse(kayit);
+      const liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]').filter((x) => x.no !== k.no);
+      localStorage.setItem('allulu_siparislerim', JSON.stringify([k, ...liste].slice(0, 20)));
+      if (yeni) localStorage.removeItem('allulu_sepet_v2');
+    } catch (e) {}
+  </script>
+</Base>

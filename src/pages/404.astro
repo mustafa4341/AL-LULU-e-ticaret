@@ -1,0 +1,16 @@
+---
+import Base from '../layouts/Base.astro';
+const k = Astro.locals.katalog;
+Astro.response.status = 404;
+---
+<Base baslik={`Sayfa bulunamadı | ${k.site.ad}`} aciklama="Aradığınız sayfa bulunamadı." indekslenmesin>
+  <div class="container" style="padding-block:80px;text-align:center">
+    <p class="eyebrow eyebrow--altin">404</p>
+    <h1 style="font-size:40px;margin-top:8px">Aradığınız sayfa bulunamadı</h1>
+    <p class="muted" style="margin-top:12px">Ürün kaldırılmış ya da bağlantı değişmiş olabilir.</p>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin-top:24px">
+      <a class="btn btn--sepet" href="/">Ana sayfa</a>
+      <a class="btn btn--cizgi" href="/urunler">Tüm ürünler</a>
+    </div>
+  </div>
+</Base>

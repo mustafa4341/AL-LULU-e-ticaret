@@ -1,0 +1,69 @@
+---
+import Ikon from './Ikon.astro';
+import Logo from './Logo.astro';
+const k = Astro.locals.katalog;
+const site = k.site;
+const kategoriler = k.gorunurKategoriler({ menu: true });
+const yil = new Date().getFullYear();
+---
+<footer class="site-footer" id="footer">
+  <div class="container">
+    <div class="footer-iletisim" data-reveal>
+      <div>
+        <p class="footer-iletisim__baslik">Sorunuz mu var? Hemen yazın.</p>
+        <p class="footer-iletisim__alt">{site.calismaSaatleri || 'Her gün'} · Ortalama yanıt birkaç dakika</p>
+      </div>
+      <div class="footer-iletisim__butonlar">
+        <a class="btn btn--wa" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={22} />WhatsApp: {site.telefonGorunen}</a>
+        <a class="btn btn--koyu-cizgi" href={`mailto:${site.eposta}`}><Ikon ad="eposta" boyut={20} />{site.eposta}</a>
+      </div>
+    </div>
+    <div class="footer-grid">
+      <div class="footer-marka">
+        <Logo tip="tam" class="footer-logo" />
+        <p class="footer-slogan">{site.slogan}</p>
+      </div>
+      <div>
+        <h3>Kategoriler</h3>
+        <ul>
+          {kategoriler.map((kat) => <li><a href={`/kategori/${kat.id}`}>{kat.ad}</a></li>)}
+          <li><a href="/urunler">Tüm ürünler</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Yardım</h3>
+        <ul>
+          <li><a href="/siparis-takip">Sipariş takip</a></li>
+          <li><a href="/yasal/teslimat-ve-kargo">Kargo ve teslimat</a></li>
+          <li><a href="/yasal/garanti-kosullari">Garanti</a></li>
+          <li><a href="/#sss">Sık sorulanlar</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>Yasal</h3>
+        <ul>
+          <li><a href="/bilgi">Satıcı bilgileri</a></li>
+          <li><a href="/yasal/iptal-iade-kosullari">İptal ve iade koşulları</a></li>
+          <li><a href="/yasal/on-bilgilendirme-formu">Ön bilgilendirme formu</a></li>
+          <li><a href="/yasal/mesafeli-satis-sozlesmesi">Mesafeli satış sözleşmesi</a></li>
+          <li><a href="/yasal/kvkk-aydinlatma-metni">KVKK aydınlatma metni</a></li>
+          <li><a href="/yasal/gizlilik-ve-cerez-politikasi">Gizlilik ve çerez politikası</a></li>
+          <li><a href="/yasal/kullanim-kosullari">Kullanım koşulları</a></li>
+        </ul>
+      </div>
+      <div>
+        <h3>İletişim</h3>
+        <address>
+          <a href={k.whatsapp()} target="_blank" rel="noopener">WhatsApp: {site.telefonGorunen}</a><br />
+          <a href={`tel:${site.telefon}`}>Tel: {site.telefonGorunen}</a><br />
+          <a href={`mailto:${site.eposta}`}>{site.eposta}</a><br />
+          <span data-verify="Ticari unvan ve adres">{site.satici.unvan}<br />{site.satici.adres}</span>
+        </address>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <span>© {yil} {site.ad}. Fissler ve Vitaquick, Fissler GmbH'nin tescilli markalarıdır.</span>
+      <span data-verify="ETBİS kaydı">ETBİS: {site.satici.etbis}</span>
+    </div>
+  </div>
+</footer>

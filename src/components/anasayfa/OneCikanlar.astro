@@ -1,0 +1,17 @@
+---
+import Ikon from '../Ikon.astro';
+import UrunKarti from '../UrunKarti.astro';
+const k = Astro.locals.katalog;
+const urunler = k.oneCikanUrunler();
+---
+{urunler.length > 0 && (
+  <section class="bolum bolum--beyaz" aria-labelledby="one-cikan-baslik">
+    <div class="container">
+      <div class="bolum-bas">
+        <div><p class="eyebrow eyebrow--altin">Seçtiklerimiz</p><h2 id="one-cikan-baslik">{k.anaSayfa.oneCikanlarBaslik}</h2></div>
+        <a class="bolum-bas__link" href="/urunler">Tümünü gör <Ikon ad="sag" boyut={16} /></a>
+      </div>
+      <div class="urun-ray">{urunler.map((u) => <UrunKarti urun={u} konum="one-cikanlar" />)}</div>
+    </div>
+  </section>
+)}

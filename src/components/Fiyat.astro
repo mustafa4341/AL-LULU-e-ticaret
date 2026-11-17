@@ -1,0 +1,49 @@
+---
+/* Fiyat sunumu — üç seçenek (panel → Ayarlar → Fiyat sunumu):
+   A "sade":     büyük fiyat (siyah), küçük üstü çizili eski fiyat, küçük indirim yüzdesi.
+   B "kampanya": kırmızı fiyat, büyük "%X İNDİRİM" rozeti, kırmızı tasarruf şeridi.
+   C "dengeli":  bordo fiyat, gri üstü çizili eski fiyat + küçük % rozeti, yeşil "X TL daha az ödersiniz" (önerilen).
+   İndirim yalnızca fiyat geçmişinden doğrulanmışsa görünür (bkz. lib/fiyat.ts). Yüksek fiyatlı üründe
+   tasarruf TL olarak gösterilir: araştırmalar yüksek fiyatlarda TL tutarının yüzdeden daha büyük algılandığını gösterir. */
+import Ikon from './Ikon.astro';
+import type { FiyatBilgisi } from '../lib/katalog';
+import { formatTL } from '../lib/fiyat';
+interface Props {
+  bilgi: FiyatBilgisi;
+  boyut?: 'buyuk' | 'orta' | 'kucuk';
+  /** Önizleme için; verilmezse panel ayarı kullanılır */
+  sunum?: 'sade' | 'kampanya' | 'dengeli';
+}
+const { bilgi, boyut = 'orta' } = Astro.props;
+const sunum = Astro.props.sunum ?? Astro.locals.katalog?.site.fiyatSunumu ?? 'dengeli';
+const indirimli = !!bilgi.onceki;
+const tasarruf = indirimli ? bilgi.onceki! - bilgi.fiyat : 0;
+const buyuk = boyut === 'buyuk';
+---
+<div class:list={['fiyat-kutu', `fiyat-kutu--${boyut}`, `fiyat-kutu--${sunum}`, { 'fiyat-kutu--indirimli': indirimli || bilgi.enDusuk }]}>
+  {indirimli && sunum === 'kampanya' && buyuk && (
+    <div class="fiyat-kampanya-ust">
+      <span class="fiyat-rozet-buyuk">%{bilgi.yuzde} İNDİRİM</span>
+      {bilgi.enDusuk && <span class="fiyat-endusuk"><Ikon ad="trend" boyut={16} />Son {bilgi.enDusukGun} Günün En Düşük Fiyatı</span>}
+    </div>
+  )}
+  {bilgi.enDusuk && !(sunum === 'kampanya' && buyuk) && (
+    <p class="fiyat-endusuk"><Ikon ad="trend" boyut={boyut === 'kucuk' ? 14 : 16} />Son {bilgi.enDusukGun} Günün En Düşük Fiyatı</p>
+  )}
+  <div class="fiyat-satir">
+    {indirimli && sunum === 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
+    {indirimli && sunum === 'dengeli' && <span class="rozet rozet--indirim fiyat-yuzde">%{bilgi.yuzde}</span>}
+    {indirimli && sunum === 'kampanya' && !buyuk && <span class="rozet rozet--indirim fiyat-yuzde">%{bilgi.yuzde}</span>}
+    <span class:list={['fiyat', { 'fiyat--indirimli': indirimli && sunum !== 'sade' }]}>{formatTL(bilgi.fiyat)}</span>
+    {indirimli && sunum !== 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
+    {indirimli && sunum === 'sade' && <span class="fiyat-yuzde-sade">%{bilgi.yuzde}</span>}
+  </div>
+  {indirimli && buyuk && sunum === 'dengeli' && <p class="fiyat-tasarruf">{formatTL(tasarruf)} daha az ödüyorsunuz</p>}
+  {indirimli && sunum === 'kampanya' && <p class="fiyat-tasarruf fiyat-tasarruf--kampanya">{formatTL(tasarruf)} tasarruf</p>}
+  {bilgi.sepette && (
+    <div class="fiyat-sepette">
+      <span class="fiyat-sepette__etiket"><Ikon ad="canta" boyut={14} />Sepette %{bilgi.sepette.yuzde} İndirim</span>
+      <span class="fiyat-sepette__tutar">Sepette <strong>{formatTL(bilgi.sepette.fiyat)}</strong></span>
+    </div>
+  )}
+</div>

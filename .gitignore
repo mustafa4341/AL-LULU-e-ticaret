@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.astro/
+
+# Gizli ayarlar (parola, oturum anahtarı) — asla yüklenmez
+.env
+.env.*
+!.env.example
+
+# Canlı veriler: müşteri siparişleri, onaylanan sözleşmeler, yedekler, yüklenen görseller
+veri/siparisler.json
+veri/sozlesmeler/
+veri/yedekler/
+veri/yuklemeler/
+
+# Yerel araç ayarları
+.claude/settings.local.json
+.vercel/
+*.log
+.DS_Store
+Thumbs.db

@@ -1,0 +1,134 @@
+---
+import Base from '../layouts/Base.astro';
+import Ikon from '../components/Ikon.astro';
+import { yasalSite } from '../lib/yasal';
+import { ODEME_BAGLI, SMS_BAGLI, epostaBagli } from '../lib/altyapi';
+const k = Astro.locals.katalog;
+/* Ödeme bağlı değilken buton ve metinler "ödeme alınıyor" izlenimi vermez (bkz. lib/altyapi.ts). */
+const gonderEtiketi = ODEME_BAGLI ? 'Ödemeye Geç' : 'Sipariş Kaydı Oluştur';
+const iletisimNotu = SMS_BAGLI
+  ? 'Sipariş ve kargo bilgileriniz SMS ile gelir.'
+  : 'Telefonunuz kargo görevlisi ve sipariş takibi için gereklidir.';
+---
+<Base baslik={`Güvenli ödeme | ${k.site.ad}`} aciklama="Güvenli ödeme" indekslenmesin sade>
+  <div class="container odeme-sayfa" data-odeme-kok>
+    <button class="ozet-ac" type="button" aria-expanded="false" aria-controls="siparis-ozeti" data-ozet-ac>
+      <span>Sipariş özeti <Ikon ad="asagi" boyut={16} class="ok" /></span>
+      <span data-ozet-toplam>—</span>
+    </button>
+
+    <aside class="ozet is-kapali" id="siparis-ozeti" aria-label="Sipariş özeti" data-ozet>
+      <div data-ozet-kalemler></div>
+      <div class="toplamlar" data-ozet-toplamlar></div>
+    </aside>
+
+    <form class="odeme-form" novalidate data-odeme-form>
+      <div class="hata-ozeti" role="alert" tabindex="-1" data-hata-ozeti></div>
+
+      <section class="adim" aria-labelledby="a1">
+        <h2 id="a1"><span class="no">1</span>İletişim</h2>
+        <p class="adim__not">{iletisimNotu}</p>
+        <div class="alanlar alanlar--2">
+          <div class="alan">
+            <label for="tel">Cep telefonu</label>
+            <input id="tel" name="tel" type="tel" autocomplete="tel-national" inputmode="tel" placeholder="05xx xxx xx xx" required data-telefon />
+            <span class="hata">05 ile başlayan 11 haneli numarayı girin.</span>
+          </div>
+          <div class="alan">
+            <label for="eposta">E-posta <span class="ops">(isteğe bağlı)</span></label>
+            <input id="eposta" name="eposta" type="email" autocomplete="email" inputmode="email" data-eposta />
+            <span class="ipucu">{epostaBagli() ? 'Yazarsanız sipariş özetiniz e-postayla da gelir.' : 'Yazarsanız faturanızı e-postayla gönderebiliriz.'}</span>
+            <span class="hata">Geçerli bir e-posta adresi girin.</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="adim" aria-labelledby="a2">
+        <h2 id="a2"><span class="no">2</span>Teslimat adresi</h2>
+        <div class="alanlar">
+          <div class="alanlar alanlar--2">
+            <div class="alan"><label for="ad">Ad</label><input id="ad" name="ad" autocomplete="given-name" required /><span class="hata">Adınızı girin.</span></div>
+            <div class="alan"><label for="soyad">Soyad</label><input id="soyad" name="soyad" autocomplete="family-name" required /><span class="hata">Soyadınızı girin.</span></div>
+          </div>
+          <div class="alanlar alanlar--2">
+            <div class="alan">
+              <label for="il">İl</label>
+              <select id="il" name="il" autocomplete="address-level1" required data-il><option value="">Seçin</option></select>
+              <span class="hata">İl seçin.</span>
+            </div>
+            <div class="alan"><label for="ilce">İlçe</label><input id="ilce" name="ilce" autocomplete="address-level2" required /><span class="hata">İlçe girin.</span></div>
+          </div>
+          <div class="alan">
+            <label for="adres">Açık adres</label>
+            <textarea id="adres" name="adres" autocomplete="street-address" rows="2" placeholder="Mahalle, sokak, bina no, daire no" required minlength="10"></textarea>
+            <span class="hata">Kargonun sizi bulabileceği açık adresi girin.</span>
+          </div>
+          <div class="alan"><label for="not">Kargo notu <span class="ops">(isteğe bağlı)</span></label><input id="not" name="not" placeholder="Örn. kapıcıya bırakılabilir" maxlength="200" /></div>
+        </div>
+      </section>
+
+      <section class="adim" aria-labelledby="a3">
+        <h2 id="a3"><span class="no">3</span>Fatura</h2>
+        <fieldset class="secmeli">
+          <legend class="visually-hidden">Fatura türü</legend>
+          <label><input type="radio" name="fatura_tipi" value="bireysel" checked data-fatura-tipi /><span>Bireysel</span></label>
+          <label><input type="radio" name="fatura_tipi" value="kurumsal" data-fatura-tipi /><span>Kurumsal</span></label>
+        </fieldset>
+        <div class="alanlar" data-kurumsal hidden>
+          <div class="alan"><label for="firma">Firma unvanı</label><input id="firma" name="firma" autocomplete="organization" /><span class="hata">Firma unvanını girin.</span></div>
+          <div class="alanlar alanlar--2">
+            <div class="alan"><label for="vd">Vergi dairesi</label><input id="vd" name="vd" /><span class="hata">Vergi dairesini girin.</span></div>
+            <div class="alan"><label for="vno">Vergi numarası</label><input id="vno" name="vno" inputmode="numeric" pattern="[0-9]{10}" maxlength="10" /><span class="hata">10 haneli vergi numarasını girin.</span></div>
+          </div>
+        </div>
+        <label class="onay" style="margin-top:8px"><input type="checkbox" name="ayni_adres" checked data-ayni-adres /><span>Fatura adresim teslimat adresiyle aynı</span></label>
+        <div class="alan" data-fatura-adres hidden style="margin-top:12px">
+          <label for="fadres">Fatura adresi</label>
+          <textarea id="fadres" name="fadres" rows="2" autocomplete="billing street-address"></textarea>
+          <span class="hata">Fatura adresini girin.</span>
+        </div>
+      </section>
+
+      <section class="adim" aria-labelledby="a4">
+        <h2 id="a4"><span class="no">4</span>{ODEME_BAGLI ? 'Onay ve ödeme' : 'Onay'}</h2>
+        <label class="onay">
+          <input type="checkbox" id="sozlesme" name="sozlesme" required data-sozlesme />
+          <span><button type="button" class="link-btn" data-yasal-ac="on-bilgilendirme">Ön Bilgilendirme Formu</button>'nu ve <button type="button" class="link-btn" data-yasal-ac="mesafeli-satis">Mesafeli Satış Sözleşmesi</button>'ni okudum, onaylıyorum.</span>
+        </label>
+        <p class="small muted" style="margin:10px 0 16px">Kişisel verileriniz yalnızca siparişinizi teslim etmek ve fatura düzenlemek için işlenir. <a href="/yasal/kvkk-aydinlatma-metni" target="_blank" rel="noopener">Aydınlatma metni</a></p>
+        {ODEME_BAGLI ? (
+          <div class="odeme-kutu">
+            <Ikon ad="kilit" boyut={18} /> Kart bilgilerinizi bir sonraki adımda lisanslı ödeme kuruluşunun 3D Secure korumalı sayfasında girersiniz. Kart bilgileriniz bizde saklanmaz.
+          </div>
+        ) : (
+          <div class="odeme-kutu odeme-kutu--bekliyor" data-verify="iyzico / PayTR bağlanınca lib/altyapi.ts → ODEME_BAGLI = true">
+            <Ikon ad="saat" boyut={18} /> <strong>Online ödeme henüz devrede değil.</strong> Bu adım yalnızca sipariş kaydı oluşturur; kartınızdan ücret alınmaz ve kayıt, ödeme alınana kadar kesinleşmiş sipariş sayılmaz.
+          </div>
+        )}
+        <button class="btn btn--sepet btn--block btn--buyuk" type="submit" style="margin-top:14px" data-gonder data-gonder-taban={gonderEtiketi}>
+          <Ikon ad={ODEME_BAGLI ? 'kilit' : 'belge'} boyut={18} /><span data-gonder-etiket>{gonderEtiketi}</span>
+        </button>
+        <a class="odeme-yardim" href={k.whatsapp('Merhaba, sipariş verirken yardıma ihtiyacım var.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={20} />Takıldınız mı? WhatsApp: {k.site.telefonGorunen}</a>
+      </section>
+    </form>
+  </div>
+
+  <dialog class="yasal-pencere" data-yasal-pencere aria-labelledby="yasal-baslik">
+    <div class="bas">
+      <h2 id="yasal-baslik">Ön Bilgilendirme Formu</h2>
+      <button class="icon-btn" type="button" data-yasal-kapat aria-label="Kapat"><Ikon ad="kapat" boyut={22} /></button>
+    </div>
+    <div class="govde belge-metin" data-yasal-govde></div>
+  </dialog>
+  <script type="application/json" id="satici-veri" set:html={JSON.stringify(yasalSite(k.site))} />
+
+  <script>
+    import '../scripts/odeme';
+  </script>
+</Base>
+
+<style>
+  .odeme-sayfa { padding-inline: 0; }
+  @media (min-width: 960px) { .odeme-sayfa { padding-inline: var(--gutter); } }
+  .odeme-kutu :global(svg) { display: inline-block; vertical-align: -3px; margin-right: 4px; }
+</style>

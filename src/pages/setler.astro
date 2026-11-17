@@ -1,0 +1,23 @@
+---
+import Base from '../layouts/Base.astro';
+import SetKarti from '../components/SetKarti.astro';
+const k = Astro.locals.katalog;
+const setler = k.tumSetler();
+const amiral = k.urunBul(k.anaSayfa.hero.urunId);
+---
+<Base baslik={`Setler & Fırsatlar | ${k.site.ad}`} aciklama="Birlikte alındığında set fiyatıyla daha avantajlı ürün kombinasyonları." aktif="setler">
+  <div class="container" style="padding-bottom:64px">
+    <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li aria-current="page">Setler & Fırsatlar</li></ol></nav>
+    <header class="liste-bas">
+      <h1>Setler & Fırsatlar</h1>
+      <p>Birlikte kullanılan ürünleri set olarak alın. Set fiyatı, ürünlerin bugünkü ayrı ayrı fiyatlarından hesaplanır; gösterilen kazanç gerçektir.</p>
+    </header>
+    {setler.length ? <div class="set-grid">{setler.map((s) => <SetKarti set={s} />)}</div> : (
+      <div class="bos-durum">
+        <h2>Setler çok yakında</h2>
+        <p>Yeni ürünlerle birlikte avantajlı setler burada olacak.</p>
+        {amiral && <a class="btn btn--sepet" href={`/urun/${amiral.id}`}>{amiral.marka} {amiral.kisaAd}</a>}
+      </div>
+    )}
+  </div>
+</Base>

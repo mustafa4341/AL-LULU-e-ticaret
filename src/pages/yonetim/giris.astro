@@ -1,0 +1,56 @@
+---
+import '../../styles/global.css';
+import '../../styles/yonetim.css';
+import { basariliGiris, basarisizGiris, girisEngelliMi, oturumAc, parolaDogruMu, yonetimHazirMi } from '../../lib/oturum';
+
+let hata = '';
+const hazir = yonetimHazirMi();
+const hedefHam = Astro.url.searchParams.get('d') ?? '/yonetim';
+const hedef = hedefHam.startsWith('/yonetim') ? hedefHam : '/yonetim';
+if (Astro.locals.yonetici) return Astro.redirect(hedef);
+
+if (Astro.request.method === 'POST' && hazir) {
+  const ip = Astro.clientAddress;
+  if (girisEngelliMi(ip)) {
+    hata = 'Çok fazla hatalı deneme. 10 dakika sonra tekrar deneyin.';
+  } else {
+    const f = await Astro.request.formData();
+    if (parolaDogruMu(String(f.get('parola') ?? ''))) {
+      basariliGiris(ip);
+      oturumAc(Astro.cookies, Astro.url.protocol === 'https:');
+      return Astro.redirect(hedef);
+    }
+    basarisizGiris(ip);
+    await new Promise((r) => setTimeout(r, 600)); // kaba kuvvet denemelerini yavaşlat
+    hata = 'Parola hatalı.';
+  }
+}
+---
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Yönetim girişi · Al Lulu Home</title>
+    <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
+  </head>
+  <body class="y-giris">
+    <form method="post">
+      <img src="/img/logo/al-lulu-home.webp" alt="Al Lulu Home" width="720" height="641" />
+      <h1>Yönetim paneli</h1>
+      {!hazir ? (
+        <p class="y-bildirim y-bildirim--hata">Panel parolası ayarlanmamış. Proje klasöründeki <code>.env</code> dosyasına <code>YONETIM_PAROLA</code> ve en az 32 karakterlik <code>OTURUM_GIZLI</code> yazın.</p>
+      ) : (
+        <>
+          {hata && <p class="y-bildirim y-bildirim--hata" role="alert">{hata}</p>}
+          <div class="y-alan">
+            <label for="parola">Parola</label>
+            <input id="parola" name="parola" type="password" autocomplete="current-password" required autofocus />
+          </div>
+          <button class="btn btn--sepet btn--block" type="submit">Giriş yap</button>
+        </>
+      )}
+    </form>
+  </body>
+</html>

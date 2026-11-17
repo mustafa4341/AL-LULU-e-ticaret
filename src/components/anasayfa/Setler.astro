@@ -1,0 +1,17 @@
+---
+import Ikon from '../Ikon.astro';
+import SetKarti from '../SetKarti.astro';
+const k = Astro.locals.katalog;
+const setler = k.tumSetler().filter((s) => s.oneCikan);
+---
+{setler.length > 0 && (
+  <section class="bolum" aria-labelledby="set-baslik">
+    <div class="container">
+      <div class="bolum-bas">
+        <div><p class="eyebrow eyebrow--altin">Birlikte alın, kazanın</p><h2 id="set-baslik">{k.anaSayfa.setlerBaslik}</h2></div>
+        <a class="bolum-bas__link" href="/setler">Tüm setler <Ikon ad="sag" boyut={16} /></a>
+      </div>
+      <div class="set-grid">{setler.slice(0, 2).map((s) => <SetKarti set={s} />)}</div>
+    </div>
+  </section>
+)}

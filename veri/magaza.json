@@ -1,0 +1,616 @@
+{
+  "surum": 4,
+  "guncelleme": "2026-11-17T15:10:27.384Z",
+  "site": {
+    "ad": "Al Lulu Home",
+    "slogan": "Evinize yıllarca eşlik edecek parçalar",
+    "url": "https://allulu.com.tr",
+    "eposta": "solyanim4341@gmail.com",
+    "telefon": "+905525778578",
+    "telefonGorunen": "0552 577 85 78",
+    "whatsapp": "905525778578",
+    "calismaSaatleri": "Hafta içi 09:00–18:00",
+    "satici": {
+      "unvan": "[Ticari Unvan]",
+      "adres": "[Açık adres]",
+      "mersis": "[—]",
+      "vergiDairesiNo": "[—]",
+      "kep": "[—]",
+      "etbis": "[ETBİS kayıt no]"
+    },
+    "kargo": {
+      "firma": "Yurtiçi Kargo",
+      "ucret": 99,
+      "ucretsizEsik": 1000,
+      "kesimSaati": 14,
+      "teslimGun": [
+        1,
+        3
+      ],
+      "takipUrl": "https://www.yurticikargo.com/Tracking/Detail/{kod}"
+    },
+    "taksit": {
+      "pesinFiyatinaTaksit": null,
+      "genelMetin": "Kredi kartına taksit seçenekleri ödeme adımında"
+    },
+    "duyurular": [
+      "Orijinal ürün · 2 yıl garanti · faturalı gönderim",
+      "14:00'e kadar verilen siparişler aynı gün kargoda",
+      "1.000 TL ve üzeri siparişlerde kargo bedava",
+      "WhatsApp destek: 0552 577 85 78"
+    ],
+    "iadeGun": 14,
+    "indirimReferansGun": 30,
+    "cokSatanEsik": 10,
+    "fiyatSunumu": "dengeli"
+  },
+  "kategoriler": [
+    {
+      "id": "duduklu-tencere",
+      "ad": "Düdüklü Tencereler",
+      "aciklama": "Hızlı, güvenli ve enerji dostu pişirme için premium düdüklü tencereler.",
+      "ikon": "duduklu",
+      "sira": 1,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": false
+    },
+    {
+      "id": "tencere",
+      "ad": "Tencereler",
+      "aciklama": "Günlük yemeklerden kalabalık sofralara, her boyda tencere.",
+      "ikon": "tencere",
+      "sira": 2,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": true
+    },
+    {
+      "id": "tava",
+      "ad": "Tavalar",
+      "aciklama": "Paslanmaz çelik ve yapışmaz tavalar.",
+      "ikon": "tava",
+      "sira": 3,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": true
+    },
+    {
+      "id": "aksesuar",
+      "ad": "Aksesuar & Yedek Parça",
+      "aciklama": "Conta, buhar aparatı ve tamamlayıcı parçalar.",
+      "ikon": "kasik",
+      "sira": 4,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": true
+    },
+    {
+      "id": "saklama",
+      "ad": "Saklama & Düzen",
+      "aciklama": "Mutfağınızı ferahlatan saklama ve düzenleme ürünleri.",
+      "ikon": "kutu",
+      "sira": 5,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": true
+    },
+    {
+      "id": "sofra",
+      "ad": "Sofra & Servis",
+      "aciklama": "Sofranıza şıklık katan servis ürünleri.",
+      "ikon": "kase",
+      "sira": 6,
+      "menudeGoster": true,
+      "anaSayfadaGoster": true,
+      "yakindaGoster": true
+    }
+  ],
+  "urunler": [
+    {
+      "id": "fissler-vitaquick-premium-6l",
+      "durum": "yayinda",
+      "marka": "Fissler",
+      "ad": "Vitaquick® Premium Düdüklü Tencere 6 L",
+      "kisaAd": "Vitaquick® Premium 6 L",
+      "kategoriler": [
+        "duduklu-tencere"
+      ],
+      "fiyat": 12999,
+      "fiyatGecmisi": [
+        {
+          "tarih": "2026-11-17T15:26:28Z",
+          "fiyat": 12999
+        }
+      ],
+      "kampanya": null,
+      "sepetteIndirim": 0,
+      "stok": 20,
+      "maxAdet": 5,
+      "sku": "602-410-06-000/0",
+      "gorseller": [
+        {
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/01-on.webp",
+          "alt": "Fissler Vitaquick Premium 6 L düdüklü tencere, önden görünüm"
+        },
+        {
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/02-yan.webp",
+          "alt": "Fissler Vitaquick Premium 6 L, yandan görünüm ve uzun kulp"
+        },
+        {
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/03-kapak-acik.webp",
+          "alt": "Kapağı açık tencere, iç gövde ve kapak altı"
+        }
+      ],
+      "ozet": "İki pişirme kademesiyle hızlı ve kontrollü pişirme. İndüksiyon dahil her ocakta, yıllarca kullanılacak 18/10 paslanmaz çelik.",
+      "oneCikanBilgiler": [
+        {
+          "ikon": "tencere",
+          "metin": "6 L · Ø 22 cm"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "2 pişirme kademesi"
+        },
+        {
+          "ikon": "ates",
+          "metin": "İndüksiyon dahil tüm ocaklar"
+        },
+        {
+          "ikon": "konum",
+          "metin": "Almanya'da üretim"
+        }
+      ],
+      "rozetler": [
+        "2 Yıl Garanti",
+        "Orijinal Ürün"
+      ],
+      "garanti": "2 yıl",
+      "faydalar": [
+        {
+          "baslik": "%70’e kadar daha kısa pişirme",
+          "metin": "Güveç ve haşlamalarda normal tencereye göre; sebzelerde %20–50.",
+          "ikon": "saat",
+          "kaynak": "Fissler verisi · yemeğe göre değişir"
+        },
+        {
+          "baslik": "Hafta içi akşam yemeği, telaşsız",
+          "metin": "Dana kuşbaşı 20–25 dk, pilav 5–7 dk.",
+          "ikon": "tencere",
+          "kaynak": "Fissler pişirme tablosu"
+        },
+        {
+          "baslik": "İki pişirme kademesi",
+          "metin": "Sebze ve balığa 1., et ve baklagile 2. kademe; gösterge basıncı gösterir.",
+          "ikon": "gosterge"
+        },
+        {
+          "baslik": "Her ocakta çalışır",
+          "metin": "İndüksiyon, elektrikli, seramik ve gazlı ocaklar.",
+          "ikon": "ates"
+        },
+        {
+          "baslik": "Yıllarca kullanım için",
+          "metin": "18/10 paslanmaz çelik, Almanya’da üretim, 2 yıl garanti.",
+          "ikon": "yildiz"
+        },
+        {
+          "baslik": "Güvenli kullanım",
+          "metin": "Kapak doğru kilitlenmeden basınç oluşmaz.",
+          "ikon": "kalkan"
+        }
+      ],
+      "teknik": [
+        [
+          "Marka",
+          "Fissler (Almanya)"
+        ],
+        [
+          "Seri",
+          "Vitaquick® Premium"
+        ],
+        [
+          "Hacim",
+          "6 litre"
+        ],
+        [
+          "Çap",
+          "22 cm"
+        ],
+        [
+          "Malzeme",
+          "18/10 paslanmaz çelik"
+        ],
+        [
+          "Pişirme kademesi",
+          "2 (hassas / hızlı)"
+        ],
+        [
+          "Ocak uyumu",
+          "İndüksiyon, elektrik, seramik, gaz"
+        ],
+        [
+          "Üretim yeri",
+          "Almanya"
+        ],
+        [
+          "Garanti",
+          "2 yıl"
+        ],
+        [
+          "Model kodu",
+          "602-410-06-000/0"
+        ]
+      ],
+      "kutuIcerigi": [
+        "Düdüklü tencere gövdesi",
+        "Kapak (basınç sistemiyle)",
+        "Kullanım kılavuzu",
+        "Garanti belgesi"
+      ],
+      "sss": [
+        {
+          "soru": "Ürün orijinal mi, faturası var mı?",
+          "cevap": "Evet. Ürün orijinaldir ve adınıza düzenlenen faturayla gönderilir. Kutudaki model kodu faturadaki kodla aynıdır."
+        },
+        {
+          "soru": "Garanti süresi ne kadar?",
+          "cevap": "Ürün 2 yıl garantilidir. Garanti belgesi ürünle birlikte kutudan çıkar."
+        },
+        {
+          "soru": "Hangi ocaklarla uyumlu?",
+          "cevap": "İndüksiyon, elektrikli, seramik ve gazlı ocaklar dahil tüm ocak türleriyle kullanılabilir."
+        },
+        {
+          "soru": "6 litre kaç kişi için uygun?",
+          "cevap": "Düdüklü tencerede en fazla 2/3 doldurma kuralı geçerlidir; yaklaşık 4 litre kullanılabilir hacim, 4–6 kişilik bir ana yemek için rahattır. Bu bizim kullanım tahminimizdir."
+        },
+        {
+          "soru": "Düdüklü tencere kullanmaktan çekiniyorum. Güvenli mi?",
+          "cevap": "Kapak tam kilitlenmeden basınç oluşmaz ve fazla basınç emniyet sistemleriyle kontrollü olarak tahliye edilir. İlk kullanımda kılavuzu okumanızı öneririz; takıldığınız yerde bize WhatsApp'tan yazabilirsiniz."
+        },
+        {
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Gövde bulaşık makinesinde yıkanabilir; kapak ve valf sistemi elde yıkanmalıdır. Ayrıntılar kullanım kılavuzundadır."
+        }
+      ],
+      "birlikteIyiGider": [
+        "fissler-buhar-aparati-22",
+        "ornek-silikon-spatula"
+      ],
+      "oneCikan": true,
+      "oncelik": 100,
+      "dogrula": [
+        "Buhar aparatı kutuya dahil mi? (gönderilen 4. fotoğrafta aparat görünüyor)",
+        "Bulaşık makinesi bilgisi kılavuzdan teyit edilecek",
+        "Faydalar: %70/%50 iddiası Fissler’in genel Vitaquick sayfasından; elimizdeki SKU ile eşleştiğini teyit edin.",
+        "Fotoğraflar gönderilecek modelle birebir aynı mı? (3. fotoğraf farklı nesil olabilir)",
+        "Güvenlik maddesi kullanım kılavuzundan teyit edilecek.",
+        "Model kodu faturadakiyle aynı mı?"
+      ],
+      "firsat": null,
+      "pisirme": [
+        {
+          "yemek": "Pilav (beyaz pirinç)",
+          "sure": "5–7 dk",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Kuru fasulye (ıslatılmış)",
+          "sure": "16 dk",
+          "kademe": "2",
+          "miktar": "400 g"
+        },
+        {
+          "yemek": "Mercimek",
+          "sure": "10–15 dk",
+          "kademe": "2",
+          "miktar": "400 g"
+        },
+        {
+          "yemek": "Dana kuşbaşı / gulaş",
+          "sure": "20–25 dk",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Kuzu yahni",
+          "sure": "10–15 dk",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Tavuk (göğüs / but)",
+          "sure": "15–20 dk",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Patates (soyulmuş, parça)",
+          "sure": "6–8 dk",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Taze fasulye",
+          "sure": "6–8 dk",
+          "kademe": "1",
+          "miktar": "500 g"
+        },
+        {
+          "yemek": "Havuç",
+          "sure": "4–6 dk",
+          "kademe": "1",
+          "miktar": "500 g"
+        }
+      ],
+      "pisirmeNotu": "Süreler Fissler’in resmi pişirme tablosundan alınmıştır ve kapaktaki sarı halka göründükten (basınç oluştuktan) sonra başlar. Miktar, parça büyüklüğü ve ocağa göre değişebilir."
+    },
+    {
+      "id": "fissler-buhar-aparati-22",
+      "durum": "taslak",
+      "marka": "Fissler",
+      "ad": "Buharlı Pişirme Aparatı 22 cm (Vitaquick uyumlu)",
+      "kisaAd": "Buhar Aparatı 22 cm",
+      "kategoriler": [
+        "aksesuar"
+      ],
+      "fiyat": 1490,
+      "fiyatGecmisi": [
+        {
+          "tarih": "2026-11-17T14:43:25Z",
+          "fiyat": 1490
+        }
+      ],
+      "kampanya": null,
+      "sepetteIndirim": 0,
+      "stok": 10,
+      "maxAdet": 5,
+      "sku": "ORNEK-001",
+      "gorseller": [],
+      "ozet": "Sebze ve balığı besin değerini koruyarak buharda pişirmek için. 22 cm Vitaquick ile uyumlu.",
+      "oneCikanBilgiler": [
+        {
+          "ikon": "tencere",
+          "metin": "22 cm uyumlu"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Paslanmaz çelik"
+        }
+      ],
+      "rozetler": [],
+      "faydalar": [],
+      "teknik": [],
+      "kutuIcerigi": [],
+      "sss": [],
+      "birlikteIyiGider": [
+        "fissler-vitaquick-premium-6l"
+      ],
+      "oneCikan": true,
+      "oncelik": 50,
+      "dogrula": [],
+      "firsat": null,
+      "pisirme": []
+    },
+    {
+      "id": "ornek-celik-tava-28",
+      "durum": "taslak",
+      "marka": "Örnek Marka",
+      "ad": "Paslanmaz Çelik Tava 28 cm",
+      "kisaAd": "Çelik Tava 28 cm",
+      "kategoriler": [
+        "tava"
+      ],
+      "fiyat": 3900,
+      "fiyatGecmisi": [
+        {
+          "tarih": "2026-11-17T14:43:25Z",
+          "fiyat": 3900
+        }
+      ],
+      "kampanya": null,
+      "sepetteIndirim": 0,
+      "stok": 8,
+      "maxAdet": 5,
+      "sku": "ORNEK-002",
+      "gorseller": [],
+      "ozet": "Kızartma ve sotelerde homojen ısı dağılımı.",
+      "oneCikanBilgiler": [
+        {
+          "ikon": "tava",
+          "metin": "Ø 28 cm"
+        },
+        {
+          "ikon": "ates",
+          "metin": "İndüksiyon uyumlu"
+        }
+      ],
+      "rozetler": [],
+      "faydalar": [],
+      "teknik": [],
+      "kutuIcerigi": [],
+      "sss": [],
+      "birlikteIyiGider": [],
+      "oneCikan": true,
+      "oncelik": 40,
+      "dogrula": [],
+      "firsat": null,
+      "pisirme": []
+    },
+    {
+      "id": "ornek-saklama-seti",
+      "durum": "taslak",
+      "marka": "Örnek Marka",
+      "ad": "Cam Saklama Kabı Seti (3'lü)",
+      "kisaAd": "Cam Saklama Seti",
+      "kategoriler": [
+        "saklama"
+      ],
+      "fiyat": 1250,
+      "fiyatGecmisi": [
+        {
+          "tarih": "2026-11-17T14:43:25Z",
+          "fiyat": 1250
+        }
+      ],
+      "kampanya": null,
+      "sepetteIndirim": 0,
+      "stok": 15,
+      "maxAdet": 5,
+      "sku": "ORNEK-003",
+      "gorseller": [],
+      "ozet": "Fırına ve mikrodalgaya uygun borosilikat cam kaplar.",
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kutu",
+          "metin": "3 farklı boy"
+        }
+      ],
+      "rozetler": [],
+      "faydalar": [],
+      "teknik": [],
+      "kutuIcerigi": [],
+      "sss": [],
+      "birlikteIyiGider": [],
+      "oneCikan": true,
+      "oncelik": 30,
+      "dogrula": [],
+      "firsat": null,
+      "pisirme": []
+    },
+    {
+      "id": "ornek-silikon-spatula",
+      "durum": "taslak",
+      "marka": "Örnek Marka",
+      "ad": "Isıya Dayanıklı Silikon Spatula",
+      "kisaAd": "Silikon Spatula",
+      "kategoriler": [
+        "aksesuar"
+      ],
+      "fiyat": 290,
+      "stok": 40,
+      "sku": "ORNEK-004",
+      "gorseller": [],
+      "ozet": "Çelik yüzeyleri çizmeyen, 230 °C’ye dayanıklı spatula.",
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kasik",
+          "metin": "230 °C dayanım"
+        }
+      ],
+      "rozetler": [],
+      "oncelik": 10,
+      "fiyatGecmisi": [
+        {
+          "tarih": "2026-11-17T14:43:25Z",
+          "fiyat": 290
+        }
+      ],
+      "kampanya": null,
+      "sepetteIndirim": 0,
+      "dogrula": [],
+      "firsat": null,
+      "pisirme": []
+    }
+  ],
+  "setler": [
+    {
+      "id": "vitaquick-buhar-seti",
+      "durum": "taslak",
+      "ad": "Vitaquick + Buhar Aparatı Seti",
+      "aciklama": "Düdüklü tencereniz ve buharda pişirme aparatı birlikte, set fiyatıyla.",
+      "kalemler": [
+        {
+          "urunId": "fissler-vitaquick-premium-6l",
+          "adet": 1
+        },
+        {
+          "urunId": "fissler-buhar-aparati-22",
+          "adet": 1
+        }
+      ],
+      "fiyatlama": {
+        "tip": "yuzde",
+        "oran": 8
+      },
+      "gorsel": {
+        "src": "/img/urunler/fissler-vitaquick-premium-6l/04-buhar-aparati.webp",
+        "alt": "Vitaquick düdüklü tencere ve buharlı pişirme aparatı"
+      },
+      "rozet": "Set fırsatı",
+      "oneCikan": true
+    },
+    {
+      "id": "mutfak-baslangic-seti",
+      "durum": "taslak",
+      "ad": "Mutfak Başlangıç Seti",
+      "aciklama": "Düdüklü tencere, çelik tava ve spatula: yeni mutfağa eksiksiz başlangıç.",
+      "kalemler": [
+        {
+          "urunId": "fissler-vitaquick-premium-6l",
+          "adet": 1
+        },
+        {
+          "urunId": "ornek-celik-tava-28",
+          "adet": 1
+        },
+        {
+          "urunId": "ornek-silikon-spatula",
+          "adet": 1
+        }
+      ],
+      "fiyatlama": {
+        "tip": "yuzde",
+        "oran": 10
+      },
+      "rozet": "Örnek set",
+      "oneCikan": true
+    }
+  ],
+  "anaSayfa": {
+    "bolumler": [
+      "hero",
+      "firsatlar",
+      "guven",
+      "kategoriler",
+      "oneCikanlar",
+      "setler",
+      "amiralHikaye",
+      "nedenBiz",
+      "sss"
+    ],
+    "hero": {
+      "urunId": "fissler-vitaquick-premium-6l",
+      "ustBaslik": "Öne çıkan ürün",
+      "baslik": "Fissler Vitaquick® Premium 6 L",
+      "altBaslik": "Normal tencereye göre %70’e kadar daha kısa pişirme, iki kademe, her ocakta. Orijinal ürün, 2 yıl garanti.",
+      "maddeler": [
+        "Normal tencereye göre %70’e kadar daha kısa pişirme*",
+        "İndüksiyon dahil her ocakta, iki pişirme kademesi",
+        "Orijinal ürün · 2 yıl garanti · Kargo bedava"
+      ]
+    },
+    "oneCikanlarBaslik": "Öne çıkan ürünler",
+    "setlerBaslik": "Setler & fırsatlar",
+    "sss": [
+      {
+        "soru": "Siparişimi nasıl takip ederim?",
+        "cevap": "Sipariş ve kargo bilgileriniz SMS ile, e-posta adresinizi yazdıysanız e-postayla da gelir. Sipariş numaranız ve telefonunuzla 'Sipariş takip' sayfasından durumunu görebilir ya da WhatsApp'tan bize yazabilirsiniz."
+      },
+      {
+        "soru": "Ürünler orijinal mi?",
+        "cevap": "Evet. Tüm ürünler orijinaldir, faturalı gönderilir ve üretici garantisi taşır. Fissler Vitaquick 2 yıl garantilidir."
+      },
+      {
+        "soru": "Kargo ne kadar sürer, ücreti var mı?",
+        "cevap": "1.000 TL ve üzeri siparişlerde kargo bedavadır. Hafta içi 14:00'e kadar verilen siparişler aynı gün kargoya verilir; teslimat genellikle 1–3 iş günü sürer."
+      },
+      {
+        "soru": "Taksit yapılıyor mu?",
+        "cevap": "Kredi kartına taksit seçeneklerini ödeme adımında görebilirsiniz."
+      }
+    ]
+  }
+}

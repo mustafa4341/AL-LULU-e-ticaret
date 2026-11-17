@@ -1,0 +1,28 @@
+---
+/* Fayda bölümü — hızlı okunur: ikon + kalın başlık + tek cümle.
+   Telefonda kısa liste, masaüstünde 3 sütun. Kaynak notu varsa küçük gri yazı. */
+import Ikon from './Ikon.astro';
+import type { IkonAdi, Urun } from '../lib/sema';
+interface Props { urun: Urun }
+const { urun } = Astro.props;
+const VARSAYILAN: IkonAdi[] = ['saat', 'tencere', 'gosterge', 'ates', 'yildiz', 'kalkan'];
+---
+{urun.faydalar.length > 0 && (
+  <section class="bolum bolum--beyaz faydalar" aria-labelledby="fayda-baslik">
+    <div class="container">
+      <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">Neden bu tencere?</p><h2 id="fayda-baslik">Daha az bekleme. Daha çok sofra keyfi.</h2><p>Basınçlı pişirmenin günlük yemek hazırlığında yarattığı fark.</p></div></div>
+      <ul class="fayda-liste-kisa">
+        {urun.faydalar.map((f, i) => (
+          <li class="fayda-oge" data-reveal>
+            <span class="fayda-oge__ikon"><Ikon ad={f.ikon ?? VARSAYILAN[i % VARSAYILAN.length]!} boyut={22} /></span>
+            <div>
+              <h3>{f.baslik}</h3>
+              <p>{f.metin}</p>
+              {f.kaynak && <p class="fayda-kaynak">{f.kaynak}</p>}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  </section>
+)}

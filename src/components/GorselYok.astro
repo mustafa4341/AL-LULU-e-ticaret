@@ -1,0 +1,10 @@
+---
+import Ikon from './Ikon.astro';
+import type { IkonAdi } from '../lib/sema';
+interface Props {
+  ikon?: IkonAdi;
+  metin?: string;
+}
+const { ikon = 'kutu', metin = 'Görsel eklenecek' } = Astro.props;
+---
+<span class="gorsel-yok"><Ikon ad={ikon} boyut={48} /><span>{metin}</span></span>

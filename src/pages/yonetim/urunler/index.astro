@@ -1,0 +1,71 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import Ikon from '../../../components/Ikon.astro';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../../lib/depo';
+import { formatTL } from '../../../lib/fiyat';
+import { sayi, metin } from '../../../lib/form';
+import { fiyatUygula } from '../../../lib/urunIslem';
+import { Katalog } from '../../../lib/katalog';
+import { DurumSema } from '../../../lib/sema';
+
+let hatalar: string[] = [];
+const basari = Astro.url.searchParams.get('ok');
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const id = metin(f, 'id');
+  try {
+    await magazaGuncelle((m) => {
+      const u = m.urunler.find((x) => x.id === id);
+      if (!u) throw new DogrulamaHatasi(['Ürün bulunamadı']);
+      fiyatUygula(u, sayi(f, 'fiyat', u.fiyat));
+      u.stok = Math.max(0, sayi(f, 'stok', u.stok));
+      const d = DurumSema.safeParse(metin(f, 'durum'));
+      if (d.success) u.durum = d.data;
+    });
+    return Astro.redirect(`/yonetim/urunler?ok=${encodeURIComponent('Kaydedildi')}#u-${id}`);
+  } catch (e) {
+    hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
+  }
+}
+const m = await magazaOku();
+const k = new Katalog(m, new Map(), true);
+const kategoriAdi = (id: string) => m.kategoriler.find((x) => x.id === id)?.ad ?? id;
+const DURUM = { yayinda: 'Yayında', taslak: 'Taslak', gizli: 'Gizli' } as const;
+---
+<Yonetim baslik="Ürünler" aktif="urunler" basari={basari} hatalar={hatalar}>
+  <div class="y-arac">
+    <p class="muted small">{m.urunler.length} ürün · Fiyat, stok ve durumu buradan hızlıca değiştirin; diğer her şey için ürüne tıklayın.</p>
+    <a class="btn btn--sepet" href="/yonetim/urunler/yeni"><Ikon ad="arti" />Yeni ürün</a>
+  </div>
+  <div class="y-liste">
+    {m.urunler.map((u) => {
+      const b = k.fiyatBilgisi(u);
+      return (
+        <form method="post" class="y-satir" id={`u-${u.id}`}>
+          <input type="hidden" name="id" value={u.id} />
+          <a class="y-satir__gorsel" href={`/yonetim/urunler/${u.id}`}>{u.gorseller[0] ? <img src={u.gorseller[0].src} alt="" loading="lazy" /> : <Ikon ad="kutu" boyut={26} />}</a>
+          <div>
+            <a class="y-satir__ad" href={`/yonetim/urunler/${u.id}`}>{u.marka} {u.ad}</a>
+            <div class="y-satir__meta">
+              <span class:list={['y-durum', `y-durum--${u.durum}`]}>{DURUM[u.durum]}</span>
+              <span>{u.kategoriler.map(kategoriAdi).join(', ')}</span>
+              {b.onceki && <span class="y-durum y-durum--iptal">İndirimde: {formatTL(b.onceki)} → {formatTL(u.fiyat)}</span>}
+              {u.sepetteIndirim > 0 && <span class="y-durum y-durum--yayinda">Sepette %{u.sepetteIndirim}</span>}
+              {u.oneCikan && <span>★ Öne çıkan</span>}
+            </div>
+          </div>
+          <div class="y-hizli">
+            <label>Fiyat (TL)<input class="y-girdi" name="fiyat" inputmode="numeric" value={u.fiyat} /></label>
+            <label>Stok<input class="y-girdi" name="stok" inputmode="numeric" value={u.stok} style="width:80px" /></label>
+            <label>Durum
+              <select class="y-girdi" name="durum" style="width:120px">
+                {Object.entries(DURUM).map(([v, a]) => <option value={v} selected={u.durum === v}>{a}</option>)}
+              </select>
+            </label>
+            <button class="btn btn--cizgi btn--kucuk" type="submit">Kaydet</button>
+          </div>
+        </form>
+      );
+    })}
+  </div>
+</Yonetim>

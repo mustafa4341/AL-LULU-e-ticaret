@@ -1,0 +1,24 @@
+---
+import Base from '../layouts/Base.astro';
+import Hero from '../components/anasayfa/Hero.astro';
+import Guven from '../components/anasayfa/Guven.astro';
+import Firsatlar from '../components/anasayfa/Firsatlar.astro';
+import Kategoriler from '../components/anasayfa/Kategoriler.astro';
+import OneCikanlar from '../components/anasayfa/OneCikanlar.astro';
+import Setler from '../components/anasayfa/Setler.astro';
+import AmiralHikaye from '../components/anasayfa/AmiralHikaye.astro';
+import NedenBiz from '../components/anasayfa/NedenBiz.astro';
+import SSSBolumu from '../components/anasayfa/SSSBolumu.astro';
+
+/* Bölümler panel → Ayarlar → Ana sayfa'daki sırayla gösterilir. */
+const bilesenler = { hero: Hero, firsatlar: Firsatlar, guven: Guven, kategoriler: Kategoriler, oneCikanlar: OneCikanlar, setler: Setler, amiralHikaye: AmiralHikaye, nedenBiz: NedenBiz, sss: SSSBolumu } as const;
+const k = Astro.locals.katalog;
+---
+<Base
+  baslik={`${k.site.ad} | Fissler Vitaquick ve premium mutfak ürünleri`}
+  aciklama="Orijinal, faturalı ve garantili premium mutfak ürünleri. Fissler Vitaquick® Premium 6 L düdüklü tencere, hızlı sipariş, aynı gün kargo."
+  aktif="ana"
+  yapisalVeri={{ '@context': 'https://schema.org', '@type': 'Organization', name: k.site.ad, url: k.site.url, logo: `${k.site.url}/img/logo/al-lulu-home.png`, email: k.site.eposta, telephone: k.site.telefon }}
+>
+  {k.anaSayfa.bolumler.map((ad) => { const Bolum = bilesenler[ad]; return <Bolum />; })}
+</Base>

@@ -1,0 +1,32 @@
+---
+/* Sayfa sonu: ürün özeti (en önemli 3 fayda + güvenceler) ve net satın alma çağrısı. */
+import Ikon from './Ikon.astro';
+import Fiyat from './Fiyat.astro';
+import type { Urun } from '../lib/sema';
+interface Props { urun: Urun }
+const { urun } = Astro.props;
+const k = Astro.locals.katalog;
+const g = k.anaGorsel(urun);
+const bilgi = k.fiyatBilgisi(urun);
+const rozet = k.rozetler(urun);
+const ozet = urun.faydalar.slice(0, 3).map((f) => f.baslik);
+const guven = [rozet.serit, urun.garanti ? `${urun.garanti} garanti` : undefined, 'Orijinal ürün', 'Faturalı gönderim'].filter(Boolean).join(' · ');
+---
+{k.stoktaMi(urun) && (
+  <section class="son-cagri" aria-labelledby="son-cagri-baslik">
+    <div class="container son-cagri__ic" data-reveal>
+      {g && <img src={g.src} alt="" width="400" height="400" loading="lazy" />}
+      <div class="son-cagri__metin">
+        <p class="eyebrow eyebrow--altin">Özetle</p>
+        <h2 id="son-cagri-baslik">{`${urun.marka} ${urun.kisaAd}`}</h2>
+        {ozet.length > 0 && <ul class="son-cagri__ozet">{ozet.map((m) => <li><Ikon ad="tik" boyut={16} />{m}</li>)}</ul>}
+        <Fiyat bilgi={bilgi} boyut="orta" />
+        <p class="son-cagri__alt">{guven}</p>
+      </div>
+      <div class="son-cagri__butonlar">
+        <button class="btn btn--simdi" type="button" data-hemen-al data-tip="urun" data-id={urun.id}>Şimdi Al</button>
+        <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id={urun.id} data-konum="son-cagri"><Ikon ad="canta" boyut={20} /><span data-etiket>Sepete Ekle</span></button>
+      </div>
+    </div>
+  </section>
+)}

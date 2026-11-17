@@ -1,0 +1,27 @@
+---
+import Ikon from '../Ikon.astro';
+const k = Astro.locals.katalog;
+const kategoriler = k.gorunurKategoriler({ anaSayfa: true });
+---
+{kategoriler.length > 0 && (
+  <section class="bolum" aria-labelledby="kat-baslik">
+    <div class="container">
+      <div class="bolum-bas">
+        <div><p class="eyebrow eyebrow--altin">Kategoriler</p><h2 id="kat-baslik">Ne arıyorsunuz?</h2></div>
+        <a class="bolum-bas__link" href="/urunler">Tümü <Ikon ad="sag" boyut={16} /></a>
+      </div>
+      <div class="kategori-grid">
+        {kategoriler.map((kat) => {
+          const n = k.kategoriUrunleri(kat.id).length;
+          return (
+            <a class="kategori-kart" href={`/kategori/${kat.id}`} data-reveal>
+              <span class="kategori-kart__ikon"><Ikon ad={kat.ikon} boyut={22} /></span>
+              <span class="kategori-kart__ad">{kat.ad}</span>
+              <span class="kategori-kart__alt">{n > 0 ? n + ' ürün' : 'Yakında'}</span>
+            </a>
+          );
+        })}
+      </div>
+    </div>
+  </section>
+)}

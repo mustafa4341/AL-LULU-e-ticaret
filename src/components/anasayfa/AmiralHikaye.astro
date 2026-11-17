@@ -1,0 +1,20 @@
+---
+const k = Astro.locals.katalog;
+const urun = k.urunBul(k.anaSayfa.hero.urunId);
+const g = urun?.gorseller[2] ?? urun?.gorseller[0];
+---
+{urun && urun.faydalar.length > 0 && (
+  <section class="bolum amiral" aria-labelledby="amiral-baslik">
+    <div class="container amiral__grid">
+      <div class="amiral__gorsel" data-reveal>{g && <img src={g.src} alt={g.alt} width="400" height="400" loading="lazy" />}</div>
+      <div data-reveal>
+        <p class="eyebrow">Neden {urun.kisaAd}?</p>
+        <h2 id="amiral-baslik">Güzel görünmesinin arkasında mühendislik var.</h2>
+        <ol class="fayda-liste">
+          {urun.faydalar.map((f, i) => <li><span class="no">{i + 1}</span><div><strong>{f.baslik}</strong><p>{f.metin}</p></div></li>)}
+        </ol>
+        <a class="btn btn--altin-cizgi" href={`/urun/${urun.id}`}>Tüm özellikleri inceleyin</a>
+      </div>
+    </div>
+  </section>
+)}

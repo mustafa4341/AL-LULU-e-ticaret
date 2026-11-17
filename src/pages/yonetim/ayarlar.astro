@@ -1,0 +1,160 @@
+---
+import Yonetim from '../../layouts/Yonetim.astro';
+import Ikon from '../../components/Ikon.astro';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../lib/depo';
+import { ciftler, liste, metin, satirlar, sayi } from '../../lib/form';
+import { BOLUMLER, BOLUM_ADLARI } from '../../lib/sema';
+
+let hatalar: string[] = [];
+const basari = Astro.url.searchParams.get('ok');
+
+/** "0552 577 85 78" → { telefon: '+905525778578', whatsapp: '905525778578', gorunen: '0552 577 85 78' } */
+function telefonCoz(girdi: string) {
+  let d = girdi.replace(/\D/g, '');
+  if (d.startsWith('90')) d = d.slice(2);
+  if (d.startsWith('0')) d = d.slice(1);
+  if (d.length !== 10) return null;
+  return { telefon: `+90${d}`, whatsapp: `90${d}`, gorunen: `0${d.slice(0, 3)} ${d.slice(3, 6)} ${d.slice(6, 8)} ${d.slice(8)}` };
+}
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  try {
+    const tel = telefonCoz(metin(f, 'telefon'));
+    if (!tel) throw new DogrulamaHatasi(['Telefon numarası 10 haneli olmalı (ör. 0552 577 85 78)']);
+    await magazaGuncelle((m) => {
+      const s = m.site;
+      Object.assign(s, {
+        ad: metin(f, 'ad'), slogan: metin(f, 'slogan'), url: metin(f, 'url'), eposta: metin(f, 'eposta'),
+        telefon: tel.telefon, whatsapp: tel.whatsapp, telefonGorunen: tel.gorunen, calismaSaatleri: metin(f, 'calismaSaatleri'),
+        duyurular: satirlar(f, 'duyurular'), iadeGun: sayi(f, 'iadeGun', 14),
+        indirimReferansGun: sayi(f, 'indirimReferansGun', 30), cokSatanEsik: sayi(f, 'cokSatanEsik', 10),
+        fiyatSunumu: (['sade', 'kampanya', 'dengeli'] as const).find((x) => x === metin(f, 'fiyatSunumu')) ?? 'dengeli',
+      });
+      s.satici = { unvan: metin(f, 'unvan'), adres: metin(f, 'adres'), mersis: metin(f, 'mersis'), vergiDairesiNo: metin(f, 'vergi'), kep: metin(f, 'kep'), etbis: metin(f, 'etbis') };
+      s.kargo = { firma: metin(f, 'kargoFirma'), takipUrl: metin(f, 'takipUrl') || 'https://www.yurticikargo.com/Tracking/Detail/{kod}', ucret: sayi(f, 'kargoUcret'), ucretsizEsik: sayi(f, 'kargoEsik'), kesimSaati: sayi(f, 'kesimSaati', 14), teslimGun: [sayi(f, 'teslimMin', 1), sayi(f, 'teslimMax', 3)] };
+      const taksit = sayi(f, 'taksit');
+      s.taksit = { pesinFiyatinaTaksit: taksit >= 2 ? taksit : null, genelMetin: metin(f, 'taksitMetin') };
+      const sira = liste(f, 'bolum_sira').map(Number);
+      const acik = new Set(liste(f, 'bolum'));
+      m.anaSayfa = {
+        bolumler: BOLUMLER.map((b, i) => ({ b, sira: sira[i] ?? i })).filter((x) => acik.has(x.b)).sort((a, b) => a.sira - b.sira).map((x) => x.b),
+        hero: { urunId: metin(f, 'heroUrun'), ustBaslik: metin(f, 'heroUst'), baslik: metin(f, 'heroBaslik'), altBaslik: metin(f, 'heroAlt'), maddeler: satirlar(f, 'heroMaddeler').slice(0, 3) },
+        oneCikanlarBaslik: metin(f, 'oneCikanlarBaslik'), setlerBaslik: metin(f, 'setlerBaslik'),
+        sss: ciftler(f, 'sss_soru', 'sss_cevap').map(([soru, cevap]) => ({ soru, cevap })),
+      };
+    });
+    return Astro.redirect(`/yonetim/ayarlar?ok=${encodeURIComponent('Ayarlar kaydedildi')}`);
+  } catch (e) {
+    hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
+  }
+}
+const m = await magazaOku();
+const s = m.site;
+const a = m.anaSayfa;
+---
+<Yonetim baslik="Ayarlar" aktif="ayarlar" basari={basari} hatalar={hatalar}>
+  <form method="post">
+    <section class="y-kart">
+      <h2>İletişim</h2>
+      <p class="y-aciklama">WhatsApp butonları, telefon ve e-posta sitenin her yerinde buradan güncellenir.</p>
+      <div class="y-izgara y-izgara--2">
+        <div class="y-alan"><label for="telefon">WhatsApp / telefon</label><input id="telefon" name="telefon" type="tel" value={s.telefonGorunen} required /></div>
+        <div class="y-alan"><label for="eposta">E-posta</label><input id="eposta" name="eposta" type="email" value={s.eposta} required /></div>
+        <div class="y-alan"><label for="calismaSaatleri">Çalışma saatleri</label><input id="calismaSaatleri" name="calismaSaatleri" value={s.calismaSaatleri} placeholder="Her gün 09:00–21:00" /></div>
+        <div class="y-alan"><label for="url">Site adresi</label><input id="url" name="url" value={s.url} required /></div>
+        <div class="y-alan"><label for="ad">Mağaza adı</label><input id="ad" name="ad" value={s.ad} required /></div>
+        <div class="y-alan"><label for="slogan">Slogan</label><input id="slogan" name="slogan" value={s.slogan} /></div>
+      </div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Kargo ve teslimat</h2>
+      <div class="y-izgara y-izgara--3">
+        <div class="y-alan"><label>Kargo firması</label><input name="kargoFirma" value={s.kargo.firma} /></div>
+        <div class="y-alan"><label>Kargo ücreti (TL)</label><input name="kargoUcret" inputmode="numeric" value={s.kargo.ucret} /></div>
+        <div class="y-alan"><label>Bu tutar ve üzeri kargo bedava (TL)</label><input name="kargoEsik" inputmode="numeric" value={s.kargo.ucretsizEsik} /></div>
+        <div class="y-alan"><label>Aynı gün kargo kesim saati</label><input name="kesimSaati" inputmode="numeric" value={s.kargo.kesimSaati} /></div>
+        <div class="y-alan"><label>Teslim süresi en az (iş günü)</label><input name="teslimMin" inputmode="numeric" value={s.kargo.teslimGun[0]} /></div>
+        <div class="y-alan"><label>Teslim süresi en çok (iş günü)</label><input name="teslimMax" inputmode="numeric" value={s.kargo.teslimGun[1]} /></div>
+      </div>
+      <div class="y-alan" style="margin-top:10px"><label>Kargo takip bağlantısı <span class="y-ipucu">{'{kod}'} yerine takip numarası yazılır</span></label><input name="takipUrl" value={s.kargo.takipUrl} />
+        <span class="y-ipucu">Yurtiçi: https://www.yurticikargo.com/Tracking/Detail/{'{kod}'} · Aras: https://www.araskargo.com.tr/Tracking/Detail?trackingNumber={'{kod}'}</span></div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Kampanya ve satış kuralları</h2>
+      <div class="y-izgara y-izgara--3">
+        <div class="y-alan"><label>Peşin fiyatına taksit sayısı <span class="y-ipucu">(yoksa boş bırakın)</span></label><input name="taksit" inputmode="numeric" value={s.taksit.pesinFiyatinaTaksit ?? ''} /></div>
+        <div class="y-alan"><label>"Çok satan" eşiği <span class="y-ipucu">(son 30 günde satış adedi)</span></label><input name="cokSatanEsik" inputmode="numeric" value={s.cokSatanEsik} /></div>
+        <div class="y-alan"><label>İndirim referans süresi (gün)</label><input name="indirimReferansGun" inputmode="numeric" value={s.indirimReferansGun} /><span class="y-ipucu">Eski fiyat bu sürede uygulanan en düşük fiyattır. Önerilen: 30.</span></div>
+      </div>
+      <div class="y-izgara y-izgara--2" style="margin-top:10px">
+        <div class="y-alan"><label>Taksit metni</label><input name="taksitMetin" value={s.taksit.genelMetin} /></div>
+        <div class="y-alan"><label>İade süresi (gün)</label><input name="iadeGun" inputmode="numeric" value={s.iadeGun} /></div>
+      </div>
+      <div class="y-alan" style="margin-top:10px"><label>Fiyat ve indirim sunumu <a class="y-ipucu" href="/yonetim/fiyat-onizleme">üçünü yan yana görün →</a></label>
+        <select name="fiyatSunumu">
+          <option value="dengeli" selected={s.fiyatSunumu === 'dengeli'}>C — Dengeli premium (önerilen)</option>
+          <option value="sade" selected={s.fiyatSunumu === 'sade'}>A — Sade</option>
+          <option value="kampanya" selected={s.fiyatSunumu === 'kampanya'}>B — Güçlü kampanya</option>
+        </select>
+        <span class="y-ipucu">Yalnızca gerçek (fiyat geçmişinden doğrulanmış) indirim olduğunda fark eder.</span></div>
+      <div class="y-alan" style="margin-top:10px"><label>Üst şerit duyuruları <span class="y-ipucu">(her satır bir mesaj, sırayla döner)</span></label><textarea name="duyurular" rows="4">{s.duyurular.join('\n')}</textarea></div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Ana sayfa</h2>
+      <div class="y-izgara y-izgara--2">
+        <div class="y-alan"><label>Öne çıkan ürün (en üstte)</label><select name="heroUrun">{m.urunler.map((u) => <option value={u.id} selected={a.hero.urunId === u.id}>{u.kisaAd}</option>)}</select></div>
+        <div class="y-alan"><label>Üst başlık</label><input name="heroUst" value={a.hero.ustBaslik} /></div>
+        <div class="y-alan"><label>Başlık</label><input name="heroBaslik" value={a.hero.baslik} required /></div>
+        <div class="y-alan"><label>Alt metin <span class="y-ipucu">(masaüstünde)</span></label><input name="heroAlt" value={a.hero.altBaslik} /></div>
+        <div class="y-alan"><label>3 kısa fayda <span class="y-ipucu">(her satıra bir; ilk ekranda fiyatın üstünde)</span></label><textarea name="heroMaddeler" rows="3">{a.hero.maddeler.join('\n')}</textarea></div>
+        <div class="y-alan"><label>"Öne çıkanlar" başlığı</label><input name="oneCikanlarBaslik" value={a.oneCikanlarBaslik} /></div>
+        <div class="y-alan"><label>"Setler" başlığı</label><input name="setlerBaslik" value={a.setlerBaslik} /></div>
+      </div>
+      <div class="y-alan" style="margin-top:12px">
+        <span class="y-etiket">Bölümler ve sırası <span class="y-ipucu">(işareti kaldırırsanız gizlenir; küçük numara üstte)</span></span>
+        <div class="y-izgara y-izgara--2">
+          {BOLUMLER.map((b) => {
+            const i = a.bolumler.indexOf(b);
+            return (
+              <div class="y-secim" style="align-items:center">
+                <input type="checkbox" name="bolum" value={b} checked={i >= 0} id={`b-${b}`} />
+                <label for={`b-${b}`} style="flex:1">{BOLUM_ADLARI[b]}</label>
+                <input class="y-girdi" name="bolum_sira" inputmode="numeric" value={i >= 0 ? i + 1 : 99} style="width:64px;min-height:36px" aria-label="Sıra" />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Ana sayfa sık sorulanlar</h2>
+      <div class="y-tekrar">
+        {a.sss.map((x) => (
+          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar"><input class="y-girdi" name="sss_soru" value={x.soru} /><textarea class="y-girdi" name="sss_cevap" rows="2">{x.cevap}</textarea></div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button></div>
+        ))}
+        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar"><input class="y-girdi" name="sss_soru" placeholder="Soru" /><textarea class="y-girdi" name="sss_cevap" rows="2" placeholder="Cevap"></textarea></div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button></div></template>
+        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Soru ekle</button>
+      </div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Satıcı bilgileri (yasal)</h2>
+      <p class="y-aciklama">Footer'da, ön bilgilendirme formunda ve sözleşmelerde kullanılır.</p>
+      <div class="y-izgara y-izgara--2">
+        <div class="y-alan"><label>Ticari unvan</label><input name="unvan" value={s.satici.unvan} /></div>
+        <div class="y-alan"><label>Açık adres</label><input name="adres" value={s.satici.adres} /></div>
+        <div class="y-alan"><label>MERSİS no</label><input name="mersis" value={s.satici.mersis} /></div>
+        <div class="y-alan"><label>Vergi dairesi / no</label><input name="vergi" value={s.satici.vergiDairesiNo} /></div>
+        <div class="y-alan"><label>KEP adresi</label><input name="kep" value={s.satici.kep} /></div>
+        <div class="y-alan"><label>ETBİS kayıt no</label><input name="etbis" value={s.satici.etbis} /></div>
+      </div>
+    </section>
+
+    <div class="y-butonlar"><button class="btn btn--sepet" type="submit"><Ikon ad="tik" />Ayarları kaydet</button></div>
+  </form>
+</Yonetim>

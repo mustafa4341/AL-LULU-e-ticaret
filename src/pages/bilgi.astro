@@ -1,0 +1,32 @@
+---
+import Base from '../layouts/Base.astro';
+import { YASAL_SAYFALAR } from '../lib/yasal';
+const kt = Astro.locals.katalog;
+const site = kt.site;
+const st = site.satici;
+const bos = (v: string) => !v.trim() || /^\[.*\]$/.test(v.trim()) || /^[—-]+$/.test(v.trim());
+const satir = (etiket: string, v: string) => ({ etiket, v, eksik: bos(v) });
+const bilgiler = [
+  satir('Ticari unvan', st.unvan), satir('Adres', st.adres), satir('MERSİS no', st.mersis),
+  satir('Vergi dairesi / no', st.vergiDairesiNo), satir('KEP adresi', st.kep), satir('ETBİS kayıt', st.etbis),
+].filter((b) => !b.eksik || Astro.locals.yonetici);
+---
+<Base baslik={`Satıcı ve yasal bilgiler | ${site.ad}`} aciklama={`${site.ad} satıcı bilgileri, mesafeli satış sözleşmesi, iptal ve iade koşulları, KVKK aydınlatma metni.`}>
+  <div class="container belge">
+    <h1>Satıcı ve yasal bilgiler</h1>
+    <section id="satici">
+      <h2>Satıcı bilgileri</h2>
+      <dl class="belge-dl">
+        {bilgiler.map((b) => <><dt>{b.etiket}</dt><dd>{b.eksik ? <mark class="eksik">[{b.etiket} girilmedi]</mark> : b.v}</dd></>)}
+        <dt>Telefon / WhatsApp</dt><dd><a href={`tel:${site.telefon}`}>{site.telefonGorunen}</a>{site.calismaSaatleri && ` · ${site.calismaSaatleri}`}</dd>
+        <dt>E-posta</dt><dd><a href={`mailto:${site.eposta}`}>{site.eposta}</a></dd>
+      </dl>
+    </section>
+    <section id="metinler">
+      <h2>Yasal metinler</h2>
+      <ul class="belge-baglantilar">
+        {YASAL_SAYFALAR.map((s) => <li><a href={`/yasal/${s.yol}`}>{s.baslik}</a></li>)}
+      </ul>
+    </section>
+  </div>
+</Base>

@@ -1,0 +1,73 @@
+---
+/* Ürün galerisi: mobilde kaydırma, masaüstünde küçük resimler.
+   Yakınlaştırma: masaüstünde fareyle üzerine gelince büyür; tıklayınca/dokununca tam ekran büyüteç
+   (iki parmakla yakınlaştırma, çift dokunma, kaydırarak gezinme). Kod: scripts/buyutec.ts */
+import type { Gorsel, IkonAdi } from '../lib/sema';
+import Ikon from './Ikon.astro';
+import GorselYok from './GorselYok.astro';
+interface Props {
+  gorseller: Gorsel[];
+  yedekIkon?: IkonAdi;
+}
+const { gorseller, yedekIkon } = Astro.props;
+const n = gorseller.length;
+---
+<div class="galeri" data-galeri>
+  <div class="galeri__sahne">
+    <div class="galeri__ray" data-galeri-ray tabindex="0" role="region" aria-label="Ürün görselleri, kaydırarak gezin">
+      {n ? (
+        gorseller.map((g, i) => (
+          <figure class="galeri__slayt">
+            <button type="button" class="galeri__buyut" data-buyutec-ac={i} aria-label={`Görsel ${i + 1}'i büyüt`}>
+              <img src={g.src} alt={g.alt} width="400" height="400" loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async" data-zoom data-ucus-gorsel={i === 0 ? '' : undefined} />
+            </button>
+          </figure>
+        ))
+      ) : (
+        <figure class="galeri__slayt"><GorselYok ikon={yedekIkon} /></figure>
+      )}
+    </div>
+    {n > 0 && <span class="galeri__ipucu" aria-hidden="true"><Ikon ad="buyutec" boyut={16} /><span class="galeri__ipucu-metin">Büyütmek için dokunun</span></span>}
+    {n > 1 && (
+      <>
+        <button class="galeri__ok galeri__ok--sol" type="button" data-galeri-onceki aria-label="Önceki görsel"><Ikon ad="sol" /></button>
+        <button class="galeri__ok galeri__ok--sag" type="button" data-galeri-sonraki aria-label="Sonraki görsel"><Ikon ad="sag" /></button>
+        <span class="galeri__sayac" data-galeri-sayac aria-hidden="true">1 / {n}</span>
+      </>
+    )}
+  </div>
+  {n > 1 && (
+    <>
+      <div class="galeri__kucukler" aria-label="Görsel seç">
+        {gorseller.map((g, i) => (
+          <button type="button" data-galeri-kucuk aria-current={i === 0 ? 'true' : 'false'} aria-label={`Görsel ${i + 1}`}>
+            <img src={g.src} alt="" width="76" height="101" loading="lazy" />
+          </button>
+        ))}
+      </div>
+      <div class="galeri__noktalar" aria-hidden="true">
+        {gorseller.map((_, i) => <span class:list={{ 'is-active': i === 0 }}></span>)}
+      </div>
+    </>
+  )}
+</div>
+
+{n > 0 && (
+  <dialog class="buyutec" data-buyutec aria-label="Görsel büyüteci">
+    <div class="buyutec__ust">
+      <span class="buyutec__sayac" data-buyutec-sayac>1 / {n}</span>
+      <span class="buyutec__ipucu">İki parmakla veya çift dokunarak yakınlaştırın</span>
+      <button class="buyutec__kapat" type="button" data-buyutec-kapat aria-label="Kapat"><Ikon ad="kapat" boyut={26} /></button>
+    </div>
+    <div class="buyutec__sahne" data-buyutec-sahne>
+      <img class="buyutec__img" data-buyutec-img src={gorseller[0]!.src} alt={gorseller[0]!.alt} draggable="false" />
+    </div>
+    {n > 1 && (
+      <>
+        <button class="buyutec__ok buyutec__ok--sol" type="button" data-buyutec-onceki aria-label="Önceki görsel"><Ikon ad="sol" boyut={26} /></button>
+        <button class="buyutec__ok buyutec__ok--sag" type="button" data-buyutec-sonraki aria-label="Sonraki görsel"><Ikon ad="sag" boyut={26} /></button>
+      </>
+    )}
+    <script type="application/json" data-buyutec-veri set:html={JSON.stringify(gorseller)} />
+  </dialog>
+)}

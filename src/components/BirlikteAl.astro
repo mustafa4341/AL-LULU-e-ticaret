@@ -1,0 +1,62 @@
+---
+/* "Birlikte Al" — setin ürünleri görselleriyle yan yana, aralarında "+", her ürünün fiyatı;
+   indirim belirli bir üründeyse o ürünün fiyatı üstü çizili ve kırmızı. Altta "X yerine Y". */
+import Ikon from './Ikon.astro';
+import GorselYok from './GorselYok.astro';
+import type { UrunSeti } from '../lib/sema';
+import { formatTL } from '../lib/fiyat';
+interface Props { set: UrunSeti; mevcutUrunId?: string }
+const { set, mevcutUrunId } = Astro.props;
+const k = Astro.locals.katalog;
+const f = k.setFiyati(set);
+const kalemIndirimi = set.fiyatlama.tip === 'kalem';
+// Yönetici önizlemesi: set veya içindeki bir ürün taslaksa müşteriler bu kutuyu görmez
+const taslakUrunler = f.dokum.filter((d) => d.urun.durum === 'taslak').map((d) => d.urun);
+const taslak = set.durum === 'taslak' || taslakUrunler.length > 0;
+---
+<section class="birlikte" aria-labelledby={`birlikte-${set.id}`} id={`set-${set.id}`}>
+  <div class="birlikte__serit">
+    <span class="birlikte__serit-ad"><Ikon ad="etiket" boyut={16} />BİRLİKTE AL FIRSATI</span>
+    <span class="birlikte__serit-yuzde">%{f.yuzde} avantaj</span>
+  </div>
+  {taslak && (
+    <p class="taslak-uyari">
+      <strong>Müşteriler bu kutuyu görmüyor:</strong>{' '}
+      {[set.durum === 'taslak' && 'set', ...taslakUrunler.map((u) => u.kisaAd)].filter(Boolean).join(' ve ')} taslak durumda.
+      Gerçek fiyat ve fotoğrafı girip panelden <a href={`/yonetim/urunler/${taslakUrunler[0]?.id ?? ''}`}>ürünü</a> ve <a href="/yonetim/setler">seti</a> “Yayında” yapın.
+    </p>
+  )}
+  <p class="birlikte__baslik" id={`birlikte-${set.id}`}>Birlikte alın, <strong>{formatTL(f.kazanc)} kazanın</strong></p>
+  <ul class="birlikte__urunler">
+    {f.dokum.map((d, i) => {
+      const g = k.anaGorsel(d.urun);
+      return (
+        <>
+          {i > 0 && <li class="birlikte__arti" aria-hidden="true"><span>+</span></li>}
+          <li class:list={['birlikte__urun', { 'is-mevcut': d.urun.id === mevcutUrunId, 'is-indirimli': !!d.indirimliBirim }]}>
+            <a class="birlikte__gorsel" href={`/urun/${d.urun.id}`} tabindex="-1" aria-hidden="true">
+              {g ? <img src={g.src} alt="" width="120" height="150" loading="lazy" /> : <GorselYok ikon={k.kategoriBul(d.urun.kategoriler[0]!)?.ikon} metin="" />}
+              {d.oran && <span class="birlikte__oran">%{d.oran}</span>}
+            </a>
+            <a class="birlikte__ad" href={`/urun/${d.urun.id}`}>{d.adet > 1 ? `${d.adet} × ` : ''}{d.urun.kisaAd}</a>
+            {d.indirimliBirim !== undefined ? (
+              <span class="birlikte__fiyat"><s>{formatTL(d.birim * d.adet)}</s><strong class="fiyat--indirimli">{formatTL(d.indirimliBirim * d.adet)}</strong></span>
+            ) : (
+              <span class="birlikte__fiyat"><strong>{formatTL(d.birim * d.adet)}</strong></span>
+            )}
+          </li>
+        </>
+      );
+    })}
+  </ul>
+  <div class="birlikte__alt">
+    <div class="birlikte__toplam">
+      <span class="birlikte__yerine"><s>{formatTL(f.ayriAyri)}</s> yerine</span>
+      <span class="birlikte__fiyat-buyuk">{formatTL(f.fiyat)} <span class="birlikte__kazanc">{formatTL(f.kazanc)} kazanç</span></span>
+      {!kalemIndirimi && <span class="birlikte__not">Set indirimi tüm ürünlerin toplamına uygulanır</span>}
+    </div>
+    <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="set" data-id={set.id} data-konum="birlikte-al">
+      <Ikon ad="canta" boyut={18} /><span data-etiket>Seti Sepete Ekle</span>
+    </button>
+  </div>
+</section>

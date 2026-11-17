@@ -1,0 +1,110 @@
+---
+import '../styles/global.css';
+import Ikonlar from '../components/Ikonlar.astro';
+import Ikon from '../components/Ikon.astro';
+import Header from '../components/Header.astro';
+import AltMenu from '../components/AltMenu.astro';
+import YanMenu from '../components/YanMenu.astro';
+import SepetPaneli from '../components/SepetPaneli.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  baslik: string;
+  aciklama: string;
+  gorsel?: string;
+  /** Aktif menü: 'ana', kategori id, 'urunler', 'setler' */
+  aktif?: string;
+  yapisalVeri?: Record<string, unknown>;
+  /** Ürün sayfası: alt menü yerine satın alma çubuğu */
+  altCubuk?: boolean;
+  indekslenmesin?: boolean;
+  /** Ödeme sayfası için sade başlık */
+  sade?: boolean;
+  /** Sayfaya özel ilk duyuru (ör. ürün sayfasında "Bu üründe kargo bedava") */
+  ozelDuyuru?: string;
+}
+const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
+const k = Astro.locals.katalog;
+const kok = Astro.site ?? new URL(k.site.url);
+const kanonik = new URL(Astro.url.pathname, kok).href;
+const ogGorsel = new URL(gorsel, kok).href;
+const duyurular = ozelDuyuru ? [ozelDuyuru, ...k.site.duyurular.filter((d) => !/kargo bedava/i.test(d))] : k.site.duyurular;
+const geriYol = Astro.url.pathname;
+---
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>{baslik}</title>
+    <meta name="description" content={aciklama} />
+    <meta name="theme-color" content="#FFFFFF" />
+    {indekslenmesin && <meta name="robots" content="noindex" />}
+    <link rel="canonical" href={kanonik} />
+    <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/img/logo/apple-touch-icon.png" />
+    <meta property="og:site_name" content={k.site.ad} />
+    <meta property="og:locale" content="tr_TR" />
+    <meta property="og:title" content={baslik} />
+    <meta property="og:description" content={aciklama} />
+    <meta property="og:image" content={ogGorsel} />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preload" as="image" href="/img/logo/yazi.webp" />
+    <script is:inline>document.documentElement.classList.add('js');</script>
+    {yapisalVeri && <script type="application/ld+json" set:html={JSON.stringify(yapisalVeri)} />}
+  </head>
+  <body class:list={{ 'alt-cubuklu': altCubuk, 'alt-menulu': !altCubuk && !sade }}>
+    <a class="skip-link" href="#main">İçeriğe geç</a>
+    <Ikonlar />
+
+    {!sade && duyurular.length > 0 && (
+      <div class="duyuru" data-duyuru aria-label="Duyurular">
+        <div class="duyuru__ray">
+          {duyurular.map((d, i) => <p class:list={['duyuru__madde', { 'is-active': i === 0 }]} aria-hidden={i === 0 ? undefined : 'true'}>{d}</p>)}
+        </div>
+      </div>
+    )}
+
+    {Astro.locals.yonetici && (
+      <div class="yonetici-serit">
+        <Ikon ad="ayar" boyut={14} />
+        {Astro.locals.musteriGorunumu ? (
+          <span>Müşteri görünümü (taslak ürünler ve setler gizli) · <a href={`/yonetim/gorunum?m=0&d=${encodeURIComponent(geriYol)}`}>Yönetici görünümüne dön</a></span>
+        ) : (
+          <span>Yönetici görünümü · <a href={`/yonetim/gorunum?m=1&d=${encodeURIComponent(geriYol)}`}>Müşteri gibi gör</a> · <a href="/yonetim">Panel</a></span>
+        )}
+      </div>
+    )}
+
+    <Header aktif={aktif} sade={sade} />
+
+    <main id="main">
+      <slot />
+    </main>
+
+    <Footer />
+
+    <slot name="alt-cubuk" />
+    {!altCubuk && !sade && <AltMenu aktif={aktif} />}
+
+    {!sade && (
+      <a class="wa-yuzen" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener" aria-label={`WhatsApp'tan yazın: ${k.site.telefonGorunen}`}>
+        <Ikon ad="whatsapp" boyut={30} /><span class="wa-yuzen__metin">Sorunuz mu var?<strong>WhatsApp'tan yazın</strong></span>
+      </a>
+    )}
+
+    <div class="perde" data-perde hidden></div>
+    <YanMenu />
+    <SepetPaneli />
+    <div class="toast" data-toast role="status" aria-live="polite"></div>
+    <div class="dev-banner">Doğrulama modu: sarı çerçeveli metinler teyit bekliyor</div>
+    <script type="application/json" id="katalog-veri" set:html={JSON.stringify(k.istemci())} />
+
+    <script>
+      import '../scripts/ui';
+      import '../scripts/sepet';
+    </script>
+  </body>
+</html>

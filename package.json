@@ -1,0 +1,23 @@
+{
+  "name": "al-lulu-home",
+  "private": true,
+  "type": "module",
+  "version": "0.2.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro check && astro build",
+    "preview": "astro preview",
+    "check": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/check": "^0.9.12",
+    "@astrojs/node": "^9.5.5",
+    "astro": "^5.18.2",
+    "nodemailer": "^10.6.0",
+    "sharp": "^0.35.5",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/nodemailer": "^8.0.2"
+  }
+}

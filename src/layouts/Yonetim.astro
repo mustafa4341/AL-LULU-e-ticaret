@@ -1,0 +1,65 @@
+---
+import '../styles/global.css';
+import '../styles/yonetim.css';
+import Ikonlar from '../components/Ikonlar.astro';
+import Ikon from '../components/Ikon.astro';
+import type { IkonAdi } from '../lib/sema';
+
+interface Props {
+  baslik: string;
+  aktif?: 'ozet' | 'urunler' | 'kategoriler' | 'setler' | 'siparisler' | 'ayarlar';
+  basari?: string | null;
+  hatalar?: string[];
+}
+const { baslik, aktif, basari, hatalar = [] } = Astro.props;
+const menu: { id: NonNullable<Props['aktif']>; ad: string; href: string; ikon: IkonAdi }[] = [
+  { id: 'ozet', ad: 'Özet', href: '/yonetim', ikon: 'ev' },
+  { id: 'urunler', ad: 'Ürünler', href: '/yonetim/urunler', ikon: 'kutu' },
+  { id: 'siparisler', ad: 'Siparişler', href: '/yonetim/siparisler', ikon: 'kargo' },
+  { id: 'setler', ad: 'Setler', href: '/yonetim/setler', ikon: 'etiket' },
+  { id: 'kategoriler', ad: 'Kategoriler', href: '/yonetim/kategoriler', ikon: 'grid' },
+  { id: 'ayarlar', ad: 'Ayarlar', href: '/yonetim/ayarlar', ikon: 'ayar' },
+];
+---
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{baslik} · Yönetim · Al Lulu Home</title>
+    <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body class="yonetim">
+    <Ikonlar />
+    <header class="y-ust">
+      <a href="/yonetim" class="y-logo"><img src="/img/logo/amblem.webp" alt="" width="36" height="27" /><span>Yönetim</span></a>
+      <nav class="y-menu" aria-label="Yönetim menüsü">
+        {menu.map((m) => (
+          <a href={m.href} class:list={{ 'is-active': aktif === m.id }} aria-current={aktif === m.id ? 'page' : undefined}><Ikon ad={m.ikon} boyut={20} /><span>{m.ad}</span></a>
+        ))}
+      </nav>
+      <div class="y-sag">
+        <a class="y-site" href="/" target="_blank" rel="noopener">Siteyi gör ↗</a>
+        <form method="post" action="/yonetim/cikis"><button class="y-cikis" type="submit">Çıkış</button></form>
+      </div>
+    </header>
+    <main class="y-ana">
+      <h1 class="y-baslik">{baslik}</h1>
+      {basari && <p class="y-bildirim y-bildirim--ok" role="status"><Ikon ad="tik" boyut={18} />{basari}</p>}
+      {hatalar.length > 0 && (
+        <div class="y-bildirim y-bildirim--hata" role="alert">
+          <strong>Kaydedilmedi, şunları düzeltin:</strong>
+          <ul>{hatalar.map((h) => <li>{h}</li>)}</ul>
+        </div>
+      )}
+      <slot />
+    </main>
+    <script>
+      import '../scripts/yonetim';
+    </script>
+  </body>
+</html>

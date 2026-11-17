@@ -1,0 +1,74 @@
+---
+import Yonetim from '../../layouts/Yonetim.astro';
+import Ikon from '../../components/Ikon.astro';
+import { magazaOku, siparisleriOku } from '../../lib/depo';
+import { formatTL } from '../../lib/fiyat';
+import { SIPARIS_DURUM_ADLARI } from '../../lib/sema';
+
+const m = await magazaOku();
+const siparisler = await siparisleriOku();
+const bugun = new Date().toDateString();
+const otuzGun = Date.now() - 30 * 864e5;
+const aktif = siparisler.filter((s) => s.durum !== 'iptal' && s.durum !== 'odeme-bekliyor');
+const ciro = aktif.filter((s) => Date.parse(s.tarih) > otuzGun).reduce((t, s) => t + s.toplam, 0);
+const bekleyen = siparisler.filter((s) => s.durum === 'odeme-bekliyor');
+const gonderilecek = siparisler.filter((s) => s.durum === 'odendi' || s.durum === 'hazirlaniyor');
+const azStok = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= 3);
+const notlar = m.urunler.filter((u) => u.dogrula.length).map((u) => ({ u, notlar: u.dogrula }));
+const bosMu = (v: string) => !v.trim() || /^\[.*\]$/.test(v.trim()) || /^[—-]+$/.test(v.trim());
+const eksikSatici = ([['Ticari unvan', m.site.satici.unvan], ['Adres', m.site.satici.adres], ['MERSİS no', m.site.satici.mersis], ['Vergi dairesi / no', m.site.satici.vergiDairesiNo]] as const)
+  .filter(([, v]) => bosMu(v)).map(([e]) => e);
+---
+<Yonetim baslik="Özet" aktif="ozet">
+  {eksikSatici.length > 0 && (
+    <p class="y-uyari" style="margin-bottom:14px"><strong>Yasal metinlerde eksik satıcı bilgisi:</strong> {eksikSatici.join(', ')}. Bu bilgiler sözleşmelerde zorunludur; <a href="/yonetim/ayarlar">Ayarlar → Satıcı bilgileri</a> bölümünden doldurun.</p>
+  )}
+  <div class="y-istatistik">
+    <div><strong>{siparisler.filter((s) => new Date(s.tarih).toDateString() === bugun).length}</strong><span>Bugünkü sipariş</span></div>
+    <div><strong>{gonderilecek.length}</strong><span>Gönderilecek</span></div>
+    <div><strong>{bekleyen.length}</strong><span>Ödeme bekleyen</span></div>
+    <div><strong>{formatTL(ciro)}</strong><span>Son 30 gün ciro</span></div>
+  </div>
+
+  <div class="y-izgara y-izgara--2">
+    <section class="y-kart">
+      <h2>Hızlı işlemler</h2>
+      <div class="y-izgara" style="margin-top:12px">
+        <a class="btn btn--sepet" href="/yonetim/urunler/yeni"><Ikon ad="arti" />Yeni ürün ekle</a>
+        <a class="btn btn--cizgi" href="/yonetim/urunler"><Ikon ad="etiket" />Fiyat / stok / indirim değiştir</a>
+        <a class="btn btn--cizgi" href="/yonetim/setler"><Ikon ad="kutu" />Set (kombinasyon) oluştur</a>
+        <a class="btn btn--cizgi" href="/yonetim/ayarlar"><Ikon ad="ayar" />Ana sayfa ve iletişim ayarları</a>
+      </div>
+    </section>
+
+    <section class="y-kart">
+      <h2>Son siparişler</h2>
+      {siparisler.length === 0 ? <p class="muted" style="margin-top:8px">Henüz sipariş yok.</p> : (
+        <ul class="y-gecmis">
+          {siparisler.slice(0, 6).map((s) => (
+            <li><a href={`/yonetim/siparisler/${s.no}`}>{s.no} · {s.musteri.ad} {s.musteri.soyad}</a><span><span class:list={['y-durum', `y-durum--${s.durum}`]}>{SIPARIS_DURUM_ADLARI[s.durum]}</span> {formatTL(s.toplam)}</span></li>
+          ))}
+        </ul>
+      )}
+    </section>
+  </div>
+
+  {azStok.length > 0 && (
+    <section class="y-kart">
+      <h2>Stoğu azalan ürünler</h2>
+      <ul class="y-gecmis">{azStok.map((u) => <li><a href={`/yonetim/urunler/${u.id}`}>{u.marka} {u.kisaAd}</a><strong style="color:var(--indirim)">{u.stok} adet</strong></li>)}</ul>
+    </section>
+  )}
+
+  {notlar.length > 0 && (
+    <section class="y-kart">
+      <h2>Yayından önce kontrol edilecekler</h2>
+      <p class="y-aciklama">Ürün sayfalarındaki "İç notlar" alanından gelir; müşteriler görmez.</p>
+      {notlar.map(({ u, notlar }) => (
+        <div style="margin-bottom:10px"><a href={`/yonetim/urunler/${u.id}`}><strong>{u.kisaAd}</strong></a>
+          <ul style="list-style:disc;margin-left:20px;font-size:14px;color:var(--ink-2)">{notlar.map((n) => <li>{n}</li>)}</ul>
+        </div>
+      ))}
+    </section>
+  )}
+</Yonetim>

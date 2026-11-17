@@ -1,0 +1,71 @@
+---
+/* Kategori ve "Tüm ürünler" sayfaları: masaüstünde solda kategori listesi, mobilde üstte kaydırılabilir filtre. */
+import Ikon from './Ikon.astro';
+import UrunKarti from './UrunKarti.astro';
+import type { Urun } from '../lib/sema';
+
+interface Props { urunler: Urun[]; aktif: string }
+const { urunler, aktif } = Astro.props;
+const k = Astro.locals.katalog;
+const kategoriler = k.gorunurKategoriler({ menu: true });
+const setVar = k.tumSetler().length > 0;
+const amiral = k.urunBul(k.anaSayfa.hero.urunId);
+---
+<div class="filtre-serit" aria-label="Kategoriler">
+  <a href="/urunler" class:list={['cat-pill', { 'is-active': aktif === 'urunler' }]}>Tümü</a>
+  {kategoriler.map((kat) => <a href={`/kategori/${kat.id}`} class:list={['cat-pill', { 'is-active': aktif === kat.id }]}>{kat.ad}</a>)}
+  {setVar && <a href="/setler" class="cat-pill cat-pill--firsat">Setler & Fırsatlar</a>}
+</div>
+<div class="liste-duzen">
+  <aside class="yan-filtre" aria-label="Kategoriler">
+    <h2>Kategoriler</h2>
+    <nav>
+      <a href="/urunler" aria-current={aktif === 'urunler' ? 'page' : undefined}>Tüm ürünler <span class="menu-sayi">{k.tumUrunler().length}</span></a>
+      {kategoriler.map((kat) => {
+        const n = k.kategoriUrunleri(kat.id).length;
+        return <a href={`/kategori/${kat.id}`} aria-current={aktif === kat.id ? 'page' : undefined}>{kat.ad} {n > 0 ? <span class="menu-sayi">{n}</span> : <span class="menu-yakinda">Yakında</span>}</a>;
+      })}
+    </nav>
+    {setVar && <a class="menu-firsat" href="/setler"><Ikon ad="etiket" /><span><strong>Setler & Fırsatlar</strong></span><Ikon ad="sag" boyut={16} /></a>}
+  </aside>
+  <div>
+    {urunler.length > 0 ? (
+      <>
+        <div class="liste-arac">
+          <span>{urunler.length} ürün</span>
+          <label><span class="visually-hidden">Sırala</span>
+            <select data-siralama>
+              <option value="onerilen">Önerilen</option>
+              <option value="artan">En düşük fiyat</option>
+              <option value="azalan">En yüksek fiyat</option>
+            </select>
+          </label>
+        </div>
+        <div class="urun-grid" data-urun-liste>
+          {urunler.map((u, i) => <UrunKarti urun={u} oncelikliYukle={i < 4} />)}
+        </div>
+      </>
+    ) : (
+      <div class="bos-durum">
+        <h2>Yakında burada</h2>
+        <p>Bu kategoriye çok yakında seçkin ürünler ekliyoruz. Bu arada öne çıkan ürünümüze göz atabilirsiniz.</p>
+        {amiral && <a class="btn btn--sepet" href={`/urun/${amiral.id}`}>{amiral.marka} {amiral.kisaAd}</a>}
+      </div>
+    )}
+  </div>
+</div>
+
+<script>
+  const sec = document.querySelector<HTMLSelectElement>('[data-siralama]');
+  const liste = document.querySelector<HTMLElement>('[data-urun-liste]');
+  if (sec && liste) {
+    const kartlar = Array.from(liste.querySelectorAll<HTMLElement>('[data-urun-kart]'));
+    const ilk = new Map(kartlar.map((k, i) => [k, i]));
+    sec.addEventListener('change', () => {
+      const f = (k: HTMLElement) => Number(k.dataset.fiyat);
+      [...kartlar]
+        .sort((a, b) => (sec.value === 'artan' ? f(a) - f(b) : sec.value === 'azalan' ? f(b) - f(a) : ilk.get(a)! - ilk.get(b)!))
+        .forEach((k) => liste.appendChild(k));
+    });
+  }
+</script>

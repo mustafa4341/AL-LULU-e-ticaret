@@ -1,0 +1,12 @@
+---
+import SSS from '../SSS.astro';
+const k = Astro.locals.katalog;
+---
+{k.anaSayfa.sss.length > 0 && (
+  <section class="bolum" id="sss" aria-labelledby="sss-baslik">
+    <div class="container">
+      <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">Sık sorulanlar</p><h2 id="sss-baslik">Aklınızdaki sorular</h2></div></div>
+      <SSS maddeler={k.anaSayfa.sss} />
+    </div>
+  </section>
+)}

@@ -1,0 +1,17 @@
+---
+/* Set kartı (ana sayfa ve Setler sayfası): set görseli varsa üstte, ardından "Birlikte Al" dökümü. */
+import BirlikteAl from './BirlikteAl.astro';
+import type { UrunSeti } from '../lib/sema';
+interface Props { set: UrunSeti }
+const { set } = Astro.props;
+---
+<article class="set-kart" data-reveal>
+  <header class="set-kart__bas">
+    {set.durum === 'taslak' && <span class="rozet rozet--taslak">Örnek</span>}
+    {set.rozet && <p class="eyebrow eyebrow--altin">{set.rozet}</p>}
+    <h3 class="set-kart__ad">{set.ad}</h3>
+    {set.aciklama && <p class="muted small">{set.aciklama}</p>}
+  </header>
+  {set.gorsel && <img class="set-kart__foto" src={set.gorsel.src} alt={set.gorsel.alt} width="360" height="480" loading="lazy" />}
+  <BirlikteAl set={set} />
+</article>

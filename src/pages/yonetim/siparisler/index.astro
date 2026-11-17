@@ -1,0 +1,38 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import { siparisleriOku } from '../../../lib/depo';
+import { formatTL } from '../../../lib/fiyat';
+import { SIPARIS_DURUMLARI, SIPARIS_DURUM_ADLARI } from '../../../lib/sema';
+
+const filtre = Astro.url.searchParams.get('durum') ?? '';
+const tum = await siparisleriOku();
+const liste = filtre ? tum.filter((s) => s.durum === filtre) : tum;
+const tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+---
+<Yonetim baslik="Siparişler" aktif="siparisler">
+  <div class="y-secimler" style="margin-bottom:14px">
+    <a class="y-secim" href="/yonetim/siparisler" style={!filtre ? 'border-color:var(--ink)' : undefined}>Tümü ({tum.length})</a>
+    {SIPARIS_DURUMLARI.map((d) => {
+      const n = tum.filter((s) => s.durum === d).length;
+      return <a class="y-secim" href={`/yonetim/siparisler?durum=${d}`} style={filtre === d ? 'border-color:var(--ink)' : undefined}>{SIPARIS_DURUM_ADLARI[d]} ({n})</a>;
+    })}
+  </div>
+  {liste.length === 0 ? <div class="y-kart"><p class="muted">Bu filtrede sipariş yok.</p></div> : (
+    <div class="y-liste">
+      {liste.map((s) => (
+        <a class="y-satir" href={`/yonetim/siparisler/${s.no}`} style="grid-template-columns:1fr auto;text-decoration:none">
+          <div>
+            <span class="y-satir__ad">{s.no} · {s.musteri.ad} {s.musteri.soyad}</span>
+            <div class="y-satir__meta">
+              <span class:list={['y-durum', `y-durum--${s.durum}`]}>{SIPARIS_DURUM_ADLARI[s.durum]}</span>
+              <span>{tarih.format(new Date(s.tarih))}</span>
+              <span>{s.teslimat.il}</span>
+              <span>{s.kalemler.reduce((t, x) => t + x.adet, 0)} ürün</span>
+            </div>
+          </div>
+          <strong>{formatTL(s.toplam)}</strong>
+        </a>
+      ))}
+    </div>
+  )}
+</Yonetim>

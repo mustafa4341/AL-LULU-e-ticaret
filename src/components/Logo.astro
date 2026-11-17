@@ -1,0 +1,16 @@
+---
+/* Header logosu: amblem + "AL LULU HOME" yazısı (orijinal logodan kırpıldı). */
+interface Props {
+  tip?: 'yatay' | 'tam';
+  class?: string;
+}
+const { tip = 'yatay', class: cls } = Astro.props;
+---
+{tip === 'yatay' ? (
+  <span class:list={['logo-yatay', cls]}>
+    <img class="logo-yatay__amblem" src="/img/logo/amblem.webp" alt="" width="215" height="160" decoding="async" />
+    <img class="logo-yatay__yazi" src="/img/logo/yazi.webp" alt="Al Lulu Home" width="427" height="120" decoding="async" />
+  </span>
+) : (
+  <img class:list={['logo-tam', cls]} src="/img/logo/al-lulu-home.webp" alt="Al Lulu Home" width="720" height="641" loading="lazy" decoding="async" />
+)}

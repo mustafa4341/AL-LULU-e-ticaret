@@ -1,0 +1,41 @@
+---
+import Fiyat from '../Fiyat.astro';
+import Ikon from '../Ikon.astro';
+import KargoSayaci from '../KargoSayaci.astro';
+import FirsatSayaci from '../FirsatSayaci.astro';
+const k = Astro.locals.katalog;
+const h = k.anaSayfa.hero;
+const urun = k.urunBul(h.urunId);
+const gorsel = urun ? k.anaGorsel(urun) : undefined;
+const rozet = urun ? k.rozetler(urun) : undefined;
+const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
+---
+{urun && (
+  <section class="hero" aria-labelledby="hero-baslik">
+    <div class="container hero__grid">
+      <a class="hero__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
+        {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-ucus-gorsel />}
+        {rozet?.damga && <span class="damga damga--buyuk"><span>{rozet.damga}</span></span>}
+      </a>
+      <div class="hero__metin">
+        {bilgi?.firsat ? <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} /> : <p class="eyebrow eyebrow--altin">{h.ustBaslik}</p>}
+        <h1 id="hero-baslik">{h.baslik}</h1>
+        <p class="hero__alt">{h.altBaslik}</p>
+        {h.maddeler.length > 0 && (
+          <ul class="hero__maddeler">{h.maddeler.slice(0, 3).map((m) => <li><Ikon ad="tik" boyut={18} />{m}</li>)}</ul>
+        )}
+        <div class="hero__fiyat"><Fiyat bilgi={bilgi!} boyut="buyuk" /></div>
+        {rozet?.serit && <p class="hero__kargo"><Ikon ad="kargo" boyut={18} />{rozet.serit} · Vergiler dahil</p>}
+        <div class="hero__cta">
+          <button class="btn btn--simdi" type="button" data-hemen-al data-tip="urun" data-id={urun.id}>Şimdi Al</button>
+          <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id={urun.id} data-konum="hero">
+            <Ikon ad="canta" boyut={18} /><span data-etiket>Sepete Ekle</span>
+          </button>
+        </div>
+        <a class="hero__incele" href={`/urun/${urun.id}`}>Ürünü incele <Ikon ad="sag" boyut={16} /></a>
+        {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">* Fissler verisi; yemeğe ve miktara göre değişir.</p>}
+        <KargoSayaci kompakt />
+      </div>
+    </div>
+  </section>
+)}

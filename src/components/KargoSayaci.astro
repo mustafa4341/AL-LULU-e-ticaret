@@ -1,0 +1,27 @@
+---
+import Ikon from './Ikon.astro';
+import { formatTL } from '../lib/fiyat';
+/* Trendyol tarzı teslimat kutusu — gerçek kesim saatine göre canlı sayaç (hesap: scripts/ui.ts). */
+interface Props { kompakt?: boolean }
+const { kompakt = false } = Astro.props;
+const k = Astro.locals.katalog;
+const kargo = k.site.kargo;
+---
+{kompakt ? (
+  <div class="kargo-sayac kargo-sayac--kompakt" data-kargo-sayac>
+    <Ikon ad="kargo" boyut={20} />
+    <span data-kargo-satir>Hafta içi {kargo.kesimSaati}:00'e kadar verilen siparişler <strong>aynı gün kargoda</strong>.</span>
+  </div>
+) : (
+  <div class="teslimat" data-kargo-sayac>
+    {kargo.ucretsizEsik > 0 && <span class="teslimat__etiket">{formatTL(kargo.ucretsizEsik)} ve üzeri kargo bedava</span>}
+    <div class="teslimat__satir">
+      <span class="teslimat__ikon"><Ikon ad="saat" boyut={20} /></span>
+      <span data-kargo-satir>Hafta içi {kargo.kesimSaati}:00'e kadar verilen siparişler <strong>aynı gün kargoda</strong>.</span>
+    </div>
+    <div class="teslimat__satir">
+      <span class="teslimat__ikon"><Ikon ad="kargo" boyut={20} /></span>
+      <span>Tahmini <strong data-teslim-tarih>—</strong> kapınızda <span class="muted small">· {kargo.firma}</span></span>
+    </div>
+  </div>
+)}
