@@ -40,12 +40,12 @@ const baslikSatiri = (metin: string) =>
 <td style="${YAZI};font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:${R.altinKoyu};white-space:nowrap;padding-right:12px">${kacis(metin)}</td>
 <td width="100%" style="border-bottom:1px solid ${R.cizgi};font-size:0;line-height:0">&nbsp;</td></tr></table>`;
 
-/** Sipariş numarası + tarih "kartı" */
-const siparisKarti = (s: Siparis, sag?: string) => kutu(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
+/** Sipariş numarası + tarih "kartı"; durum etiketi altta (telefonda numara ikiye bölünmesin diye yan yana değil) */
+const siparisKarti = (s: Siparis, durum?: string) => kutu(`<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>
 <td style="${YAZI}"><span style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${R.soluk}">Sipariş No</span><br>
-<strong style="${SERIF};font-size:21px;letter-spacing:.5px;color:${R.yazi}">${kacis(s.no)}</strong><br>
-<span style="font-size:13px;color:${R.soluk}">${kacis(tarihYaz(s.tarih))}</span></td>
-${sag ? `<td align="right" valign="middle" style="${YAZI};font-size:13px;color:${R.soluk}">${sag}</td>` : ''}
+<strong style="${SERIF};font-size:21px;letter-spacing:.5px;color:${R.yazi};white-space:nowrap">${kacis(s.no)}</strong><br>
+<span style="font-size:13px;color:${R.soluk}">${kacis(tarihYaz(s.tarih))}</span>
+${durum ? `<div style="margin-top:10px;font-size:12px">${durum}</div>` : ''}</td>
 </tr></table>`);
 
 /** Müşteri e-postalarında sipariş yolculuğu: Alındı → Hazırlanıyor → Kargoda → Teslim */
@@ -134,7 +134,7 @@ ${o.guven === false ? '' : guvenSatiri()}
 ${o.ek ? `<tr><td style="height:16px"></td></tr><tr><td bgcolor="${R.kart}" style="border-radius:18px;padding:26px 30px;${YAZI};font-size:12px;line-height:1.55;color:${R.yazi}">${o.ek}</td></tr>` : ''}
 <tr><td align="center" style="padding:28px 16px 6px;${YAZI};font-size:13px;line-height:1.8;color:${R.soluk}">
 <strong style="color:${R.yazi}">Yardıma mı ihtiyacınız var?</strong><br>
-Bu e-postayı yanıtlayın ya da <a href="${kacis(wa)}" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none">WhatsApp ${kacis(site.telefonGorunen)}</a> üzerinden yazın.
+Bu e-postayı yanıtlayın ya da <a href="${kacis(wa)}" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none;white-space:nowrap">WhatsApp ${kacis(site.telefonGorunen)}</a> üzerinden yazın.
 ${site.calismaSaatleri ? `<br><span style="font-size:12px">${kacis(site.calismaSaatleri)}</span>` : ''}
 </td></tr>
 <tr><td align="center" style="padding:14px 16px 4px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="40" height="1" bgcolor="${R.altin}" style="font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>
@@ -164,8 +164,11 @@ export function siparisAlindiEpostasi(
   gorsel?: GorselBul,
 ): Eposta {
   const odemeBekliyor = s.durum === 'odeme-bekliyor';
+  // Kartlı ödeme kapalıyken (PayTR kaydı yok) ödeme için mağaza müşteriye ulaşır
   const durumNotu = odemeBekliyor
-    ? 'Ödemeniz onaylandığında siparişiniz hemen hazırlanmaya başlar; kargoya verildiğinde takip numarasıyla size ayrıca yazacağız.'
+    ? s.paytr
+      ? 'Ödemeniz onaylandığında siparişiniz hemen hazırlanmaya başlar; kargoya verildiğinde takip numarasıyla size ayrıca yazacağız.'
+      : 'Ödeme için kısa süre içinde sizinle iletişime geçeceğiz. Ödemeniz onaylanınca siparişiniz hemen hazırlanır; kargoya verildiğinde takip numarasıyla size ayrıca yazacağız.'
     : 'Ödemeniz başarıyla alındı. Siparişinizi özenle hazırlıyoruz; kargoya verildiğinde takip numarasıyla size ayrıca yazacağız.';
   const rozet = odemeBekliyor
     ? `<span style="display:inline-block;padding:5px 12px;border-radius:999px;background:#FFF4E0;color:#9A5B00;font-weight:bold;font-size:12px">Ödeme bekleniyor</span>`
@@ -176,19 +179,94 @@ ${adimCubugu(s)}
 ${siparisKarti(s, rozet)}
 ${baslikSatiri('Sipariş özeti')}${urunTablosu(s, site, gorsel)}
 ${baslikSatiri('Teslimat adresi')}<p style="margin:10px 0 0;font-size:14px;line-height:1.65">${adresMetni(s)}</p>
-${buton('Siparişimi Takip Et', takipUrl)}`;
-  const ek = belgeler ? `<p style="margin:0 0 10px;${YAZI};font-size:11px;font-weight:bold;letter-spacing:2px;color:${R.altinKoyu}">ONAYLADIĞINIZ SÖZLEŞMELER</p>
-<p style="margin:0 0 12px">Aşağıdaki metinler bilgileriniz için kalıcı olarak size iletilmiştir. Ayrıca <a href="${kacis(belgeler.baglanti)}" style="color:${R.altinKoyu}">buradan</a> görüntüleyebilirsiniz.</p>
-<h2 style="${SERIF};font-size:17px;font-weight:normal;margin:18px 0 6px">Ön Bilgilendirme Formu</h2>${belgeler.onBilgilendirme}
-<hr style="border:0;border-top:1px solid ${R.cizgi};margin:20px 0"><h2 style="${SERIF};font-size:17px;font-weight:normal;margin:18px 0 6px">Mesafeli Satış Sözleşmesi</h2>${belgeler.mesafeliSatis}` : undefined;
+${buton('Siparişimi Takip Et', takipUrl)}
+${belgeler ? sozlesmeKutusu(belgeler.baglanti) : ''}`;
   return {
     konu: `Siparişiniz alındı — ${s.no}`,
     html: cerceve(site, {
       onYazi: `${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}.`,
-      ust: 'Sipariş onayı', baslik: 'Teşekkürler, siparişiniz alındı', icerik, ek, altNot: altNot(s),
+      ust: 'Sipariş onayı', baslik: 'Teşekkürler, siparişiniz alındı', icerik, altNot: altNot(s),
     }),
-    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz alındı. ${durumNotu}\n\n${satirlarMetin(s)}\n\nTeslimat: ${s.teslimat.adres}, ${s.teslimat.ilce} / ${s.teslimat.il}\n\nSiparişinizi takip edin: ${takipUrl}${belgeler ? `\nOnayladığınız sözleşmeler: ${belgeler.baglanti}` : ''}${imza(site)}`,
+    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz alındı. ${durumNotu}\n\n${satirlarMetin(s)}\n\nTeslimat: ${s.teslimat.adres}, ${s.teslimat.ilce} / ${s.teslimat.il}\n\nSiparişinizi takip edin: ${takipUrl}${belgeler ? `\n\nOnayladığınız Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi ayrı bir e-postayla gönderildi. Buradan da görüntüleyebilirsiniz: ${belgeler.baglanti}` : ''}${imza(site)}`,
   };
+}
+
+/** Sipariş e-postasının altında küçük, sakin bir "Sözleşmeleriniz" kutusu (tam metinler ayrı e-postada) */
+function sozlesmeKutusu(baglanti: string): string {
+  const madde = (ad: string) => `<tr><td width="18" valign="top" style="${SERIF};font-size:11px;line-height:20px;color:${R.altin}">&#9670;</td><td style="${YAZI};font-size:13px;line-height:20px;color:${R.yazi}">${ad}</td></tr>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:30px 0 0"><tr>
+<td style="padding:18px 20px;border-radius:12px;border:1px solid ${R.cizgi};background:#FCFBF8">
+<p style="margin:0 0 8px;${YAZI};font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:${R.altinKoyu}">Sözleşmeleriniz</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0">${madde('Ön Bilgilendirme Formu')}${madde('Mesafeli Satış Sözleşmesi')}</table>
+<p style="margin:10px 0 0;${YAZI};font-size:12.5px;line-height:1.6;color:${R.soluk}">Onayladığınız metinler ayrı bir e-postayla size gönderildi. İstediğiniz zaman <a href="${kacis(baglanti)}" target="_blank" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none">buradan görüntüleyebilirsiniz&nbsp;&rarr;</a></p>
+</td></tr></table>`;
+}
+
+/* ───────────────────────── Müşteri: Sözleşmeler ───────────────────────── */
+/**
+ * Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi'nin onaylanan hâli, ayrı bir e-postayla.
+ * E-posta "kalıcı veri saklayıcısı"dır (Mesafeli Sözleşmeler Yön. m.4/c); tam metin burada kalır,
+ * sipariş onayı ise kısa ve okunaklı olur.
+ */
+export function sozlesmelerEpostasi(
+  s: Siparis, site: SiteAyarlari,
+  belgeler: { onBilgilendirme: string; mesafeliSatis: string; baglanti: string },
+): Eposta {
+  const belge = (sira: string, baslik: string, govde: string) => `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:34px 0 0"><tr>
+<td style="padding:0 0 12px;border-bottom:2px solid ${R.altin}">
+<p style="margin:0 0 4px;${YAZI};font-size:11px;font-weight:bold;letter-spacing:2px;color:${R.altinKoyu}">BELGE ${sira}</p>
+<h2 style="margin:0;${SERIF};font-size:22px;line-height:1.25;font-weight:normal;color:${R.yazi}">${baslik}</h2></td></tr></table>
+<div style="${YAZI};font-size:13px;line-height:1.7;color:#3A352D">${belgeyiBicimle(govde)}</div>`;
+  const icindekiler = (sira: string, ad: string) => `<tr><td width="28" valign="top" style="${SERIF};font-size:15px;line-height:24px;color:${R.altin}">${sira}</td><td style="${YAZI};font-size:14px;line-height:24px;color:${R.yazi}">${ad}</td></tr>`;
+  const icerik = `<p style="margin:0 0 8px">Merhaba ${kacis(s.musteri.ad)},</p>
+<p style="margin:0">Siparişinizi verirken onayladığınız sözleşmeler aşağıdadır. Herhangi bir işlem yapmanız gerekmiyor; bu e-postayı kayıtlarınız için saklamanızı öneririz.</p>
+${kutu(`<table role="presentation" cellpadding="0" cellspacing="0" border="0">${icindekiler('1', 'Ön Bilgilendirme Formu')}${icindekiler('2', 'Mesafeli Satış Sözleşmesi')}</table>
+<p style="margin:10px 0 0;font-size:12.5px;color:${R.soluk}">Sipariş no <strong style="color:${R.yazi}">${kacis(s.no)}</strong> · ${kacis(tarihYaz(s.tarih))}</p>`)}
+${buton('Sözleşmeleri Web\'de Aç', belgeler.baglanti, R.altinAcik, R.altinKoyu)}
+${belge('1', 'Ön Bilgilendirme Formu', belgeler.onBilgilendirme)}
+${belge('2', 'Mesafeli Satış Sözleşmesi', belgeler.mesafeliSatis)}`;
+  return {
+    konu: `Sözleşmeleriniz — ${s.no}`,
+    html: cerceve(site, {
+      onYazi: `${s.no} numaralı siparişinizin Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi.`,
+      ust: 'Kayıtlarınız için', baslik: 'Onayladığınız sözleşmeler', icerik, altNot: altNot(s), guven: false,
+    }),
+    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişinizi verirken onayladığınız sözleşmeler aşağıdadır. Web'de görüntülemek için: ${belgeler.baglanti}\n\n` +
+      `=== 1. ÖN BİLGİLENDİRME FORMU ===\n\n${htmldenMetin(belgeler.onBilgilendirme)}\n\n=== 2. MESAFELİ SATIŞ SÖZLEŞMESİ ===\n\n${htmldenMetin(belgeler.mesafeliSatis)}${imza(site)}`,
+  };
+}
+
+/**
+ * Sözleşme HTML'i (lib/yasal.ts, sitedeki CSS sınıflarıyla) e-posta programları için satır içi stile çevrilir:
+ * başlıklar, paragraflar, listeler, tanım listeleri (tabloya) ve ürün tablosu. Metnin kendisine dokunulmaz.
+ */
+function belgeyiBicimle(html: string): string {
+  const td = `padding:7px 10px;border-bottom:1px solid ${R.cizgi};vertical-align:top;font-size:12.5px;line-height:1.5`;
+  return html
+    .replace(/<p class="belge-ust">/g, `<p style="margin:12px 0 14px;font-size:12px;color:${R.soluk}">`)
+    .replace(/<p>/g, `<p style="margin:0 0 11px">`)
+    .replace(/<h2>/g, `<h3 style="margin:24px 0 8px;${SERIF};font-size:16px;font-weight:bold;color:${R.yazi}">`).replace(/<\/h2>/g, '</h3>')
+    .replace(/<h3>/g, `<h4 style="margin:16px 0 6px;${YAZI};font-size:13px;font-weight:bold;color:${R.yazi}">`).replace(/<\/h3>/g, '</h4>')
+    .replace(/<(ul|ol)( [^>]*)?>/g, `<$1 style="margin:0 0 12px;padding-left:20px">`)
+    .replace(/<li>/g, `<li style="margin:0 0 5px">`)
+    .replace(/<dl[^>]*>/g, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;border-top:1px solid ${R.cizgi}">`)
+    .replace(/<\/dl>/g, '</table>')
+    .replace(/<dt>/g, `<tr><td width="34%" style="${td};color:${R.soluk}">`).replace(/<\/dt>/g, '</td>')
+    .replace(/<dd>/g, `<td style="${td};color:${R.yazi}">`).replace(/<\/dd>/g, '</td></tr>')
+    .replace(/<mark[^>]*>/g, `<span style="background:#FFF4D6;color:#8A5A00;padding:1px 5px;border-radius:4px">`).replace(/<\/mark>/g, '</span>')
+    .replace(/<div class="belge-tablo-kap">/g, '<div>')
+    .replace(/<table class="belge-tablo">/g, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;border-collapse:collapse">`)
+    .replace(/<(td|th)([^>]*)>/g, (_t, ad: string, oz: string) =>
+      `<${ad}${oz.replace(/ class="[^"]*"/, '')} style="padding:8px 8px;border-bottom:1px solid ${R.cizgi};font-size:12.5px;line-height:1.45;vertical-align:top;${/sayi/.test(oz) ? 'text-align:right;white-space:nowrap;' : 'text-align:left;'}${ad === 'th' ? `font-weight:bold;color:${R.yazi};background:#FAF7F1;` : ''}">`);
+}
+
+/** Düz metin sürümü (HTML göstermeyen e-posta programları için) */
+function htmldenMetin(html: string): string {
+  return html
+    .replace(/<\/(p|h2|h3|li|tr|dd|table)>/g, '\n').replace(/<br\s*\/?>/g, '\n').replace(/<\/(dt|td|th)>/g, ': ').replace(/<li[^>]*>/g, '• ')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
+    .replace(/[ \t]+/g, ' ').replace(/\n /g, '\n').replace(/: \n/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 /* ───────────────────────── Müşteri: Durum değişti ───────────────────────── */

@@ -68,7 +68,7 @@ const musteriSayfasi = '/siparis/' + s.no + '?t=' + s.token;
 const epostaAcik = epostaBagli();
 const epostalar = await epostaKayitlari(s.no);
 const yenidenSecenekler = [
-  ...(s.musteri.eposta ? ['alindi'] : []),
+  ...(s.musteri.eposta ? ['alindi', 'sozlesmeler'] : []),
   'magaza',
   ...(s.musteri.eposta && (EPOSTA_GIDEN_DURUMLAR as readonly string[]).includes(s.durum) ? ['durum-' + s.durum] : []),
 ];
