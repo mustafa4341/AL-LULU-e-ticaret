@@ -7,7 +7,7 @@ import { benzersizKod, evet, istegeBagli, liste, metin, sayi } from '../../../li
 import { fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
 import { Katalog } from '../../../lib/katalog';
 import type { IkonAdi, Urun } from '../../../lib/sema';
-import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri } from '../../../lib/yonetimUrun';
+import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri, yayinEksikleri } from '../../../lib/yonetimUrun';
 import Onizleme from '../../../components/yonetim/Onizleme.astro';
 import Sekmeler from '../../../components/yonetim/Sekmeler.astro';
 
@@ -44,6 +44,9 @@ if (Astro.request.method === 'POST') {
     }
   } else {
     const aday = urunFormu(f, urun);
+    // Üst çubuktaki "Kaydet ve yayınla" / "Yayından kaldır" düğmeleri seçili durumu ezer
+    const yayin = metin(f, 'yayin');
+    if (yayin === 'yayinda' || yayin === 'gizli' || yayin === 'taslak') aday.durum = yayin;
     const fiyat = sayi(f, 'fiyat', urun.fiyat);
     const kampanya = evet(f, 'kampanya');
     const kampanyaEtiket = istegeBagli(f, 'kampanya_etiket');
@@ -86,9 +89,17 @@ if (Astro.request.method === 'POST') {
           Object.assign(u, alanlar, { stok });
           if (kampanya && oncekiFiyat && oncekiFiyat <= sonFiyat) throw new DogrulamaHatasi(["Önceki satış fiyatı indirimli satış fiyatından yüksek olmalı."]);
           fiyatUygula(u, sonFiyat, kampanya, kampanyaEtiket, oncekiFiyat);
+          if (u.durum === 'yayinda') {
+            const eksik = yayinEksikleri(u);
+            if (eksik.length) throw new DogrulamaHatasi([`Yayına almak için eksik: ${eksik.join(', ')}. Tamamlayıp tekrar "Kaydet ve yayınla"ya basın (ya da önce taslak olarak kaydedin).`]);
+          }
         });
         for (const s of silinecek) await gorselSil(s);
-        return Astro.redirect('/yonetim/urunler/' + hedefId + '?ok=' + encodeURIComponent(yeni ? 'Ürün oluşturuldu.' : 'Ürün kaydedildi.'), 303);
+        const mesaj = aday.durum === 'yayinda'
+          ? (yeni ? 'Ürün oluşturuldu ve yayında.' : 'Kaydedildi. Ürün yayında, müşteriler görebilir.')
+          : aday.durum === 'gizli' ? 'Kaydedildi. Ürün gizli: sitede görünmüyor.'
+          : (yeni ? 'Ürün taslak olarak oluşturuldu. Sitede görünmesi için "Kaydet ve yayınla"ya basın.' : 'Taslak kaydedildi. Sitede görünmüyor.');
+        return Astro.redirect('/yonetim/urunler/' + hedefId + '?ok=' + encodeURIComponent(mesaj), 303);
       } catch (e) {
         hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
         for (const g of yuklenen) await gorselSil(g.src);
@@ -124,7 +135,17 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a href="/yonetim/urunler" class="y-link">Ürünlere dön</a>
     <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="urun-onizleme" aria-expanded="false">Önizle</button>
-    <button type="submit" form="urun-form" class="btn btn--sepet" name="eylem" value="kaydet" data-yayin-kaydet>Kaydet</button>
+    {kayitli && <span class={'y-yayin-rozet y-yayin-rozet--' + kayitli.durum} title="Şu anki yayın durumu">{kayitli.durum === 'yayinda' ? 'Yayında' : kayitli.durum === 'gizli' ? 'Gizli' : 'Taslak'}</span>}
+    {kayitli?.durum === 'yayinda'
+      ? <>
+          <button type="submit" form="urun-form" class="btn btn--cizgi" name="yayin" value="gizli" data-onayla="Ürün yayından kaldırılsın mı? Sitede görünmez olur, silinmez.">Yayından kaldır</button>
+          <button type="submit" form="urun-form" class="btn btn--sepet" name="eylem" value="kaydet" data-yayin-kaydet>Kaydet</button>
+        </>
+      : <>
+          <button type="submit" form="urun-form" class="btn btn--cizgi" name="yayin" value={kayitli?.durum === 'gizli' ? 'gizli' : 'taslak'}>{yeni ? 'Taslak kaydet' : 'Kaydet'}</button>
+          <button type="submit" form="urun-form" class="btn y-yayinla-btn" name="yayin" value="yayinda">Kaydet ve yayınla</button>
+        </>}
+    {!yeni && <button type="submit" form="urun-form" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.">Sil</button>}
   </div>
   <div class="y-editor-duzen" data-editor-duzen>
     <!-- SOL SÜTUN: REHBERLİ ÜRÜN FORMU -->

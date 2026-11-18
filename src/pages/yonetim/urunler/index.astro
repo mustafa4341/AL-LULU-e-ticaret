@@ -1,6 +1,7 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
-import { DogrulamaHatasi, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
+import { DogrulamaHatasi, gorselSil, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
+import { yayinEksikleri } from '../../../lib/yonetimUrun';
 import { formatTL } from '../../../lib/fiyat';
 import { metin, sayi } from '../../../lib/form';
 import { fiyatDegisimleriListesi, fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
@@ -16,6 +17,38 @@ let hatalar: string[] = [];
 let form: FormData | undefined;
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
+  const eylem = metin(f, 'eylem');
+  if (eylem === 'yayinla' || eylem === 'gizle' || eylem === 'sil') {
+    const id = metin(f, 'id');
+    const geri = (mesaj: string) => Astro.redirect('/yonetim/urunler?' + new URLSearchParams({ filtre, q: soru, sira, ok: mesaj }) + (eylem === 'sil' ? '' : '#u-' + id), 303);
+    try {
+      let silinecek: string[] = [];
+      let ad = '';
+      await magazaGuncelle((m) => {
+        const u = m.urunler.find((x) => x.id === id);
+        if (!u) throw new Error('Ürün bulunamadı. Sayfayı yenileyin.');
+        ad = (u.marka + ' ' + u.kisaAd).trim();
+        if (eylem === 'yayinla') {
+          const eksik = yayinEksikleri(u);
+          if (eksik.length) throw new Error(`"${ad}" yayına alınamadı. Eksik: ${eksik.join(', ')}. Ürünü açıp "Düzenle" ile tamamlayın.`);
+          u.durum = 'yayinda';
+        } else if (eylem === 'gizle') {
+          u.durum = 'gizli';
+        } else {
+          const setler = m.setler.filter((s) => s.kalemler.some((x) => x.urunId === id));
+          if (setler.length) throw new Error(`Bu ürün şu setlerde kullanılıyor, önce setten çıkarın: ${setler.map((s) => s.ad).join(', ')}`);
+          if (m.anaSayfa.hero.urunId === id) throw new Error('Bu ürün ana sayfada öne çıkan ürün. Önce Site Düzeni → Ana sayfa’dan başka bir ürün seçin.');
+          silinecek = u.gorseller.map((g) => g.src);
+          m.urunler = m.urunler.filter((x) => x.id !== id);
+          m.urunler.forEach((x) => (x.birlikteIyiGider = x.birlikteIyiGider.filter((y) => y !== id)));
+        }
+      });
+      for (const s of silinecek) await gorselSil(s).catch(() => undefined);
+      return geri(eylem === 'yayinla' ? `"${ad}" yayında, müşteriler artık görebilir.` : eylem === 'gizle' ? `"${ad}" yayından kaldırıldı (gizli).` : `"${ad}" silindi.`);
+    } catch (e) {
+      hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
+    }
+  } else {
   duzenle = metin(f, 'id');
   form = f;
   try {
@@ -38,6 +71,7 @@ if (Astro.request.method === 'POST') {
     return Astro.redirect('/yonetim/urunler?' + q + '#u-' + duzenle, 303);
   } catch (e) {
     hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
+  }
   }
 }
 const [m, siparisler] = await Promise.all([magazaOku(), siparisleriOku()]);
@@ -70,8 +104,16 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
         <td><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" />}</span><span><a class="y-link" href={'/yonetim/urunler/' + u.id}>{u.marka} {u.kisaAd}</a><small class="y-table-note">{u.gorseller.length ? u.sku : 'Fotoğraf eksik'}</small></span></div></td>
         <td class="y-nowrap"><strong>{formatTL(u.fiyat)}</strong>{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
         <td>{fiyat.yuzde ? <span>%{fiyat.yuzde} fiyat indirimi</span> : null}{fiyat.sepette && <small class="y-table-note">Sepette %{fiyat.sepette.yuzde} · {formatTL(fiyat.sepette.fiyat)}</small>}{!fiyat.yuzde && !fiyat.sepette && '—'}</td>
-        <td>{u.stok <= 3 && u.durum === 'yayinda' ? <span class="y-stok-rozet y-stok-rozet--kritik">{u.stok === 0 ? 'Tükendi' : u.stok + ' · Kritik'}</span> : u.stok}</td><td>{YAYIN_ADLARI[u.durum]}</td>
-        <td><div class="y-row-actions"><a class="y-link" href={'/yonetim/urunler/' + u.id}>Düzenle</a><a class="y-link" href={url(duzenle === u.id ? undefined : u.id)}>{duzenle === u.id ? "Kapat" : "Hızlı düzenle"}</a>{skuGecerli(u.sku) && <details class="y-row-menu"><summary aria-label="Ürün işlemleri">•••</summary><a href={"/yonetim/finans/etiket?sku=" + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi ↗</a></details>}</div></td>
+        <td>{u.stok <= 3 && u.durum === 'yayinda' ? <span class="y-stok-rozet y-stok-rozet--kritik">{u.stok === 0 ? 'Tükendi' : u.stok + ' · Kritik'}</span> : u.stok}</td><td><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>{u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}</td>
+        <td><div class="y-row-actions">
+          <form method="post" class="y-satir-form">
+            <input type="hidden" name="id" value={u.id} />
+            {u.durum === 'yayinda'
+              ? <button class="btn btn--cizgi btn--kucuk" name="eylem" value="gizle" data-onayla={`"${u.kisaAd}" yayından kaldırılsın mı? Sitede görünmez olur, silinmez.`}>Yayından kaldır</button>
+              : <button class="btn btn--kucuk y-yayinla-btn" name="eylem" value="yayinla">Yayına al</button>}
+            <button class="y-link y-link--tehlike" name="eylem" value="sil" data-onayla={`"${u.marka} ${u.kisaAd}" KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.`}>Sil</button>
+          </form>
+          <a class="y-link" href={'/yonetim/urunler/' + u.id}>Düzenle</a><a class="y-link" href={url(duzenle === u.id ? undefined : u.id)}>{duzenle === u.id ? "Kapat" : "Hızlı düzenle"}</a>{skuGecerli(u.sku) && <details class="y-row-menu"><summary aria-label="Ürün işlemleri">•••</summary><a href={"/yonetim/finans/etiket?sku=" + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi ↗</a></details>}</div></td>
       </tr>
       {duzenle === u.id && <tr class="y-inline-edit"><td colspan="6"><form method="post" class="y-inline-fields" data-editor>
         <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />

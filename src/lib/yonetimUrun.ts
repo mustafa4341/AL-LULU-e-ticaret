@@ -7,6 +7,16 @@ export const BOS_URUN: Urun = {
   faydalar: [], pisirme: [], teknik: [], kutuIcerigi: [], sss: [], birlikteIyiGider: [], oneCikan: false, cokSatan: false, oncelik: 0, dogrula: [],
 };
 
+/** Ürün yayına alınmadan önce eksik olanlar (boşsa yayına alınabilir). */
+export function yayinEksikleri(u: Urun): string[] {
+  const eksik: string[] = [];
+  if (!u.ad.trim()) eksik.push('ürün adı');
+  if (!(u.fiyat > 0)) eksik.push('fiyat');
+  if (!u.kategoriler.length) eksik.push('kategori');
+  if (!u.gorseller.length) eksik.push('en az 1 fotoğraf');
+  return eksik;
+}
+
 export function urunFormu(f: FormData, temel: Urun): Urun {
   const ikonlu = ciftler(f, 'bilgi_ikon', 'bilgi_metin').map(([ikon, metin]) => ({
     ikon: (IkonSema.safeParse(ikon).success ? ikon : 'kutu') as IkonAdi,

@@ -15,7 +15,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import type { Siparis, SiteAyarlari } from './sema';
 import { SIPARIS_DURUM_ADLARI } from './sema';
 import { formatTL } from './fiyat';
-import { EPOSTA_GIDEN_DURUMLAR, durumEpostasi, siparisAlindiEpostasi, yeniSiparisEpostasi, type Eposta } from './epostaSablon';
+import { EPOSTA_GIDEN_DURUMLAR, durumEpostasi, siparisAlindiEpostasi, yeniSiparisEpostasi, type Eposta, type GorselBul } from './epostaSablon';
 import { magazaOku, siparisleriOku, sozlesmeOku, supabaseIstemci } from './depo';
 
 const ortam = (ad: string): string | undefined => process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
@@ -28,7 +28,8 @@ function eposta(): Transporter | null {
   const port = Number(ortam('SMTP_PORT') || 465);
   tasiyici = nodemailer.createTransport({
     host, port, secure: port === 465,
-    auth: { user: ortam('SMTP_KULLANICI'), pass: ortam('SMTP_PAROLA') },
+    // Google uygulama şifresi "abcd efgh ijkl mnop" diye boşluklu gösterilir; boşluklar ve tırnaklar silinir
+    auth: { user: ortam('SMTP_KULLANICI')?.trim(), pass: ortam('SMTP_PAROLA')?.replace(/[\s"']/g, '') },
     // Sunucusuz ortamda (Vercel) istek uzun süre asılı kalmasın
     connectionTimeout: 8000, greetingTimeout: 8000, socketTimeout: 12000,
   });
@@ -109,18 +110,20 @@ export async function epostaKayitlari(no: string): Promise<EpostaKaydi[]> {
 export async function epostaYenidenGonder(no: string, tur: string, origin: string): Promise<GonderimSonucu> {
   const s = (await siparisleriOku()).find((x) => x.no === no);
   if (!s) throw new Error('Sipariş bulunamadı.');
-  const { site } = await magazaOku();
+  const m = await magazaOku();
+  const { site } = m;
+  const gorsel = gorselBulucu(m);
   const takipUrl = new URL(`/siparis/${s.no}?t=${s.token}`, origin).href;
   const kayit = { no, tur, zorla: true };
-  if (tur === 'magaza') return epostaGonder(magazaAdresi(site), yeniSiparisEpostasi(s, site), kayit, s.musteri.eposta);
+  if (tur === 'magaza') return epostaGonder(magazaAdresi(site), yeniSiparisEpostasi(s, site, gorsel), kayit, s.musteri.eposta);
   if (!s.musteri.eposta) throw new Error('Müşterinin e-posta adresi yok.');
   if (tur === 'alindi') {
     const belge = await sozlesmeOku(no);
     const baglanti = new URL(`/siparis/${s.no}/sozlesmeler?t=${s.token}`, origin).href;
-    return epostaGonder(s.musteri.eposta, siparisAlindiEpostasi(s, site, takipUrl, belge ? { ...belge, baglanti } : undefined), kayit);
+    return epostaGonder(s.musteri.eposta, siparisAlindiEpostasi(s, site, takipUrl, belge ? { ...belge, baglanti } : undefined, gorsel), kayit);
   }
   if (tur === `durum-${s.durum}`) {
-    const e = durumEpostasi(s, site, takipUrl);
+    const e = durumEpostasi(s, site, takipUrl, gorsel);
     if (e) return epostaGonder(s.musteri.eposta, e, kayit);
   }
   throw new Error('Bu e-posta siparişin şu anki durumu için gönderilemez.');
@@ -130,6 +133,18 @@ async function smsGonder(_tel: string, _metin: string): Promise<void> {
   // SMS sağlayıcısı seçildiğinde burada API çağrısı yapılacak.
 }
 
+/** E-postadaki ürün satırları için kimlik → ilk fotoğraf (ürün veya set) */
+function gorselBulucu(m: Awaited<ReturnType<typeof magazaOku>>): GorselBul {
+  const harita = new Map<string, string>();
+  for (const u of m.urunler) if (u.gorseller[0]) harita.set(u.id, u.gorseller[0].src);
+  for (const st of m.setler) {
+    const ilk = st.gorsel?.src ?? m.urunler.find((u) => u.id === st.kalemler[0]?.urunId)?.gorseller[0]?.src;
+    if (ilk) harita.set(st.id, ilk);
+  }
+  return (id) => harita.get(id);
+}
+const gorselGetir = (): Promise<GorselBul | undefined> => magazaOku().then(gorselBulucu, () => undefined);
+
 /** Yeni sipariş bildiriminin gideceği mağaza adres(ler)i */
 const magazaAdresi = (site: SiteAyarlari) => ortam('SIPARIS_BILDIRIM_EPOSTA') || site.eposta;
 
@@ -137,18 +152,19 @@ export async function siparisAlindi(
   s: Siparis, site: SiteAyarlari, takipUrl: string,
   belgeler?: { onBilgilendirme: string; mesafeliSatis: string; baglanti: string },
 ): Promise<void> {
+  const gorsel = await gorselGetir();
   await Promise.all([
-    s.musteri.eposta ? epostaGonder(s.musteri.eposta, siparisAlindiEpostasi(s, site, takipUrl, belgeler), { no: s.no, tur: 'alindi' }) : Promise.resolve(),
+    s.musteri.eposta ? epostaGonder(s.musteri.eposta, siparisAlindiEpostasi(s, site, takipUrl, belgeler, gorsel), { no: s.no, tur: 'alindi' }) : Promise.resolve(),
     smsGonder(s.musteri.tel, `${site.ad}: ${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}. Takip: ${takipUrl}`),
     // Mağazaya gelen bildirimde "Yanıtla" doğrudan müşteriye yazar
-    epostaGonder(magazaAdresi(site), yeniSiparisEpostasi(s, site), { no: s.no, tur: 'magaza' }, s.musteri.eposta),
+    epostaGonder(magazaAdresi(site), yeniSiparisEpostasi(s, site, gorsel), { no: s.no, tur: 'magaza' }, s.musteri.eposta),
   ]);
 }
 
 export async function durumDegisti(s: Siparis, site: SiteAyarlari, takipUrl: string): Promise<void> {
   const durum = SIPARIS_DURUM_ADLARI[s.durum];
   const ek = s.durum === 'kargoda' && s.kargoTakip ? ` Kargo takip no: ${s.kargoTakip}.` : '';
-  const ePosta = (EPOSTA_GIDEN_DURUMLAR as readonly string[]).includes(s.durum) ? durumEpostasi(s, site, takipUrl) : undefined;
+  const ePosta = (EPOSTA_GIDEN_DURUMLAR as readonly string[]).includes(s.durum) ? durumEpostasi(s, site, takipUrl, await gorselGetir()) : undefined;
   await Promise.all([
     smsGonder(s.musteri.tel, `${site.ad}: ${s.no} numaralı siparişinizin durumu: ${durum}.${ek} Takip: ${takipUrl}`),
     s.musteri.eposta && ePosta ? epostaGonder(s.musteri.eposta, ePosta, { no: s.no, tur: `durum-${s.durum}` }) : Promise.resolve(),
