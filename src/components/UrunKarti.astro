@@ -4,6 +4,7 @@ import Ikon from './Ikon.astro';
 import Fiyat from './Fiyat.astro';
 import GorselYok from './GorselYok.astro';
 import FirsatSayaci from './FirsatSayaci.astro';
+import UrunRozeti from './UrunRozeti.astro';
 
 interface Props {
   urun: Urun;
@@ -17,6 +18,7 @@ const k = Astro.locals.katalog;
 const gorsel = k.anaGorsel(urun);
 const bilgi = k.fiyatBilgisi(urun);
 const rozet = k.rozetler(urun);
+const rozetTuru = k.cokSatanMi(urun) ? 'cok-satan' : bilgi.firsat ? 'firsat' : 'stok';
 const stokta = k.stoktaMi(urun);
 const kat = k.kategoriBul(urun.kategoriler[0]!);
 const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
@@ -24,17 +26,15 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
 <article class:list={["kart", { "kart--firsat": !!bilgi.firsat, "kart--yatay": yatay }]} data-urun-kart data-urun-id={urun.id} data-fiyat={siralamaFiyati} data-reveal>
   <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
     {gorsel ? (
-      <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-ucus-gorsel />
+      <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-yuklenen-gorsel />
     ) : (
       <GorselYok ikon={kat?.ikon} />
     )}
     {urun.durum === 'taslak' && <span class="rozet rozet--taslak kart__taslak">Örnek</span>}
-    {rozet.damga && (k.cokSatanMi(urun)
-      ? <span class="cok-satan-damga kart__cok-satan" aria-label="En Çok Satan"><span>En Çok<br />Satan</span></span>
-      : <span class="damga"><span>{rozet.damga}</span></span>)}
     {bilgi.onceki && urun.durum !== 'taslak' && <span class="kart__indirim"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
     {rozet.serit && <span class="kart__serit"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>}
   </a>
+  {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} />}
   <div class="kart__govde">
     <h3 class="kart__ad"><a href={`/urun/${urun.id}`}><strong lang="en">{urun.marka}</strong> {urun.ad}</a></h3>
     {bilgi.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} boyut="kucuk" />}

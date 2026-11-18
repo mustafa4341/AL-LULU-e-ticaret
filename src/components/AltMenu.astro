@@ -12,7 +12,7 @@ const k = Astro.locals.katalog;
   <button type="button" class:list={['alt-menu__oge', { 'is-active': aktif && aktif !== 'ana' }]} data-cekmece-ac="kategori-paneli" aria-controls="kategori-paneli" aria-expanded="false">
     <Ikon ad="grid" boyut={22} /><span>Kategoriler</span>
   </button>
-  <button type="button" class="alt-menu__oge" data-cekmece-ac="sepet" aria-controls="sepet" aria-expanded="false" data-sepet-hedef>
+  <button type="button" class="alt-menu__oge" data-cekmece-ac="sepet" aria-controls="sepet" aria-expanded="false">
     <span class="alt-menu__ikon"><Ikon ad="canta" boyut={22} /><span class="cart-count" data-sepet-sayi data-bos="true">0</span></span><span>Sepetim</span>
   </button>
   <a href={k.whatsapp('Merhaba, bir sorum var.')} class="alt-menu__oge alt-menu__oge--wa" target="_blank" rel="noopener">

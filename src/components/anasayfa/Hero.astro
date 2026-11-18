@@ -7,6 +7,7 @@ import Fiyat from '../Fiyat.astro';
 import Ikon from '../Ikon.astro';
 import KargoSayaci from '../KargoSayaci.astro';
 import FirsatSayaci from '../FirsatSayaci.astro';
+import UrunRozeti from '../UrunRozeti.astro';
 import OzellikListesi from '../OzellikListesi.astro';
 import { metindenIkon } from '../../lib/ozellik';
 const k = Astro.locals.katalog;
@@ -17,23 +18,24 @@ const rozet = urun ? k.rozetler(urun) : undefined;
 const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
 /* Görselin sol üst etiketi: gerçek durum varsa o (En Çok Satan / Fırsat / Son N Adet), yoksa panel → "Üst başlık" */
 const etiket = rozet?.damga ?? h.ustBaslik;
+const rozetTuru = urun && k.cokSatanMi(urun) ? 'cok-satan' : bilgi?.firsat ? 'firsat' : 'stok';
 const href = urun ? `/urun/${urun.id}` : '/';
 ---
 {urun && (
   <section class="hero hero--vitrin" aria-labelledby="hero-baslik">
     <div class="container hero__grid">
       <a class="hero__vitrin" href={href} aria-label={`${urun.marka} ${urun.kisaAd} ürün sayfasını aç`}>
-        {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-ucus-gorsel />}
-        {urun && k.cokSatanMi(urun) ? (
-          <span class="cok-satan-damga hero__cok-satan" aria-label="En Çok Satan"><span>En Çok<br />Satan</span></span>
+        {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-yuklenen-gorsel />}
+        {rozet?.damga ? (
+          <UrunRozeti etiket={rozet.damga} tur={rozetTuru} />
         ) : (
-          etiket && <span class:list={['hero__etiket', { 'hero__etiket--durum': !!rozet?.damga }]}>{rozet?.damga && <Ikon ad="yildiz" boyut={13} />}{etiket}</span>
+          etiket && <span class="hero__etiket">{etiket}</span>
         )}
         {bilgi?.onceki && <span class="hero__indirim"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
         <span class="hero__incele-hap">Ürünü incele <Ikon ad="sag" boyut={16} /></span>
       </a>
       <div class="hero__metin">
-        {bilgi?.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} />}
+        {bilgi?.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} />}
         <h1 id="hero-baslik"><a href={href}>{h.baslik}</a></h1>
         <p class="hero__alt">{h.altBaslik}</p>
         <OzellikListesi kucuk maddeler={h.maddeler.slice(0, 3).map((m) => ({ ikon: metindenIkon(m), metin: m }))} dipnot="" />

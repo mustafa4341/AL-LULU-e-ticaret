@@ -8,6 +8,7 @@ import UrunKarti from './UrunKarti.astro';
 import SSS from './SSS.astro';
 import FirsatSayaci from './FirsatSayaci.astro';
 import BirlikteAl from './BirlikteAl.astro';
+import UrunRozeti from './UrunRozeti.astro';
 import FaydaBolumleri from './FaydaBolumleri.astro';
 import PisirmeSureleri from './PisirmeSureleri.astro';
 import SonCagri from './SonCagri.astro';
@@ -102,8 +103,7 @@ const sssVerisi = urunSSS.length ? {
     <section class="urun-ust" aria-labelledby="urun-adi" data-ga-urun={urun.id}>
       <div class="urun-galeri-kap">
         <Galeri gorseller={urun.gorseller} yedekIkon={kat?.ikon} />
-        {rozet.damga && <span class="damga damga--buyuk urun-damga"><span>{rozet.damga}</span></span>}
-        {k.cokSatanMi(urun) && <span class="cok-satan-damga urun-cok-satan" aria-label="En Çok Satan"><span>En Çok<br />Satan</span></span>}
+        {rozet.damga && k.cokSatanMi(urun) && <UrunRozeti etiket={rozet.damga} tur="cok-satan" konum="galeri" />}
         {bilgi.onceki && <span class="urun-indirim-cip"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
       </div>
 

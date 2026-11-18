@@ -19,7 +19,7 @@ const n = gorseller.length;
         gorseller.map((g, i) => (
           <figure class="galeri__slayt">
             <button type="button" class="galeri__buyut" data-buyutec-ac={i} aria-label={`Görsel ${i + 1}'i büyüt`}>
-              <img src={g.src} alt={g.alt} width="400" height="400" loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async" data-zoom data-ucus-gorsel={i === 0 ? '' : undefined} />
+              <img src={g.src} alt={g.alt} width="400" height="400" loading={i === 0 ? 'eager' : 'lazy'} fetchpriority={i === 0 ? 'high' : undefined} decoding="async" data-zoom data-yuklenen-gorsel />
             </button>
           </figure>
         ))

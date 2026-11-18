@@ -4,7 +4,7 @@
  */
 import { formatTL, katalog, setBul, urunBul } from './katalog';
 import { kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
-import { cekmeceAc, sepeteUcur, toast } from './ui';
+import { cekmeceAc, toast } from './ui';
 import { satirlardanUrunler, track } from './analitik';
 
 export type { KalemTipi, SepetKalemi };
@@ -37,17 +37,22 @@ export const sepetKalemleri = (): readonly SepetKalemi[] => kalemler;
 export const sepetOzeti = () => sepetHesapla(kalemler, katalog);
 export function sepetiBosalt(): void { kalemler = []; kaydet(); }
 
-export function eklenebilir(tip: KalemTipi, id: string): number {
-  const kul = urunKullanimi(kalemler, katalog);
+export function eklenebilir(tip: KalemTipi, id: string, taban: readonly SepetKalemi[] = kalemler): number {
+  const kul = urunKullanimi(taban, katalog);
   if (tip === 'urun') { const u = urunBul(id); return u ? Math.max(0, u.maxAdet - (kul.get(id) ?? 0)) : 0; }
   const s = setBul(id);
   if (!s) return 0;
-  return Math.min(...s.kalemler.map((k) => { const u = urunBul(k.urunId); return u ? Math.floor(Math.max(0, u.maxAdet - (kul.get(k.urunId) ?? 0)) / k.adet) : 0; }));
+  const gereken = urunKullanimi([{ tip: 'set', id, adet: 1 }], katalog);
+  return Math.min(...Array.from(gereken, ([urunId, adet]) => {
+    const u = urunBul(urunId);
+    return u ? Math.floor(Math.max(0, u.maxAdet - (kul.get(urunId) ?? 0)) / adet) : 0;
+  }));
 }
 
-export function ekle(tip: KalemTipi, id: string, adet = 1): number {
-  const n = Math.min(adet, eklenebilir(tip, id));
+export function ekle(tip: KalemTipi, id: string, adet = 1, taban = kalemler): number {
+  const n = Math.min(adet, eklenebilir(tip, id, taban));
   if (n <= 0) { toast('Bu üründen daha fazla ekleyemezsiniz (stok/sipariş limiti).'); return 0; }
+  kalemler = taban;
   const m = kalemler.find((k) => k.tip === tip && k.id === id);
   if (m) m.adet += n; else kalemler.push({ tip, id, adet: n });
   kaydet();
@@ -169,8 +174,42 @@ function oneriBul() {
   return undefined;
 }
 
+const birlikteKutulari = Array.from(document.querySelectorAll<HTMLElement>('[data-birlikte]'), (kutu) => ({
+  id: kutu.dataset.birlikte!,
+  buton: kutu.querySelector<HTMLButtonElement>('[data-sepete-ekle]')!,
+  etiket: kutu.querySelector<HTMLElement>('[data-etiket]')!,
+  not: kutu.querySelector<HTMLElement>('[data-birlikte-sepet-notu]')!,
+}));
+
+function seteGecis(id: string) {
+  if (!setBul(id)) return;
+  const gereken = urunKullanimi([{ tip: 'set', id, adet: 1 }], katalog);
+  let aktarilan = 0;
+  const taban = kalemler.flatMap((kalem) => {
+    if (kalem.tip !== 'urun') return [kalem];
+    const al = Math.min(kalem.adet, gereken.get(kalem.id) ?? 0);
+    gereken.set(kalem.id, (gereken.get(kalem.id) ?? 0) - al);
+    aktarilan += al;
+    return al === kalem.adet ? [] : [{ ...kalem, adet: kalem.adet - al }];
+  });
+  if (aktarilan && eklenebilir('set', id, taban) > 0) return { taban, aktarilan };
+}
+
+function setleriYansit(): void {
+  for (const { id, buton, etiket, not } of birlikteKutulari) {
+    const gecis = seteGecis(id);
+    const metin = gecis ? 'Sepette Bu Sete Geç' : 'Seti Sepete Ekle';
+    buton.dataset.etiketMetni = metin;
+    buton.toggleAttribute('data-sete-gec', !!gecis);
+    if (!buton.classList.contains('is-added')) etiket.textContent = metin;
+    not.hidden = !gecis;
+    not.textContent = gecis ? `Sepetteki ${gecis.aktarilan} uygun ürün bu sete aktarılır.` : '';
+  }
+}
+
 function yansit(): void {
   const o = sepetOzeti();
+  setleriYansit();
   document.querySelectorAll<HTMLElement>('[data-sepet-sayi]').forEach((el) => {
     const once = el.textContent;
     el.textContent = String(o.adet);
@@ -220,24 +259,23 @@ function yansit(): void {
 
 /* ---------------- Tıklamalar ---------------- */
 let mesgul = false;
+const bildirimZamanlari = new WeakMap<HTMLElement, number>();
 function adetKaynagi(btn: HTMLElement): number {
   const el = btn.dataset.adetKaynak ? document.querySelector<HTMLElement>(btn.dataset.adetKaynak) : null;
   const n = el ? parseInt(el.textContent || '1', 10) : 1;
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
-function geriBildirim(btn: HTMLElement): void {
+function geriBildirim(btn: HTMLElement, mesaj: string): void {
   const et = btn.querySelector<HTMLElement>('[data-etiket]');
-  const eski = et?.textContent;
+  const eski = btn.dataset.etiketMetni ?? et?.textContent;
+  if (eski) btn.dataset.etiketMetni = eski;
   btn.classList.add('is-added');
-  if (et) et.textContent = 'Eklendi ✓';
-  window.setTimeout(() => { btn.classList.remove('is-added'); if (et && eski) et.textContent = eski; }, 1500);
-}
-function kaynakGorsel(btn: HTMLElement): Element | null {
-  const kart = btn.closest('[data-urun-kart]');
-  if (kart) return kart.querySelector('[data-ucus-gorsel]');
-  const hero = btn.closest('.hero');
-  if (hero) return hero.querySelector('[data-ucus-gorsel]');
-  return document.querySelector('.urun-ust [data-ucus-gorsel]');
+  if (et) et.textContent = `${mesaj} ✓`;
+  window.clearTimeout(bildirimZamanlari.get(btn));
+  bildirimZamanlari.set(btn, window.setTimeout(() => {
+    btn.classList.remove('is-added');
+    if (et && btn.dataset.etiketMetni) et.textContent = btn.dataset.etiketMetni;
+  }, 1400));
 }
 
 document.addEventListener('click', (e) => {
@@ -247,20 +285,22 @@ document.addEventListener('click', (e) => {
   if (t.hasAttribute('data-sepete-ekle')) {
     if (mesgul) return;
     mesgul = true; window.setTimeout(() => (mesgul = false), 500);
-    const n = ekle((t.dataset.tip as KalemTipi) || 'urun', t.dataset.id!, adetKaynagi(t));
+    const tip = (t.dataset.tip as KalemTipi) || 'urun', id = t.dataset.id!;
+    const gecis = t.hasAttribute('data-sete-gec') ? seteGecis(id) : undefined;
+    if (t.hasAttribute('data-sete-gec') && !gecis) { setleriYansit(); return; }
+    const n = ekle(tip, id, gecis ? 1 : adetKaynagi(t), gecis?.taban);
     if (!n) return;
-    geriBildirim(t);
-    sepeteUcur(kaynakGorsel(t));
-    try { navigator.vibrate?.(12); } catch { /* desteklenmiyor */ }
+    geriBildirim(t, gecis ? 'Sete geçildi' : 'Eklendi');
     // Listeden hızlı ekleme: gezinmeyi bölme, bildirim göster. Ürün sayfası/hero: sepeti aç.
     if (t.hasAttribute('data-hizli') || t.hasAttribute('data-sessiz')) {
       toast('Sepete eklendi', { metin: 'Sepete git', cekmece: 'sepet' });
       return;
     }
-    window.setTimeout(() => {
-      document.querySelector('[data-sepet-bildirim]')?.classList.add('is-visible');
-      cekmeceAc('sepet', document.querySelector<HTMLElement>('[data-odemeye-gec]'));
-    }, 380);
+    const bildirim = document.querySelector('[data-sepet-bildirim]');
+    const mesaj = bildirim?.querySelector('span');
+    if (mesaj) mesaj.textContent = gecis ? 'Sepetiniz set fiyatıyla güncellendi' : 'Sepetinize eklendi';
+    bildirim?.classList.add('is-visible');
+    cekmeceAc('sepet', tip === 'set' ? undefined : document.querySelector<HTMLElement>('[data-odemeye-gec]'));
     return;
   }
 

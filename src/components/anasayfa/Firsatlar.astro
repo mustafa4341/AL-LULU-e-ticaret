@@ -1,23 +1,23 @@
 ---
 /* Fırsat ürünleri: panelde "Fırsat ürünü" işaretli ve gerçek bir avantajı olan ürünler. */
 import Ikon from '../Ikon.astro';
+import FirsatSure from '../FirsatSure.astro';
 import UrunKarti from '../UrunKarti.astro';
 const k = Astro.locals.katalog;
 const urunler = k.firsatUrunleri();
-const enYakin = urunler.map((u) => u.firsat?.bitis).filter((b): b is string => !!b).sort()[0];
+const enYakin = urunler.map((u) => u.firsat?.bitis)
+  .filter((b): b is string => !!b && Number.isFinite(Date.parse(b)))
+  .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
 ---
 {urunler.length > 0 && (
   <section class="bolum firsat-bolum" aria-labelledby="firsat-baslik">
     <div class="container">
       <div class="bolum-bas">
-        <div>
-          <p class="firsat-bolum__ust"><svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>Fırsat Ürünleri</p>
-          <h2 id="firsat-baslik">Kaçırmayın</h2>
-        </div>
+        <h2 id="firsat-baslik">Fırsat ürünleri</h2>
         {enYakin && (
           <div class="firsat-bolum__sayac" data-firsat-sayac={enYakin}>
-            <span class="muted small">Bitmesine</span>
-            <span class="firsat-bolum__sure" data-firsat-sure>--:--:--</span>
+            <span class="muted small">İlk fırsatın bitişine</span>
+            <FirsatSure bitis={enYakin} />
           </div>
         )}
       </div>

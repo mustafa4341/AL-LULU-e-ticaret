@@ -30,37 +30,6 @@ export function toast(mesaj: string, baglanti?: { metin: string; href?: string; 
   toastZaman = window.setTimeout(() => el.classList.remove('is-visible'), 3200);
 }
 
-/* ---------------- Sepete uçuş animasyonu ---------------- */
-export function sepeteUcur(kaynak: Element | null): void {
-  if (azHareket || !kaynak) return;
-  const hedefler = $$('[data-sepet-hedef]').filter((h) => h.offsetParent !== null);
-  const hedef = hedefler[hedefler.length - 1];
-  const img = kaynak.matches('img') ? (kaynak as HTMLImageElement) : kaynak.querySelector<HTMLImageElement>('img');
-  if (!hedef || !img) return;
-  const a = img.getBoundingClientRect(), b = hedef.getBoundingClientRect();
-  if (!a.width) return;
-  const kopya = img.cloneNode() as HTMLImageElement;
-  kopya.className = 'ucan-gorsel';
-  Object.assign(kopya.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
-  document.body.appendChild(kopya);
-  const dx = b.left + b.width / 2 - (a.left + a.width / 2);
-  const dy = b.top + b.height / 2 - (a.top + a.height / 2);
-  const anim = kopya.animate(
-    [
-      { transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { transform: `translate(${dx * 0.55}px, ${dy * 0.35 - 60}px) scale(.55)`, opacity: 0.95, offset: 0.55 },
-      { transform: `translate(${dx}px, ${dy}px) scale(.08)`, opacity: 0.4 },
-    ],
-    { duration: 720, easing: 'cubic-bezier(.5,0,.3,1)' },
-  );
-  anim.onfinish = () => {
-    kopya.remove();
-    hedef.classList.remove('is-salla');
-    void hedef.offsetWidth;
-    hedef.classList.add('is-salla');
-  };
-}
-
 /* ---------------- Çekmeceler (kategori paneli + sepet) ---------------- */
 const perde = $('[data-perde]');
 let acik: HTMLElement | null = null;
@@ -175,19 +144,18 @@ $$('.cekmece').forEach((el) => {
 
 /* ---------------- Kaydırınca beliren içerik ---------------- */
 (() => {
-  const ogeler = $$('[data-reveal]');
+  if (azHareket || !('IntersectionObserver' in window)) return;
+  const ogeler = $$('[data-reveal]').filter((el) => el.getBoundingClientRect().top >= window.innerHeight);
   if (!ogeler.length) return;
-  if (azHareket || !('IntersectionObserver' in window)) { ogeler.forEach((o) => o.classList.add('gorundu')); return; }
   const g = new IntersectionObserver((girdiler) => {
-    girdiler.forEach((gi) => {
+    girdiler.forEach((gi, i) => {
       if (!gi.isIntersecting) return;
       const el = gi.target as HTMLElement;
-      const kardesler = el.parentElement ? Array.from(el.parentElement.children).filter((c) => c.hasAttribute('data-reveal')) : [];
-      el.style.transitionDelay = `${Math.min(kardesler.indexOf(el), 6) * 60}ms`;
+      el.style.setProperty('--giris-gecikmesi', `${Math.min(i, 3) * 32}ms`);
       el.classList.add('gorundu');
       g.unobserve(el);
     });
-  }, { rootMargin: '0px 0px -8% 0px', threshold: 0.08 });
+  });
   ogeler.forEach((o) => g.observe(o));
 })();
 
@@ -199,7 +167,7 @@ $$('[data-galeri]').forEach((gal) => {
   const kucukler = $$('[data-galeri-kucuk]', gal);
   const noktalar = $$('.galeri__noktalar span', gal);
   const sayac = $('[data-galeri-sayac]', gal);
-  let aktif = 0, goruldu = false;
+  let aktif = 0, secilen: number | undefined, goruldu = false;
   const isaretle = (i: number) => {
     aktif = i;
     noktalar.forEach((n, j) => n.classList.toggle('is-active', j === i));
@@ -210,23 +178,30 @@ $$('[data-galeri]').forEach((gal) => {
   };
   const git = (i: number) => {
     i = (i + slaytlar.length) % slaytlar.length;
-    ray.scrollTo({ left: slaytlar[i]!.offsetLeft - ray.offsetLeft, behavior: azHareket ? 'auto' : 'smooth' });
-    isaretle(i);
+    const sol = slaytlar[i]!.getBoundingClientRect().left - slaytlar[0]!.getBoundingClientRect().left;
+    secilen = i;
+    ray.scrollTo({ left: sol, behavior: azHareket ? 'auto' : 'smooth' });
   };
   let raf = 0;
   ray.addEventListener('scroll', () => {
     cancelAnimationFrame(raf);
     raf = requestAnimationFrame(() => {
+      if (!ray.clientWidth) return;
       const i = Math.round(ray.scrollLeft / ray.clientWidth);
+      if (i === secilen && Math.abs(ray.scrollLeft - i * ray.clientWidth) < 1.5) secilen = undefined;
       if (i !== aktif) isaretle(Math.max(0, Math.min(slaytlar.length - 1, i)));
     });
   }, { passive: true });
-  kucukler.forEach((b, i) => { b.addEventListener('click', () => git(i)); b.addEventListener('mouseenter', () => git(i)); });
-  $('[data-galeri-onceki]', gal)?.addEventListener('click', () => git(aktif - 1));
-  $('[data-galeri-sonraki]', gal)?.addEventListener('click', () => git(aktif + 1));
+  const secimiBirak = () => { secilen = undefined; };
+  ray.addEventListener('pointerdown', secimiBirak, { passive: true });
+  ray.addEventListener('wheel', secimiBirak, { passive: true });
+  ray.addEventListener('scrollend', secimiBirak);
+  kucukler.forEach((b, i) => b.addEventListener('click', () => git(i)));
+  $('[data-galeri-onceki]', gal)?.addEventListener('click', () => git((secilen ?? aktif) - 1));
+  $('[data-galeri-sonraki]', gal)?.addEventListener('click', () => git((secilen ?? aktif) + 1));
   ray.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowRight') { e.preventDefault(); git(aktif + 1); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); git(aktif - 1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); git((secilen ?? aktif) + 1); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); git((secilen ?? aktif) - 1); }
   });
 });
 
@@ -288,24 +263,38 @@ $$('[data-galeri]').forEach((gal) => {
 
 /* ---------------- Fırsat geri sayımı (panelde girilen GERÇEK bitiş saati) ---------------- */
 (() => {
-  const sayaclar = $$('[data-firsat-sayac]').filter((s) => s.dataset.firsatSayac);
+  const sayaclar = $$('[data-firsat-sayac]').flatMap((kutu) => {
+    const bitis = Date.parse(kutu.dataset.firsatSayac ?? '');
+    const sure = $('[data-firsat-sure]', kutu), tarih = $('[data-firsat-bitis]', kutu);
+    return Number.isFinite(bitis) && sure && tarih ? [{ kutu, bitis, sure, tarih }] : [];
+  });
   if (!sayaclar.length) return;
   const iki = (n: number) => String(n).padStart(2, '0');
+  let yenileniyor = false;
   const tik = () => {
     const simdi = Date.now();
-    let biten = false;
-    sayaclar.forEach((s) => {
-      const kalan = Date.parse(s.dataset.firsatSayac!) - simdi;
-      const hedef = $('[data-firsat-sure]', s);
-      if (kalan <= 0) { s.classList.add('is-bitti'); biten = true; return; }
-      const sn = Math.floor(kalan / 1000), g = Math.floor(sn / 86400);
-      const metin = `${g ? g + 'g ' : ''}${iki(Math.floor((sn % 86400) / 3600))}:${iki(Math.floor((sn % 3600) / 60))}:${iki(sn % 60)}`;
-      if (hedef) hedef.textContent = metin;
-    });
-    // Fırsat bittiyse fiyatlar değişir: sayfayı bir kez yenile
-    if (biten && !sessionStorage.getItem('firsat-yenilendi')) {
-      try { sessionStorage.setItem('firsat-yenilendi', '1'); } catch { /* yok */ }
-      window.setTimeout(() => location.reload(), 800);
+    for (const { kutu, bitis, sure, tarih } of sayaclar) {
+      if (kutu.hidden) continue;
+      const kalan = bitis - simdi;
+      if (kalan <= 0) {
+        kutu.hidden = true;
+        if (yenileniyor) continue;
+        const anahtar = `firsat-yenile:${location.pathname}:${bitis}`;
+        try {
+          if (sessionStorage.getItem(anahtar)) continue;
+          sessionStorage.setItem(anahtar, '1');
+        } catch { /* Depolama kapalıyken yeniden yükleme döngüsü oluşturma. */
+          continue;
+        }
+        yenileniyor = true;
+        window.setTimeout(() => location.reload(), 600);
+        continue;
+      }
+      const sn = Math.ceil(kalan / 1000), gun = Math.floor(sn / 86400);
+      sure.textContent = `${gun ? `${gun} gün ` : ''}${iki(Math.floor((sn % 86400) / 3600))}:${iki(Math.floor((sn % 3600) / 60))}:${iki(sn % 60)}`;
+      sure.hidden = false;
+      tarih.classList.add('visually-hidden');
+      kutu.classList.toggle('is-yaklasiyor', kalan <= 3600000);
     }
   };
   tik();

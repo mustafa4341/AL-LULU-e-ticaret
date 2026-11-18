@@ -1,6 +1,7 @@
 ---
-/* Fırsat etiketi + GERÇEK bitiş saatine geri sayım (panelde girilen tarih).
-   Herkese aynı bitişi gösterir; sayfa yenilenince başa dönmez. Süre bitince kendini gizler. */
+import Ikon from './Ikon.astro';
+import FirsatSure from './FirsatSure.astro';
+
 interface Props {
   etiket: string;
   bitis?: string;
@@ -8,17 +9,10 @@ interface Props {
   stil?: 'firsat' | 'flas' | 'ozel';
 }
 const { etiket, bitis, boyut = 'buyuk', stil = 'firsat' } = Astro.props;
+const sureli = bitis && Number.isFinite(Date.parse(bitis));
 ---
-<span class:list={['firsat-cip', `firsat-cip--${boyut}`, `firsat-cip--${stil}`]} data-firsat-sayac={bitis}>
-  <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>
+<span class:list={['firsat-cip', `firsat-cip--${boyut}`, `firsat-cip--${stil}`]} data-firsat-sayac={sureli ? bitis : undefined}>
+  <Ikon ad={sureli ? 'saat' : 'etiket'} boyut={14} />
   <span>{etiket}</span>
-  {bitis && <span class="firsat-cip__sure" data-firsat-sure aria-label="Kalan süre">--:--:--</span>}
+  {sureli && <FirsatSure bitis={bitis} />}
 </span>
-<style>
-  .firsat-cip--flas { background: #a92837; color: #fff; border-color: #a92837; }
-  .firsat-cip--ozel { background: #f6ead4; color: #5c4118; border-color: #e3cb9d; }
-  @media (prefers-reduced-motion: no-preference) {
-    .firsat-cip--flas[data-firsat-sayac] svg { animation: flas 1.4s ease-in-out 3; }
-    @keyframes flas { 50% { transform: scale(1.19); opacity: .7; } }
-  }
-</style>

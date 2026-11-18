@@ -1,5 +1,6 @@
 ---
 import '../styles/global.css';
+import '../styles/vitrin.css';
 import Ikonlar from '../components/Ikonlar.astro';
 import Ikon from '../components/Ikon.astro';
 import Header from '../components/Header.astro';
@@ -52,6 +53,7 @@ const jsonLd: Record<string, unknown>[] = [
 ];
 const duyurular = ozelDuyuru ? [ozelDuyuru, ...k.site.duyurular.filter((d) => !/kargo bedava/i.test(d))] : k.site.duyurular;
 const geriYol = Astro.url.pathname;
+const vitrinGecisi = !onizleme && /^\/(?:urunler|setler|(?:urun|kategori)\/[^/]+)?$/.test(geriYol);
 ---
 <!doctype html>
 <html lang="tr">
@@ -93,7 +95,7 @@ const geriYol = Astro.url.pathname;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="preload" as="image" href="/img/logo/yazi.webp" />
-    <script is:inline>document.documentElement.classList.add('js');</script>
+    {vitrinGecisi && <style is:inline>@view-transition { navigation: auto; }</style>}
     {gtm && <script is:inline>
       /* Consent Mode varsayılanı: onay verilene kadar her şey kapalı (GTM de yüklenmez) */
       window.dataLayer = window.dataLayer || [];
@@ -137,7 +139,7 @@ const geriYol = Astro.url.pathname;
 
     <Header aktif={aktif} sade={sade} />
 
-    <main id="main">
+    <main id="main" data-vitrin-gecisi={vitrinGecisi ? '' : undefined}>
       <slot />
     </main>
 
@@ -156,12 +158,17 @@ const geriYol = Astro.url.pathname;
     <YanMenu />
     <SepetPaneli />
     <div class="toast" data-toast role="status" aria-live="polite"></div>
+    {vitrinGecisi && <div class="sayfa-yukleme" data-sayfa-yukleme hidden>
+      <span class="sayfa-yukleme__isaret" aria-hidden="true"><Ikon ad="saat" boyut={18} /></span>
+      <span role="status" data-sayfa-yukleme-metin></span>
+    </div>}
     {gtm && <CerezOnay gtm={gtm} />}
     <div class="dev-banner">Doğrulama modu: sarı çerçeveli metinler teyit bekliyor</div>
     <script type="application/json" id="katalog-veri" set:html={JSON.stringify(k.istemci()).replace(/</g, '\\u003c')} />
 
     <script>
       import '../scripts/ui';
+      import '../scripts/vitrin';
       import '../scripts/sepet';
       import '../scripts/olaylar';
     </script>
