@@ -3,7 +3,7 @@
  * Hesap lib/fiyat.ts → sepetHesapla ile yapılır; sunucu siparişi alırken AYNI fonksiyonla yeniden hesaplar.
  */
 import { formatTL, katalog, setBul, urunBul } from './katalog';
-import { sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
+import { kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
 import { cekmeceAc, sepeteUcur, toast } from './ui';
 import { track } from './analitik';
 
@@ -29,34 +29,6 @@ let kalemler: SepetKalemi[] = oku();
 function kaydet(): void {
   try { localStorage.setItem(ANAHTAR, JSON.stringify(kalemler)); } catch { /* gizli sekme */ }
   yansit();
-
-/* ---------------- Sepet hatırlatma: geri gelen ziyaretçiye nazik bir kart ---------------- */
-(() => {
-  if (/^\/(odeme|siparis)/.test(location.pathname) || !kalemler.length) return;
-  let gosterildi = false;
-  try { gosterildi = !!sessionStorage.getItem('sepet-hatirlatma'); } catch { /* yok */ }
-  const dahili = document.referrer && new URL(document.referrer).host === location.host;
-  if (gosterildi || dahili) return;
-  window.setTimeout(() => {
-    const o = sepetOzeti();
-    if (!o.satirlar.length) return;
-    try { sessionStorage.setItem('sepet-hatirlatma', '1'); } catch { /* yok */ }
-    const ilk = o.satirlar[0]!;
-    const kart = document.createElement('div');
-    kart.className = 'hatirlatma';
-    kart.setAttribute('role', 'status');
-    kart.innerHTML = `
-      ${ilk.gorsel ? `<img src="${ilk.gorsel}" alt="">` : `<span class="oneri__yok">${ikonSvg(ilk.ikon, 22)}</span>`}
-      <div class="hatirlatma__metin"><strong>Sepetin seni bekliyor</strong>${o.adet} ürün · ${formatTL(o.toplam)}</div>
-      <button class="btn btn--sepet btn--kucuk" type="button" data-cekmece-ac="sepet">Tamamla</button>
-      <button class="hatirlatma__kapat" type="button" aria-label="Kapat">${ikonSvg('kapat', 14)}</button>`;
-    document.body.appendChild(kart);
-    requestAnimationFrame(() => kart.classList.add('is-visible'));
-    const kapat = () => { kart.classList.remove('is-visible'); window.setTimeout(() => kart.remove(), 400); };
-    kart.addEventListener('click', (e) => { if ((e.target as Element).closest('.hatirlatma__kapat, [data-cekmece-ac]')) kapat(); });
-    window.setTimeout(kapat, 12000);
-  }, 2500);
-})();
   document.dispatchEvent(new CustomEvent(DEGISTI));
 }
 window.addEventListener('storage', (e) => { if (e.key === ANAHTAR) { kalemler = oku(); yansit(); document.dispatchEvent(new CustomEvent(DEGISTI)); } });
@@ -94,19 +66,29 @@ export function adetAyarla(tip: KalemTipi, id: string, adet: number): void {
 }
 
 /* ---------------- Görünüm ---------------- */
+/**
+ * Ürün satırının açık dökümü (sepet çekmecesi ve ödeme ekranı ortak): indirim varsa indirimsiz tutar,
+ * kampanya indirimi ve sepette indirim ayrı satırlarda. Satırların toplamı sağdaki satır tutarına eşittir.
+ */
+function dokumHtml(s: HesapSatiri): string {
+  const satir = (sol: string, sag: string, sinif = '') => `<li${sinif ? ` class="${sinif}"` : ''}><span>${sol}</span><span>${sag}</span></li>`;
+  const kampanya = satirKampanyaIndirimi(s, katalog);
+  if (!kampanya && !s.indirim) return '';
+  const indirimsizBirim = s.birimFiyat + kampanya / s.adet;
+  return `<ul class="kalem__dokum" aria-label="Fiyat dökümü">
+    ${satir(`${s.adet} × ${formatTL(indirimsizBirim)}`, formatTL(indirimsizBirim * s.adet))}
+    ${kampanya ? satir('İndirim', `−${formatTL(kampanya)}`, 'kalem__dokum-indirim') : ''}
+    ${s.indirim ? satir(`Sepette %${s.sepetteYuzde} indirim`, `−${formatTL(s.indirim)}`, 'kalem__dokum-indirim') : ''}
+  </ul>`;
+}
+
 export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
   const anah = anahtar(s);
   const eklenir = eklenebilir(s.tip, s.id) > 0;
-  // Üstü çizili tutar: set → ayrı ayrı fiyat; sepette indirim → liste fiyatı; yoksa gerçek kampanyada önceki fiyat
-  const onceki = s.tip === 'urun' ? urunBul(s.id)?.onceki : undefined;
-  const once = s.birimAyriAyri ? s.birimAyriAyri * s.adet : s.indirim ? s.birimFiyat * s.adet : onceki ? onceki * s.adet : 0;
-  return `
-    <div class="kalem">
-      <a class="kalem__gorsel" href="${s.href}" tabindex="-1" aria-hidden="true">${s.gorsel ? `<img src="${s.gorsel}" alt="" width="72" height="88">` : ikonSvg(s.ikon, 28)}</a>
-      <div>
-        <a class="kalem__ad" href="${s.href}">${s.tip === 'set' ? 'Set: ' : ''}${esc(s.ad)}</a>
-        ${s.icerik ? `<div class="kalem__icerik">${esc(s.icerik)}</div>` : ''}
-        ${s.sepetteYuzde ? `<div class="kalem__sepette">${ikonSvg('canta', 13)} Sepette %${s.sepetteYuzde} indirim uygulandı</div>` : ''}
+  // Üstü çizili tutar = indirimlerden önceki tutar (set: ayrı ayrı fiyat; ürün: kampanya öncesi fiyat + sepette indirim)
+  const indirimsiz = s.birimAyriAyri ? s.birimAyriAyri * s.adet : s.birimFiyat * s.adet + satirKampanyaIndirimi(s, katalog);
+  const once = indirimsiz > s.toplam ? indirimsiz : 0;
+  const altSatir = `
         <div class="kalem__satir">
           ${duzenlenebilir ? `<div class="adet adet--kucuk" role="group" aria-label="${esc(s.ad)} adet">
             <button type="button" data-kalem-eksi="${anah}" aria-label="${s.adet > 1 ? 'Adedi azalt' : 'Sepetten çıkar'}">${ikonSvg(s.adet > 1 ? 'eksi' : 'cop', 16)}</button>
@@ -114,25 +96,64 @@ export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
             <button type="button" data-kalem-arti="${anah}" aria-label="Adedi artır"${eklenir ? '' : ' disabled'}>${ikonSvg('arti', 16)}</button>
           </div>` : `<span class="muted small">${s.adet} adet</span>`}
           <div class="kalem__fiyat">${once ? `<s>${formatTL(once)}</s>` : ''}<span class="${once ? 'fiyat--indirimli' : ''}">${formatTL(s.toplam)}</span></div>
+        </div>`;
+  if (s.tip === 'set') return setSatirHtml(s, altSatir, once);
+  return `
+    <div class="kalem">
+      <a class="kalem__gorsel" href="${s.href}" tabindex="-1" aria-hidden="true">${s.gorsel ? `<img src="${s.gorsel}" alt="" width="72" height="88">` : ikonSvg(s.ikon, 28)}</a>
+      <div>
+        <a class="kalem__ad" href="${s.href}">${esc(s.ad)}</a>
+        ${dokumHtml(s)}
+        ${altSatir}
+      </div>
+    </div>`;
+}
+
+/**
+ * Set satırı: tek bir çerçeve içinde set adı, içindeki her ürün kendi fotoğrafıyla (yoksa kategori ikonuyla)
+ * tek tek, ardından set indirimi ve setin adet/tutar satırı.
+ */
+function setSatirHtml(s: HesapSatiri, altSatir: string, once: number): string {
+  const set = setBul(s.id);
+  const urunler = set?.kalemler.map((x) => ({ x, u: urunBul(x.urunId) })) ?? [];
+  const urunSayisi = s.parcalar.reduce((t, p) => t + p.adet, 0);
+  const yuzde = s.birimAyriAyri ? Math.round(((s.birimAyriAyri - s.birimFiyat) * 100) / s.birimAyriAyri) : 0;
+  // Setteki bir ürün katalogda görünmüyorsa (taslak vb.) kısa içerik metnine dönülür
+  const liste = urunler.length && urunler.every((k) => k.u)
+    ? urunler.map(({ x, u }) => `
+        <li class="set-kalem__urun">
+          <span class="set-kalem__gorsel" aria-hidden="true">${u!.gorsel ? `<img src="${u!.gorsel}" alt="" width="44" height="52" loading="lazy">` : ikonSvg(u!.ikon, 20)}</span>
+          <span class="set-kalem__bilgi"><span class="set-kalem__ad">${esc(`${u!.marka} ${u!.kisaAd}`)}</span><span class="set-kalem__adet">${x.adet * s.adet} adet</span></span>
+          <span class="set-kalem__fiyat">${formatTL(u!.fiyat * x.adet * s.adet)}</span>
+        </li>`).join('')
+    : s.icerik ? `<li class="set-kalem__urun set-kalem__urun--metin">${esc(s.icerik)}</li>` : '';
+  return `
+    <div class="kalem kalem--set">
+      <div class="set-kalem">
+        <div class="set-kalem__ust">
+          <span class="kalem__rozet">${ikonSvg('etiket', 12)}Set · ${urunSayisi} ürün</span>
+          <a class="kalem__ad" href="${s.href}">${esc(s.ad)}</a>
         </div>
+        <ul class="set-kalem__liste" aria-label="${esc(s.ad)} içindeki ürünler">${liste}</ul>
+        ${once ? `<div class="set-kalem__indirim"><span>Set indirimi${yuzde ? ` (%${yuzde})` : ''}</span><span>−${formatTL(once - s.toplam)}</span></div>` : ''}
+        ${altSatir}
       </div>
     </div>`;
 }
 
 export function toplamlarHtml(o: ReturnType<typeof sepetOzeti>): string {
-  // Gerçek kampanya avantajı (fiyat geçmişinden doğrulanmış önceki fiyata göre); toplam hesabını değiştirmez, yalnızca bilgi
-  const kampanya = o.satirlar.reduce((t, s) => {
-    const onceki = s.tip === 'urun' ? urunBul(s.id)?.onceki : undefined;
-    return t + (onceki && onceki > s.birimFiyat ? (onceki - s.birimFiyat) * s.adet : 0);
-  }, 0);
+  // Kampanya indirimi (fiyat geçmişinden doğrulanmış önceki fiyata göre). "Ürünler" indirimsiz tutarı gösterir,
+  // indirim ayrı satırda düşülür: Ürünler − indirimler + kargo = Toplam (ödenen tutar değişmez).
+  const kampanya = kampanyaIndirimi(o.satirlar, katalog);
   const avantaj = o.setIndirimi + o.sepetIndirimi + kampanya;
   return `
-    <div><span>Ürünler</span><span>${formatTL(o.urunlerToplami)}</span></div>
+    <div><span>Ürünler</span><span>${formatTL(o.urunlerToplami + kampanya)}</span></div>
+    ${kampanya ? `<div class="kazanc"><span>İndirim</span><span>−${formatTL(kampanya)}</span></div>` : ''}
     ${o.setIndirimi ? `<div class="kazanc"><span>Set indirimi</span><span>−${formatTL(o.setIndirimi)}</span></div>` : ''}
     ${o.sepetIndirimi ? `<div class="kazanc"><span>Sepette indirim</span><span>−${formatTL(o.sepetIndirimi)}</span></div>` : ''}
     <div><span>Kargo</span><span>${o.kargo ? formatTL(o.kargo) : '<strong class="yesil">Bedava</strong>'}</span></div>
     <div class="genel"><span>Toplam</span><span>${formatTL(o.toplam)}</span></div>
-    ${avantaj > 0 ? `<p class="toplam-kazanc">${ikonSvg('etiket', 16)} Bu siparişte <strong>${formatTL(avantaj)}</strong> avantaj</p>` : ''}`;
+    ${avantaj > 0 ? `<p class="toplam-kazanc">${ikonSvg('etiket', 16)}<span>Bu siparişte toplam <strong>${formatTL(avantaj)}</strong> indirim kazanıyorsunuz</span></p>` : ''}`;
 }
 
 function oneriBul() {

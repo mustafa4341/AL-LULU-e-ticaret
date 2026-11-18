@@ -1,107 +1,217 @@
 ---
-import Yonetim from '../../../layouts/Yonetim.astro';
+import FinansSiparis from '../../../components/yonetim/FinansSiparis.astro';
 import Ikon from '../../../components/Ikon.astro';
-import { magazaGuncelle, magazaOku, siparisGuncelle, siparisleriOku } from '../../../lib/depo';
-import { durumDegisti } from '../../../lib/bildirim';
+import { finansOku } from '../../../lib/finansDepo';
+import Yonetim from '../../../layouts/Yonetim.astro';
+import { magazaOku, siparisleriOku } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
-import { istegeBagli, metin } from '../../../lib/form';
-import { SIPARIS_DURUMLARI, SIPARIS_DURUM_ADLARI, SiparisDurumSema, type Siparis } from '../../../lib/sema';
+import { evet, istegeBagli, metin } from '../../../lib/form';
+import { kargoFirmalari, siparisKargoBaglantisi } from '../../../lib/kargoTakip';
+import { siparisDurumGuncelle } from '../../../lib/urunIslem';
+import { BELGE_TURLERI, belgeGecerli } from '../../../lib/finans';
+import { gonderildi, IADE_ISLEMI, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
+import { odemeEtiketi, yTarih } from '../../../lib/yonetimRapor';
+import { SIPARIS_DURUM_ADLARI } from '../../../lib/sema';
 
 const no = Astro.params.no ?? '';
+const s = (await siparisleriOku()).find((x) => x.no === no);
+if (!s) return Astro.redirect('/yonetim/siparisler?hata=' + encodeURIComponent(no + ' numaralı sipariş bulunamadı.'));
 let hatalar: string[] = [];
-const basari = Astro.url.searchParams.get('ok');
-let s = (await siparisleriOku()).find((x) => x.no === no);
-if (!s) return Astro.redirect('/yonetim/siparisler');
-
-/** Ödeme alındığında stok düşülür; iptalde geri eklenir. */
-const STOK_DUSEN = new Set(['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi']);
-
+let forma: FormData | undefined;
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
-  let durumHam = metin(f, 'durum');
-  const takipNo = istegeBagli(f, 'kargoTakip');
-  // Takip numarası ilk kez girildiyse ve sipariş henüz yoldaysa: otomatik "Kargoda"
-  if (takipNo && !s.kargoTakip && ['odeme-bekliyor', 'odendi', 'hazirlaniyor'].includes(durumHam)) durumHam = 'kargoda';
-  const yeni = SiparisDurumSema.safeParse(durumHam);
-  if (!yeni.success) hatalar = ['Geçersiz durum'];
-  else {
-    try {
-      const onceki = s.durum;
-      const stokDus = STOK_DUSEN.has(yeni.data) && !s.stokDusuldu;
-      const stokIade = yeni.data === 'iptal' && s.stokDusuldu;
-      if (stokDus || stokIade) {
-        const isaret = stokDus ? -1 : 1;
-        await magazaGuncelle((m) => {
-          for (const kalem of s!.kalemler) for (const p of kalem.parcalar) {
-            const u = m.urunler.find((x) => x.id === p.urunId);
-            if (u) u.stok = Math.max(0, u.stok + isaret * p.adet * kalem.adet);
-          }
-        });
-      }
-      s = await siparisGuncelle(no, (x: Siparis) => {
-        x.durum = yeni.data;
-        x.kargoTakip = takipNo;
-        if (takipNo) x.kargoFirma = x.kargoFirma || undefined;
-        x.yoneticiNotu = istegeBagli(f, 'yoneticiNotu');
-        if (stokDus) x.stokDusuldu = true;
-        if (stokIade) x.stokDusuldu = false;
-        if (onceki !== yeni.data) x.gecmis.push({ tarih: new Date().toISOString(), durum: yeni.data });
-      });
-      if (onceki !== yeni.data) {
-        const m = await magazaOku();
-        durumDegisti(s, m.site, new URL(`/siparis/${s.no}?t=${s.token}`, Astro.url.origin).href).catch(() => undefined);
-      }
-      return Astro.redirect(`/yonetim/siparisler/${no}?ok=${encodeURIComponent('Sipariş güncellendi' + (stokDus ? ' · stok düşüldü' : stokIade ? ' · stok geri eklendi' : ''))}`);
-    } catch (e) {
-      hatalar = [(e as Error).message];
-    }
+  forma = f;
+  try {
+    const sonuc = await siparisDurumGuncelle({
+      no, eylem: metin(f, 'eylem'), durum: metin(f, 'durum'),
+      kargoTakip: istegeBagli(f, 'kargoTakip'), kargoFirma: istegeBagli(f, 'kargoFirma'),
+      yoneticiNotu: istegeBagli(f, 'yoneticiNotu'), iptalNotu: istegeBagli(f, 'iptalNotu'),
+      odemeOnay: evet(f, 'odemeOnay'), iadeOnay: evet(f, 'iadeOnay'), origin: Astro.url.origin,
+    });
+    return Astro.redirect('/yonetim/siparisler/' + no + '?ok=' + encodeURIComponent(sonuc.mesaj), 303);
+  } catch (e) {
+    const mesaj = (e as Error).message;
+    hatalar = [mesaj.startsWith('Supabase') ? 'Sipariş kaydedilemedi. Sayfayı yenileyerek tekrar deneyin.' : mesaj];
   }
 }
-const m = await magazaOku();
-const telWa = '90' + s.musteri.tel.replace(/^0/, '');
-const waMusteri = `https://wa.me/${telWa}?text=${encodeURIComponent(`Merhaba ${s.musteri.ad}, ${m.site.ad} — ${s.no} numaralı siparişiniz hakkında yazıyoruz.`)}`;
-const tarih = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short' });
+const { site } = await magazaOku();
+const belgeler = s.paytr?.test ? [] : (await finansOku()).belgeler.filter((b) => b.siparisNo === no);
+const sonraki = siradakiDurum(s);
+const iade = iadeEdildi(s);
+const iptal = s.durum === 'iptal';
+const kargolar = kargoFirmalari(site.kargo);
+const kargo = siparisKargoBaglantisi(s, site.kargo);
+const musteriTel = '90' + s.musteri.tel.replace(/\D/g, '').replace(/^(?:90|0)/, '');
+const wa = /^90\d{10}$/.test(musteriTel) ? 'https://wa.me/' + musteriTel + '?text=' : undefined;
+const takipMesaj = kargo && wa && wa + encodeURIComponent('Merhaba ' + s.musteri.ad + ', ' + s.no + ' numaralı siparişiniz ' + kargo.firma + ' ile gönderildi. Takip no: ' + s.kargoTakip + ' · ' + kargo.url);
+const musteriSayfasi = '/siparis/' + s.no + '?t=' + s.token;
+
+/* Adım çizgisi: ödeme, hazırlık ve kargo ayrı ayrı izlenir */
+const odemeTamam = ['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi'].includes(s.durum) || (iptal && (s.paytr?.sonuc === 'odendi' || s.gecmis.some((g) => g.durum === 'odendi')));
+const adimlar = [
+  { ad: 'Sipariş alındı', tamam: true, tarih: s.tarih },
+  { ad: 'Ödeme onaylandı', tamam: odemeTamam, tarih: s.gecmis.find((g) => g.durum === 'odendi')?.tarih },
+  { ad: 'Hazırlanıyor', tamam: ['hazirlaniyor', 'kargoda', 'teslim-edildi'].includes(s.durum), tarih: s.gecmis.find((g) => g.durum === 'hazirlaniyor')?.tarih },
+  { ad: 'Kargoda', tamam: ['kargoda', 'teslim-edildi'].includes(s.durum), tarih: s.gecmis.find((g) => g.durum === 'kargoda')?.tarih },
+  { ad: 'Teslim edildi', tamam: s.durum === 'teslim-edildi', tarih: s.gecmis.find((g) => g.durum === 'teslim-edildi')?.tarih },
+];
+const simdikiAdim = adimlar.findIndex((a) => !a.tamam);
+
+/* Üç bağımsız durum: ödeme, kargo, belge */
+const odemeYazi = odemeEtiketi(s);
+const odemeRenk = s.paytr ? (s.paytr.sonuc === 'odendi' ? 'yesil' : s.paytr.sonuc === 'basarisiz' ? 'kirmizi' : 'turuncu')
+  : iptal ? 'gri' : s.durum === 'odeme-bekliyor' ? 'turuncu' : 'yesil';
+const kargoYazi = iade ? 'İade tamamlandı' : iptal ? 'Gönderilmeyecek' : s.durum === 'kargoda' ? 'Kargoda' : s.durum === 'teslim-edildi' ? 'Teslim edildi'
+  : s.durum === 'hazirlaniyor' ? 'Kargoya verilecek' : s.durum === 'odendi' ? 'Hazırlanacak' : 'Ödeme bekleniyor';
+const kargoRenk = iptal || iade ? 'gri' : ['kargoda', 'teslim-edildi'].includes(s.durum) ? 'yesil' : s.durum === 'odeme-bekliyor' ? 'gri' : 'turuncu';
+const gecerliBelgeler = belgeler.filter(belgeGecerli);
+const hataliBelge = belgeler.some((b) => b.durum === 'hata');
+const belgeYazi = hataliBelge ? 'Hata oluştu' : gecerliBelgeler.length ? gecerliBelgeler.map((b) => BELGE_TURLERI[b.tur]).join(', ') : 'Hazırlanmadı';
+const belgeRenk = hataliBelge ? 'kirmizi' : gecerliBelgeler.length ? 'yesil' : odemeTamam && !iptal ? 'turuncu' : 'gri';
+
+/* Çelişkili durum uyarıları */
+const uyarilar: string[] = [];
+if (s.paytr?.stokEksik) uyarilar.push('Ödeme alındı ama stok ayrılamadı. PayTR ve stok kayıtlarını kontrol edin.');
+if (iptal && s.kargoTakip) uyarilar.push('Bu sipariş iptal edildi ancak kayıtlı bir kargo takip numarası var (' + s.kargoTakip + '). Gönderiyi kargo firmasından durdurun.');
+if (iptal && gecerliBelgeler.some((b) => b.tur !== 'iade')) uyarilar.push('İptal edilen siparişin geçerli belgeleri var. Muhasebe kaydında iptal olarak dikkate alın.');
+if (s.paytr && s.paytr.sonuc === 'bekliyor' && Date.now() - Date.parse(s.tarih) > 60 * 60_000) uyarilar.push('Bir saattir ödeme sonucu gelmedi. PayTR Mağaza Paneli’nden işlemi kontrol edin.');
+if (s.paytr?.test) uyarilar.push('Bu bir test siparişidir; ciroya ve stoğa dahil edilmez.');
+
+const adim = { odendi: 'Ödemeyi onayla', hazirlaniyor: 'Hazırlamaya al', 'teslim-edildi': 'Teslim edildi olarak işaretle' } as const;
+const kargoFormuAcik = sonraki === 'kargoda';
+const takipDuzenlenebilir = s.durum === 'kargoda' && !s.paytr?.test && !iade;
+const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new URLSearchParams({ no: s.no, bicim, ...(tur ? { tur } : {}) });
 ---
-<Yonetim baslik={`Sipariş ${s.no}`} aktif="siparisler" basari={basari} hatalar={hatalar}>
-  <p style="margin:-8px 0 14px"><a href="/yonetim/siparisler">← Siparişler</a> · <a href={`/siparis/${s.no}?t=${s.token}`} target="_blank" rel="noopener">Müşterinin gördüğü sayfa ↗</a> · <a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`} target="_blank" rel="noopener">Onaylanan sözleşmeler ↗</a></p>
+<Yonetim baslik={'Sipariş ' + s.no} altBaslik={yTarih.format(new Date(s.tarih)) + ' · Web sitesi'} aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={[...hatalar, ...(Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : [])]}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <button class="btn btn--cizgi" type="button" data-kopyala={s.no} title="Sipariş numarasını kopyala">Numarayı kopyala</button>
+    <details class="y-row-menu y-row-menu--sag">
+      <summary class="btn btn--cizgi" aria-label="Diğer işlemler">•••</summary>
+      <div>
+        {!iptal && !iade && <>
+          <a href={etiket('a4')} target="_blank" rel="noopener">Hazırlık etiketi · A4</a>
+          <a href={etiket('etiket')} target="_blank" rel="noopener">Hazırlık etiketi · 10 × 15 cm</a>
+          <a href={etiket('a4', 'toplama')} target="_blank" rel="noopener">Ürün toplama listesi</a>
+        </>}
+        {kargo && <a href={kargo.url} target="_blank" rel="noopener">Kargo takibini aç ↗</a>}
+        <a href={musteriSayfasi} target="_blank" rel="noopener">Müşterinin gördüğü sayfa ↗</a>
+        <a href={'/siparis/' + s.no + '/sozlesmeler?t=' + s.token} target="_blank" rel="noopener">Onaylanan sözleşmeler ↗</a>
+        {wa && <a href={wa + encodeURIComponent('Merhaba, ' + s.no + ' numaralı siparişiniz hakkında yazıyoruz.')} target="_blank" rel="noopener">WhatsApp’tan yaz ↗</a>}
+        {iptalEdilebilir(s) && <a href="#iptal" data-ac="iptal">Siparişi iptal et</a>}
+        {gonderildi(s) && !iade && !s.paytr?.test && <a href="#iade" data-ac="iade">İade kaydı aç</a>}
+      </div>
+    </details>
+  </div>
+
+  {uyarilar.map((u) => <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} />{u}</p>)}
+
+  <section class="y-kart y-durum-kart" id="kargo">
+    {iptal ? (
+      <p class="y-iptal-bant"><strong>{s.paytr?.sonuc === 'basarisiz' ? 'Ödeme tamamlanamadı' : 'Sipariş iptal edildi'}</strong>{s.iptalNotu && <span> · {s.iptalNotu}</span>}</p>
+    ) : (
+      <ol class="y-adimlar" aria-label="Sipariş adımları">
+        {adimlar.map((a, i) => <li class:list={{ 'is-tamam': a.tamam, 'is-simdi': i === simdikiAdim }}>
+          <span class="y-adimlar__nokta" aria-hidden="true">{a.tamam ? '✓' : i + 1}</span>
+          <span class="y-adimlar__ad">{a.ad}</span>
+          {a.tarih && a.tamam && <small>{yTarih.format(new Date(a.tarih))}</small>}
+        </li>)}
+      </ol>
+    )}
+    <div class="y-durumlar">
+      <span>Ödeme <b class:list={['y-chip', 'y-chip--' + odemeRenk]}>{odemeYazi}</b></span>
+      <span>Kargo <b class:list={['y-chip', 'y-chip--' + kargoRenk]}>{kargoYazi}</b></span>
+      <span>Belge <a href="#belgeler" class:list={['y-chip', 'y-chip--' + belgeRenk]}>{belgeYazi}</a></span>
+      <strong class="y-durumlar__tutar">{formatTL(s.toplam)}</strong>
+    </div>
+
+    {sonraki && sonraki !== 'kargoda' && (
+      <form method="post" class="y-sonraki">
+        <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value={sonraki} />
+        {sonraki === 'odendi' && <label class="y-secim"><input type="checkbox" name="odemeOnay" required />Ödemenin hesaba geçtiğini kontrol ettim.</label>}
+        <button class="btn btn--sepet" type="submit">{adim[sonraki]}</button>
+      </form>
+    )}
+    {kargoFormuAcik && (
+      <form method="post" class="y-sonraki y-sonraki--kargo">
+        <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value="kargoda" />
+        <label class="y-alan">Kargo firması<select name="kargoFirma" required><option value="">Firma seçin</option>
+          {kargolar.map((x) => <option value={x.ad} selected={x.ad === (forma?.get('kargoFirma') || s.kargoFirma || site.kargo.firma)}>{x.ad}</option>)}
+        </select></label>
+        <label class="y-alan">Kargo takip numarası<input name="kargoTakip" required minlength="6" maxlength="40" autocomplete="off" value={String(forma?.get('kargoTakip') ?? s.kargoTakip ?? '')} placeholder="Kargo fişindeki numara" /></label>
+        <button class="btn btn--sepet" type="submit"><Ikon ad="kargo" boyut={16} />Kargoya verildi</button>
+      </form>
+    )}
+    {kargo && <p class="y-shipment"><Ikon ad="kargo" boyut={16} /><strong>{kargo.firma} · {s.kargoTakip}</strong>
+      <a class="y-link" href={kargo.url} target="_blank" rel="noopener">Takibi aç ↗</a>
+      {takipMesaj && !iade && <a class="y-link" href={takipMesaj} target="_blank" rel="noopener">Müşteriye WhatsApp’tan gönder ↗</a>}
+      <button class="y-icon-button" type="button" data-kopyala={s.kargoTakip}>Takip no kopyala</button>
+    </p>}
+    {takipDuzenlenebilir && (
+      <details class="y-order-secondary" open={metin(forma ?? new FormData(), 'durum') === 'kargoda'}>
+        <summary>Takip bilgisini düzelt</summary>
+        <form method="post" class="y-sonraki y-sonraki--kargo">
+          <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value="kargoda" />
+          <label class="y-alan">Kargo firması<select name="kargoFirma" required>
+            {kargolar.map((x) => <option value={x.ad} selected={x.ad === (s.kargoFirma || site.kargo.firma)}>{x.ad}</option>)}
+          </select></label>
+          <label class="y-alan">Takip numarası<input name="kargoTakip" required minlength="6" maxlength="40" value={s.kargoTakip ?? ''} /></label>
+          <button class="btn btn--cizgi" type="submit">Kaydet</button>
+        </form>
+      </details>
+    )}
+    {iptalEdilebilir(s) && (
+      <details class="y-order-secondary y-danger" id="iptal" open={forma?.get('durum') === 'iptal'}>
+        <summary>Siparişi iptal et</summary>
+        <form method="post" class="y-sonraki">
+          <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value="iptal" />
+          <label class="y-alan">İptal nedeni<input name="iptalNotu" maxlength="500" value={String(forma?.get('iptalNotu') ?? '')} /></label>
+          {(s.durum !== 'odeme-bekliyor' || s.paytr) && <label class="y-secim"><input type="checkbox" name="iadeOnay" required />Ödenen tutarı müşteriye geri ödedim.</label>}
+          <button type="submit" class="btn btn--tehlike" data-onayla="Sipariş iptal edilsin mi? Ayrılan stok geri eklenir ve sipariş satış gelirinden çıkar.">İptali onayla</button>
+        </form>
+      </details>
+    )}
+    {gonderildi(s) && !iade && !s.paytr?.test && (
+      <details class="y-order-secondary y-danger" id="iade" open={forma?.get('eylem') === 'iade'}>
+        <summary>İade kaydı</summary>
+        <form method="post" class="y-sonraki">
+          <input type="hidden" name="eylem" value="iade" />
+          <label class="y-alan">İade notu<input name="iptalNotu" maxlength="500" value={String(forma?.get('iptalNotu') ?? '')} /></label>
+          <label class="y-secim"><input type="checkbox" name="iadeOnay" required />Ürünleri teslim aldım ve geri ödemeyi yaptım.</label>
+          <button type="submit" class="btn btn--tehlike" data-onayla="İade tamamlandı olarak kaydedilsin mi? Ürünler stoğa geri eklenir, tutar iade olarak raporlanır.">İadeyi kaydet</button>
+        </form>
+      </details>
+    )}
+  </section>
+
   <div class="y-izgara y-izgara--2">
     <section class="y-kart">
-      <h2>Müşteri</h2>
-      <p style="margin-top:6px"><strong>{s.musteri.ad} {s.musteri.soyad}</strong></p>
-      <p><a href={`tel:${s.musteri.tel}`}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a href={`mailto:${s.musteri.eposta}`}>{s.musteri.eposta}</a></>}</p>
-      <p class="muted" style="margin-top:6px">{s.teslimat.adres}, {s.teslimat.ilce} / {s.teslimat.il}</p>
-      {s.teslimat.not && <p class="muted">Not: {s.teslimat.not}</p>}
-      <p class="muted" style="margin-top:6px">Fatura: {s.fatura.tip === 'kurumsal' ? `${s.fatura.firma} · ${s.fatura.vd} · ${s.fatura.vno}` : 'Bireysel'}{s.fatura.adres && ` · ${s.fatura.adres}`}</p>
-      <a class="btn btn--wa btn--kucuk" style="margin-top:10px" href={waMusteri} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={18} />Müşteriye WhatsApp'tan yaz</a>
+      <h2>Müşteri ve Teslimat</h2>
+      <p><strong>{s.musteri.ad} {s.musteri.soyad}</strong></p>
+      <p><a class="y-link" href={'tel:' + s.musteri.tel}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a class="y-link" href={'mailto:' + s.musteri.eposta}>{s.musteri.eposta}</a></>}</p>
+      <p>{s.teslimat.adres}<br />{s.teslimat.ilce} / {s.teslimat.il}</p>
+      {s.teslimat.not && <p class="muted">Kargo notu: {s.teslimat.not}</p>}
+      <p class="muted">Fatura: {s.fatura.tip === 'kurumsal' ? [s.fatura.firma, s.fatura.vd, s.fatura.vno].filter(Boolean).join(' · ') : 'Bireysel'}{s.fatura.adres && <> · {s.fatura.adres}</>}</p>
     </section>
     <section class="y-kart">
-      <h2>Ürünler</h2>
-      <div class="toplamlar" style="margin-top:8px">
-        {s.kalemler.map((x) => <div><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}{x.sku && <span class="muted"> ({x.sku})</span>}</span><span>{formatTL(x.toplam)}</span></div>)}
-        {s.setIndirimi > 0 && <div class="kazanc"><span>Set indirimi</span><span>−{formatTL(s.setIndirimi)}</span></div>}
-        {s.sepetIndirimi > 0 && <div class="kazanc"><span>Sepette indirim</span><span>−{formatTL(s.sepetIndirimi)}</span></div>}
-        <div><span>Kargo</span><span>{s.kargo ? formatTL(s.kargo) : 'Bedava'}</span></div>
-        <div class="genel"><span>Toplam</span><span>{formatTL(s.toplam)}</span></div>
-      </div>
+      <h2>Ürünler ve Tutar</h2>
+      <ul class="y-siparis-kalem-liste">{s.kalemler.map((k) => <li><span>{k.adet} × {k.ad}{k.sku && <small class="muted"> · {k.sku}</small>}</span><strong>{formatTL(k.toplam)}</strong></li>)}</ul>
+      <dl class="y-money-lines y-money-lines--kucuk">
+        {s.setIndirimi > 0 && <div><dt>Set indirimi</dt><dd>−{formatTL(s.setIndirimi)}</dd></div>}
+        {s.sepetIndirimi > 0 && <div><dt>Sepet indirimi</dt><dd>−{formatTL(s.sepetIndirimi)}</dd></div>}
+        <div><dt>Kargo</dt><dd>{s.kargo ? formatTL(s.kargo) : 'Ücretsiz'}</dd></div>
+        <div><dt><strong>Toplam</strong></dt><dd><strong>{formatTL(s.toplam)}</strong></dd></div>
+      </dl>
     </section>
   </div>
 
-  <form method="post" class="y-kart">
-    <h2>Durum</h2>
-    <p class="y-aciklama">"Ödendi" ve sonrasına geçince stok otomatik düşülür; "İptal"de geri eklenir. Durum değişince müşteriye SMS/e-posta gider (ayarlıysa).</p>
-    <div class="y-secimler">
-      {SIPARIS_DURUMLARI.map((d) => <label class="y-secim"><input type="radio" name="durum" value={d} checked={s!.durum === d} />{SIPARIS_DURUM_ADLARI[d]}</label>)}
-    </div>
-    <div class="y-izgara y-izgara--2" style="margin-top:12px">
-      <div class="y-alan"><label for="kargoTakip">Kargo takip numarası <span class="y-ipucu">girince sipariş "Kargoda" olur, müşteri sayfasında takip butonu çıkar</span></label><input id="kargoTakip" name="kargoTakip" value={s.kargoTakip ?? ''} />
-        {s.kargoTakip && <a class="y-ipucu" href={m.site.kargo.takipUrl.replace('{kod}', encodeURIComponent(s.kargoTakip))} target="_blank" rel="noopener">{m.site.kargo.firma} sitesinde aç ↗</a>}</div>
-      <div class="y-alan"><label for="yoneticiNotu">İç not</label><input id="yoneticiNotu" name="yoneticiNotu" value={s.yoneticiNotu ?? ''} /></div>
-    </div>
-    <div style="text-align:right;margin-top:12px"><button class="btn btn--sepet" type="submit"><Ikon ad="tik" />Güncelle</button></div>
-  </form>
+  <FinansSiparis siparis={s} belgeler={belgeler} />
 
-  <section class="y-kart">
-    <h2>Geçmiş</h2>
-    <ul class="y-gecmis">{[...s.gecmis].reverse().map((g) => <li><span>{tarih.format(new Date(g.tarih))}</span><span>{SIPARIS_DURUM_ADLARI[g.durum]}</span></li>)}</ul>
-  </section>
+  <details class="y-kart">
+    <summary><strong>İşlem geçmişi ve iç not</strong></summary>
+    <ul class="y-gecmis">{[...s.gecmis].reverse().map((g) => <li><span>{yTarih.format(new Date(g.tarih))}</span><span><strong>{g.islem === IADE_ISLEMI ? 'İade tamamlandı' : g.islem === 'manuel-odeme' ? 'Manuel ödeme onayı' : g.islem === 'takip-duzeltildi' ? 'Takip güncellendi' : SIPARIS_DURUM_ADLARI[g.durum]}</strong>{g.not && ' · ' + g.not}</span></li>)}</ul>
+    <form method="post" class="y-sonraki">
+      <input type="hidden" name="eylem" value="not" /><label class="y-alan">İç not (müşteri görmez)<input name="yoneticiNotu" maxlength="1000" value={s.yoneticiNotu ?? ''} /></label>
+      <button class="btn btn--cizgi" type="submit">Notu kaydet</button>
+    </form>
+  </details>
 </Yonetim>

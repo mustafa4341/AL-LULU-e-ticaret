@@ -12,6 +12,7 @@ veri/siparisler.json
 veri/sozlesmeler/
 veri/yedekler/
 veri/yuklemeler/
+veri/finans/
 
 # Yerel araç ayarları
 .claude/settings.local.json

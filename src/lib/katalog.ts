@@ -3,7 +3,7 @@
  * Her istekte middleware tarafından oluşturulur ve Astro.locals.katalog ile her bileşene ulaşır.
  */
 import type { Durum, Kategori, Magaza, Urun, UrunSeti } from './sema';
-import { gecerliSepetteIndirim, oncekiFiyat, sepetteFiyat, sonGunlerinEnDusugu, type IstemciKatalog, type IstemciSet, type IstemciUrun } from './fiyat';
+import { gecerliSepetteIndirim, oncekiFiyat, sepetteFiyat, setToplamlari, sonGunlerinEnDusugu, type IstemciKatalog, type IstemciSet, type IstemciUrun } from './fiyat';
 
 export interface FiyatBilgisi {
   fiyat: number;
@@ -17,7 +17,7 @@ export interface FiyatBilgisi {
   /** Sepette ek indirim */
   sepette?: { yuzde: number; fiyat: number };
   /** Aktif fırsat (gerçek bitiş saatiyle) */
-  firsat?: { etiket: string; bitis?: string };
+  firsat?: { etiket: string; bitis?: string; stil?: 'firsat' | 'flas' | 'ozel' };
 }
 
 export interface SetKalemDokumu {
@@ -73,29 +73,41 @@ export class Katalog {
   birlikteIyiGiderler(u: Urun): Urun[] {
     return u.birlikteIyiGider.map((id) => this.urunBul(id)).filter((x): x is Urun => !!x && this.stoktaMi(x));
   }
+  birlikteIyiGiderOnizleme(u: Urun): Urun[] {
+    return u.birlikteIyiGider.flatMap((id) => this.magaza.urunler.find((x) => x.id === id) ?? []);
+  }
 
-  /** Fırsat bitişi geçmemişse ve ürünün GERÇEK bir avantajı varsa fırsat aktiftir */
+  /** Fırsat işaretliyse ve bitiş saati geçmemişse fırsat aktiftir */
   firsatAktif(u: Urun, simdi = Date.now()): boolean {
     if (!u.firsat) return false;
     if (u.firsat.bitis && simdi >= Date.parse(u.firsat.bitis)) return false;
-    const gun = this.site.indirimReferansGun;
-    const indirim = u.kampanya ? oncekiFiyat(u.fiyatGecmisi, u.kampanya.baslangic, gun, u.fiyat) : undefined;
-    return u.sepetteIndirim > 0 || !!indirim || !!u.hediye || this.urunuIcerenSetler(u.id).length > 0;
+    return true;
   }
 
   fiyatBilgisi(u: Urun, simdi = Date.now()): FiyatBilgisi {
     const gun = this.site.indirimReferansGun;
-    const onceki = u.kampanya ? oncekiFiyat(u.fiyatGecmisi, u.kampanya.baslangic, gun, u.fiyat) : undefined;
+    const gecmis: typeof u.fiyatGecmisi = [];
+    for (const kayit of u.fiyatGecmisi) {
+      if (kayit.dogrulandi) gecmis.push(kayit);
+      else gecmis.length = 0;
+    }
+    const elle = u.kampanya?.oncekiFiyat;
+    const onceki = u.kampanya
+      ? elle && elle > u.fiyat ? elle : oncekiFiyat(gecmis, u.kampanya.baslangic, gun, u.fiyat)
+      : undefined;
     const sepetteYuzde = gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }, simdi);
     return {
       fiyat: u.fiyat,
       onceki,
       yuzde: onceki ? Math.round(((onceki - u.fiyat) / onceki) * 100) : undefined,
-      etiket: onceki ? u.kampanya?.etiket : undefined,
-      enDusuk: sonGunlerinEnDusugu(u.fiyatGecmisi, gun, u.fiyat, simdi),
+      etiket: onceki ? u.kampanya?.etiket || undefined : undefined,
+      enDusuk: !elle && sonGunlerinEnDusugu(gecmis, gun, u.fiyat, simdi),
       enDusukGun: gun,
       sepette: sepetteYuzde > 0 ? { yuzde: sepetteYuzde, fiyat: sepetteFiyat(u.fiyat, sepetteYuzde) } : undefined,
-      firsat: this.firsatAktif(u, simdi) ? { etiket: u.firsat!.etiket || 'Fırsat Ürünü', bitis: u.firsat!.bitis } : undefined,
+      firsat: this.firsatAktif(u, simdi) ? {
+        etiket: u.firsat!.etiket || (u.firsat!.stil === 'flas' ? 'Flaş İndirim' : u.firsat!.stil === 'ozel' ? 'Özel Seçim' : 'Fırsat Ürünü'),
+        bitis: u.firsat!.bitis, stil: u.firsat!.stil,
+      } : undefined,
     };
   }
 
@@ -103,8 +115,9 @@ export class Katalog {
     return this.urunListesi.filter((u) => this.firsatAktif(u) && this.stoktaMi(u));
   }
 
+  /** Sitedeki son 30 günlük satış eşiği dolduysa ya da mağaza sahibi diğer kanallardaki satışlara dayanarak açtıysa */
   cokSatanMi(u: Urun): boolean {
-    return (this.satislar.get(u.id) ?? 0) >= this.site.cokSatanEsik;
+    return u.cokSatan || (this.satislar.get(u.id) ?? 0) >= this.site.cokSatanEsik;
   }
 
   /** Sadece DOĞRU bilgilerden oluşan rozetler */
@@ -128,17 +141,33 @@ export class Katalog {
     return this.magaza.kategoriler
       .filter((k) => (f.menu ? k.menudeGoster : true))
       .filter((k) => (f.anaSayfa ? k.anaSayfadaGoster : true))
-      .filter((k) => this.kategoriUrunleri(k.id).length > 0 || k.yakindaGoster)
+      // Menüde yalnızca ürünü olan kategoriler (boş sayfaya götürmesin); "Yakında" kutuları yalnız listelerde
+      .filter((k) => this.kategoriUrunleri(k.id).length > 0 || (k.yakindaGoster && !f.menu))
       .sort((a, b) => a.sira - b.sira);
   }
 
   /* ---------------- Setler ---------------- */
   tumSetler(): UrunSeti[] {
     return this.magaza.setler.filter(
-      (s) => this.gorunur(s.durum) && s.kalemler.every((k) => { const u = this.urunBul(k.urunId); return !!u && u.stok >= k.adet; }),
+      (s) => this.gorunur(s.durum) && this.setEngelleri(s, this.taslaklarGorunur).length === 0,
     );
   }
   setBul(id: string): UrunSeti | undefined { return this.tumSetler().find((s) => s.id === id); }
+  setEngelleri(s: UrunSeti, taslakIzinli = false): string[] {
+    const adetler = new Map<string, number>();
+    for (const { urunId, adet } of s.kalemler) adetler.set(urunId, (adetler.get(urunId) ?? 0) + adet);
+    const sorunlar: string[] = [];
+    for (const [id, adet] of adetler) {
+      const u = this.magaza.urunler.find((u) => u.id === id);
+      if (!u) sorunlar.push('Sette bulunamayan bir ürün var.');
+      else if (u.durum !== 'yayinda' && !(taslakIzinli && u.durum === 'taslak')) sorunlar.push(u.kisaAd + ' yayında değil.');
+      else if (Math.min(u.stok, u.maxAdet) < adet) sorunlar.push(u.kisaAd + ' için yeterli stok veya alım adedi yok.');
+      else if (!u.gorseller.length && !s.gorsel && !taslakIzinli) sorunlar.push(u.kisaAd + ' için fotoğraf gerekli.');
+    }
+    const { fiyat, ayriAyri } = this.setFiyati(s);
+    if (s.kalemler.length < 2 || fiyat <= 0 || fiyat > ayriAyri) sorunlar.push('En az iki ürün ve geçerli set fiyatı gerekli.');
+    return sorunlar;
+  }
   setFiyati(s: UrunSeti) {
     const f = s.fiyatlama;
     const dokum: SetKalemDokumu[] = s.kalemler
@@ -152,13 +181,7 @@ export class Katalog {
         }
         return d;
       });
-    const ayriAyri = dokum.reduce((t, d) => t + d.birim * d.adet, 0);
-    const fiyat =
-      f.tip === 'yuzde' ? Math.floor((ayriAyri * (1 - f.oran / 100)) / 10) * 10
-      : f.tip === 'sabit' ? f.fiyat
-      : dokum.reduce((t, d) => t + (d.indirimliBirim ?? d.birim) * d.adet, 0);
-    const kazanc = Math.max(0, ayriAyri - fiyat);
-    return { ayriAyri, fiyat, kazanc, yuzde: ayriAyri ? Math.round((kazanc / ayriAyri) * 100) : 0, dokum };
+    return { ...setToplamlari(dokum, f), dokum };
   }
   urunuIcerenSetler(urunId: string): UrunSeti[] {
     return this.tumSetler().filter((s) => s.kalemler.some((k) => k.urunId === urunId));

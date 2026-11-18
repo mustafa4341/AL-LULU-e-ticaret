@@ -29,22 +29,22 @@ function eposta(): Transporter | null {
 
 async function epostaGonder(kime: string, konu: string, metin: string, html?: string): Promise<void> {
   const t = eposta();
-  if (!t) { console.info(`[bildirim] E-posta ayarı yok, gönderilmedi → ${kime}: ${konu}`); return; }
+  if (!t) return;
   try {
     await t.sendMail({ from: ortam('SMTP_GONDEREN') || ortam('SMTP_KULLANICI'), to: kime, subject: konu, text: metin, ...(html ? { html } : {}) });
-  } catch (e) {
-    console.error('[bildirim] E-posta gönderilemedi:', (e as Error).message);
+  } catch {
+    console.error('[bildirim] E-posta gönderilemedi');
   }
 }
 
-async function smsGonder(tel: string, metin: string): Promise<void> {
+async function smsGonder(_tel: string, _metin: string): Promise<void> {
   // SMS sağlayıcısı seçildiğinde burada API çağrısı yapılacak.
-  console.info(`[bildirim] SMS sağlayıcısı ayarlı değil, gönderilmedi → ${tel}: ${metin.slice(0, 60)}…`);
 }
 
 function ozet(s: Siparis): string {
   return [
     ...s.kalemler.map((k) => `• ${k.adet} × ${k.ad} — ${formatTL(k.toplam)}`),
+    s.kampanyaIndirimi ? `İndirim avantajı: ${formatTL(s.kampanyaIndirimi)} (fiyata yansıtıldı)` : '',
     s.setIndirimi ? `Set indirimi: −${formatTL(s.setIndirimi)}` : '',
     s.sepetIndirimi ? `Sepette indirim: −${formatTL(s.sepetIndirimi)}` : '',
     `Kargo: ${s.kargo ? formatTL(s.kargo) : 'Bedava'}`,

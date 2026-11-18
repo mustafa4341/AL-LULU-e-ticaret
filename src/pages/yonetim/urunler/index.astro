@@ -1,71 +1,89 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
-import Ikon from '../../../components/Ikon.astro';
-import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../../lib/depo';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
-import { sayi, metin } from '../../../lib/form';
-import { fiyatUygula } from '../../../lib/urunIslem';
+import { metin, sayi } from '../../../lib/form';
+import { fiyatDegisimleriListesi, fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
 import { Katalog } from '../../../lib/katalog';
-import { DurumSema } from '../../../lib/sema';
+import { YAYIN_ADLARI, yTarih } from '../../../lib/yonetimRapor';
 
-let hatalar: string[] = [];
 const basari = Astro.url.searchParams.get('ok');
+const filtre = Astro.url.searchParams.get('filtre') ?? 'tumu';
+const soru = Astro.url.searchParams.get('q') ?? '';
+const sira = Astro.url.searchParams.get('sira') ?? 'katalog';
+let duzenle = Astro.url.searchParams.get('duzenle');
+let hatalar: string[] = [];
+let form: FormData | undefined;
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
-  const id = metin(f, 'id');
+  duzenle = metin(f, 'id');
+  form = f;
   try {
     await magazaGuncelle((m) => {
-      const u = m.urunler.find((x) => x.id === id);
-      if (!u) throw new DogrulamaHatasi(['Ürün bulunamadı']);
-      fiyatUygula(u, sayi(f, 'fiyat', u.fiyat));
-      u.stok = Math.max(0, sayi(f, 'stok', u.stok));
-      const d = DurumSema.safeParse(metin(f, 'durum'));
-      if (d.success) u.durum = d.data;
+      const u = m.urunler.find((x) => x.id === duzenle);
+      if (!u) throw new Error('Ürün bulunamadı.');
+      const stok = sayi(f, 'stok', -1);
+      const fiyat = sayi(f, 'fiyat', -1);
+      const indirim = sayi(f, 'sepetteIndirim', -1);
+      if (stok < 0 || fiyat <= 0 || indirim < 0 || indirim > 50) throw new Error('Geçerli fiyat, stok ve %0–50 arası sepet indirimi girin.');
+      const eskiStok = sayi(f, 'eskiStok', -1);
+      if (stok !== eskiStok && u.stok !== eskiStok) throw new Error('Stok bu sırada güncellendi. Güncel stoğu kontrol edip tekrar deneyin.');
+      const eskiFiyat = sayi(f, 'eskiFiyat', -1);
+      if (fiyat !== eskiFiyat && u.fiyat !== eskiFiyat) throw new Error('Fiyat bu sırada güncellendi. Güncel fiyatı kontrol edip tekrar deneyin.');
+      if (stok !== eskiStok) u.stok = stok;
+      if (fiyat !== eskiFiyat) fiyatUygula(u, fiyat);
+      u.sepetteIndirim = indirim;
     });
-    return Astro.redirect(`/yonetim/urunler?ok=${encodeURIComponent('Kaydedildi')}#u-${id}`);
+    const q = new URLSearchParams({ filtre, q: soru, sira, ok: 'Fiyat ve stok kaydedildi.' });
+    return Astro.redirect('/yonetim/urunler?' + q + '#u-' + duzenle, 303);
   } catch (e) {
     hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
   }
 }
-const m = await magazaOku();
-const k = new Katalog(m, new Map(), true);
-const kategoriAdi = (id: string) => m.kategoriler.find((x) => x.id === id)?.ad ?? id;
-const DURUM = { yayinda: 'Yayında', taslak: 'Taslak', gizli: 'Gizli' } as const;
+const [m, siparisler] = await Promise.all([magazaOku(), siparisleriOku()]);
+const k = new Katalog(m);
+const rapor = urunBazliSatislar(m, siparisler);
+const gecmis = fiyatDegisimleriListesi(m).slice(0, 30);
+const aranan = soru.toLocaleLowerCase('tr').trim();
+const liste = m.urunler.filter((u) => {
+  const uygun = filtre === 'tumu' || u.durum === filtre || (filtre === 'kritik' && u.durum === 'yayinda' && u.stok <= 3);
+  return uygun && (!aranan || [u.ad, u.kisaAd, u.sku, u.marka].some((x) => x.toLocaleLowerCase('tr').includes(aranan)));
+}).sort((a, b) => sira === 'stok' ? a.stok - b.stok : sira === 'fiyat' ? a.fiyat - b.fiyat : sira === 'ad' ? a.kisaAd.localeCompare(b.kisaAd, 'tr') : b.oncelik - a.oncelik);
+const url = (id?: string) => '?' + new URLSearchParams({ filtre, q: soru, sira, ...(id ? { duzenle: id } : {}) }) + (id ? '#u-' + id : '');
+// Etikete basılabilecek SKU (yalnız yazdırılabilir ASCII, en fazla 55 karakter).
+// Not: regex şablonun içinde yazılırsa Astro derleyicisi onu etiket sanıp sayfa açılmaz; burada kalmalı.
+const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
 ---
-<Yonetim baslik="Ürünler" aktif="urunler" basari={basari} hatalar={hatalar}>
-  <div class="y-arac">
-    <p class="muted small">{m.urunler.length} ürün · Fiyat, stok ve durumu buradan hızlıca değiştirin; diğer her şey için ürüne tıklayın.</p>
-    <a class="btn btn--sepet" href="/yonetim/urunler/yeni"><Ikon ad="arti" />Yeni ürün</a>
-  </div>
-  <div class="y-liste">
-    {m.urunler.map((u) => {
-      const b = k.fiyatBilgisi(u);
-      return (
-        <form method="post" class="y-satir" id={`u-${u.id}`}>
-          <input type="hidden" name="id" value={u.id} />
-          <a class="y-satir__gorsel" href={`/yonetim/urunler/${u.id}`}>{u.gorseller[0] ? <img src={u.gorseller[0].src} alt="" loading="lazy" /> : <Ikon ad="kutu" boyut={26} />}</a>
-          <div>
-            <a class="y-satir__ad" href={`/yonetim/urunler/${u.id}`}>{u.marka} {u.ad}</a>
-            <div class="y-satir__meta">
-              <span class:list={['y-durum', `y-durum--${u.durum}`]}>{DURUM[u.durum]}</span>
-              <span>{u.kategoriler.map(kategoriAdi).join(', ')}</span>
-              {b.onceki && <span class="y-durum y-durum--iptal">İndirimde: {formatTL(b.onceki)} → {formatTL(u.fiyat)}</span>}
-              {u.sepetteIndirim > 0 && <span class="y-durum y-durum--yayinda">Sepette %{u.sepetteIndirim}</span>}
-              {u.oneCikan && <span>★ Öne çıkan</span>}
-            </div>
-          </div>
-          <div class="y-hizli">
-            <label>Fiyat (TL)<input class="y-girdi" name="fiyat" inputmode="numeric" value={u.fiyat} /></label>
-            <label>Stok<input class="y-girdi" name="stok" inputmode="numeric" value={u.stok} style="width:80px" /></label>
-            <label>Durum
-              <select class="y-girdi" name="durum" style="width:120px">
-                {Object.entries(DURUM).map(([v, a]) => <option value={v} selected={u.durum === v}>{a}</option>)}
-              </select>
-            </label>
-            <button class="btn btn--cizgi btn--kucuk" type="submit">Kaydet</button>
-          </div>
-        </form>
-      );
-    })}
+<Yonetim baslik="Ürünler & Stok" aktif="urunler" basari={basari} hatalar={hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar"><a class="y-link" href="/yonetim/setler">Setler</a><a class="y-link" href="/yonetim/kategoriler">Kategoriler</a><a class="btn btn--sepet" href="/yonetim/urunler/yeni">Yeni Ürün</a></div>
+  <form method="get" class="y-toolbar" data-filtre-form="urun">
+    <input class="y-girdi" name="q" type="search" value={soru} placeholder="Ürün adı, marka veya SKU" aria-label="Ürün ara" />
+    <select class="y-girdi" name="filtre" aria-label="Ürün filtresi">
+      {Object.entries({ tumu: 'Tümü', ...YAYIN_ADLARI, kritik: 'Kritik Stok' }).map(([id, ad]) => <option value={id} selected={filtre === id}>{ad}</option>)}
+    </select>
+    <select class="y-girdi" name="sira" aria-label="Ürün sıralaması">{Object.entries({ katalog: 'Katalog sırası', stok: 'En az stok', fiyat: 'En düşük fiyat', ad: 'Ürün adı' }).map(([id, ad]) => <option value={id} selected={sira === id}>{ad}</option>)}</select>
+    <button class="btn btn--cizgi" type="submit">Uygula</button>
+  </form>
+  {liste.length ? <div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Fiyat</th><th>İndirim</th><th>Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+    {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return <>
+      <tr id={'u-' + u.id}>
+        <td><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" />}</span><span><a class="y-link" href={'/yonetim/urunler/' + u.id}>{u.marka} {u.kisaAd}</a><small class="y-table-note">{u.gorseller.length ? u.sku : 'Fotoğraf eksik'}</small></span></div></td>
+        <td class="y-nowrap"><strong>{formatTL(u.fiyat)}</strong>{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
+        <td>{fiyat.yuzde ? <span>%{fiyat.yuzde} fiyat indirimi</span> : null}{fiyat.sepette && <small class="y-table-note">Sepette %{fiyat.sepette.yuzde} · {formatTL(fiyat.sepette.fiyat)}</small>}{!fiyat.yuzde && !fiyat.sepette && '—'}</td>
+        <td>{u.stok <= 3 && u.durum === 'yayinda' ? <span class="y-stok-rozet y-stok-rozet--kritik">{u.stok === 0 ? 'Tükendi' : u.stok + ' · Kritik'}</span> : u.stok}</td><td>{YAYIN_ADLARI[u.durum]}</td>
+        <td><div class="y-row-actions"><a class="y-link" href={'/yonetim/urunler/' + u.id}>Düzenle</a><a class="y-link" href={url(duzenle === u.id ? undefined : u.id)}>{duzenle === u.id ? "Kapat" : "Hızlı düzenle"}</a>{skuGecerli(u.sku) && <details class="y-row-menu"><summary aria-label="Ürün işlemleri">•••</summary><a href={"/yonetim/finans/etiket?sku=" + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi ↗</a></details>}</div></td>
+      </tr>
+      {duzenle === u.id && <tr class="y-inline-edit"><td colspan="6"><form method="post" class="y-inline-fields" data-editor>
+        <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />
+        <label class="y-alan">Fiyat (TL)<input name="fiyat" type="number" min="1" required value={String(form?.get('fiyat') ?? u.fiyat)} /></label>
+        <label class="y-alan">Stok<input name="stok" type="number" min="0" required value={String(form?.get('stok') ?? u.stok)} /></label>
+        <label class="y-alan">Sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String(form?.get('sepetteIndirim') ?? u.sepetteIndirim)} /></label>
+        <button class="btn btn--sepet" type="submit">Kaydet</button>
+      </form></td></tr>}
+    </>; })}
+  </tbody></table></div> : <p class="y-kart muted">Bu görünümde ürün bulunamadı.</p>}
+  <div class="y-report-links">
+    <details class="y-kart"><summary>Fiyat geçmişi</summary>{gecmis.length ? <ul class="y-gecmis">{gecmis.map((g) => <li><span>{yTarih.format(new Date(g.tarih))}</span><span>{g.urunAd} · {g.eskiFiyat && formatTL(g.eskiFiyat) + ' → '}{formatTL(g.yeniFiyat)}</span></li>)}</ul> : <p class="muted">Fiyat kaydı yok.</p>}</details>
+    <details class="y-kart"><summary>Ürün satış raporu</summary><div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Onaylı adet</th><th>Kargolanan adet</th><th>Bekleyen adet</th><th>İptal / iade</th></tr></thead><tbody>{rapor.map((r) => <tr><td>{r.urun.kisaAd}</td><td>{r.onayliAdet}</td><td>{r.kargolananAdet}</td><td>{r.bekleyenAdet}</td><td>{r.iptalAdet}</td></tr>)}</tbody></table></div></details>
   </div>
 </Yonetim>

@@ -1,59 +1,60 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
 import Ikon from '../../components/Ikon.astro';
-import { DogrulamaHatasi, gorselKaydet, magazaGuncelle, magazaOku } from '../../lib/depo';
+import Onizleme from '../../components/yonetim/Onizleme.astro';
+import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku } from '../../lib/depo';
 import { formatTL } from '../../lib/fiyat';
-import { benzersizKod, evet, istegeBagli, liste, metin, sayi } from '../../lib/form';
+import { benzersizKod, metin } from '../../lib/form';
 import { Katalog } from '../../lib/katalog';
-import { DurumSema, type UrunSeti } from '../../lib/sema';
-
+import { SetSema, type UrunSeti } from '../../lib/sema';
+import { BOS_SET, setFormu } from '../../lib/yonetimSet';
+import { YAYIN_ADLARI } from '../../lib/yonetimRapor';
 let hatalar: string[] = [];
 const basari = Astro.url.searchParams.get('ok');
+let secim = Astro.url.searchParams.get('duzenle');
+let taslak: UrunSeti | undefined;
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
   const eylem = metin(f, 'eylem');
-  const id = metin(f, 'id');
+  secim = metin(f, 'id');
+  let yuklenen: string | undefined;
   try {
     const dosya = f.get('gorsel');
-    const yeniGorsel = dosya instanceof File && dosya.size > 0 ? await gorselKaydet(dosya, 'setler') : undefined;
+    if (eylem !== 'sil' && dosya instanceof File && dosya.size > 0) yuklenen = await gorselKaydet(dosya, 'setler');
     await magazaGuncelle((m) => {
-      if (eylem === 'sil') { m.setler = m.setler.filter((s) => s.id !== id); return; }
-      const urunIdler = liste(f, 'kalem_urun'), adetler = liste(f, 'kalem_adet');
-      const kalemler = urunIdler.map((u, i) => ({ urunId: u, adet: Math.max(1, Number(adetler[i]) || 1) })).filter((x) => x.urunId);
-      const tipHam = metin(f, 'fiyat_tip');
-      const tip = tipHam === 'sabit' ? 'sabit' : tipHam === 'kalem' ? 'kalem' : 'yuzde';
-      const d = DurumSema.safeParse(metin(f, 'durum'));
-      const veri: Omit<UrunSeti, 'id'> = {
-        durum: d.success ? d.data : 'taslak', ad: metin(f, 'ad'), aciklama: metin(f, 'aciklama'), kalemler,
-        fiyatlama: tip === 'sabit' ? { tip: 'sabit', fiyat: sayi(f, 'deger') }
-          : tip === 'kalem' ? { tip: 'kalem', urunId: metin(f, 'kalem_hedef') || kalemler[kalemler.length - 1]?.urunId || '', oran: sayi(f, 'deger') }
-          : { tip: 'yuzde', oran: sayi(f, 'deger') },
-        rozet: istegeBagli(f, 'rozet'), oneCikan: evet(f, 'oneCikan'),
-      };
-      const mevcut = m.setler.find((s) => s.id === id);
-      const gorsel = yeniGorsel ? { src: yeniGorsel, alt: veri.ad } : evet(f, 'gorsel_kaldir') ? undefined : mevcut?.gorsel;
-      if (eylem === 'yeni') m.setler.push({ id: benzersizKod(veri.ad, new Set(m.setler.map((s) => s.id))), ...veri, gorsel });
-      else if (mevcut) Object.assign(mevcut, veri, { gorsel });
+      const mevcut = m.setler.find((x) => x.id === secim);
+      if (!mevcut && secim !== 'yeni') throw new Error('Set bulunamadı.');
+      if (eylem === 'sil') { m.setler = m.setler.filter((x) => x.id !== secim); return; }
+      const aday = setFormu(f, mevcut ?? BOS_SET, yuklenen);
+      taslak = aday;
+      const sonuc = SetSema.safeParse(aday);
+      if (!sonuc.success) throw new DogrulamaHatasi(sonuc.error.issues.map((i) => i.message));
+      const engeller = new Katalog(m).setEngelleri(sonuc.data);
+      if (aday.durum === 'yayinda' && engeller.length) throw new DogrulamaHatasi(engeller);
+      if (mevcut) Object.assign(mevcut, sonuc.data);
+      else m.setler.push({ ...sonuc.data, id: benzersizKod(aday.ad, new Set(m.setler.map((x) => x.id))) });
     });
-    return Astro.redirect(`/yonetim/setler?ok=${encodeURIComponent(eylem === 'sil' ? 'Set silindi' : 'Kaydedildi')}`);
+    return Astro.redirect('/yonetim/setler?ok=' + encodeURIComponent(eylem === 'sil' ? 'Set silindi.' : 'Set kaydedildi.'), 303);
   } catch (e) {
+    if (yuklenen) await gorselSil(yuklenen);
+    if (taslak?.gorsel?.src === yuklenen && taslak) taslak.gorsel = undefined;
     hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
   }
 }
 const m = await magazaOku();
-const k = new Katalog(m, new Map(), true);
-const BOS: UrunSeti = { id: '', durum: 'taslak', ad: '', aciklama: '', kalemler: [{ urunId: '', adet: 1 }, { urunId: '', adet: 1 }], fiyatlama: { tip: 'yuzde', oran: 10 }, oneCikan: true };
-const formlar = [...m.setler.map((s) => ({ s, yeni: false })), { s: BOS, yeni: true }];
+const k = new Katalog(m);
+const yeni = secim === 'yeni';
+const s = taslak ?? (yeni ? BOS_SET : m.setler.find((x) => x.id === secim));
+const engeller = s && !yeni ? k.setEngelleri(s) : [];
 ---
-<Yonetim baslik="Setler & kombinasyonlar" aktif="setler" basari={basari} hatalar={hatalar}>
-  <p class="muted small" style="margin-bottom:14px">Set fiyatı, ürünlerin <strong>güncel</strong> ayrı ayrı fiyatlarından hesaplanır; sitede "Ayrı ayrı X TL → Set Y TL, Z TL kazanç" olarak görünür. Setteki bir ürün stokta değilse set otomatik gizlenir.</p>
-  {formlar.map(({ s, yeni }) => {
-    const f = !yeni && s.kalemler.every((x) => m.urunler.some((u) => u.id === x.urunId)) ? k.setFiyati(s) : undefined;
-    return (
-      <form method="post" enctype="multipart/form-data" class="y-kart" style={yeni ? 'border-style:dashed' : undefined}>
+<Yonetim baslik={s ? yeni ? "Yeni Set" : s.ad || "Seti Düzenle" : "Setler"} aktif="setler" basari={basari} hatalar={hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    {s ? <><a class="y-link" href="/yonetim/setler">Setlere dön</a><button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="set-onizleme" aria-expanded="false">Önizle</button><button type="submit" form="set-form" class="btn btn--sepet">Kaydet</button></> : <a href="?duzenle=yeni" class="btn btn--sepet">Yeni Set</a>}
+  </div>
+  {s ? <div class="y-editor-duzen" data-editor-duzen>
+      <form method="post" enctype="multipart/form-data" id="set-form" class="y-editor-form y-kart" data-editor data-onizleme-form="set">
         <input type="hidden" name="id" value={s.id} />
-        <h2>{yeni ? 'Yeni set' : s.ad}</h2>
-        {f && <p class="y-aciklama">Ayrı ayrı {formatTL(f.ayriAyri)} → set fiyatı <strong>{formatTL(f.fiyat)}</strong> · {formatTL(f.kazanc)} kazanç (%{f.yuzde})</p>}
+        {engeller.length > 0 && <p class="y-uyari">{engeller.join(" ")}</p>}
         <div class="y-izgara y-izgara--2" style="margin-top:8px">
           <div class="y-alan"><label>Set adı</label><input name="ad" value={s.ad} required placeholder="Örn. Vitaquick + Buhar Aparatı Seti" /></div>
           <div class="y-alan"><label>Durum</label><select name="durum">{[['yayinda', 'Yayında'], ['taslak', 'Taslak'], ['gizli', 'Gizli']].map(([v, a]) => <option value={v} selected={s.durum === v}>{a}</option>)}</select></div>
@@ -64,12 +65,12 @@ const formlar = [...m.setler.map((s) => ({ s, yeni: false })), { s: BOS, yeni: t
           <div class="y-tekrar">
             {s.kalemler.map((x) => (
               <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-                <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} selected={u.id === x.urunId}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
-                <input class="y-girdi" name="kalem_adet" inputmode="numeric" value={x.adet} aria-label="Adet" />
+                <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat} selected={u.id === x.urunId}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
+                <input class="y-girdi" name="kalem_adet" type="number" step="1" min="1" value={x.adet} aria-label="Adet" />
               </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div>
             ))}
             <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-              <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
+              <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
               <input class="y-girdi" name="kalem_adet" inputmode="numeric" value="1" aria-label="Adet" />
             </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div></template>
             <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Ürün ekle</button>
@@ -80,24 +81,27 @@ const formlar = [...m.setler.map((s) => ({ s, yeni: false })), { s: BOS, yeni: t
             <option value="kalem" selected={s.fiyatlama.tip === 'kalem'}>Belirli ürüne % indirim (önerilen)</option>
             <option value="yuzde" selected={s.fiyatlama.tip === 'yuzde'}>Tüm sete % indirim</option>
             <option value="sabit" selected={s.fiyatlama.tip === 'sabit'}>Sabit set fiyatı (TL)</option>
-          </select><span class="y-ipucu">"Belirli ürüne": sitede o ürünün fiyatı üstü çizili ve kırmızı görünür, indirimin nerede olduğu net olur.</span></div>
+          </select></div>
           <div class="y-alan"><label>Değer (% ya da TL)</label><input name="deger" inputmode="numeric" value={s.fiyatlama.tip === 'sabit' ? s.fiyatlama.fiyat : s.fiyatlama.oran} /></div>
-          <div class="y-alan"><label>İndirimli ürün <span class="y-ipucu">(yalnız "belirli ürüne")</span></label><select name="kalem_hedef"><option value="">Son ürün</option>{m.urunler.map((u) => <option value={u.id} selected={s.fiyatlama.tip === 'kalem' && s.fiyatlama.urunId === u.id}>{u.kisaAd}</option>)}</select></div>
+          <div class="y-alan" data-kalem-hedef><label>İndirimli ürün</label><select name="kalem_hedef"><option value="">Son ürün</option>{m.urunler.map((u) => <option value={u.id} selected={s.fiyatlama.tip === 'kalem' && s.fiyatlama.urunId === u.id}>{u.kisaAd}</option>)}</select></div>
         </div>
         <div class="y-alan" style="margin-top:10px"><label>Rozet <span class="y-ipucu">(isteğe bağlı)</span></label><input name="rozet" value={s.rozet ?? ''} placeholder="Set fırsatı" /></div>
         <div class="y-izgara y-izgara--2" style="margin-top:10px">
           <div class="y-alan"><label>Set görseli <span class="y-ipucu">(yoksa ürün görselleri yan yana gösterilir)</span></label>
             {s.gorsel && <img src={s.gorsel.src} alt="" style="width:90px;height:110px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff" />}
-            <input type="file" name="gorsel" accept="image/*" />
+            <input type="file" name="gorsel" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif" data-gorsel-sec />
             {s.gorsel && <label class="y-secim"><input type="checkbox" name="gorsel_kaldir" />Görseli kaldır</label>}
           </div>
           <label class="y-secim" style="align-self:end"><input type="checkbox" name="oneCikan" checked={s.oneCikan} />Ana sayfada göster</label>
         </div>
-        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
-          {!yeni && <button class="btn btn--tehlike btn--kucuk" type="submit" name="eylem" value="sil" formnovalidate data-onayla={`"${s.ad}" seti silinsin mi?`}>Sil</button>}
-          <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value={yeni ? 'yeni' : 'kaydet'}>{yeni ? 'Seti oluştur' : 'Kaydet'}</button>
-        </div>
-      </form>
-    );
-  })}
+
+    <output class="y-set-ozet" data-set-toplam aria-live="polite"></output>
+    <p class="y-ipucu">Yüzde indirimi tüm sete uygulandığında sonuç bir alt 10 TL basamağına yuvarlanır.</p>
+    <p data-kayit-durum class="y-form-state" role="status"></p>
+    {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><button type="submit" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu set silinsin mi?">Seti sil</button></details>}
+    </form>
+    <Onizleme id="set-onizleme" tur="set" kayit={s.id} />
+  </div> : m.setler.length ? <div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Set</th><th>Ürünler</th><th>Ayrı ayrı</th><th>Set fiyatı</th><th>Tasarruf</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+    {m.setler.map((x) => { const f = k.setFiyati(x); const engel = x.durum === "yayinda" && k.setEngelleri(x).length > 0; return <tr><td><strong>{x.ad}</strong></td><td>{f.dokum.map((d) => d.adet + " × " + d.urun.kisaAd).join(", ")}</td><td>{formatTL(f.ayriAyri)}</td><td><strong>{formatTL(f.fiyat)}</strong></td><td>{formatTL(f.kazanc)}</td><td>{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</td><td><a class="y-link" href={"?duzenle=" + x.id}>Düzenle</a></td></tr>; })}
+  </tbody></table></div> : <p class="y-kart muted">Henüz set yok.</p>}
 </Yonetim>

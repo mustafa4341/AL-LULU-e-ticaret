@@ -1,11 +1,13 @@
 import type { APIRoute } from 'astro';
 import crypto from 'node:crypto';
 import { z } from 'astro/zod';
-import { sepetHesapla, urunKullanimi } from '../../lib/fiyat';
-import { siparisEkle, siparisleriOku, sozlesmeKaydet } from '../../lib/depo';
+import { kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, urunKullanimi } from '../../lib/fiyat';
+import { magazaOku, siparisGuncelle, siparisleriOku, siparisVeSozlesmeEkle, SiparisNumarasiDolu, StokYetersiz } from '../../lib/depo';
 import { SOZLESME_SURUMU, mesafeliSatisSozlesmesi, onBilgilendirmeFormu, siparistenYasal } from '../../lib/yasal';
 import { siparisAlindi } from '../../lib/bildirim';
 import type { Siparis } from '../../lib/sema';
+import { Katalog } from '../../lib/katalog';
+import { paytrAyari, paytrFormUrl, paytrIstendi, PAYTR_SURE_DK } from '../../lib/paytr';
 
 /* Sipariş oluşturma — fiyatlar ve stok SUNUCUDA katalogdan yeniden hesaplanır. */
 const metin = (min = 1, max = 300) => z.string().trim().min(min).max(max);
@@ -29,23 +31,32 @@ const Girdi = z.object({
 
 const sinir = new Map<string, number[]>();
 const json = (veri: unknown, status = 200) =>
-  new Response(JSON.stringify(veri), { status, headers: { 'Content-Type': 'application/json' } });
+  Response.json(veri, { status, headers: { 'Cache-Control': 'no-store' } });
 
 export const POST: APIRoute = async ({ request, locals, clientAddress, url }) => {
+  const paytr = paytrAyari();
+  if (paytrIstendi() && (!paytr || paytr.origin !== url.origin)) {
+    return json({ hata: 'Online ödeme geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.' }, 503);
+  }
   // IP başına saatte 10 sipariş denemesi
   const simdi = Date.now();
   const gecmis = (sinir.get(clientAddress) ?? []).filter((t) => simdi - t < 3600_000);
   if (gecmis.length >= 10) return json({ hata: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin veya WhatsApp üzerinden yazın.' }, 429);
   sinir.set(clientAddress, [...gecmis, simdi]);
+  // Süresi dolan IP kayıtları temizlenir (sunucu belleği sınırsız büyümesin)
+  if (sinir.size > 5000) for (const [ip, z] of sinir) if (!z.some((t) => simdi - t < 3600_000)) sinir.delete(ip);
 
   const g = Girdi.safeParse(await request.json().catch(() => null));
   if (!g.success) return json({ hata: 'Lütfen bilgileri kontrol edin.', ayrinti: g.error.issues.map((i) => i.path.join('.')) }, 400);
   const d = g.data;
+  if (paytr && (!d.musteri.eposta || !/^[\x21-\x7e]{1,100}$/.test(d.musteri.eposta))) {
+    return json({ hata: 'Kartla ödeme için geçerli bir e-posta adresi girin (en fazla 100 karakter).' }, 400);
+  }
   if (d.fatura.tip === 'kurumsal' && (!d.fatura.firma || !d.fatura.vd || !d.fatura.vno)) {
     return json({ hata: 'Kurumsal fatura bilgilerini tamamlayın.' }, 400);
   }
 
-  const k = locals.katalog;
+  const k = paytr ? new Katalog(await magazaOku(), new Map(), false) : locals.katalog;
   const ik = k.istemci();
   const hesap = sepetHesapla(d.kalemler, ik);
   if (hesap.satirlar.length !== d.kalemler.length) {
@@ -58,10 +69,15 @@ export const POST: APIRoute = async ({ request, locals, clientAddress, url }) =>
   if (hesap.toplam !== d.beklenenToplam) {
     return json({ hata: 'Fiyatlar güncellendi. Yeni toplamı kontrol edip tekrar onaylayın.', yenile: true }, 409);
   }
+  if (paytr && (!Number.isSafeInteger(hesap.toplam * 100) || hesap.toplam <= 0)) {
+    return json({ hata: 'Bu sepet için ödeme başlatılamadı.' }, 409);
+  }
 
   const mevcut = new Set((await siparisleriOku()).map((s) => s.no));
   const tarih = new Date();
-  const gun = tarih.toISOString().slice(2, 10).replace(/-/g, '');
+  // Numaradaki tarih Türkiye saatine göre (gece 00.00–03.00 arası siparişler önceki günün tarihini almasın)
+  const gun = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul', year: 'numeric', month: '2-digit', day: '2-digit' })
+    .format(tarih).slice(2).replace(/-/g, '');
   let no = '';
   do { no = `AL${gun}-${crypto.randomInt(1000, 9999)}`; } while (mevcut.has(no));
 
@@ -76,13 +92,21 @@ export const POST: APIRoute = async ({ request, locals, clientAddress, url }) =>
     kalemler: hesap.satirlar.map((s) => ({
       tip: s.tip, id: s.id, ad: s.ad, sku: s.sku, icerik: s.icerik, parcalar: s.parcalar,
       adet: s.adet, birimFiyat: s.birimFiyat, indirim: s.indirim, toplam: s.toplam,
+      oncekiBirim: satirKampanyaIndirimi(s, ik) > 0 ? ik.urunler[s.id]!.onceki : undefined,
     })),
     urunlerToplami: hesap.urunlerToplami,
     setIndirimi: hesap.setIndirimi,
     sepetIndirimi: hesap.sepetIndirimi,
+    kampanyaIndirimi: kampanyaIndirimi(hesap.satirlar, ik),
     kargo: hesap.kargo,
     toplam: hesap.toplam,
     stokDusuldu: false,
+    paytr: paytr ? {
+      ref: 'AL' + crypto.randomBytes(16).toString('hex'),
+      test: paytr.test,
+      sonuc: 'bekliyor',
+      beklemeBitis: tarih.getTime() + (PAYTR_SURE_DK + 2) * 60_000,
+    } : undefined,
     sozlesmeSurumu: SOZLESME_SURUMU,
     gecmis: [{ tarih: tarih.toISOString(), durum: 'odeme-bekliyor' }],
   };
@@ -90,15 +114,33 @@ export const POST: APIRoute = async ({ request, locals, clientAddress, url }) =>
   // Onaylanan metinler sunucuda siparişin gerçek verisiyle üretilir ve saklanır (ispat yükü satıcıda)
   const yasalVeri = siparistenYasal(siparis);
   const belgeler = { onBilgilendirme: onBilgilendirmeFormu(k.site, yasalVeri), mesafeliSatis: mesafeliSatisSozlesmesi(k.site, yasalVeri) };
-  await sozlesmeKaydet({
-    no, surum: SOZLESME_SURUMU, onayTarihi: tarih.toISOString(), ip: clientAddress,
-    tarayici: request.headers.get('user-agent')?.slice(0, 300) ?? undefined, ...belgeler,
-  });
-  await siparisEkle(siparis);
+  try {
+    await siparisVeSozlesmeEkle(siparis, {
+      no, surum: SOZLESME_SURUMU, onayTarihi: tarih.toISOString(), ip: clientAddress,
+      tarayici: request.headers.get('user-agent')?.slice(0, 300) ?? undefined, ...belgeler,
+    });
+  } catch (e) {
+    if (e instanceof StokYetersiz) return json({ hata: 'Sepetinizdeki bir ürün için şu anda yeterli stok yok.', yenile: true }, 409);
+    if (e instanceof SiparisNumarasiDolu) return json({ hata: 'Lütfen siparişinizi tekrar gönderin.' }, 409);
+    throw e;
+  }
+
+  if (paytr) {
+    try {
+      const odemeUrl = await paytrFormUrl(paytr, siparis, clientAddress);
+      return json({ no, token: siparis.token, toplam: hesap.toplam, odemeUrl, odemeRef: siparis.paytr?.ref });
+    } catch {
+      console.error('[PayTR] Ödeme ekranı açılamadı', no);
+      // Form bağlantısı müşteriye ulaşmadı. Ödeme sonucu saklı kalır, yalnızca stok ayrımı sonlanır.
+      await siparisGuncelle(no, (s) => {
+        if (s.paytr?.sonuc === 'bekliyor') s.paytr.beklemeBitis = Date.now();
+      }).catch(() => console.error('[PayTR] Stok ayrımı kapatılamadı', no));
+      return json({ hata: 'Ödeme ekranı şu anda açılamadı. Sepetiniz korundu. Lütfen daha sonra tekrar deneyin.' }, 502);
+    }
+  }
 
   const takip = new URL(`/siparis/${no}?t=${siparis.token}`, url.origin).href;
   const sozlesmeBaglantisi = new URL(`/siparis/${no}/sozlesmeler?t=${siparis.token}`, url.origin).href;
   siparisAlindi(siparis, k.site, takip, { ...belgeler, baglanti: sozlesmeBaglantisi }).catch((e) => console.error('[bildirim]', e));
-  // TODO(ödeme): iyzico/PayTR bağlandığında burada ödeme formu token'ı oluşturulup döndürülecek.
   return json({ no, token: siparis.token, toplam: hesap.toplam });
 };

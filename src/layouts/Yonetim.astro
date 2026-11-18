@@ -1,25 +1,35 @@
 ---
 import '../styles/global.css';
 import '../styles/yonetim.css';
+import '../styles/panel.css';
 import Ikonlar from '../components/Ikonlar.astro';
 import Ikon from '../components/Ikon.astro';
+import { siparisleriOku, supabaseDurumu } from '../lib/depo';
+import { gonderilecek } from '../lib/yonetimRapor';
 import type { IkonAdi } from '../lib/sema';
 
 interface Props {
   baslik: string;
-  aktif?: 'ozet' | 'urunler' | 'kategoriler' | 'setler' | 'siparisler' | 'ayarlar';
+  altBaslik?: string;
+  aktif?: 'ozet' | 'urunler' | 'kategoriler' | 'setler' | 'siparisler' | 'site' | 'ayarlar' | 'finans';
   basari?: string | null;
   hatalar?: string[];
+  genis?: boolean;
 }
-const { baslik, aktif, basari, hatalar = [] } = Astro.props;
-const menu: { id: NonNullable<Props['aktif']>; ad: string; href: string; ikon: IkonAdi }[] = [
-  { id: 'ozet', ad: 'Özet', href: '/yonetim', ikon: 'ev' },
-  { id: 'urunler', ad: 'Ürünler', href: '/yonetim/urunler', ikon: 'kutu' },
-  { id: 'siparisler', ad: 'Siparişler', href: '/yonetim/siparisler', ikon: 'kargo' },
-  { id: 'setler', ad: 'Setler', href: '/yonetim/setler', ikon: 'etiket' },
-  { id: 'kategoriler', ad: 'Kategoriler', href: '/yonetim/kategoriler', ikon: 'grid' },
-  { id: 'ayarlar', ad: 'Ayarlar', href: '/yonetim/ayarlar', ikon: 'ayar' },
+const { baslik, altBaslik, aktif, basari, hatalar = [] } = Astro.props;
+const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
+const baglanti = supabaseDurumu();
+/* Yan menüde Siparişler'in yanında hazırlanacak/kargolanacak sipariş sayısı */
+const bekleyen = await siparisleriOku().then((l) => l.filter((x) => !x.paytr?.test && gonderilecek(x)).length).catch(() => 0);
+const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
+  ['ozet', 'Genel Bakış', '/yonetim', 'ev'],
+  ['siparisler', 'Siparişler', '/yonetim/siparisler', 'kargo'],
+  ['urunler', 'Ürünler', '/yonetim/urunler', 'kutu'],
+  ['finans', 'Finans & Belgeler', '/yonetim/finans', 'belge'],
+  ['site', 'Site Düzeni', '/yonetim/site-duzeni', 'ayar'],
 ];
+const urunAlt = aktif === 'setler' || aktif === 'kategoriler';
+const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : 'Ayarlar');
 ---
 <!doctype html>
 <html lang="tr">
@@ -27,37 +37,61 @@ const menu: { id: NonNullable<Props['aktif']>; ad: string; href: string; ikon: I
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>{baslik} · Yönetim · Al Lulu Home</title>
+    <title>{baslik} · Al Lulu Home</title>
     <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <script is:inline>try { document.documentElement.dataset.yMenu = localStorage.getItem('y-menu') || 'acik'; } catch {}</script>
   </head>
-  <body class="yonetim">
+  <body class="yonetim y-panel">
     <Ikonlar />
-    <header class="y-ust">
-      <a href="/yonetim" class="y-logo"><img src="/img/logo/amblem.webp" alt="" width="36" height="27" /><span>Yönetim</span></a>
-      <nav class="y-menu" aria-label="Yönetim menüsü">
-        {menu.map((m) => (
-          <a href={m.href} class:list={{ 'is-active': aktif === m.id }} aria-current={aktif === m.id ? 'page' : undefined}><Ikon ad={m.ikon} boyut={20} /><span>{m.ad}</span></a>
-        ))}
-      </nav>
-      <div class="y-sag">
-        <a class="y-site" href="/" target="_blank" rel="noopener">Siteyi gör ↗</a>
-        <form method="post" action="/yonetim/cikis"><button class="y-cikis" type="submit">Çıkış</button></form>
+    <header class="y-top">
+      <button type="button" class="y-icon-button" aria-label="Menüyü aç veya kapat" aria-controls="y-menu" aria-expanded="true" data-menu-ac><Ikon ad="menu" boyut={20} /></button>
+      <a href="/yonetim" class="y-brand" aria-label="Al Lulu Home yönetimi"><img src="/img/logo/amblem.webp" alt="" width="30" height="24" /><span>AL LULU HOME</span></a>
+      <span class="y-top-title">{sayfa}</span>
+      <div class="y-top-end">
+        <button type="button" class="y-icon-button" data-panel-ara title="Ara · Ctrl/K"><Ikon ad="buyutec" boyut={18} /><span>Ara</span></button>
+        {baglanti === 'hata'
+          ? <span class="y-service-error" role="status" title="Supabase okunamadı. Yerel yedek gösteriliyor.">Bağlantı hatası</span>
+          : <span class:list={['y-service', { 'y-service--warning': baglanti === 'yerel' }]} title={baglanti === 'bagli' ? 'Supabase bağlı' : 'Yerel veri deposu kullanılıyor'}></span>}
+        <a class:list={['y-live', { 'y-live--maintenance': tadilat }]} href="/yonetim/site-duzeni?bolum=tadilat">{tadilat ? 'Bakımda' : 'Yayında'}</a>
+        <details class="y-account">
+          <summary class="y-icon-button">Hesap</summary>
+          <div><a href="/" target="_blank" rel="noopener">Canlı site ↗</a><form method="post" action="/yonetim/cikis"><button type="submit">Çıkış</button></form></div>
+        </details>
       </div>
     </header>
-    <main class="y-ana">
-      <h1 class="y-baslik">{baslik}</h1>
-      {basari && <p class="y-bildirim y-bildirim--ok" role="status"><Ikon ad="tik" boyut={18} />{basari}</p>}
-      {hatalar.length > 0 && (
-        <div class="y-bildirim y-bildirim--hata" role="alert">
-          <strong>Kaydedilmedi, şunları düzeltin:</strong>
-          <ul>{hatalar.map((h) => <li>{h}</li>)}</ul>
-        </div>
-      )}
+    <button type="button" class="y-mobile-scrim" aria-label="Menüyü kapat" data-menu-kapat hidden></button>
+    <nav id="y-menu" class="y-sidebar" aria-label="Yönetim menüsü">
+      {menu.map(([id, ad, href, ikon]) => <>
+        <a href={href} aria-current={aktif === id ? "page" : undefined} class:list={{ 'is-grup': (id === "urunler" && urunAlt) || (id === "site" && aktif === "ayarlar") }} title={ad}>
+          <Ikon ad={ikon} boyut={19} /><span>{ad}</span>
+          {id === "siparisler" && bekleyen > 0 && <b class="y-rozet" title={bekleyen + ' sipariş hazırlanacak veya kargolanacak'}>{bekleyen}</b>}
+        </a>
+        {id === "urunler" && <div class="y-sidebar-sub">
+          <a href="/yonetim/setler" aria-current={aktif === "setler" ? "page" : undefined}>Setler</a>
+          <a href="/yonetim/kategoriler" aria-current={aktif === "kategoriler" ? "page" : undefined}>Kategoriler</a>
+        </div>}
+        {id === "site" && <div class="y-sidebar-sub"><a href="/yonetim/ayarlar" aria-current={aktif === "ayarlar" ? "page" : undefined}>Ayarlar ve yasal bilgiler</a></div>}
+      </>)}
+    </nav>
+    <main class="y-workspace" id="y-icerik">
+      <div class="y-sayfa-ust">
+        <div><h1 class="y-baslik">{baslik}</h1>{altBaslik && <p class="y-alt-baslik">{altBaslik}</p>}</div>
+        <slot name="ust-sag" />
+      </div>
+      {basari && <p class="y-toast" role="status" data-y-toast><Ikon ad="tik" boyut={16} />{basari}</p>}
+      {hatalar.length > 0 && <div class="y-bildirim y-bildirim--hata" role="alert"><strong>İşlem tamamlanamadı</strong><ul>{hatalar.map((h) => <li>{h}</li>)}</ul></div>}
       <slot />
     </main>
+    <dialog class="y-search" data-panel-arama>
+      <div class="y-kart__bas"><strong>Panelde ara</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+      <form method="get" action="/yonetim/urunler" data-genel-arama>
+        <label class="y-alan">Arama<input name="q" type="search" placeholder="Ürün, sipariş no, müşteri veya telefon" required /></label>
+        <div class="y-ust-aksiyonlar"><button class="btn btn--sepet" type="submit">Ürünlerde ara</button><button class="btn btn--cizgi" type="submit" formaction="/yonetim/siparisler" name="durum" value="tumu">Siparişlerde ara</button></div>
+      </form>
+    </dialog>
     <script>
       import '../scripts/yonetim';
     </script>

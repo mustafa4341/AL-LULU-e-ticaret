@@ -1,0 +1,41 @@
+---
+/* Ürünün en iyi özellikleri: renkli ikon + kısa fayda cümlesi. "Başlık: açıklama" yazılırsa başlık kalın olur.
+   Metinde * varsa altına kaynak dipnotu eklenir. Maddeler panelden (ürün → Öne çıkan bilgiler) düzenlenir. */
+import Ikon from './Ikon.astro';
+import type { IkonAdi } from '../lib/sema';
+import { ozellikRengi } from '../lib/ozellik';
+interface Props {
+  maddeler: { ikon: IkonAdi; metin: string }[];
+  kucuk?: boolean;
+  dipnot?: string;
+}
+const { maddeler, kucuk = false, dipnot = '* Fissler verisi; yemeğe ve miktara göre değişir.' } = Astro.props;
+/* "Ana cümle | küçük açıklama" yazılırsa: müşterinin hayatına dokunan cümle kalın, teknik bilgi altında küçük.
+   "Başlık: açıklama" yazılırsa başlık kalın olur. */
+const parcala = (m: string) => {
+  const d = m.indexOf('|');
+  if (d > 0) return { kalin: '', devam: m.slice(0, d).trim(), alt: m.slice(d + 1).trim() };
+  const i = m.indexOf(':');
+  return i > 0 && i < 40 ? { kalin: m.slice(0, i), devam: m.slice(i + 1).trim(), alt: '' } : { kalin: '', devam: m, alt: '' };
+};
+---
+{maddeler.length > 0 && (
+  <>
+    <ul class:list={['ozellik-liste', { 'ozellik-liste--kucuk': kucuk }]} aria-label="Öne çıkan özellikler">
+      {maddeler.map((b) => {
+        const p = parcala(b.metin);
+        return (
+          <li data-renk={ozellikRengi(b.ikon)} class:list={{ 'ozellik--iki': !!p.alt }}>
+            <span class="ozellik-liste__ikon"><Ikon ad={b.ikon} boyut={kucuk ? 16 : 18} /></span>
+            {p.alt ? (
+              <span class="ozellik-liste__metin"><strong>{p.devam}</strong><small>{p.alt}</small></span>
+            ) : (
+              <span>{p.kalin && <><strong>{p.kalin}:</strong>{' '}</>}{p.devam}</span>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+    {dipnot && maddeler.some((b) => b.metin.includes('*')) && <p class="ozellik-dipnot">{dipnot}</p>}
+  </>
+)}

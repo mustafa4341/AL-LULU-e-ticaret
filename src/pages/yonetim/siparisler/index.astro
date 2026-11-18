@@ -1,38 +1,179 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
-import { siparisleriOku } from '../../../lib/depo';
+import Ikon from '../../../components/Ikon.astro';
+import { magazaOku, siparisleriOku } from '../../../lib/depo';
+import { finansOku } from '../../../lib/finansDepo';
+import { BELGE_TURLERI, belgeGecerli, finansGunu, gecerliGun } from '../../../lib/finans';
+import { gonderilecek, odemeEtiketi, onayliSatis, yTarih } from '../../../lib/yonetimRapor';
+import { gonderildi, iadeEdildi, iptalEdilebilir } from '../../../lib/siparisAkisi';
+import { siparisKargoBaglantisi } from '../../../lib/kargoTakip';
 import { formatTL } from '../../../lib/fiyat';
-import { SIPARIS_DURUMLARI, SIPARIS_DURUM_ADLARI } from '../../../lib/sema';
+import type { Siparis } from '../../../lib/sema';
 
-const filtre = Astro.url.searchParams.get('durum') ?? '';
-const tum = await siparisleriOku();
-const liste = filtre ? tum.filter((s) => s.durum === filtre) : tum;
-const tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+const q = (Astro.url.searchParams.get('q') ?? '').trim();
+const sira = Astro.url.searchParams.get('sira') ?? 'yeni';
+const bas = Astro.url.searchParams.get('baslangic') ?? '';
+const son = Astro.url.searchParams.get('bitis') ?? '';
+const aranan = q.toLocaleLowerCase('tr');
+const [tum, finans, { site }] = await Promise.all([siparisleriOku(), finansOku(), magazaOku()]);
+const gercek = tum.filter((s) => !s.paytr?.test);
+
+/* Barkod okuyucu / numara ile doğrudan açma ("AL" ve tire yazılmasa da bulunur) */
+const numara = (v: string) => { const m = /^(?:AL)?(\d{6})-?(\d{4})$/.exec(v.toUpperCase().replace(/[\s#]/g, '')); return m ? `AL${m[1]}-${m[2]}` : undefined; };
+if (Astro.url.searchParams.get('tara') === '1') {
+  const no = numara(q);
+  const secim = no && tum.find((s) => s.no === no);
+  if (secim) return Astro.redirect('/yonetim/siparisler/' + secim.no);
+}
+
+const belgesiVar = (no: string) => finans.belgeler.some((b) => b.siparisNo === no && belgeGecerli(b));
+const FILTRELER: [string, string, (s: Siparis) => boolean][] = [
+  ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr)],
+  ['odendi', 'Hazırlanacak', (s) => s.durum === 'odendi'],
+  ['hazirlaniyor', 'Kargoya verilecek', (s) => s.durum === 'hazirlaniyor'],
+  ['kargoda', 'Kargoda', (s) => s.durum === 'kargoda' && !iadeEdildi(s)],
+  ['belgesiz', 'Belgesi eksik', (s) => onayliSatis(s) && !belgesiVar(s.no)],
+  ['odeme-bekliyor', 'Ödeme bekleyen', (s) => s.durum === 'odeme-bekliyor'],
+  ['teslim-edildi', 'Teslim edilen', (s) => s.durum === 'teslim-edildi' && !iadeEdildi(s)],
+  ['iptal', 'İptal / İade', (s) => s.durum === 'iptal' || iadeEdildi(s)],
+  ['tumu', 'Tümü', () => true],
+];
+const filtre = FILTRELER.find(([id]) => id === Astro.url.searchParams.get('durum'))?.[0]
+  ?? (Astro.url.searchParams.get('durum') === 'gonderilecek' ? 'islem' : q ? 'tumu' : 'islem');
+const uygun = FILTRELER.find(([id]) => id === filtre)![2];
+const sayilar = Object.fromEntries(FILTRELER.map(([id, , f]) => [id, gercek.filter(f).length]));
+
+const liste = gercek.filter((s) => {
+  const gun = finansGunu(new Date(s.tarih));
+  if (!uygun(s) || (gecerliGun(bas) && gun < bas) || (gecerliGun(son) && gun > son)) return false;
+  const rakam = aranan.replace(/\D/g, '');
+  return !aranan || [s.no, s.musteri.ad + ' ' + s.musteri.soyad, s.musteri.tel, s.kargoTakip ?? '']
+    .some((x) => x.toLocaleLowerCase('tr').includes(aranan) || (rakam.length >= 4 && x.replace(/\D/g, '').includes(rakam)));
+}).sort((a, b) => sira === 'tutar' ? b.toplam - a.toplam : sira === 'eski' ? Date.parse(a.tarih) - Date.parse(b.tarih) : Date.parse(b.tarih) - Date.parse(a.tarih));
+
+function odemeChip(s: Siparis) {
+  const renk = s.paytr ? (s.paytr.sonuc === 'odendi' ? 'yesil' : s.paytr.sonuc === 'basarisiz' ? 'kirmizi' : 'turuncu')
+    : s.durum === 'iptal' ? 'gri' : s.durum === 'odeme-bekliyor' ? 'turuncu' : 'yesil';
+  return { yazi: odemeEtiketi(s), renk };
+}
+function kargoChip(s: Siparis) {
+  if (iadeEdildi(s)) return { yazi: 'İade edildi', renk: 'gri' };
+  if (s.durum === 'iptal') return { yazi: s.kargoTakip ? 'İptal · takip var!' : 'İptal', renk: s.kargoTakip ? 'kirmizi' : 'gri' };
+  if (s.durum === 'kargoda') return { yazi: 'Kargoda', renk: 'yesil' };
+  if (s.durum === 'teslim-edildi') return { yazi: 'Teslim edildi', renk: 'yesil' };
+  if (s.durum === 'hazirlaniyor') return { yazi: 'Kargoya verilecek', renk: 'turuncu' };
+  if (s.durum === 'odendi') return { yazi: 'Hazırlanacak', renk: 'turuncu' };
+  return { yazi: '—', renk: 'gri' };
+}
+function belgeChip(s: Siparis) {
+  const b = finans.belgeler.filter((d) => d.siparisNo === s.no);
+  if (b.some((d) => d.durum === 'hata')) return { yazi: 'Hata', renk: 'kirmizi' };
+  const gecerli = b.filter(belgeGecerli);
+  if (gecerli.length) return { yazi: gecerli.some((d) => d.durum === 'gonderildi') ? 'Gönderildi' : 'Düzenlendi', renk: 'yesil', baslik: gecerli.map((d) => (d.belgeNo ?? '') + ' ' + BELGE_TURLERI[d.tur]).join(', ') };
+  return onayliSatis(s) ? { yazi: 'Hazırlanmadı', renk: 'turuncu' } : { yazi: '—', renk: 'gri' };
+}
+const filtreAdresi = (id: string) => '?' + new URLSearchParams({ durum: id, ...(q ? { q } : {}), ...(bas ? { baslangic: bas } : {}), ...(son ? { bitis: son } : {}), ...(sira !== 'yeni' ? { sira } : {}) });
+const tarihAcik = !!(bas || son);
+const tarihsizAdres = '?' + new URLSearchParams({ durum: filtre, ...(q ? { q } : {}), ...(sira !== 'yeni' ? { sira } : {}) });
 ---
-<Yonetim baslik="Siparişler" aktif="siparisler">
-  <div class="y-secimler" style="margin-bottom:14px">
-    <a class="y-secim" href="/yonetim/siparisler" style={!filtre ? 'border-color:var(--ink)' : undefined}>Tümü ({tum.length})</a>
-    {SIPARIS_DURUMLARI.map((d) => {
-      const n = tum.filter((s) => s.durum === d).length;
-      return <a class="y-secim" href={`/yonetim/siparisler?durum=${d}`} style={filtre === d ? 'border-color:var(--ink)' : undefined}>{SIPARIS_DURUM_ADLARI[d]} ({n})</a>;
-    })}
-  </div>
-  {liste.length === 0 ? <div class="y-kart"><p class="muted">Bu filtrede sipariş yok.</p></div> : (
-    <div class="y-liste">
-      {liste.map((s) => (
-        <a class="y-satir" href={`/yonetim/siparisler/${s.no}`} style="grid-template-columns:1fr auto;text-decoration:none">
-          <div>
-            <span class="y-satir__ad">{s.no} · {s.musteri.ad} {s.musteri.soyad}</span>
-            <div class="y-satir__meta">
-              <span class:list={['y-durum', `y-durum--${s.durum}`]}>{SIPARIS_DURUM_ADLARI[s.durum]}</span>
-              <span>{tarih.format(new Date(s.tarih))}</span>
-              <span>{s.teslimat.il}</span>
-              <span>{s.kalemler.reduce((t, x) => t + x.adet, 0)} ürün</span>
-            </div>
-          </div>
-          <strong>{formatTL(s.toplam)}</strong>
-        </a>
-      ))}
+<Yonetim baslik="Siparişler" aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}>
+  <button slot="ust-sag" type="button" class="btn btn--cizgi" data-y-dialog="barkod-oku"><Ikon ad="buyutec" boyut={16} />Numarayla / barkodla aç</button>
+
+  <dialog class="y-modal" id="barkod-oku" data-hata-ac={Astro.url.searchParams.get('tara') === '1' ? '1' : undefined} aria-labelledby="barkod-baslik">
+    <div class="y-modal__bas"><strong id="barkod-baslik">Siparişi aç</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+    <form method="get" class="y-izgara">
+      <input type="hidden" name="tara" value="1" />
+      <label class="y-alan">Barkodu okutun veya sipariş numarasını yazın
+        <input name="q" placeholder="AL261118-1234" required autocomplete="off" autocapitalize="characters" value={Astro.url.searchParams.get('tara') === '1' ? q : ''} />
+      </label>
+      {Astro.url.searchParams.get('tara') === '1' && <p class="y-uyari">“{q}” numaralı sipariş bulunamadı.</p>}
+      <p class="y-help">İpucu: Panelin herhangi bir sayfasında barkod okuyucuyla sipariş barkodunu okutmanız yeterli; sipariş kendiliğinden açılır.</p>
+      <button class="btn btn--sepet">Siparişi aç</button>
+    </form>
+  </dialog>
+
+  <nav class="y-filtreler" aria-label="Sipariş görünümleri">
+    {FILTRELER.map(([id, ad]) => <a href={filtreAdresi(id)} aria-current={filtre === id ? 'page' : undefined}>
+      {ad}{id !== 'tumu' && sayilar[id] > 0 && <b>{sayilar[id]}</b>}
+    </a>)}
+  </nav>
+
+  <form class="y-toolbar" method="get" data-filtre-form="siparis">
+    <input type="hidden" name="durum" value={filtre} />
+    <input class="y-girdi" name="q" type="search" value={q} placeholder="Sipariş no, müşteri, telefon veya takip no" aria-label="Sipariş ara" />
+    <select class="y-girdi" name="sira" aria-label="Sıralama"><option value="yeni" selected={sira === 'yeni'}>En yeni</option><option value="eski" selected={sira === 'eski'}>En eski</option><option value="tutar" selected={sira === 'tutar'}>En yüksek tutar</option></select>
+    <details class="y-tarih" open={tarihAcik}>
+      <summary class="btn btn--cizgi">{tarihAcik ? (bas || '…') + ' – ' + (son || '…') : 'Tarih'}</summary>
+      <div>
+        <label class="y-alan">Başlangıç<input name="baslangic" type="date" value={bas} /></label>
+        <label class="y-alan">Bitiş<input name="bitis" type="date" value={son} /></label>
+        {tarihAcik && <a class="y-link" href={tarihsizAdres}>Temizle</a>}
+      </div>
+    </details>
+    <button class="btn btn--cizgi" type="submit">Ara</button>
+  </form>
+
+  {liste.length ? <>
+    <div class="y-tablo-kap y-tablo-kap--kart">
+      <table class="y-tablo y-siparis-tablo">
+        <thead><tr>
+          <th class="y-sec"><input type="checkbox" data-y-tumu aria-label="Görünen siparişlerin tümünü seç" /></th>
+          <th>Sipariş No</th><th class="y-kanal">Kanal</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Ödeme</th><th>Kargo</th><th>Belge</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th>
+        </tr></thead>
+        <tbody>{liste.map((s) => {
+          const detay = '/yonetim/siparisler/' + s.no;
+          const o = odemeChip(s), k = kargoChip(s), b = belgeChip(s);
+          const takip = siparisKargoBaglantisi(s, site.kargo);
+          const hazirlanabilir = s.durum !== 'iptal' && !iadeEdildi(s);
+          return <tr data-satir={s.no}>
+            <td class="y-sec"><input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} /></td>
+            <td data-etiket="Sipariş" class="y-siparis-no">
+              <a class="y-link" href={detay}>{s.no}</a>
+              <button type="button" class="y-kopya" data-kopyala={s.no} title="Numarayı kopyala" aria-label={s.no + ' kopyala'}><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
+              <small class="y-table-note">{yTarih.format(new Date(s.tarih))}</small>
+            </td>
+            <td data-etiket="Kanal" class="y-kanal">Web</td>
+            <td data-etiket="Müşteri">{s.musteri.ad} {s.musteri.soyad}<small class="y-table-note">{s.teslimat.ilce} / {s.teslimat.il}</small></td>
+            <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{formatTL(s.toplam)}</strong></td>
+            <td data-etiket="Ödeme"><span class:list={['y-chip', 'y-chip--' + o.renk]}>{o.yazi}</span></td>
+            <td data-etiket="Kargo"><span class:list={['y-chip', 'y-chip--' + k.renk]}>{k.yazi}</span></td>
+            <td data-etiket="Belge"><span class:list={['y-chip', 'y-chip--' + b.renk]} title={b.baslik}>{b.yazi}</span></td>
+            <td class="y-sayi y-islem">
+              <details class="y-row-menu y-row-menu--sag"><summary aria-label={s.no + ' işlemleri'}>•••</summary>
+                <div>
+                  <a href={detay}>Detayı aç</a>
+                  {onayliSatis(s) && <form method="post" action="/yonetim/finans/belge">
+                    <input type="hidden" name="islem" value="olustur" /><input type="hidden" name="tur" value="ozet" /><input type="hidden" name="no" value={s.no} />
+                    <input type="hidden" name="geri" value={Astro.url.pathname + Astro.url.search} />
+                    <button type="submit">Sipariş özeti PDF indir</button>
+                  </form>}
+                  {hazirlanabilir && <a href={'/yonetim/finans/etiket?no=' + encodeURIComponent(s.no)} target="_blank" rel="noopener">Hazırlık etiketi yazdır ↗</a>}
+                  <a href={detay + '#belgeler'}>Belge durumunu gör</a>
+                  <a href={detay + '#kargo'}>Kargoyu yönet</a>
+                  {takip && <a href={takip.url} target="_blank" rel="noopener">Kargo takibini aç ↗</a>}
+                  {(iptalEdilebilir(s) || (gonderildi(s) && !iadeEdildi(s))) && <a href={detay + (iptalEdilebilir(s) ? '#iptal' : '#iade')}>İade / iptal işlemi</a>}
+                </div>
+              </details>
+            </td>
+          </tr>;
+        })}</tbody>
+      </table>
     </div>
-  )}
+    <p class="y-help">{liste.length} sipariş · Toplu işlem için soldaki kutuları işaretleyin (en fazla 30).</p>
+
+    <div class="y-toplu" data-y-toplu hidden role="region" aria-label="Toplu işlemler">
+      <strong data-y-secim>0 seçili</strong>
+      <label class="y-toplu__tur">Belge
+        <select data-y-toplu-tur aria-label="Toplu belge türü">{Object.entries(BELGE_TURLERI).map(([id, ad]) => <option value={id}>{ad}</option>)}</select>
+      </label>
+      <button class="btn btn--sepet" type="button" data-y-toplu-eylem="belge">PDF / ZIP indir</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="a4">Etiket A4</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="etiket">Etiket 10×15</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="toplama">Toplama listesi</button>
+      <button class="y-icon-button" type="button" data-y-toplu-temizle aria-label="Seçimi temizle"><Ikon ad="kapat" boyut={16} /></button>
+    </div>
+  </> : <div class="y-kart y-bos">
+    <p><strong>{q ? '“' + q + '” için sipariş bulunamadı.' : filtre === 'islem' ? 'Bekleyen iş yok.' : 'Bu görünümde sipariş yok.'}</strong></p>
+    {filtre !== 'tumu' && <a class="y-link" href="?durum=tumu">Tüm siparişleri göster</a>}
+  </div>}
 </Yonetim>

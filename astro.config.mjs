@@ -1,13 +1,29 @@
 // @ts-check
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
+import vercel from '@astrojs/vercel';
+
+const SITE = 'https://alluluhome.com'; // gerçek alan adı (değişirse burayı ve paneldeki "Site Adresi"ni değiştirin)
+const ALAN = new URL(SITE).hostname.replace(/^www\./, '');
+const VERCEL_ORTAMI = Boolean(process.env.VERCEL);
 
 export default defineConfig({
-  site: 'https://allulu.com.tr', // DOĞRULA: gerçek alan adı
+  site: SITE,
   output: 'server',              // sayfalar her istekte güncel veriyle üretilir (panel değişiklikleri anında yansır)
-  adapter: node({ mode: 'standalone' }),
+  adapter: VERCEL_ORTAMI ? vercel() : node({ mode: 'standalone' }),
   trailingSlash: 'never',
   prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
-  security: { checkOrigin: true }, // başka sitelerden form gönderimini engeller (CSRF)
+  security: {
+    checkOrigin: false, // src/middleware.ts aynı origin'i zorunlu tutar; PayTR bildirimi kendi imzasıyla doğrulanır
+    // ZORUNLU: Astro 5.14+ bu liste olmadan canlı sunucuda adresi "localhost" sayar.
+    // O zaman sipariş, ödeme ve panel formları 403 verir, e-postalardaki bağlantılar localhost olur.
+    allowedDomains: [
+      { protocol: 'https', hostname: ALAN },
+      { protocol: 'https', hostname: `www.${ALAN}` },
+      { protocol: 'https', hostname: '**.vercel.app' },
+      { protocol: 'http', hostname: 'localhost' },  // yerelde `npm run preview` / test
+      { protocol: 'http', hostname: '127.0.0.1' },
+    ],
+  },
   devToolbar: { enabled: false },
 });

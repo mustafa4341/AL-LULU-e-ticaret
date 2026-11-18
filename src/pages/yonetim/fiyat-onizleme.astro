@@ -5,7 +5,7 @@ import Fiyat from '../../components/Fiyat.astro';
 import Ikon from '../../components/Ikon.astro';
 import type { FiyatBilgisi } from '../../lib/katalog';
 
-const indirimli: FiyatBilgisi = { fiyat: 12999, onceki: 14999, yuzde: 13, enDusuk: true, enDusukGun: 30 };
+const indirimli: FiyatBilgisi = { fiyat: 12999, onceki: 13999, yuzde: 7, enDusuk: true, enDusukGun: 30 };
 const normal: FiyatBilgisi = { fiyat: 12999, enDusuk: false, enDusukGun: 30 };
 const secili = Astro.locals.katalog.site.fiyatSunumu;
 const SECENEKLER = [
@@ -15,7 +15,7 @@ const SECENEKLER = [
 ] as const;
 ---
 <Yonetim baslik="Fiyat sunumu önizleme" aktif="ayarlar">
-  <p class="y-aciklama" style="margin-bottom:14px">Aşağıdaki rakamlar <strong>yalnızca örnektir</strong> (14.999 → 12.999 TL). Sitede üstü çizili fiyat yalnızca ürün en az 30 gün gerçekten daha yüksek fiyattan satıldıysa çıkar. Şu an seçili: <strong>{SECENEKLER.find((s) => s.id === secili)?.ad}</strong> · <a href="/yonetim/ayarlar">Ayarlardan değiştir</a></p>
+  <p class="y-aciklama" style="margin-bottom:14px">Aşağıdaki rakamlar <strong>yalnızca örnektir</strong> (13.999 → 12.999 TL). Sitede üstü çizili fiyat yalnızca ürün en az 30 gün gerçekten daha yüksek fiyattan satıldıysa çıkar. Şu an seçili: <strong>{SECENEKLER.find((s) => s.id === secili)?.ad}</strong> · <a href="/yonetim/ayarlar">Ayarlardan değiştir</a></p>
   <div class="y-izgara y-izgara--3">
     {SECENEKLER.map((s) => (
       <section class="y-kart" style={s.id === secili ? 'border-color:var(--ink);box-shadow:0 0 0 2px var(--ink)' : undefined}>

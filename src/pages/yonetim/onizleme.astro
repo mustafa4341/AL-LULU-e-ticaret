@@ -1,0 +1,64 @@
+---
+import AnaSayfa from '../../components/AnaSayfa.astro';
+import BakimSayfasi from '../../components/BakimSayfasi.astro';
+import SetKarti from '../../components/SetKarti.astro';
+import UrunSayfasi from '../../components/UrunSayfasi.astro';
+import Base from '../../layouts/Base.astro';
+import { satisAdetleri } from '../../lib/depo';
+import { istegeBagli, liste, metin, sayi, evet } from '../../lib/form';
+import { Katalog } from '../../lib/katalog';
+import { fiyatUygula } from '../../lib/urunIslem';
+import { BOS_SET, setFormu } from '../../lib/yonetimSet';
+import { SITE_SEKMELERI, siteFormu } from '../../lib/yonetimSite';
+import { BOS_URUN, urunFormu, urunGorselleri } from '../../lib/yonetimUrun';
+import type { Urun, UrunSeti } from '../../lib/sema';
+
+if (Astro.request.method !== 'POST') return new Response(null, { status: 405, headers: { Allow: 'POST' } });
+const f = await Astro.request.formData();
+const m = structuredClone(Astro.locals.katalog.magaza);
+const tur = metin(f, '_tur');
+const id = metin(f, '_id');
+const bolum = metin(f, 'aktifBolum');
+const satislar = await satisAdetleri();
+const bloblar = liste(f, '_gorsel').filter((s) => {
+  const url = URL.parse(s);
+  return url?.protocol === 'blob:' && url.origin === Astro.url.origin;
+}).slice(0, 24);
+let urun: Urun | undefined;
+let set: UrunSeti | undefined;
+let not = '';
+if (tur === 'urun') {
+  const mevcut = m.urunler.find((u) => u.id === id);
+  const temel = mevcut ?? structuredClone(BOS_URUN);
+  urun = urunFormu(f, temel);
+  urun.id = mevcut?.id ?? 'yeni-urun';
+  urun.ad ||= 'Ürün adı';
+  urun.kisaAd ||= urun.ad;
+  urun.gorseller = urunGorselleri(f, temel, bloblar.map((src) => ({ src, alt: urun!.ad })));
+  fiyatUygula(urun, Math.max(0, sayi(f, 'fiyat')), evet(f, 'kampanya'), istegeBagli(f, 'kampanya_etiket'), sayi(f, 'onceki_fiyat'));
+  m.urunler = [...m.urunler.filter((u) => u.id !== urun?.id), urun];
+  if (urun.durum !== 'yayinda') not = urun.durum === 'taslak' ? 'Taslak · müşterilere görünmez' : 'Gizli · müşterilere görünmez';
+} else if (tur === 'set') {
+  set = setFormu(f, m.setler.find((s) => s.id === id) ?? BOS_SET, bloblar[0]);
+  set.ad ||= 'Set adı';
+  const engeller = new Katalog(m).setEngelleri(set);
+  if (set.durum !== 'yayinda') not = 'Set müşterilere görünmez.';
+  if (engeller.length) not = [not, ...engeller].filter(Boolean).join(' ');
+} else if (tur === 'site') {
+  siteFormu(f, m, SITE_SEKMELERI.map(([id]) => id), true);
+  if (bolum === 'kargo' || bolum === 'duyuru') {
+    urun = m.urunler.find((u) => u.id === m.anaSayfa.hero.urunId && u.durum === 'yayinda')
+      ?? m.urunler.find((u) => u.durum === 'yayinda');
+  }
+} else {
+  return new Response(null, { status: 404 });
+}
+Astro.locals.katalog = new Katalog(m, satislar);
+Astro.locals.vitrinOnizleme = true;
+Astro.response.headers.set('X-Preview-Note', encodeURIComponent(not));
+---
+{urun ? <UrunSayfasi urun={urun} /> : set ? (
+  <Base baslik={set.ad} aciklama={set.aciklama} aktif="setler">
+    <div class="container"><div class="set-grid"><SetKarti set={set} /></div></div>
+  </Base>
+) : bolum === 'tadilat' ? <BakimSayfasi /> : <AnaSayfa />}

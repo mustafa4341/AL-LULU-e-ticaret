@@ -5,11 +5,20 @@ interface Props {
   etiket: string;
   bitis?: string;
   boyut?: 'kucuk' | 'buyuk';
+  stil?: 'firsat' | 'flas' | 'ozel';
 }
-const { etiket, bitis, boyut = 'buyuk' } = Astro.props;
+const { etiket, bitis, boyut = 'buyuk', stil = 'firsat' } = Astro.props;
 ---
-<span class:list={['firsat-cip', `firsat-cip--${boyut}`]} data-firsat-sayac={bitis}>
+<span class:list={['firsat-cip', `firsat-cip--${boyut}`, `firsat-cip--${stil}`]} data-firsat-sayac={bitis}>
   <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z" /></svg>
   <span>{etiket}</span>
   {bitis && <span class="firsat-cip__sure" data-firsat-sure aria-label="Kalan süre">--:--:--</span>}
 </span>
+<style>
+  .firsat-cip--flas { background: #a92837; color: #fff; border-color: #a92837; }
+  .firsat-cip--ozel { background: #f6ead4; color: #5c4118; border-color: #e3cb9d; }
+  @media (prefers-reduced-motion: no-preference) {
+    .firsat-cip--flas[data-firsat-sayac] svg { animation: flas 1.4s ease-in-out 3; }
+    @keyframes flas { 50% { transform: scale(1.19); opacity: .7; } }
+  }
+</style>

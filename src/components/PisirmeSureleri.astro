@@ -15,6 +15,7 @@ const { urun } = Astro.props;
         <p>Örnek pişirme süreleri · ayrıntı için karta dokunun</p>
       </div>
     </div>
+    {urun.pisirme.length > 2 && <p class="pisirme-kaydir" aria-hidden="true">{urun.pisirme.length} yemek · yana kaydırın <Ikon ad="sag" boyut={14} /></p>}
     <ul class="pisirme-ray">
       {urun.pisirme.map((p, i) => (
         <li>

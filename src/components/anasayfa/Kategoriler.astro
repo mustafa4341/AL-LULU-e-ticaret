@@ -2,9 +2,13 @@
 import Ikon from '../Ikon.astro';
 const k = Astro.locals.katalog;
 const kategoriler = k.gorunurKategoriler({ anaSayfa: true });
+/* Ürünü olan kategori sayısı 2'den azsa bölüm ana sayfada gösterilmez: altı kutunun beşinde "Yakında"
+   yazması mağazayı yarım gösteriyordu. Kategoriler menüde kalır; yeni ürün eklenince bölüm kendiliğinden açılır. */
+const doluKategori = kategoriler.filter((kat) => k.kategoriUrunleri(kat.id).length > 0).length;
 ---
-{kategoriler.length > 0 && (
-  <section class="bolum" aria-labelledby="kat-baslik">
+<!-- Telefonda gizli: alttaki menüde "Kategoriler" butonu aynı işi görüyor (bkz. global.css .kategori-bolum) -->
+{doluKategori >= 2 && (
+  <section class="bolum kategori-bolum" aria-labelledby="kat-baslik">
     <div class="container">
       <div class="bolum-bas">
         <div><p class="eyebrow eyebrow--altin">Kategoriler</p><h2 id="kat-baslik">Ne arıyorsunuz?</h2></div>

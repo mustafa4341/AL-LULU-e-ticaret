@@ -31,16 +31,24 @@ if (!sepetKalemleri().length) {
 
 function baslat(): void {
   /* ---------- Özet ---------- */
+  const sepeteDon = () => { if (sepetOzeti().satirlar.length) location.reload(); };
+  let gonderiliyor = false;
   const ciz = () => {
     const o = sepetOzeti();
-    if (!o.satirlar.length) { bosSepet(); return; }
+    if (!o.satirlar.length) {
+      document.removeEventListener(DEGISTI, ciz);
+      bosSepet();
+      document.addEventListener(DEGISTI, sepeteDon);
+      return false;
+    }
     $('[data-ozet-kalemler]')!.innerHTML = o.satirlar.map((s) => satirHtml(s)).join('');
     $('[data-ozet-toplamlar]')!.innerHTML = toplamlarHtml(o);
     $('[data-ozet-toplam]')!.textContent = formatTL(o.toplam);
     const taban = $<HTMLElement>('[data-gonder]')?.dataset.gonderTaban || 'Siparişi Tamamla';
-    $('[data-gonder-etiket]')!.textContent = `${taban} · ${formatTL(o.toplam)}`;
+    $('[data-gonder-etiket]')!.textContent = taban; // tutar butonda değil, özette (indirimle birlikte) görünür
+    return true;
   };
-  ciz();
+  if (!ciz()) return;
   document.addEventListener(DEGISTI, ciz);
   $('[data-ozet-kalemler]')!.addEventListener('click', (e) => {
     const b = (e.target as Element).closest<HTMLElement>('[data-kalem-arti], [data-kalem-eksi]');
@@ -48,7 +56,7 @@ function baslat(): void {
     e.stopPropagation();
     const [tip, ...p] = (b.dataset.kalemArti || b.dataset.kalemEksi)!.split(':');
     const k = sepetKalemleri().find((x) => x.tip === tip && x.id === p.join(':'));
-    if (k) adetAyarla(k.tip, k.id, k.adet + (b.hasAttribute('data-kalem-arti') ? 1 : -1));
+    if (k && !gonderiliyor) adetAyarla(k.tip, k.id, k.adet + (b.hasAttribute('data-kalem-arti') ? 1 : -1));
   }, true);
   const ac = $('[data-ozet-ac]')!, ozet = $('[data-ozet]')!;
   ac.addEventListener('click', () => {
@@ -121,7 +129,6 @@ function baslat(): void {
   pencere.addEventListener('click', (e) => { if (e.target === pencere) pencere.close(); });
 
   /* ---------- Gönderim ---------- */
-  let gonderiliyor = false;
   const hataKutu = $('[data-hata-ozeti]')!;
   const btn = $<HTMLButtonElement>('[data-gonder]')!;
   const hataGoster = (m: string) => { hataKutu.innerHTML = `<strong>${esc(m)}</strong>`; hataKutu.classList.add('is-visible'); hataKutu.focus(); hataKutu.scrollIntoView({ block: 'center', behavior: 'smooth' }); };
@@ -144,6 +151,7 @@ function baslat(): void {
     btn.classList.add('is-yukleniyor');
     $('[data-gonder-etiket]')!.textContent = 'Sipariş oluşturuluyor…';
     const o = sepetOzeti();
+    const sepet = localStorage.getItem('allulu_sepet_v2');
     const kurumsal = (form.elements.namedItem('fatura_tipi') as RadioNodeList).value === 'kurumsal';
     try {
       const yanit = await fetch('/api/siparis', {
@@ -169,7 +177,29 @@ function baslat(): void {
         throw new Error('red');
       }
       track('purchase_intent', { transaction_id: veri.no, value: veri.toplam, currency: 'TRY' });
-      location.href = `/siparis/${veri.no}?t=${veri.token}&yeni`;
+      const takip = `/siparis/${encodeURIComponent(veri.no)}?t=${encodeURIComponent(veri.token)}&yeni`;
+      if (veri.odemeUrl) {
+        const url = new URL(veri.odemeUrl);
+        if (url.origin !== 'https://www.paytr.com' || !/^\/odeme\/guvenli\/[a-zA-Z0-9_-]+$/.test(url.pathname)) {
+          hataGoster('Ödeme ekranı açılamadı. Lütfen tekrar deneyin.');
+          throw new Error('red');
+        }
+        try {
+          sessionStorage.setItem('allulu_paytr_takip', JSON.stringify({
+            ref: veri.odemeRef, no: veri.no, token: veri.token, sepet,
+          }));
+        } catch { /* Sipariş takip bağlantısı ekranda da bulunur. */ }
+        $<HTMLIFrameElement>('[data-paytr-form]')!.src = url.href;
+        $<HTMLAnchorElement>('[data-paytr-takip]')!.href = takip;
+        form.hidden = true;
+        const ekran = $('[data-paytr-ekran]')!;
+        ekran.hidden = false;
+        document.removeEventListener(DEGISTI, ciz);
+        $('[data-paytr-baslik]')!.focus();
+        ekran.scrollIntoView({ block: 'start' });
+        return;
+      }
+      location.href = takip;
     } catch (err) {
       if ((err as Error).message !== 'red') hataGoster('Bağlantı hatası. İnternetinizi kontrol edip tekrar deneyin.');
       gonderiliyor = false;

@@ -342,3 +342,43 @@ R1 13.000 öneriyor; biz marketplace fiyatları nedeniyle 12.999 seçtik. R1'in 
 | Arka plan sıcaklığı | `--bg` #F7F5F0 (hafif krem). |
 
 Bilerek uygulanmayanlar: buton sırası (kullanıcının istediği Trendyol düzeni korunuyor), alt menünün tamamen kaldırılması (çok kategorili mağaza), indirim fiyatı (gerçek 30 günlük fiyat geçmişi olmadan üstü çizili fiyat gösterilmez).
+
+---
+
+## v3.5 — 20 ekranlık dış incelemeye göre yapılanlar (18.11.2026)
+
+| İnceleme maddesi | Durum |
+|---|---|
+| Ödeme bağlı değilken "Siparişiniz alındı!" deniyor | **Düzeltildi.** Ödeme alınmamış siparişte saat ikonu + "Sipariş kaydınız oluşturuldu · Ödeme henüz alınmadı". Yeşil tik ve "Siparişiniz onaylandı" yalnız ödenmiş siparişte. |
+| Ödeme sayfasında 3D Secure anlatılıyor, buton "Siparişi Tamamla" | **Düzeltildi.** Ödeme bağlı değilken buton "Sipariş Kaydı Oluştur", kutuda "Online ödeme henüz devrede değil; kartınızdan ücret alınmaz". Bağlanınca `src/lib/altyapi.ts` → `ODEME_BAGLI = true` yapılır, eski metinler ("Ödemeye Geç", 3D Secure) kendiliğinden döner. |
+| SMS/e-posta vaadi (altyapı yok) | **Düzeltildi.** Ödeme formu, sipariş sonucu, sipariş takip, ana sayfa "Neden biz", ürün sayfası güvenceleri: SMS sağlayıcı ve SMTP bağlanmadan söz verilmiyor (`SMS_BAGLI`, `.env` SMTP_HOST). Yasal metinlerdeki SMS ifadeleri diğer oturumun alanında. |
+| Ana sayfa: kesikli çember, tıklanabilir görünmüyor | **Yenilendi.** Krem zeminli büyük görsel alanı (telefonda 252 px), görselin tamamı ürün sayfasına gider, sağ altta "Ürünü incele ›" hapı, sol üstte "Öne çıkan ürün" (gerçek satış verisi varsa "En Çok Satan"), butonların altında "Ürünü incele · Fotoğraflar, pişirme süreleri, teknik özellikler" satırı. Butonlar telefonda hâlâ ilk ekranda. |
+| 13.999 → 12.999 %7 indirim gösterilmeli | **Gösterilmedi (bilerek).** Fiyat geçmişinde 13.999 hiç yok; Haksız Ticari Uygulamalar Yönetmeliği'ne göre eski fiyat son 30 günün en düşük uygulanan fiyatı olmalı. Gerçek indirim oluştuğunda artık her yerde tutarlı görünür: ana sayfa görselinde ve ürün galerisinde "%X İndirim" rozeti, kartta rozet, fiyat kutusunda üstü çizili fiyat, sepette üstü çizili satır + "Bu siparişte X TL avantaj". |
+| "Çok Satan" mı "2 Yıl Garanti" mi | "En Çok Satan" yalnız gerçek satıştan (eşik: panel). Yoksa "Öne çıkan ürün". Garanti küçük güven işareti olarak kaldı. |
+| Tek ürün kartı ekranın yarısında | **Düzeltildi.** Tek ürün varken tam genişlik yatay kart, "Tümünü gör" gizli. |
+| Kategorilerin çoğu "Yakında" | **Düzeltildi.** Ürünü olan kategori 2'den azsa ana sayfada kategori bölümü gizli (menüde duruyor; ikinci kategoriye ürün eklenince kendiliğinden açılır). |
+| Aynı gün / yarın kargo çelişkisi | Hesap doğruydu (14:00 sonrası yarın). Metin netleşti: "Bugünkü kargo 14:00'te çıktı. Şimdi sipariş verirsen Yarın kargoda" / hafta sonu "Hafta sonu kargo çıkmıyor". Ürün şeridi "Hafta içi 14:00'e kadar". Panel → duyurulardaki "14:00'e kadar…" metnine "Hafta içi" eklenmesi önerilir. |
+| Galeride 1/3, diğer fotoğraflar belirsiz | Telefonda noktalar yerine küçük resimler. |
+| Pişirme kartları yana kaydırılabilir mi belli değil | "9 yemek · yana kaydırın ›" ipucu. |
+| Teknik tablo uzun | İlk 6 satır açık, kalanı "Tüm teknik özellikler (+4)". |
+| Boş yorum alanı büyük | Tek satırlık not. |
+| Sepet "Sepeti Onayla" | "Ödemeye Geç". |
+| Sipariş özetinde ad/fiyat dağınık | Fiyat sağda tek satır; telefon 05xx xxx xx xx biçiminde. |
+| Footer'da telefon/e-posta kelime ortasından bölünüyor | İletişim sütunu telefonda tam genişlik, kelime ortasından bölme yok. |
+
+**Bilerek değiştirilmeyenler:**
+- **"Hemen Satın Al" ana buton önerisi:** Senin seçtiğin Trendyol düzeni (Sepete Ekle dolu turuncu) korunuyor.
+- **Footer'daki [Ticari Unvan], [Açık adres], [ETBİS] yer tutucuları:** Gerçek bilgiler sende; yasal sayfalar paralel oturumda düzenleniyor. Canlıya çıkmadan Panel → Ayarlar'dan doldurulmalı.
+- **İl/ilçe:** İl zaten seçmeli; ilçe listesi (973 ilçe) henüz eklenmedi.
+- **Sipariş takibi güvenliği:** Zaten korumalı: sipariş sayfası 128 bit gizli anahtarla açılıyor, numara+telefon araması IP başına 10 dakikada 10 deneme ile sınırlı.
+
+### v3.5.1 — Öne çıkan özellikler ve indirim görünümü (18.11.2026)
+- Ürün sayfasındaki 4 gri kutu (6 L · Ø 22 cm, 2 pişirme kademesi…) yerine, fiyatın hemen altında **renkli ikonlu fayda listesi**: "%70'e kadar daha hızlı pişirir*", "2 pişirme kademesi: sebzeye hassas, ete hızlı", "İndüksiyon dahil tüm ocaklarda çalışır", "Almanya'da üretim, 18/10 paslanmaz çelik". Aynı stil ana sayfadaki 3 maddede de var. Maddeler panelden (ürün → Öne çıkan bilgiler) düzenlenir; ikon rengi seçilen ikona göre otomatik. Eski hâli `veri/yedekler/` içinde.
+- Gerçek indirimde fiyat: kırmızı "↘ %7 İndirim" rozeti (düşüş ikonu), üstü çizili eski fiyat, kırmızı yeni fiyat, yeşil "1.000 TL daha az ödüyorsunuz". Panel → Ayarlar → fiyat önizlemesi artık 13.999 → 12.999 örneğiyle gösteriyor.
+- **Uygulanmayan:** Satış verisi olmadan "Çok Satan" rozeti ve fiyat geçmişine yazılmış sahte 13.999 TL. İkisi de gerçek olduğunda sistem kendiliğinden gösterir.
+
+### v3.5.2 — Çok Satan ve 13.999 → 12.999 indirimi (18.11.2026)
+- **En Çok Satan:** Panel → Ürün → "En Çok Satan rozeti" kutusu eklendi (yeni alan `cokSatan`). Mağaza sahibi, ürünün başka kanallarda gerçekten satıldığını belirttiği için Vitaquick'te açıldı. Rozet ana sayfa görselinde, ürün sayfasında ve kartta görünür.
+- **İndirim:** Mağaza sahibi, ürünü son 30 gün içinde 13.999 TL'den sattığını ve daha ucuza satmadığını beyan etti. Fiyat geçmişine "17.10.2026'dan beri 13.999 TL → 18.11.2026'da 12.999 TL" olarak işlendi ve kampanya açıldı. Önceki fiyat yine sistemin 30 gün kuralıyla hesaplanıyor. Geliştirme sırasında sitede (henüz yayında değilken) girilen 12.999 kaydı geçmişten çıkarıldı. Önceki veri `veri/yedekler/` içinde.
+- **Saklanması gerekenler:** 13.999 TL'lik satışların fatura ve sipariş kayıtları. Bir şikâyette indirimin gerçek olduğunu bunlar kanıtlar. Ürünün iç notlarına (`dogrula`) da yazıldı.
+- 30 gün dolmadan fiyat yükseltilip yeniden düşürülürse sistem yeni indirimi göstermez (kural korunuyor).

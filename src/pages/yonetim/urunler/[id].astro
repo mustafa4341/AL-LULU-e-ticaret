@@ -1,71 +1,29 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
 import Ikon from '../../../components/Ikon.astro';
-import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku } from '../../../lib/depo';
+import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
-import { benzersizKod, ciftler, evet, istegeBagli, liste, metin, satirlar, sayi } from '../../../lib/form';
-import { fiyatUygula } from '../../../lib/urunIslem';
+import { benzersizKod, evet, istegeBagli, liste, metin, sayi } from '../../../lib/form';
+import { fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
 import { Katalog } from '../../../lib/katalog';
-import { DurumSema, IkonSema, type IkonAdi, type Urun } from '../../../lib/sema';
+import type { IkonAdi, Urun } from '../../../lib/sema';
+import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri } from '../../../lib/yonetimUrun';
+import Onizleme from '../../../components/yonetim/Onizleme.astro';
+import Sekmeler from '../../../components/yonetim/Sekmeler.astro';
 
-const IKON_SECENEK: [IkonAdi, string][] = [['tencere', 'Tencere'], ['duduklu', 'Düdüklü'], ['tava', 'Tava'], ['ates', 'Ocak / ateş'], ['gosterge', 'Gösterge'], ['konum', 'Konum / üretim'], ['kalkan', 'Kalkan / güven'], ['kutu', 'Kutu'], ['kasik', 'Kaşık / çatal'], ['kase', 'Kase'], ['saat', 'Saat'], ['yildiz', 'Yıldız'], ['hediye', 'Hediye'], ['kargo', 'Kargo'], ['belge', 'Belge / garanti'], ['etiket', 'Etiket']];
+const IKON_SECENEK: [IkonAdi, string][] = [
+  ['tencere', 'Tencere'], ['duduklu', 'Düdüklü'], ['tava', 'Tava'], ['ates', 'Ocak / ateş'],
+  ['gosterge', 'Gösterge'], ['konum', 'Konum / üretim'], ['kalkan', 'Kalkan / güven'], ['kutu', 'Kutu'],
+  ['kasik', 'Kaşık / çatal'], ['kase', 'Kase'], ['saat', 'Saat'], ['yildiz', 'Yıldız'],
+  ['hediye', 'Hediye'], ['kargo', 'Kargo'], ['belge', 'Belge / garanti'], ['etiket', 'Etiket'],
+];
 const param = Astro.params.id ?? 'yeni';
 const yeni = param === 'yeni';
 let hatalar: string[] = [];
 const basari = Astro.url.searchParams.get('ok');
 let m = await magazaOku();
-const BOS: Urun = {
-  id: '', durum: 'taslak', marka: '', ad: '', kisaAd: '', kategoriler: [], fiyat: 0, fiyatGecmisi: [], kampanya: null,
-  sepetteIndirim: 0, firsat: null, stok: 0, maxAdet: 5, sku: '', gorseller: [], ozet: '', oneCikanBilgiler: [], rozetler: [],
-  faydalar: [], pisirme: [], teknik: [], kutuIcerigi: [], sss: [], birlikteIyiGider: [], oneCikan: false, oncelik: 0, dogrula: [],
-};
-let urun: Urun | undefined = yeni ? structuredClone(BOS) : m.urunler.find((u) => u.id === param);
+let urun: Urun | undefined = yeni ? structuredClone(BOS_URUN) : m.urunler.find((u) => u.id === param);
 if (!urun) return Astro.redirect('/yonetim/urunler');
-
-/* ---------------- Formdan ürüne ---------------- */
-function formdan(f: FormData, temel: Urun): Urun {
-  const ikonlu = ciftler(f, 'bilgi_ikon', 'bilgi_metin').map(([ikon, metin]) => ({ ikon: (IkonSema.safeParse(ikon).success ? ikon : 'kutu') as IkonAdi, metin }));
-  const d = DurumSema.safeParse(metin(f, 'durum'));
-  return {
-    ...temel,
-    durum: d.success ? d.data : temel.durum,
-    marka: metin(f, 'marka'), ad: metin(f, 'ad'), kisaAd: metin(f, 'kisaAd') || metin(f, 'ad'),
-    kategoriler: liste(f, 'kategoriler'),
-    sepetteIndirim: Math.min(50, Math.max(0, sayi(f, 'sepetteIndirim'))),
-    stok: Math.max(0, sayi(f, 'stok')), maxAdet: Math.max(1, sayi(f, 'maxAdet', 5)), sku: metin(f, 'sku'),
-    ozet: metin(f, 'ozet'), garanti: istegeBagli(f, 'garanti'), hediye: istegeBagli(f, 'hediye'),
-    rozetler: satirlar(f, 'rozetler'), oneCikan: evet(f, 'oneCikan'), oncelik: sayi(f, 'oncelik'),
-    oneCikanBilgiler: ikonlu.slice(0, 6),
-    faydalar: (() => {
-      const bas = liste(f, 'fayda_baslik'), met = liste(f, 'fayda_metin'), ik = liste(f, 'fayda_ikon'), kay = liste(f, 'fayda_kaynak');
-      return bas.map((b, i) => ({ baslik: b, metin: met[i] ?? '', ikon: (IkonSema.safeParse(ik[i]).success ? ik[i] : undefined) as IkonAdi | undefined, kaynak: kay[i] || undefined })).filter((x) => x.baslik && x.metin);
-    })(),
-    pisirme: (() => {
-      const y = liste(f, 'pis_yemek'), su = liste(f, 'pis_sure'), ka = liste(f, 'pis_kademe'), mi = liste(f, 'pis_miktar');
-      return y.map((yemek, i) => ({ yemek, sure: su[i] ?? '', kademe: ka[i] || undefined, miktar: mi[i] || undefined })).filter((x) => x.yemek && x.sure);
-    })(),
-    pisirmeNotu: istegeBagli(f, 'pisirmeNotu'),
-    teknik: ciftler(f, 'teknik_etiket', 'teknik_deger'),
-    kutuIcerigi: satirlar(f, 'kutuIcerigi'),
-    sss: ciftler(f, 'sss_soru', 'sss_cevap').map(([soru, cevap]) => ({ soru, cevap })),
-    birlikteIyiGider: liste(f, 'birlikte'),
-    dogrula: satirlar(f, 'dogrula'),
-    firsat: evet(f, 'firsat') ? { etiket: istegeBagli(f, 'firsat_etiket'), bitis: istanbuldanISO(metin(f, 'firsat_bitis')) } : null,
-  };
-}
-
-/** "2026-11-20T23:59" (Türkiye saati, UTC+3) → ISO */
-function istanbuldanISO(v: string): string | undefined {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(v)) return undefined;
-  const d = new Date(`${v}:00+03:00`);
-  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
-}
-/** ISO → datetime-local değeri (Türkiye saati) */
-function istanbulaYerel(iso?: string): string {
-  if (!iso) return '';
-  const d = new Date(Date.parse(iso) + 3 * 3600_000);
-  return d.toISOString().slice(0, 16);
-}
 
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
@@ -75,7 +33,7 @@ if (Astro.request.method === 'POST') {
       await magazaGuncelle((mm) => {
         const setler = mm.setler.filter((s) => s.kalemler.some((x) => x.urunId === param));
         if (setler.length) throw new DogrulamaHatasi([`Bu ürün şu setlerde kullanılıyor, önce setten çıkarın: ${setler.map((s) => s.ad).join(', ')}`]);
-        if (mm.anaSayfa.hero.urunId === param) throw new DogrulamaHatasi(['Bu ürün ana sayfada öne çıkan ürün. Önce Ayarlar → Ana sayfa’dan başka bir ürün seçin.']);
+        if (mm.anaSayfa.hero.urunId === param) throw new DogrulamaHatasi(['Bu ürün ana sayfada öne çıkan ürün. Önce Site Düzeni → Ana sayfa’dan başka bir ürün seçin.']);
         mm.urunler = mm.urunler.filter((u) => u.id !== param);
         mm.urunler.forEach((u) => (u.birlikteIyiGider = u.birlikteIyiGider.filter((x) => x !== param)));
       });
@@ -85,15 +43,18 @@ if (Astro.request.method === 'POST') {
       hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
     }
   } else {
-    const aday = formdan(f, urun);
+    const aday = urunFormu(f, urun);
     const fiyat = sayi(f, 'fiyat', urun.fiyat);
     const kampanya = evet(f, 'kampanya');
     const kampanyaEtiket = istegeBagli(f, 'kampanya_etiket');
-    const hedefId = yeni ? benzersizKod(metin(f, 'kod') || aday.ad || 'urun', new Set(m.urunler.map((u) => u.id))) : urun.id;
+    const oncekiFiyat = sayi(f, 'onceki_fiyat');
+    // Sayfa adresi marka + ürün adından tamamen otomatik oluşturulur
+    const hedefId = yeni
+      ? benzersizKod(`${aday.marka} ${aday.kisaAd || aday.ad}`.trim() || 'urun', new Set(m.urunler.map((u) => u.id)))
+      : urun.id;
 
     // Görseller: mevcutlar (sıra, açıklama, silme) + yeni yüklenenler
-    const srcler = liste(f, 'gorsel_src'), altlar = liste(f, 'gorsel_alt'), siralar = liste(f, 'gorsel_sira');
-    const silinecek = new Set(liste(f, 'gorsel_sil'));
+    const silinecek = urun.gorseller.map((g) => g.src).filter((src) => liste(f, 'gorsel_sil').includes(src));
     const yuklenen: { src: string; alt: string }[] = [];
     try {
       for (const d of f.getAll('yeni_gorsel')) {
@@ -101,29 +62,33 @@ if (Astro.request.method === 'POST') {
       }
     } catch (e) {
       hatalar = [`Görsel yüklenemedi: ${(e as Error).message}`];
+      for (const g of yuklenen.splice(0)) await gorselSil(g.src);
     }
-    aday.gorseller = [
-      ...srcler.map((src, i) => ({ src, alt: altlar[i] ?? '', sira: Number(siralar[i]) || i + 1 }))
-        .filter((g) => !silinecek.has(g.src))
-        .sort((a, b) => a.sira - b.sira)
-        .map(({ src, alt }) => ({ src, alt: alt || `${aday.marka} ${aday.ad}`.trim() })),
-      ...yuklenen,
-    ];
+    aday.gorseller = urunGorselleri(f, urun, yuklenen);
 
     if (!hatalar.length) {
       try {
         await magazaGuncelle((mm) => {
           let u = mm.urunler.find((x) => x.id === hedefId);
+          if (yeni && u) throw new DogrulamaHatasi(["Aynı ürün adresi bu sırada oluşturuldu. Yeniden deneyin."]);
+          if (!yeni && !u) throw new DogrulamaHatasi(["Ürün artık katalogda bulunmuyor."]);
           if (!u) {
-            u = { ...structuredClone(BOS), id: hedefId, fiyat };
+            u = { ...structuredClone(BOS_URUN), id: hedefId, fiyat };
             mm.urunler.push(u);
           }
+          const eskiStok = sayi(f, "eskiStok", u.stok);
+          const eskiFiyat = sayi(f, "eskiFiyat", u.fiyat);
+          if (!yeni && u.stok !== eskiStok && aday.stok !== eskiStok) throw new DogrulamaHatasi(["Stok bu sırada değişti. Güncel miktarı kontrol edin."]);
+          if (!yeni && u.fiyat !== eskiFiyat && fiyat !== eskiFiyat) throw new DogrulamaHatasi(["Fiyat bu sırada değişti. Güncel fiyatı kontrol edin."]);
+          const stok = !yeni && aday.stok === eskiStok ? u.stok : aday.stok;
+          const sonFiyat = !yeni && fiyat === eskiFiyat ? u.fiyat : fiyat;
           const { fiyat: _f, fiyatGecmisi: _g, kampanya: _k, id: _i, ...alanlar } = aday;
-          Object.assign(u, alanlar);
-          fiyatUygula(u, fiyat, kampanya, kampanyaEtiket);
+          Object.assign(u, alanlar, { stok });
+          if (kampanya && oncekiFiyat && oncekiFiyat <= sonFiyat) throw new DogrulamaHatasi(["Önceki satış fiyatı indirimli satış fiyatından yüksek olmalı."]);
+          fiyatUygula(u, sonFiyat, kampanya, kampanyaEtiket, oncekiFiyat);
         });
         for (const s of silinecek) await gorselSil(s);
-        return Astro.redirect(`/yonetim/urunler/${hedefId}?ok=${encodeURIComponent(yeni ? 'Ürün oluşturuldu' : 'Kaydedildi — sitede hemen görünür')}`);
+        return Astro.redirect('/yonetim/urunler/' + hedefId + '?ok=' + encodeURIComponent(yeni ? 'Ürün oluşturuldu.' : 'Ürün kaydedildi.'), 303);
       } catch (e) {
         hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
         for (const g of yuklenen) await gorselSil(g.src);
@@ -139,247 +104,643 @@ const u = urun;
 const k = new Katalog(m, new Map(), true);
 const kayitli = m.urunler.find((x) => x.id === u.id);
 const bilgi = kayitli ? k.fiyatBilgisi(kayitli) : undefined;
-const firsatGercek = kayitli ? kayitli.sepetteIndirim > 0 || !!bilgi?.onceki || !!kayitli.hediye || k.urunuIcerenSetler(kayitli.id).length > 0 : false;
 const digerUrunler = m.urunler.filter((x) => x.id !== u.id);
-const gecmis = [...(kayitli?.fiyatGecmisi ?? [])].reverse().slice(0, 8);
+const tamamlayiciGruplar = [...m.kategoriler].sort((a,b) => a.sira - b.sira)
+  .map((k) => ({ ad: k.ad, urunler: digerUrunler.filter((x) => x.kategoriler[0] === k.id) })).filter((k) => k.urunler.length);
+const gecmis = [...(kayitli?.fiyatGecmisi ?? [])].reverse();
+const siparisler = await siparisleriOku();
+const urunSatis = kayitli ? urunBazliSatislar(m, siparisler).find((x) => x.urun.id === kayitli.id) : undefined;
 const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
----
-<Yonetim baslik={yeni ? 'Yeni ürün' : u.kisaAd} aktif="urunler" basari={basari} hatalar={hatalar}>
-  <p style="margin:-8px 0 14px"><a href="/yonetim/urunler">← Ürünler</a>{!yeni && <> · <a href={`/urun/${u.id}`} target="_blank" rel="noopener">Sitede gör ↗</a></>}</p>
 
-  <form method="post" enctype="multipart/form-data" id="urun-form">
-    <section class="y-kart">
-      <h2>Temel bilgiler</h2>
-      <p class="y-aciklama">Taslak ürünü sadece siz görürsünüz (giriş yapmışken sitede "Örnek" etiketiyle). Hazır olunca "Yayında" yapın.</p>
-      <div class="y-izgara">
-        <div class="y-alan">
-          <span class="y-etiket">Durum</span>
-          <div class="y-secimler">
-            {([['yayinda', 'Yayında'], ['taslak', 'Taslak'], ['gizli', 'Gizli']] as const).map(([v, a]) => (
-              <label class="y-secim"><input type="radio" name="durum" value={v} checked={u.durum === v} />{a}</label>
+
+---
+<Yonetim
+  baslik={yeni ? "Yeni Ürün" : u.marka + " " + u.kisaAd}
+  aktif="urunler"
+  basari={basari}
+  hatalar={hatalar}
+  genis
+>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a href="/yonetim/urunler" class="y-link">Ürünlere dön</a>
+    <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="urun-onizleme" aria-expanded="false">Önizle</button>
+    <button type="submit" form="urun-form" class="btn btn--sepet" name="eylem" value="kaydet" data-yayin-kaydet>Kaydet</button>
+  </div>
+  <div class="y-editor-duzen" data-editor-duzen>
+    <!-- SOL SÜTUN: REHBERLİ ÜRÜN FORMU -->
+    <form method="post" enctype="multipart/form-data" id="urun-form" class="y-editor-form" data-editor data-onizleme-form="urun" data-kayit={u.id} data-kayit-durum={kayitli?.durum ?? "taslak"}>
+      <input type="hidden" name="eskiStok" value={kayitli?.stok ?? 0} />
+      <input type="hidden" name="eskiFiyat" value={kayitli?.fiyat ?? 0} />
+      <Sekmeler secenekler={[["genel", "Genel Bilgiler"], ["fiyat", "Fiyat & Stok"], ["fotograf", "Fotoğraflar"], ["satis", "Satış İçeriği"], ["detay", "Detaylar"], ["gelismis", "Gelişmiş"]]} />
+      <!-- 1. TEMEL BİLGİLER -->
+      <section class="y-kart" id="bolum-temel" data-bolum="genel">
+        <h2>Temel Bilgiler</h2>
+
+
+        <div class="y-izgara">
+          <div class="y-alan">
+            <span class="y-etiket">Yayın Durumu </span>
+            <select name="durum" aria-label="Yayın durumu">
+              <option value="taslak" selected={u.durum === "taslak"}>Taslak</option>
+              <option value="yayinda" selected={u.durum === "yayinda"}>Yayında</option>
+              <option value="gizli" selected={u.durum === "gizli"}>Gizli</option>
+            </select>
+          </div>
+
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="marka">Marka </label>
+              <input
+                id="marka"
+                name="marka"
+                value={u.marka}
+                required
+                placeholder="Örn. Fissler"
+                data-alan-ipucu="Marka: Ürün kartında kalın harflerle ürün adının başında ve ürün sayfasında başlığın hemen üstünde altın rengiyle görünür."
+                data-hedef-eleman="marka"
+              />
+            </div>
+            <div class="y-alan">
+              <label for="kisaAd">Kısa Ad </label>
+              <input
+                id="kisaAd"
+                name="kisaAd"
+                value={u.kisaAd}
+                placeholder="Örn. Vitaquick® Premium 6 L (boşsa tam ad kullanılır)"
+                data-alan-ipucu="Kısa Ad: 1) Sayfa üstündeki 'Ana sayfa › Kategori › Kısa Ad' konum çubuğunda, 2) Müşterinin Sepet çekmecesinde ve 3) Sayfa sonundaki 'Özetle' kutusunda görünür."
+                data-hedef-eleman="kisaAd"
+              />
+            </div>
+          </div>
+
+          <div class="y-alan">
+            <label for="ad">Tam Ürün Adı </label>
+            <input
+              id="ad"
+              name="ad"
+              value={u.ad}
+              required
+              placeholder="Örn. Vitaquick® Premium Düdüklü Tencere 6 L"
+              data-alan-ipucu="Tam Ürün Adı: Ürün sayfasının en büyük ana başlığıdır ve vitrin kartlarında markanın yanında yer alır."
+              data-hedef-eleman="ad"
+            />
+          </div>
+
+          <div class="y-otomatik-adres">
+            <span>🔗 <strong>Otomatik Sayfa Adresi:</strong> <code data-demo-url>/urun/{u.id || 'marka-urun-adi'}</code></span>
+            <span class="y-ipucu">Sizin adres girmenize gerek yoktur; yazdığınız marka ve ürün adından otomatik oluşturulur.</span>
+          </div>
+
+          <div class="y-alan">
+            <span class="y-etiket">Kategoriler  <span class="y-ipucu">(ilk seçilen ana kategori olur)</span></span>
+            <div class="y-secimler">
+              {m.kategoriler.map((c) => (
+                <label class="y-secim">
+                  <input
+                    type="checkbox"
+                    name="kategoriler"
+                    value={c.id}
+                    checked={u.kategoriler.includes(c.id)}
+                    data-alan-ipucu={`Kategori (${c.ad}): İşaretlendiğinde sayfa üstü konum çubuğunda '${c.ad}' yazar ve ürün bu kategori sayfasında listelenir.`}
+                    data-hedef-eleman="kategori"
+                  />
+                  {c.ad}
+                </label>
+              ))}
+            </div>
+          </div>
+
+          <div class="y-alan">
+            <label for="ozet">Kısa Açıklama (Özet) </label>
+            <textarea
+              id="ozet"
+              name="ozet"
+              rows="2"
+              placeholder="1–2 cümle: Ürün ne işe yarar, neden iyi?"
+              data-alan-ipucu="Kısa Açıklama (Özet): Ürün sayfasında ana başlığın hemen altında ve Google/WhatsApp bağlantı önizlemelerinde görünür."
+              data-hedef-eleman="ozet"
+            >{u.ozet}</textarea>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. FİYAT VE İNDİRİM -->
+      <section class="y-kart" id="bolum-fiyat" data-bolum="fiyat" hidden data-fiyat-kutu data-mevcut={kayitli?.fiyat ?? 0} data-gun={m.site.indirimReferansGun} data-aktif-onceki={bilgi?.onceki ?? ''}>
+        <h2>Fiyat ve İndirim Yönetimi</h2>
+
+
+        <div class="y-izgara y-izgara--2">
+          <div class="y-alan">
+            <label for="fiyat">Satış Fiyatı (KDV dahil) </label>
+            <div class="y-tl">
+              <input
+                id="fiyat"
+                name="fiyat"
+                inputmode="numeric"
+                value={u.fiyat || ''}
+                required
+                data-fiyat-girdi
+                data-alan-ipucu={`Satış Fiyatı: Müşterinin ödeyeceği KDV dahil fiyattır. ${formatTL(m.site.kargo.ucretsizEsik)} ve üzeri olduğunda ürüne otomatik 'Kargo Bedava' şeridi eklenir.`}
+                data-hedef-eleman="fiyat"
+              />
+            </div>
+          </div>
+          <div class="y-alan">
+            <label for="sepetteIndirim">Sepette Ek İndirim (%) </label>
+            <input
+              id="sepetteIndirim"
+              name="sepetteIndirim"
+              inputmode="numeric"
+              value={u.sepetteIndirim}
+              data-sepette-girdi
+              data-alan-ipucu="Sepette Ek İndirim (%): 0'dan büyük girerseniz (örn. 10), ürün kartında ve ürün sayfasında yeşil 'Sepette %10 İndirim' kutusu çıkar ve sepette otomatik düşer."
+              data-hedef-eleman="sepetteIndirim"
+            />
+            <span class="y-ipucu">0 girildiğinde sepet indirimi uygulanmaz.</span>
+          </div>
+        </div>
+
+        <div class="y-kampanya-panel" style="margin-top:14px;padding:14px;border-radius:12px;border:1.5px solid var(--line);background:#FAF9F5">
+          <label class="y-secim" style="border:0;padding:0;background:transparent">
+            <input
+              type="checkbox"
+              name="kampanya"
+              checked={!!u.kampanya}
+              data-kampanya-girdi
+              data-alan-ipucu="Fiyat Düşüşünü İndirim Olarak Göster: Açıldığında eski fiyat üstü çizili, yeni fiyat bordo/kırmızı, '%X İndirim' rozeti ve 'X TL daha az ödüyorsunuz' yazısı görünür."
+              data-hedef-eleman="fiyat"
+            />
+            <span>
+              <strong>Fiyat düşüşünü üstü çizili indirim olarak göster</strong><br />
+              <span class="y-ipucu">Önceki satış fiyatını ve satış fiyatını girin.</span>
+            </span>
+          </label>
+
+          <div class="y-izgara y-izgara--2" style="margin-top:12px">
+            <div class="y-alan">
+              <label for="onceki_fiyat">Önceki satış fiyatı</label>
+              <input id="onceki_fiyat" name="onceki_fiyat" inputmode="numeric" value={u.kampanya?.oncekiFiyat ?? ""} placeholder="Örn. 13999" data-hedef-eleman="fiyat" />
+              <small class="y-ipucu">Ürüne gerçekten uyguladığınız önceki fiyatı yazın.</small>
+            </div>
+            <div class="y-alan">
+              <label for="kampanya_etiket">
+                Kampanya Etiketi
+              </label>
+              <input
+                id="kampanya_etiket"
+                name="kampanya_etiket"
+                value={u.kampanya?.etiket ?? ''}
+                placeholder="Örn. Kasım Fırsatı / Özel Fiyat"
+                data-alan-ipucu="Kampanya Etiketi: Fiyat kutusunun hemen içinde fiyatın altında ve ürün kartında kırmızı kalın yazı olarak görünür (örn. 'Kasım Fırsatı')."
+                data-hedef-eleman="kampanyaEtiket"
+              />
+
+            </div>
+          </div>
+        </div>
+
+        <div class="y-indirim-onizleme" data-indirim-onizleme aria-live="polite"></div>
+
+        {gecmis.length > 0 && (
+          <details class="y-fiyat-gecmis-kutu">
+            <summary>Fiyat geçmişi ({gecmis.length})</summary>
+            <ul class="y-gecmis">
+              {gecmis.slice(0, 8).map((g, idx) => {
+                const oncekiKayit = gecmis[idx + 1];
+                const fark = oncekiKayit ? g.fiyat - oncekiKayit.fiyat : 0;
+                return (
+                  <li>
+                    <span>{tarihBicim.format(new Date(g.tarih))}</span>
+                    <span>
+                      <strong>{formatTL(g.fiyat)}</strong>
+                      {fark < 0 && <small style="color:var(--yesil);margin-left:6px">(📉 {formatTL(fark)})</small>}
+                      {fark > 0 && <small style="color:var(--danger);margin-left:6px">(📈 +{formatTL(fark)})</small>}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          </details>
+        )}
+      </section>
+
+      <!-- 3. FIRSAT ÜRÜNÜ -->
+      <section class="y-kart" id="bolum-firsat" data-bolum="satis" hidden style="border-color:#F3B8C0">
+        <div class="y-kart-ust-etiket" style="color:var(--flas)">Adım 3 · Fırsat Vitrini & Canlı Geri Sayım Sayacı</div>
+        <h2>⚡ Fırsat Ürünü ve Geri Sayım Sayacı</h2>
+
+
+        <label class="y-secim">
+          <input
+            type="checkbox"
+            name="firsat"
+            checked={!!u.firsat}
+            data-firsat-girdi
+            data-alan-ipucu="Fırsat Ürünü: İşaretlendiği anda hem ürün kartında hem ürün sayfasının en üstünde kırmızı yıldırım ikonlu 'Fırsat' rozeti ve geri sayım sayacı açılır."
+            data-hedef-eleman="firsat"
+          />
+          <span><strong>Bu ürünü fırsat ürünü olarak işaretle</strong> (Sağdaki önizlemede hemen görebilirsiniz)</span>
+        </label>
+
+        <div class="y-izgara y-izgara--2" style="margin-top:10px">
+          <div class="y-alan"><label for="firsat-stil">Rozet şablonu</label>
+<select id="firsat-stil" name="firsat_stil">
+<option value="firsat" selected={u.firsat?.stil === "firsat"}>Fırsat · bordo</option>
+<option value="flas" selected={u.firsat?.stil === "flas"}>Flaş indirim · mercan</option>
+<option value="ozel" selected={u.firsat?.stil === "ozel"}>Özel seçim · şampanya</option>
+</select></div>
+<div class="y-alan">
+            <label for="firsat_etiket">Fırsat Etiketi </label>
+            <input
+              id="firsat_etiket"
+              name="firsat_etiket"
+              value={u.firsat?.etiket ?? ''}
+              placeholder="Fırsat Ürünü (veya Flaş Fırsat)"
+              data-alan-ipucu="Fırsat Etiketi: Kırmızı yıldırım ikonunun yanında ve ürün kartının sol üst damgasında yazacak metindir (boşsa 'Fırsat Ürünü' yazar)."
+              data-hedef-eleman="firsat"
+            />
+          </div>
+          <div class="y-alan">
+            <label for="firsat_bitis">Bitiş Tarihi & Saati (Türkiye saati) </label>
+            <input
+              id="firsat_bitis"
+              name="firsat_bitis"
+              type="datetime-local"
+              value={istanbulaYerel(u.firsat?.bitis)}
+              data-alan-ipucu="Fırsat Bitiş Saati: Seçtiğiniz tarihe kadar kırmızı rozetin içinde beyaz kutuda canlı geri sayım (saat:dakika:saniye) çalışır. Boş bırakırsanız süresiz fırsat rozeti görünür."
+              data-hedef-eleman="firsat"
+            />
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. STOK VE SATIŞ TAKİBİ -->
+      <section class="y-kart" id="bolum-stok" data-bolum="fiyat" hidden>
+        <h2>Stok ve Model Kodu</h2>
+
+
+        <div class="y-izgara y-izgara--3">
+          <div class="y-alan">
+            <label for="stok">Mevcut Stok Adedi </label>
+            <input
+              id="stok"
+              name="stok"
+              inputmode="numeric"
+              value={u.stok}
+              data-alan-ipucu="Stok Adedi: 0 yazarsanız ürün 'Şu an stokta yok' olur. 1, 2 veya 3 yazarsanız kırmızı 'Stokta son X adet' uyarısı çıkar."
+              data-hedef-eleman="stok"
+            />
+          </div>
+          <div class="y-alan">
+            <label for="maxAdet">Bir Siparişte En Fazla</label>
+            <input
+              id="maxAdet"
+              name="maxAdet"
+              inputmode="numeric"
+              value={u.maxAdet}
+              data-alan-ipucu="Siparişte En Fazla Adet: Bir müşterinin tek sepette bu üründen en fazla kaç adet alabileceğini sınırlar."
+            />
+          </div>
+          <div class="y-alan">
+            <label for="sku">Model / Stok Kodu (SKU) </label>
+            <input
+              id="sku"
+              name="sku"
+              value={u.sku}
+              placeholder="Örn. 602-410-06-000/0"
+              data-alan-ipucu="Model / Stok Kodu: Ürün sayfasında WhatsApp soru kutusunun hemen altında 'Model kodu: ...' olarak görünür."
+              data-hedef-eleman="sku"
+            />
+          </div>
+        </div>
+
+        {urunSatis && (
+          <div class="y-stok-satis-cubugu" style="margin-top:12px">
+            <span>📊 <strong>Bu Ürünün Satış Özeti:</strong></span>
+            <span>✅ Onaylı Satış: <strong>{urunSatis.onayliAdet} adet</strong> ({formatTL(urunSatis.onayliCiro)})</span>
+            <span>🚚 Kargolanan/Teslim: <strong>{urunSatis.kargolananAdet} adet</strong></span>
+            <span>⏳ Ödeme Bekleyen: <strong>{urunSatis.bekleyenAdet} adet</strong></span>
+            <span>✕ İptal Edilen: <strong>{urunSatis.iptalAdet} adet</strong></span>
+          </div>
+        )}
+      </section>
+
+      <!-- 5. GÖRSELLER -->
+      <section class="y-kart" id="bolum-gorsel" data-bolum="fotograf" hidden>
+        <h2>Görseller</h2>
+
+
+        {u.gorseller.length > 0 && (
+          <div class="y-gorseller" data-gorsel-sirala style="margin-bottom:12px">
+            {u.gorseller.map((g, i) => (
+              <div class:list={['y-gorsel', { 'y-gorsel--ana': i === 0 }]}>
+                <img src={g.src} alt="" loading="lazy" />
+                <button type="button" class="y-link" data-ana-foto>Ana fotoğraf yap</button>
+                <input type="hidden" name="gorsel_src" value={g.src} />
+                <label class="y-ipucu">Sıra<input type="number" class="y-girdi" name="gorsel_sira" value={i + 1} min="1" /></label>
+                <input type="text" class="y-girdi" name="gorsel_alt" value={g.alt} placeholder="Görsel açıklaması" aria-label="Görsel açıklaması" />
+                <label class="y-secim"><input type="checkbox" name="gorsel_sil" value={g.src} />Sil</label>
+              </div>
             ))}
           </div>
-        </div>
-        <div class="y-izgara y-izgara--2">
-          <div class="y-alan"><label for="marka">Marka</label><input id="marka" name="marka" value={u.marka} required placeholder="Fissler" /></div>
-          <div class="y-alan"><label for="kisaAd">Kısa ad <span class="y-ipucu">(sepette ve dar alanlarda)</span></label><input id="kisaAd" name="kisaAd" value={u.kisaAd} placeholder="Vitaquick® Premium 6 L" /></div>
-        </div>
-        <div class="y-alan"><label for="ad">Ürün adı</label><input id="ad" name="ad" value={u.ad} required placeholder="Vitaquick® Premium Düdüklü Tencere 6 L" /></div>
-        {yeni ? (
-          <div class="y-alan"><label for="kod">Adres kodu <span class="y-ipucu">(boş bırakırsanız addan üretilir; sonradan değişmez)</span></label><input id="kod" name="kod" placeholder="fissler-vitaquick-premium-6l" pattern="[a-z0-9-]*" /></div>
-        ) : (
-          <p class="y-ipucu">Sayfa adresi: <code>/urun/{u.id}</code></p>
         )}
-        <div class="y-alan">
-          <span class="y-etiket">Kategoriler <span class="y-ipucu">(ilki ana kategori sayılır)</span></span>
-          <div class="y-secimler">
-            {m.kategoriler.map((c) => <label class="y-secim"><input type="checkbox" name="kategoriler" value={c.id} checked={u.kategoriler.includes(c.id)} />{c.ad}</label>)}
+        <label class="y-yukle" data-dosya-birak>
+          <Ikon ad="arti" boyut={28} />
+          Fotoğraf seçin veya buraya bırakın
+          <input type="file" name="yeni_gorsel" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif" multiple data-gorsel-sec data-hedef-eleman="galeri" />
+        </label>
+        <input type="hidden" name="yeniAnaFoto" value="" />
+        <div class="y-onizlemeler" data-gorsel-onizleme></div>
+      </section>
+
+      <!-- 6. ROZETLER VE VİTRİN -->
+      <section class="y-kart" id="bolum-rozet" data-bolum="satis" hidden>
+        <h2>Rozetler, Garanti ve Hediye</h2>
+
+
+        <div class="y-izgara y-izgara--2">
+          <div class="y-alan">
+            <label for="rozetler">Güvence Rozetleri </label>
+            <textarea
+              id="rozetler"
+              name="rozetler"
+              rows="3"
+              placeholder={'2 Yıl Garanti\nOrijinal Ürün'}
+              data-alan-ipucu="Güvence Rozetleri: Her satır bir rozettir. Ürün sayfasında başlığın hemen altında yeşil ✓ işaretiyle, ürün kartında ise kalkan ikonuyla görünür."
+              data-hedef-eleman="rozetler"
+            >{u.rozetler.join('\n')}</textarea>
+          </div>
+          <div class="y-izgara">
+            <div class="y-alan">
+              <label for="garanti">Garanti Süresi </label>
+              <input
+                id="garanti"
+                name="garanti"
+                value={u.garanti ?? ''}
+                placeholder="Örn. 2 yıl"
+                data-alan-ipucu="Garanti Süresi: Ürün sayfasının altındaki güvence maddelerinde ve sayfa sonu özetinde '2 yıl garanti' olarak görünür."
+                data-hedef-eleman="garanti"
+              />
+            </div>
+            <div class="y-alan">
+              <label for="hediye">Yanında Hediye </label>
+              <input
+                id="hediye"
+                name="hediye"
+                value={u.hediye ?? ''}
+                placeholder="Örn. Yanında silikon spatula hediye"
+                data-alan-ipucu="Hediye: Doldurulursa ürün sayfasında teslimat kutusunun altında altın sarısı hediye ikonuyla özel bir kutu olarak görünür."
+                data-hedef-eleman="hediye"
+              />
+            </div>
           </div>
         </div>
-        <div class="y-alan"><label for="ozet">Kısa açıklama</label><textarea id="ozet" name="ozet" rows="3" placeholder="1–2 cümle: ürün ne işe yarar, neden iyi?">{u.ozet}</textarea></div>
-      </div>
-    </section>
 
-    <section class="y-kart" data-fiyat-kutu data-mevcut={kayitli?.fiyat ?? 0} data-gun={m.site.indirimReferansGun} data-aktif-onceki={bilgi?.onceki ?? ''}>
-      <h2>Fiyat ve indirim</h2>
-      <p class="y-aciklama">Fiyatı değiştirdiğiniz an sitede güncellenir ve fiyat geçmişine kaydedilir.</p>
-      <div class="y-izgara y-izgara--2">
-        <div class="y-alan"><label for="fiyat">Satış fiyatı (KDV dahil)</label><div class="y-tl"><input id="fiyat" name="fiyat" inputmode="numeric" value={u.fiyat || ''} required data-fiyat-girdi /></div></div>
-        <div class="y-alan"><label for="sepetteIndirim">Sepette ek indirim (%) <span class="y-ipucu">0 = yok · Ürün kartında yeşil "Sepette %X İndirim" çıkar</span></label><input id="sepetteIndirim" name="sepetteIndirim" inputmode="numeric" value={u.sepetteIndirim} /></div>
-      </div>
-      <label class="y-secim" style="margin-top:12px"><input type="checkbox" name="kampanya" checked={!!u.kampanya} data-kampanya-girdi />
-        <span><strong>Fiyat düşüşünü indirim olarak göster</strong><br /><span class="y-ipucu">Eski fiyat üstü çizili, kırmızı indirimli fiyat ve "Son {m.site.indirimReferansGun} günün en düşük fiyatı" etiketi. Eski fiyat, son {m.site.indirimReferansGun} günde sitede gerçekten uygulanan en düşük fiyattan otomatik hesaplanır (yasal kural).</span></span>
-      </label>
-      <div class="y-alan" style="margin-top:10px"><label for="kampanya_etiket">Kampanya etiketi <span class="y-ipucu">(isteğe bağlı, ör. "Kasım fırsatı")</span></label><input id="kampanya_etiket" name="kampanya_etiket" value={u.kampanya?.etiket ?? ''} /></div>
-      <div class="y-indirim-onizleme" data-indirim-onizleme aria-live="polite"></div>
-      <script type="application/json" data-fiyat-gecmisi set:html={JSON.stringify(kayitli?.fiyatGecmisi ?? [])} />
-      {gecmis.length > 0 && (
-        <details style="margin-top:10px"><summary class="y-ipucu" style="cursor:pointer">Fiyat geçmişi</summary>
-          <ul class="y-gecmis">{gecmis.map((g) => <li><span>{tarihBicim.format(new Date(g.tarih))}</span><strong>{formatTL(g.fiyat)}</strong></li>)}</ul>
-        </details>
-      )}
-    </section>
+        <div class="y-izgara y-izgara--2" style="margin-top:12px">
+          <label class="y-secim">
+            <input
+              type="checkbox"
+              name="cokSatan"
+              checked={u.cokSatan}
+              data-alan-ipucu="En Çok Satan Damgası: Ürün fotoğrafının sol üst köşesine birebir ana sitedeki 3 boyutlu yuvarlak turuncu 'EN ÇOK SATAN' damgasını yerleştirir."
+              data-hedef-eleman="galeri"
+            />
+            <span>
+              <strong>"En Çok Satan" yuvarlak turuncu damgası</strong><br />
+              <span class="y-ipucu">Yalnızca satış kayıtlarınız destekliyorsa işaretleyin.</span>
+            </span>
+          </label>
+          <label class="y-secim">
+            <input
+              type="checkbox"
+              name="oneCikan"
+              checked={u.oneCikan}
+              data-alan-ipucu="Ana Sayfada Öne Çıkanlar: İşaretlendiğinde bu ürün ana sayfadaki 'Öne çıkan ürünler' vitrininde sergilenir."
+            />
+            <span><strong>Ana sayfada "Öne çıkan ürünler" bölümünde göster</strong></span>
+          </label>
+          <div class="y-alan">
+            <label for="oncelik">Listeleme Sıra Önceliği <span class="y-ipucu">(büyük sayı daha önde çıkar)</span></label>
+            <input id="oncelik" name="oncelik" inputmode="numeric" value={u.oncelik} />
+          </div>
+        </div>
+      </section>
 
-    <section class="y-kart" style="border-color:#F3B8C0">
-      <h2>⚡ Fırsat ürünü</h2>
-      <p class="y-aciklama">Ürünü sitede kırmızı "Fırsat" etiketiyle öne çıkarır, ana sayfadaki "Fırsat Ürünleri" bölümüne ekler. Bitiş girerseniz herkese aynı, gerçek bir geri sayım gösterilir; süre bitince fırsat ve <strong>sepette indirim otomatik sona erer</strong>. Fırsat etiketi ancak ürünün gerçek bir avantajı varsa (sepette indirim, indirimli fiyat, hediye veya set) görünür.</p>
-      <label class="y-secim"><input type="checkbox" name="firsat" checked={!!u.firsat} /><span><strong>Bu ürünü fırsat ürünü olarak işaretle</strong></span></label>
-      <div class="y-izgara y-izgara--2" style="margin-top:10px">
-        <div class="y-alan"><label for="firsat_bitis">Bitiş (Türkiye saati) <span class="y-ipucu">boş = süresiz, sayaç yok</span></label><input id="firsat_bitis" name="firsat_bitis" type="datetime-local" value={istanbulaYerel(u.firsat?.bitis)} /></div>
-        <div class="y-alan"><label for="firsat_etiket">Etiket <span class="y-ipucu">(ör. "Flaş Fırsat")</span></label><input id="firsat_etiket" name="firsat_etiket" value={u.firsat?.etiket ?? ''} placeholder="Fırsat Ürünü" /></div>
-      </div>
-      {u.firsat && !firsatGercek && <p class="y-indirim-onizleme is-uyari" style="margin-top:10px">Bu ürünün şu an gerçek bir avantajı yok; fırsat etiketi sitede görünmez. Yukarıdan sepette indirim girin ya da ürünü bir sete ekleyin.</p>}
-      {u.firsat?.bitis && Date.parse(u.firsat.bitis) < Date.now() && <p class="y-indirim-onizleme is-uyari" style="margin-top:10px">Fırsatın süresi doldu.</p>}
-    </section>
+      <!-- 7. ÖNE ÇIKAN BİLGİLER & FAYDALAR -->
+      <section class="y-kart" id="bolum-ozellik" data-bolum="satis" hidden>
+        <h2>Öne Çıkan Bilgiler </h2>
 
-    <section class="y-kart">
-      <h2>Stok</h2>
-      <div class="y-izgara y-izgara--3">
-        <div class="y-alan"><label for="stok">Stok adedi</label><input id="stok" name="stok" inputmode="numeric" value={u.stok} /><span class="y-ipucu">3 ve altında "Son X adet" yazar; 0 olunca "Tükendi".</span></div>
-        <div class="y-alan"><label for="maxAdet">Siparişte en fazla</label><input id="maxAdet" name="maxAdet" inputmode="numeric" value={u.maxAdet} /></div>
-        <div class="y-alan"><label for="sku">Model / stok kodu</label><input id="sku" name="sku" value={u.sku} /></div>
-      </div>
-    </section>
 
-    <section class="y-kart">
-      <h2>Görseller</h2>
-      <p class="y-aciklama">İlk görsel ana görseldir. Sırayı numarayla değiştirin. Yüklenen görseller otomatik küçültülür ve hızlı WebP'ye çevrilir. En iyi sonuç: beyaz/düz zeminli, en az 1000 px.</p>
-      {u.gorseller.length > 0 && (
-        <div class="y-gorseller" style="margin-bottom:12px">
-          {u.gorseller.map((g, i) => (
-            <div class:list={['y-gorsel', { 'y-gorsel--ana': i === 0 }]}>
-              <img src={g.src} alt="" loading="lazy" />
-              <input type="hidden" name="gorsel_src" value={g.src} />
-              <label class="y-ipucu">Sıra<input type="number" class="y-girdi" name="gorsel_sira" value={i + 1} min="1" /></label>
-              <input type="text" class="y-girdi" name="gorsel_alt" value={g.alt} placeholder="Görsel açıklaması" aria-label="Görsel açıklaması" />
-              <label class="y-secim"><input type="checkbox" name="gorsel_sil" value={g.src} />Sil</label>
+        <div class="y-tekrar" data-tekrar="bilgi">
+          {u.oneCikanBilgiler.map((b) => (
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--ikon">
+                <select class="y-girdi" name="bilgi_ikon" data-hedef-eleman="ozellikler">
+                  {IKON_SECENEK.map(([v, a]) => <option value={v} selected={b.ikon === v}>{a}</option>)}
+                </select>
+                <input
+                  class="y-girdi"
+                  name="bilgi_metin"
+                  value={b.metin}
+                  placeholder="Ana fayda cümlesi|Alt teknik açıklama"
+                  data-alan-ipucu="Öne Çıkan Bilgi: Fiyat kutusunun hemen altında renkli ikonla görünür. '|' işaretiyle kalın başlık ve alt açıklamayı ayırabilirsiniz."
+                  data-hedef-eleman="ozellikler"
+                />
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
             </div>
           ))}
-        </div>
-      )}
-      <label class="y-yukle">
-        <Ikon ad="arti" boyut={28} />
-        Görsel ekle (birden fazla seçebilirsiniz)
-        <input type="file" name="yeni_gorsel" accept="image/*" multiple data-gorsel-sec />
-      </label>
-      <div class="y-onizlemeler" data-gorsel-onizleme></div>
-    </section>
-
-    <section class="y-kart">
-      <h2>Rozetler ve vitrin</h2>
-      <p class="y-aciklama">Yalnızca doğru bilgiler yazın. "En Çok Satan" (gerçek satışlardan), "Son X Adet", "Kargo Bedava" ve "Son N günün en düşük fiyatı" sistem tarafından otomatik verilir.</p>
-      <div class="y-izgara y-izgara--2">
-        <div class="y-alan"><label for="rozetler">Rozetler <span class="y-ipucu">(her satıra bir tane; ürün sayfasında başlığın altında ✓ güvence olarak, kartlarda küçük etiket olarak görünür)</span></label><textarea id="rozetler" name="rozetler" rows="3" placeholder={'2 Yıl Garanti\nOrijinal Ürün'}>{u.rozetler.join('\n')}</textarea></div>
-        <div class="y-izgara">
-          <div class="y-alan"><label for="garanti">Garanti süresi</label><input id="garanti" name="garanti" value={u.garanti ?? ''} placeholder="2 yıl" /></div>
-          <div class="y-alan"><label for="hediye">Hediye <span class="y-ipucu">(gerçekten veriliyorsa)</span></label><input id="hediye" name="hediye" value={u.hediye ?? ''} placeholder="Yanında hediye: ..." /></div>
-        </div>
-      </div>
-      <div class="y-izgara y-izgara--2" style="margin-top:12px">
-        <label class="y-secim"><input type="checkbox" name="oneCikan" checked={u.oneCikan} /><span><strong>Ana sayfada "Öne çıkanlar"da göster</strong></span></label>
-        <div class="y-alan"><label for="oncelik">Sıralama önceliği <span class="y-ipucu">(büyük sayı önde)</span></label><input id="oncelik" name="oncelik" inputmode="numeric" value={u.oncelik} /></div>
-      </div>
-    </section>
-
-    <section class="y-kart">
-      <h2>Öne çıkan bilgiler</h2>
-      <p class="y-aciklama">Fiyatın altında kutucuklar halinde görünür (en fazla 4–6).</p>
-      <div class="y-tekrar" data-tekrar="bilgi">
-        {u.oneCikanBilgiler.map((b) => (
-          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--ikon">
-            <select class="y-girdi" name="bilgi_ikon">{IKON_SECENEK.map(([v, a]) => <option value={v} selected={b.ikon === v}>{a}</option>)}</select>
-            <input class="y-girdi" name="bilgi_metin" value={b.metin} placeholder="6 L · Ø 22 cm" />
-          </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div>
-        ))}
-        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--ikon">
-          <select class="y-girdi" name="bilgi_ikon">{IKON_SECENEK.map(([v, a]) => <option value={v}>{a}</option>)}</select>
-          <input class="y-girdi" name="bilgi_metin" placeholder="Örn. İndüksiyon dahil tüm ocaklar" />
-        </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div></template>
-        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Bilgi ekle</button>
-      </div>
-    </section>
-
-    <section class="y-kart">
-      <h2>Fayda bölümleri</h2>
-      <p class="y-aciklama">Ürün sayfasında ikon + kalın başlık + tek cümle olarak görünür. Kısa tutun (başlık 3–6 kelime, açıklama tek cümle). Yalnızca doğrulanabilir bilgiler; kaynak notu küçük gri yazıyla görünür.</p>
-      <div class="y-tekrar">
-        {u.faydalar.map((x) => (
-          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar">
-            <input class="y-girdi" name="fayda_baslik" value={x.baslik} placeholder="Büyük başlık" />
-            <textarea class="y-girdi" name="fayda_metin" rows="2" placeholder="Kısa açıklama">{x.metin}</textarea>
-            <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-              <select class="y-girdi" name="fayda_ikon"><option value="">Otomatik ikon</option>{IKON_SECENEK.map(([v, a]) => <option value={v} selected={x.ikon === v}>{a}</option>)}</select>
-              <input class="y-girdi" name="fayda_kaynak" value={x.kaynak ?? ''} placeholder="Kaynak notu (ör. Fissler verisi)" />
+          <template>
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--ikon">
+                <select class="y-girdi" name="bilgi_ikon" data-hedef-eleman="ozellikler">
+                  {IKON_SECENEK.map(([v, a]) => <option value={v}>{a}</option>)}
+                </select>
+                <input
+                  class="y-girdi"
+                  name="bilgi_metin"
+                  placeholder="Örn. Hangi ocağınız olursa olsun çalışır|İndüksiyon dahil tüm ocaklar"
+                  data-alan-ipucu="Öne Çıkan Bilgi: Fiyat kutusunun hemen altında renkli ikonla görünür."
+                  data-hedef-eleman="ozellikler"
+                />
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
             </div>
-          </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div>
-        ))}
-        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar">
-          <input class="y-girdi" name="fayda_baslik" placeholder="Büyük başlık" />
-          <textarea class="y-girdi" name="fayda_metin" rows="2" placeholder="Kısa açıklama"></textarea>
-          <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-            <select class="y-girdi" name="fayda_ikon"><option value="">Otomatik ikon</option>{IKON_SECENEK.map(([v, a]) => <option value={v}>{a}</option>)}</select>
-            <input class="y-girdi" name="fayda_kaynak" placeholder="Kaynak notu (ör. Fissler verisi)" />
-          </div>
-        </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div></template>
-        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Fayda ekle</button>
-      </div>
-    </section>
+          </template>
+          <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Öne Çıkan Bilgi Ekle</button>
+        </div>
 
-    <section class="y-kart">
-      <h2>Pişirme süreleri</h2>
-      <p class="y-aciklama">"Bu tencerede neler, ne kadar sürede pişer?" bölümü. Sadece üreticinin resmi tablosundaki süreleri girin; tahmini süre yazmayın.</p>
-      <div class="y-tekrar">
-        {u.pisirme.map((x) => (
-          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-            <input class="y-girdi" name="pis_yemek" value={x.yemek} placeholder="Yemek" />
-            <div class="y-tekrar__alanlar" style="grid-template-columns:1fr 1fr 1fr">
-              <input class="y-girdi" name="pis_sure" value={x.sure} placeholder="Süre (ör. 20–25 dk)" />
-              <input class="y-girdi" name="pis_kademe" value={x.kademe ?? ''} placeholder="Kademe" />
-              <input class="y-girdi" name="pis_miktar" value={x.miktar ?? ''} placeholder="Miktar" />
+        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
+
+        <h2>Fayda Bölümleri </h2>
+
+        <div class="y-tekrar">
+          {u.faydalar.map((x) => (
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar">
+                <input class="y-girdi" name="fayda_baslik" value={x.baslik} placeholder="Büyük başlık (örn. %70’e kadar daha kısa pişirme)" data-alan-ipucu="Fayda Kartı Başlığı: Sayfa ortasındaki 3'lü fayda kutularının kalın başlığıdır; ilk 3 tanesi sayfa sonu özet kutusunda da yer alır." data-hedef-eleman="faydalar" />
+                <textarea class="y-girdi" name="fayda_metin" rows="2" placeholder="Kısa açıklama" data-alan-ipucu="Fayda Kartı Açıklaması: Fayda başlığının altındaki açıklama cümlesidir." data-hedef-eleman="faydalar">{x.metin}</textarea>
+                <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                  <select class="y-girdi" name="fayda_ikon" data-hedef-eleman="faydalar"><option value="">Otomatik ikon</option>{IKON_SECENEK.map(([v, a]) => <option value={v} selected={x.ikon === v}>{a}</option>)}</select>
+                  <input class="y-girdi" name="fayda_kaynak" value={x.kaynak ?? ''} placeholder="Kaynak notu (örn. Fissler verisi)" data-hedef-eleman="faydalar" />
+                </div>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
             </div>
-          </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div>
-        ))}
-        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-          <input class="y-girdi" name="pis_yemek" placeholder="Yemek" />
-          <div class="y-tekrar__alanlar" style="grid-template-columns:1fr 1fr 1fr">
-            <input class="y-girdi" name="pis_sure" placeholder="Süre (ör. 20–25 dk)" />
-            <input class="y-girdi" name="pis_kademe" placeholder="Kademe" />
-            <input class="y-girdi" name="pis_miktar" placeholder="Miktar" />
-          </div>
-        </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div></template>
-        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Yemek ekle</button>
-      </div>
-      <div class="y-alan" style="margin-top:10px"><label for="pisirmeNotu">Açıklama notu</label><textarea id="pisirmeNotu" name="pisirmeNotu" rows="2">{u.pisirmeNotu ?? ''}</textarea></div>
-    </section>
-
-    <section class="y-kart">
-      <h2>Teknik özellikler</h2>
-      <div class="y-tekrar">
-        {u.teknik.map(([e, d]) => (
-          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-            <input class="y-girdi" name="teknik_etiket" value={e} placeholder="Hacim" /><input class="y-girdi" name="teknik_deger" value={d} placeholder="6 litre" />
-          </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div>
-        ))}
-        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-          <input class="y-girdi" name="teknik_etiket" placeholder="Özellik" /><input class="y-girdi" name="teknik_deger" placeholder="Değer" />
-        </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button></div></template>
-        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Satır ekle</button>
-      </div>
-      <div class="y-alan" style="margin-top:14px"><label for="kutuIcerigi">Kutu içeriği <span class="y-ipucu">(her satıra bir madde)</span></label><textarea id="kutuIcerigi" name="kutuIcerigi" rows="4">{u.kutuIcerigi.join('\n')}</textarea></div>
-    </section>
-
-    <section class="y-kart">
-      <h2>Sık sorulan sorular</h2>
-      <div class="y-tekrar">
-        {u.sss.map((x) => (
-          <div class="y-tekrar__satir"><div class="y-tekrar__alanlar">
-            <input class="y-girdi" name="sss_soru" value={x.soru} placeholder="Soru" /><textarea class="y-girdi" name="sss_cevap" rows="2" placeholder="Cevap">{x.cevap}</textarea>
-          </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button></div>
-        ))}
-        <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar">
-          <input class="y-girdi" name="sss_soru" placeholder="Soru" /><textarea class="y-girdi" name="sss_cevap" rows="2" placeholder="Cevap"></textarea>
-        </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button></div></template>
-        <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Soru ekle</button>
-      </div>
-    </section>
-
-    {digerUrunler.length > 0 && (
-      <section class="y-kart">
-        <h2>Bununla iyi gider</h2>
-        <p class="y-aciklama">Ürün sayfasında ve sepette önerilir.</p>
-        <div class="y-secimler">{digerUrunler.map((x) => <label class="y-secim"><input type="checkbox" name="birlikte" value={x.id} checked={u.birlikteIyiGider.includes(x.id)} />{x.kisaAd}</label>)}</div>
+          ))}
+          <template>
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar">
+                <input class="y-girdi" name="fayda_baslik" placeholder="Büyük başlık" data-alan-ipucu="Fayda Kartı Başlığı: Sayfa ortasındaki 3'lü fayda kutularının kalın başlığıdır." data-hedef-eleman="faydalar" />
+                <textarea class="y-girdi" name="fayda_metin" rows="2" placeholder="Kısa açıklama" data-hedef-eleman="faydalar"></textarea>
+                <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                  <select class="y-girdi" name="fayda_ikon" data-hedef-eleman="faydalar"><option value="">Otomatik ikon</option>{IKON_SECENEK.map(([v, a]) => <option value={v}>{a}</option>)}</select>
+                  <input class="y-girdi" name="fayda_kaynak" placeholder="Kaynak notu (örn. Fissler verisi)" data-hedef-eleman="faydalar" />
+                </div>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          </template>
+          <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Fayda Kartı Ekle</button>
+        </div>
       </section>
-    )}
 
-    <section class="y-kart">
-      <h2>İç notlar</h2>
-      <p class="y-aciklama">Sadece panelde görünür; müşteriler görmez. Her satıra bir not.</p>
-      <textarea class="y-girdi" name="dogrula" rows="3" style="width:100%">{u.dogrula.join('\n')}</textarea>
-    </section>
+      <!-- 8. PİŞİRME SÜRELERİ VE TEKNİK ÖZELLİKLER -->
+      <section class="y-kart" id="bolum-pisirme" data-bolum="detay" hidden>
+        <details data-pisirme open={u.pisirme.length > 0 || u.kategoriler.some((id) => /duduklu|tencere/.test(id))}>
+          <summary>Pişirme süreleri</summary>
 
-    <div class="y-butonlar">
-      {!yeni && <button class="btn btn--tehlike" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün kalıcı olarak silinsin mi? Görselleri de silinir.">Sil</button>}
-      <button class="btn btn--sepet" type="submit" name="eylem" value="kaydet"><Ikon ad="tik" />{yeni ? 'Ürünü oluştur' : 'Kaydet'}</button>
-    </div>
-  </form>
+        <div class="y-tekrar">
+          {u.pisirme.map((x) => (
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                <input class="y-girdi" name="pis_yemek" value={x.yemek} placeholder="Yemek (örn. Dana kuşbaşı)" data-alan-ipucu="Pişirme Yemeği: Koyu kahve pişirme panelindeki kartlarda sürenin altında yazar." data-hedef-eleman="pisirme" />
+                <div class="y-tekrar__alanlar" style="grid-template-columns:1fr 1fr 1fr">
+                  <input class="y-girdi" name="pis_sure" value={x.sure} placeholder="Süre (20–25 dk)" data-alan-ipucu="Pişirme Süresi: Kartın üstünde büyük krem rengi rakamlarla yazar." data-hedef-eleman="pisirme" />
+                  <input class="y-girdi" name="pis_kademe" value={x.kademe ?? ''} placeholder="Kademe (2)" data-hedef-eleman="pisirme" />
+                  <input class="y-girdi" name="pis_miktar" value={x.miktar ?? ''} placeholder="Miktar (500 g)" data-hedef-eleman="pisirme" />
+                </div>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          ))}
+          <template>
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                <input class="y-girdi" name="pis_yemek" placeholder="Yemek" data-alan-ipucu="Pişirme Yemeği: Koyu kahve pişirme panelindeki kartlarda görünür." data-hedef-eleman="pisirme" />
+                <div class="y-tekrar__alanlar" style="grid-template-columns:1fr 1fr 1fr">
+                  <input class="y-girdi" name="pis_sure" placeholder="Süre (örn. 20–25 dk)" data-hedef-eleman="pisirme" />
+                  <input class="y-girdi" name="pis_kademe" placeholder="Kademe" data-hedef-eleman="pisirme" />
+                  <input class="y-girdi" name="pis_miktar" placeholder="Miktar" data-hedef-eleman="pisirme" />
+                </div>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          </template>
+          <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Yemek Süresi Ekle</button>
+        </div>
+        <div class="y-alan" style="margin-top:10px">
+          <label for="pisirmeNotu">Pişirme Tablosu Dipnotu</label>
+          <textarea id="pisirmeNotu" name="pisirmeNotu" rows="2" data-alan-ipucu="Pişirme Dipnotu: Koyu kahve pişirme panelinin en altında açıklama olarak yer alır." data-hedef-eleman="pisirme">{u.pisirmeNotu ?? ''}</textarea>
+        </div>
+
+        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
+
+        </details>
+        <h2>Teknik Özellikler & Kutu İçeriği </h2>
+        <div class="y-tekrar">
+          {u.teknik.map(([e, d]) => (
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                <input class="y-girdi" name="teknik_etiket" value={e} placeholder="Özellik (örn. Hacim)" data-alan-ipucu="Teknik Özellik: Teknik özellikler tablosunun sol sütunudur. 'Hacim' yazarsanız ürün başlığının üstünde markanın yanında da görünür." data-hedef-eleman="teknik" />
+                <input class="y-girdi" name="teknik_deger" value={d} placeholder="Değer (örn. 6 litre)" data-alan-ipucu="Teknik Değer: Teknik özellikler tablosunun sağ sütunudur." data-hedef-eleman="teknik" />
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          ))}
+          <template>
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
+                <input class="y-girdi" name="teknik_etiket" placeholder="Özellik (örn. Hacim)" data-alan-ipucu="Teknik Özellik: Teknik özellikler tablosunun sol sütunudur." data-hedef-eleman="teknik" />
+                <input class="y-girdi" name="teknik_deger" placeholder="Değer (örn. 6 litre)" data-hedef-eleman="teknik" />
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Satırı sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          </template>
+          <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Teknik Özellik Satırı Ekle</button>
+        </div>
+
+        <div class="y-alan" style="margin-top:14px">
+          <label for="kutuIcerigi">Kutu İçeriği </label>
+          <textarea
+            id="kutuIcerigi"
+            name="kutuIcerigi"
+            rows="4"
+            placeholder="Kutuya dahil olan parçaları satır satır yazın"
+            data-alan-ipucu="Kutu İçeriği: Teknik özelliklerin yanındaki sütunda yeşil onay işaretleriyle (✓) madde madde listelenir."
+            data-hedef-eleman="kutu"
+          >{u.kutuIcerigi.join('\n')}</textarea>
+        </div>
+      </section>
+
+      <!-- 9. SSS, TAMAMLAYICI ÜRÜNLER VE İÇ NOTLAR -->
+      <section class="y-kart" id="bolum-sss" data-bolum="detay" hidden>
+        <h2>Sık Sorulan Sorular (Ürüne Özel) </h2>
+        <div class="y-tekrar">
+          {u.sss.map((x) => (
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar">
+                <input class="y-girdi" name="sss_soru" value={x.soru} placeholder="Soru" data-alan-ipucu="Sık Sorulan Soru: Ürün sayfasının altındaki 'Bu ürün hakkında' bölümünde açılır-kapanır soru başlığı olarak görünür." data-hedef-eleman="sss" />
+                <textarea class="y-girdi" name="sss_cevap" rows="2" placeholder="Cevap" data-alan-ipucu="Soru Cevabı: Müşteri soruya tıkladığında açılan cevaptır." data-hedef-eleman="sss">{x.cevap}</textarea>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          ))}
+          <template>
+            <div class="y-tekrar__satir">
+              <div class="y-tekrar__alanlar">
+                <input class="y-girdi" name="sss_soru" placeholder="Soru" data-alan-ipucu="Sık Sorulan Soru: Ürün sayfasının altındaki açılır-kapanır soru başlığıdır." data-hedef-eleman="sss" />
+                <textarea class="y-girdi" name="sss_cevap" rows="2" placeholder="Cevap" data-hedef-eleman="sss"></textarea>
+              </div>
+              <button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Soruyu sil"><Ikon ad="cop" boyut={18} /></button>
+            </div>
+          </template>
+          <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Soru-Cevap Ekle</button>
+        </div>
+
+        {digerUrunler.length > 0 && (
+          <>
+            <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
+            <h2>Bununla İyi Gider (Tamamlayıcı Ürünler) </h2>
+
+            <p class="y-ipucu">Önizleme tüm seçilenleri gösterir. Mağazada yayındaki ve stoktaki ürünler gösterilir.</p>
+            {tamamlayiciGruplar.map((grup) => <fieldset class="y-kart y-block-gap">
+              <legend>{grup.ad}</legend>
+              <div class="y-secimler">{grup.urunler.map((x) => <label class="y-secim">
+                <input type="checkbox" name="birlikte" value={x.id} checked={u.birlikteIyiGider.includes(x.id)} />
+                {x.kisaAd} · {formatTL(x.fiyat)}{x.durum !== "yayinda" ? " · " + (x.durum === "taslak" ? "Taslak" : "Gizli") : x.stok === 0 ? " · Tükendi" : ""}
+              </label>)}</div>
+            </fieldset>)}
+          </>
+        )}
+
+        <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
+      </section>
+      <section class="y-kart" data-bolum="gelismis" hidden>
+                <h2>Arama görünümü ve iç notlar</h2>
+        <p class="y-ipucu">Sayfa başlığı ürün adı ve markadan, arama açıklaması kısa açıklamadan oluşturulur.</p>
+        <p class="y-block-gap"><strong>{u.marka} {u.ad} · {m.site.ad}</strong></p>
+        {u.ozet && <p class="muted">{u.ozet}</p>}
+
+        <textarea class="y-girdi" name="dogrula" rows="3" style="width:100%" placeholder="Örn. Fatura kodu kutuyla teyit edilecek">{u.dogrula.join('\n')}</textarea>
+      </section>
+
+      <p class="y-form-state" data-kayit-durum role="status"></p>
+      {!yeni && <details class="y-kart" data-bolum="gelismis" hidden>
+        <summary>Tehlikeli işlemler</summary>
+        <button class="btn btn--tehlike btn--kucuk" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün kalıcı olarak silinsin mi?">Ürünü sil</button>
+      </details>}
+    </form>
+    <Onizleme id="urun-onizleme" tur="urun" kayit={u.id} />
+  </div>
 </Yonetim>

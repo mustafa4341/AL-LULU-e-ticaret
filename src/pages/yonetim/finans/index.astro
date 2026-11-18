@@ -1,0 +1,361 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import Ikon from '../../../components/Ikon.astro';
+import { siparisleriOku } from '../../../lib/depo';
+import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
+import { finansOku, giderEkle, giderGuncelle, giderSil, trendyolKaydet } from '../../../lib/finansDepo';
+import { aylar } from '../../../lib/finansDisari';
+import { metin } from '../../../lib/form';
+import { trendyolDosyasi } from '../../../lib/trendyolDosya';
+import { gonderilecek, onayliSatis, yTarih } from '../../../lib/yonetimRapor';
+
+const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
+const q0 = Astro.url.searchParams;
+let sekme = sekmeler.find(([id]) => id === q0.get('sekme'))?.[0] ?? 'ozet';
+let hatalar: string[] = [];
+let taslak: FormData | undefined;
+let acikPencere = '';
+const giderGirdisi = (f: FormData) => {
+  const tarih = metin(f, 'tarih');
+  const kategori = metin(f, 'kategori') as Gider['kategori'];
+  const tutar = paraOku(metin(f, 'tutar'));
+  if (!gecerliGun(tarih) || !Object.hasOwn(GIDER_KATEGORILERI, kategori) || tutar <= 0) throw new Error('Tarih, kategori ve sıfırdan büyük bir tutar girin.');
+  return { tutar, tarih, kategori, not: metin(f, 'not').slice(0, 300) };
+};
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  taslak = f;
+  const eylem = metin(f, 'eylem');
+  try {
+    if (eylem === 'gider-ekle') {
+      sekme = 'giderler'; acikPencere = 'gider-ekle';
+      const dosya = f.get('belge');
+      const g = giderGirdisi(f);
+      await giderEkle(g, dosya instanceof File ? dosya : undefined);
+      return Astro.redirect('/yonetim/finans?sekme=giderler&ay=' + g.tarih.slice(0, 7) + '&ok=' + encodeURIComponent('Gider kaydedildi.'), 303);
+    }
+    if (eylem === 'gider-duzenle') {
+      sekme = 'giderler'; acikPencere = 'gider-duzenle';
+      const g = giderGirdisi(f);
+      await giderGuncelle(metin(f, 'id'), g);
+      return Astro.redirect('/yonetim/finans?sekme=giderler&ay=' + g.tarih.slice(0, 7) + '&ok=' + encodeURIComponent('Gider güncellendi.'), 303);
+    }
+    if (eylem === 'gider-sil') {
+      sekme = 'giderler';
+      const g = await giderSil(metin(f, 'id'));
+      return Astro.redirect('/yonetim/finans?sekme=giderler&ay=' + g.tarih.slice(0, 7) + '&ok=' + encodeURIComponent('Gider silindi.'), 303);
+    }
+    if (eylem === 'trendyol-al') {
+      sekme = 'trendyol';
+      const dosya = f.get('rapor');
+      if (!(dosya instanceof File) || !dosya.size) throw new Error('Bir CSV veya XLSX dosyası seçin.');
+      const satirlar = await trendyolDosyasi(dosya);
+      await trendyolKaydet(satirlar);
+      return Astro.redirect('/yonetim/finans?sekme=trendyol&ok=' + encodeURIComponent(satirlar.length + ' hakediş satırı işlendi.'), 303);
+    }
+    throw new Error('Geçersiz finans işlemi.');
+  } catch (e) {
+    hatalar = [e instanceof Error && e.name !== 'ZodError' ? e.message : 'Girilen değerleri kontrol edin.'];
+  }
+}
+
+const [finans, tum] = await Promise.all([finansOku(), siparisleriOku()]);
+const siparisler = tum.filter((s) => !s.paytr?.test).sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih));
+const bugun = finansGunu();
+
+/* Seçili ay (Özet ve Giderler): ?ay=2026-11 */
+const ay = /^\d{4}-\d{2}$/.test(q0.get('ay') ?? '') && q0.get('ay')! <= bugun.slice(0, 7) ? q0.get('ay')! : bugun.slice(0, 7);
+const ayDonemi = aylar(ay + '-01', ay === bugun.slice(0, 7) ? bugun : new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7), 0)).toISOString().slice(0, 10))[0]!;
+const ayKaydir = (n: number) => { const d = new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
+const ayRaporu = raporla(finans, siparisler, ayDonemi.bas, ayDonemi.son);
+const kalan = (r: ReturnType<typeof raporla>) => r.webSatis - r.webIade + r.trendyolBeklenen - r.gider;
+const bugunSatis = raporla(finans, siparisler, bugun, bugun);
+const buAy = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
+const son6 = aylar(ayKaydir(-5) + '-01', ayDonemi.son).map((a) => ({ ...a, r: raporla(finans, siparisler, a.bas, a.son) })).reverse();
+
+const { bas, son } = donem(q0);
+const rapor = raporla(finans, siparisler, bas, son);
+const belgeGerekenler = siparisler.filter((s) => onayliSatis(s) && !finans.belgeler.some((b) => b.siparisNo === s.no && belgeGecerli(b)));
+const isler = siparisler.filter((s) => gonderilecek(s) || belgeGerekenler.includes(s));
+const q = (q0.get('q') ?? '').trim();
+const aranan = q.toLocaleLowerCase('tr');
+const ayAdi = (tarih: string) => new Intl.DateTimeFormat('tr-TR', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(tarih));
+const giderler = [...finans.giderler].sort((a, b) => b.tarih.localeCompare(a.tarih)).filter((g) =>
+  aranan ? aranan.split(/\s+/).every((x) => (GIDER_KATEGORILERI[g.kategori] + ' ' + g.not + ' ' + g.tarih + ' ' + ayAdi(g.tarih)).toLocaleLowerCase('tr').includes(x))
+    : g.tarih.startsWith(ay));
+const giderToplam = giderler.reduce((t, g) => t + g.tutar, 0);
+const giderKategori = Object.entries(giderler.reduce((t, g) => ({ ...t, [g.kategori]: (t[g.kategori] ?? 0) + g.tutar }), {} as Record<string, number>)).sort((a, b) => b[1] - a[1]);
+const duzenlenen = finans.giderler.find((g) => g.id === q0.get('duzenle'));
+if (duzenlenen && !acikPencere) acikPencere = 'gider-duzenle';
+const duzenGider = acikPencere === 'gider-duzenle' && taslak ? { id: metin(taslak, 'id'), tarih: metin(taslak, 'tarih'), tutarYazi: metin(taslak, 'tutar'), kategori: metin(taslak, 'kategori'), not: metin(taslak, 'not') }
+  : duzenlenen ? { id: duzenlenen.id, tarih: duzenlenen.tarih, tutarYazi: (duzenlenen.tutar / 100).toFixed(2).replace('.', ','), kategori: duzenlenen.kategori, not: duzenlenen.not } : undefined;
+
+const belgeler = [...finans.belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturma))
+  .filter((b) => !aranan || ((b.belgeNo ?? '') + ' ' + b.siparisNo + ' ' + BELGE_TURLERI[b.tur]).toLocaleLowerCase('tr').includes(aranan));
+const disari = (tur: string, b = bas, s = son) => '/yonetim/finans/rapor?' + new URLSearchParams({ tur, baslangic: b, bitis: s });
+const kalanlar = rapor.trendyol.filter((x) => x.banka === undefined).reduce((t, x) => t + hakEdis(x), 0);
+const banka = rapor.trendyol.reduce((t, x) => t + (x.banka ?? 0), 0);
+const farklar = rapor.trendyol.filter((x) => x.banka !== undefined && x.banka !== hakEdis(x)).length;
+const ayar = finans.ayarlar;
+const TURLER = Object.keys(BELGE_TURLERI) as BelgeTuru[];
+const hazirAraliklar = (() => {
+  const y = bugun.slice(0, 4);
+  const gecen = new Date(Date.UTC(+bugun.slice(0, 4), +bugun.slice(5, 7) - 2, 1)).toISOString().slice(0, 7);
+  const gecenSon = new Date(Date.UTC(+gecen.slice(0, 4), +gecen.slice(5, 7), 0)).toISOString().slice(0, 10);
+  return [['Bu ay', bugun.slice(0, 7) + '-01', bugun], ['Geçen ay', gecen + '-01', gecenSon], ['Bu yıl', y + '-01-01', bugun]] as const;
+})();
+const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyor' ? 'turuncu' : d === 'iptal' ? 'gri' : 'yesil';
+---
+<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
+  <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
+    {sekmeler.map(([id, ad]) => <a href={'?sekme=' + id + (id === 'ozet' || id === 'giderler' ? '&ay=' + ay : '')} aria-current={sekme === id ? 'page' : undefined}>{ad}</a>)}
+  </nav>
+
+  {sekme === 'ozet' && <>
+    <div class="y-metrics y-metrics--finans">
+      <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü onaylı satış</span><strong>{finansPara(bugunSatis.webSatis - bugunSatis.webIade)}</strong></a>
+      <a class="y-metric" href="/yonetim/siparisler?durum=belgesiz"><span>Belgesi hazırlanmamış</span><strong>{belgeGerekenler.length}</strong></a>
+      <a class="y-metric" href={'?sekme=giderler&ay=' + bugun.slice(0, 7)}><span>Bu ayki giderler</span><strong>{finansPara(buAy.gider)}</strong></a>
+      <a class="y-metric" href={'?sekme=ozet&ay=' + bugun.slice(0, 7) + '#ay-hesabi'}><span>Tahmini net · bu ay</span><strong>{finansPara(kalan(buAy))}</strong>
+        {buAy.tahmini === undefined && <small class="y-uyari-kucuk">Ürün maliyeti girilmedi</small>}</a>
+    </div>
+
+    <section class="y-kart" id="ay-hesabi">
+      <div class="y-kart__bas">
+        <div class="y-ay-secici">
+          <a class="y-icon-button" href={'?sekme=ozet&ay=' + ayKaydir(-1)} aria-label="Önceki ay">‹</a>
+          <h2>{ayDonemi.ad}</h2>
+          {ay < bugun.slice(0, 7) ? <a class="y-icon-button" href={'?sekme=ozet&ay=' + ayKaydir(1)} aria-label="Sonraki ay">›</a> : <span class="y-icon-button" aria-hidden="true"></span>}
+        </div>
+        <a class="y-link" href={disari('pdf', ayDonemi.bas, ayDonemi.son)}>Bu ayın özetini PDF indir</a>
+      </div>
+      <dl class="y-hesap">
+        <div><dt>Onaylı satışlar <small>{ayRaporu.satislar.length} sipariş · ödeme tarihine göre</small></dt><dd>{finansPara(ayRaporu.webSatis)}</dd></div>
+        <div class="eksi"><dt>İade ve iptal geri ödemeleri <small>{ayRaporu.iadeler.length} kayıt</small></dt><dd>−{finansPara(ayRaporu.webIade)}</dd></div>
+        {ayRaporu.trendyolBeklenen !== 0 && <div><dt>Trendyol beklenen hakediş <small>kesintiler düşülmüş</small></dt><dd>{finansPara(ayRaporu.trendyolBeklenen)}</dd></div>}
+        <div class="eksi"><dt>Giderler <small><a class="y-link" href={'?sekme=giderler&ay=' + ay}>{ayRaporu.giderler.length} kayıt · gör</a></small></dt><dd>−{finansPara(ayRaporu.gider)}</dd></div>
+        {Object.entries(ayRaporu.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
+        <div class="sonuc"><dt>Kalan (tahmini)</dt><dd>{finansPara(kalan(ayRaporu))}</dd></div>
+      </dl>
+      {ayRaporu.tahmini === undefined
+        ? <p class="y-uyari">Bu ay için “Ürün alış maliyeti” gideri girilmedi. Kalan tutar ürün maliyeti düşülmeden hesaplandı; gerçek kazanç daha düşüktür. <a class="y-link" href={'?sekme=giderler&ay=' + ay + '&yeni=urun'}>Ürün maliyeti ekle</a></p>
+        : <p class="y-help">Yönetim tahminidir: KDV, banka tahsilatı ve muhasebe kârı ayrıca hesaplanır. Kargo tahsilatı satış tutarına dahildir ({finansPara(ayRaporu.kargo)}).</p>}
+    </section>
+
+    <section class="y-kart">
+      <h2>Son 6 ay</h2>
+      <div class="y-tablo-kap"><table class="y-tablo">
+        <thead><tr><th>Ay</th><th class="y-sayi">Satış</th><th class="y-sayi">İade</th><th class="y-sayi">Gider</th><th class="y-sayi">Kalan</th></tr></thead>
+        <tbody>{son6.map((a) => <tr class:list={{ 'is-secili': a.bas.slice(0, 7) === ay }}>
+          <td><a class="y-link" href={'?sekme=ozet&ay=' + a.bas.slice(0, 7)}>{a.ad}</a></td>
+          <td class="y-sayi">{finansPara(a.r.webSatis)}</td><td class="y-sayi">{finansPara(a.r.webIade)}</td><td class="y-sayi">{finansPara(a.r.gider)}</td>
+          <td class="y-sayi"><strong>{finansPara(kalan(a.r))}</strong>{a.r.tahmini === undefined && <span class="y-uyari-kucuk" title="Ürün maliyeti girilmedi"> *</span>}</td>
+        </tr>)}</tbody>
+      </table></div>
+      {son6.some((a) => a.r.tahmini === undefined) && <p class="y-help">* Ürün alış maliyeti girilmemiş ay; kalan kesin değildir.</p>}
+    </section>
+
+    <section class="y-kart">
+      <div class="y-kart__bas"><h2>İşlem gerektiren siparişler</h2><a class="y-link" href="/yonetim/siparisler">Siparişlere git</a></div>
+      {isler.length ? <ul class="y-task-list">
+        {isler.slice(0, 10).map((s) => <li><a href={'/yonetim/siparisler/' + s.no + (gonderilecek(s) ? '' : '#belgeler')}>
+          <span><strong>{s.no}</strong> · {s.musteri.ad} {s.musteri.soyad}</span>
+          <span>{[gonderilecek(s) ? (s.durum === 'hazirlaniyor' ? 'Kargoya verilecek' : 'Hazırlanacak') : '', belgeGerekenler.includes(s) ? 'Belge eksik' : ''].filter(Boolean).join(' · ')} ›</span>
+        </a></li>)}
+      </ul> : <p class="muted">Bekleyen işlem yok.</p>}
+    </section>
+  </>}
+
+  {sekme === 'belgeler' && <>
+    <div class="y-toolbar">
+      <form class="y-toolbar y-toolbar--genis" method="get"><input type="hidden" name="sekme" value="belgeler" />
+        <input type="search" class="y-girdi" name="q" value={q} placeholder="Belge no, sipariş no veya belge türü" aria-label="Belge ara" />
+        <button class="btn btn--cizgi" type="submit">Ara</button>
+      </form>
+      <button type="button" class="btn btn--cizgi" data-y-dialog="belge-ayar"><Ikon ad="ayar" boyut={16} />Belge ayarları</button>
+    </div>
+    {belgeGerekenler.length > 0 && <details class="y-kart"><summary><strong>Belgesi hazırlanmamış {belgeGerekenler.length} sipariş</strong></summary>
+      <ul class="y-task-list">{belgeGerekenler.slice(0, 30).map((s) => <li><a href={'/yonetim/siparisler/' + s.no + '#belgeler'}><span>{s.no} · {s.musteri.ad} {s.musteri.soyad}</span><span>Belge oluştur ›</span></a></li>)}</ul>
+    </details>}
+    {belgeler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Belge no</th><th>Sipariş</th><th>Tür</th><th>Tarih</th><th>Durum</th><th class="y-sayi">İşlem</th></tr></thead>
+      <tbody>{belgeler.map((b) => <tr>
+        <td data-etiket="Belge no" class="y-nowrap"><strong>{b.belgeNo ?? '—'}</strong></td>
+        <td data-etiket="Sipariş"><a class="y-link" href={'/yonetim/siparisler/' + b.siparisNo + '#belgeler'}>{b.siparisNo}</a></td>
+        <td data-etiket="Tür">{BELGE_TURLERI[b.tur]}{b.fiyatGizle && <small class="y-table-note">fiyatsız</small>}</td>
+        <td data-etiket="Tarih" class="y-nowrap">{yTarih.format(new Date(b.olusturma))}</td>
+        <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + durumSinifi(b.durum)]}>{BELGE_DURUMLARI[b.durum]}</span></td>
+        <td class="y-sayi y-nowrap">{['duzenlendi', 'gonderildi', 'iptal'].includes(b.durum)
+          ? <><a class="y-link" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Görüntüle</a> · <a class="y-link" href={'/yonetim/finans/belge?id=' + b.id}>İndir</a></>
+          : <a class="y-link" href={'/yonetim/siparisler/' + b.siparisNo + '#belgeler'}>Yeniden dene</a>}</td>
+      </tr>)}</tbody>
+    </table></div> : <p class="y-kart muted">{q ? 'Aramaya uygun belge yok.' : 'Henüz belge düzenlenmedi. Sipariş detayından “Belge Oluştur” ile başlayın.'}</p>}
+
+    <dialog class="y-modal y-modal--genis" id="belge-ayar" data-hata-ac={q0.get('ayar') === '1' ? '1' : undefined} aria-labelledby="belge-ayar-baslik">
+      <div class="y-modal__bas"><strong id="belge-ayar-baslik">Belge ayarları</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+      <div class="y-belge-duzen">
+        <form method="post" action="/yonetim/finans/belge" class="y-belge-form" data-belge-ayar>
+          <input type="hidden" name="islem" value="ayar-kaydet" /><input type="hidden" name="geri" value="/yonetim/finans?sekme=belgeler" />
+          <fieldset class="y-ayar-grup"><legend>Görünüm</legend>
+            <label class="y-secim"><input type="checkbox" name="logo" value="1" checked={ayar.logo} />Logo göster</label>
+            <label class="y-secim"><input type="checkbox" name="satici" value="1" checked={ayar.satici} />Satıcı bilgileri (unvan, adres, vergi no)</label>
+            <label class="y-secim"><input type="checkbox" name="barkod" value="1" checked={ayar.barkod} />Sipariş barkodu</label>
+            <label class="y-secim"><input type="checkbox" name="fisFiyat" value="1" checked={ayar.fisFiyat} />Paket içi fişte fiyatları göster</label>
+            <p class="y-help">Satıcı bilgileri <a class="y-link" href="/yonetim/ayarlar">Ayarlar ve yasal bilgiler</a> sayfasından gelir.</p>
+          </fieldset>
+          <fieldset class="y-ayar-grup"><legend>Belge notları</legend>
+            {TURLER.map((t) => <label class="y-alan">{BELGE_TURLERI[t]}<textarea name={'not_' + t} rows="2" maxlength="400">{ayar.notlar[t]}</textarea></label>)}
+          </fieldset>
+          <details class="y-ayar-grup"><summary>Numara önekleri</summary>
+            <div class="y-izgara y-izgara--2">
+              {TURLER.map((t) => <label class="y-alan">{BELGE_TURLERI[t]}<input name={'onek_' + t} value={ayar.onekler[t]} maxlength="5" pattern="[A-Za-z]{1,5}" required /></label>)}
+            </div>
+            <p class="y-help">Örnek: {ayar.onekler.ozet}-{bugun.slice(0, 4)}-00001. Numaralar her yıl ve her belge türü için ayrı sıra ile verilir; değişiklik yalnızca yeni belgelere uygulanır.</p>
+          </details>
+          <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Ayarları kaydet</button></div>
+        </form>
+        <figure class="y-belge-onizleme">
+          <label class="y-alan">Önizlenen belge<select data-ayar-onizleme-tur>{TURLER.map((t) => <option value={t}>{BELGE_TURLERI[t]}</option>)}</select></label>
+          {siparisler.length ? <img alt="Belge önizlemesi" data-ayar-onizleme width="595" height="842" /> : <p class="muted">Önizleme için en az bir sipariş gerekir.</p>}
+          <figcaption>Son siparişle örnek önizleme</figcaption>
+        </figure>
+      </div>
+    </dialog>
+  </>}
+
+  {sekme === 'giderler' && <>
+    <div class="y-toolbar">
+      {!q && <div class="y-ay-secici">
+        <a class="y-icon-button" href={'?sekme=giderler&ay=' + ayKaydir(-1)} aria-label="Önceki ay">‹</a>
+        <strong>{ayDonemi.ad}</strong>
+        {ay < bugun.slice(0, 7) ? <a class="y-icon-button" href={'?sekme=giderler&ay=' + ayKaydir(1)} aria-label="Sonraki ay">›</a> : <span class="y-icon-button" aria-hidden="true"></span>}
+      </div>}
+      <form class="y-toolbar y-toolbar--genis" method="get"><input type="hidden" name="sekme" value="giderler" /><input type="search" name="q" class="y-girdi" value={q} placeholder="Ara: örn. “Kasım kargo”" aria-label="Gider ara" /><button class="btn btn--cizgi">Ara</button>{q && <a class="y-link" href={'?sekme=giderler&ay=' + ay}>Temizle</a>}</form>
+      <button type="button" class="btn btn--sepet" data-y-dialog="gider-ekle"><Ikon ad="arti" boyut={16} />Gider Ekle</button>
+    </div>
+
+    <div class="y-gider-ozet">
+      <span>{q ? '“' + q + '” sonuçları' : ayDonemi.ad + ' toplamı'}: <strong>{finansPara(giderToplam)}</strong> · {giderler.length} kayıt</span>
+      {giderKategori.map(([id, n]) => <span class="y-chip y-chip--gri">{GIDER_KATEGORILERI[id as Gider['kategori']]} {finansPara(n)}</span>)}
+    </div>
+
+    {giderler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Tarih</th><th>Kategori</th><th>Açıklama</th><th class="y-sayi">Tutar</th><th>Fiş / fatura</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th></tr></thead>
+      <tbody>{giderler.map((g) => <tr>
+        <td data-etiket="Tarih" class="y-nowrap">{new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(g.tarih))}</td>
+        <td data-etiket="Kategori">{GIDER_KATEGORILERI[g.kategori]}</td>
+        <td data-etiket="Açıklama">{g.not || '—'}</td>
+        <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{finansPara(g.tutar)}</strong></td>
+        <td data-etiket="Ek">{g.ek ? <a class="y-link" href={'/yonetim/finans/belge?ek=gider&id=' + g.id} target="_blank" rel="noopener">{g.ek.tur === 'application/pdf' ? 'PDF' : 'Fotoğraf'} ↗</a> : <span class="muted">Yok</span>}</td>
+        <td class="y-sayi y-islem"><details class="y-row-menu y-row-menu--sag"><summary aria-label="Gider işlemleri">•••</summary><div>
+          <a href={'?sekme=giderler&ay=' + ay + '&duzenle=' + g.id + (q ? '&q=' + encodeURIComponent(q) : '')}>Düzenle</a>
+          <form method="post"><input type="hidden" name="eylem" value="gider-sil" /><input type="hidden" name="id" value={g.id} />
+            <button type="submit" class="y-sil" data-onayla={'Bu gider silinsin mi?\n' + GIDER_KATEGORILERI[g.kategori] + ' · ' + finansPara(g.tutar) + ' · ' + g.tarih + '\nEklenen fiş arşivde kalır.'}>Sil</button>
+          </form>
+        </div></details></td>
+      </tr>)}</tbody>
+    </table></div> : <div class="y-kart y-bos"><p>{q ? 'Aramaya uygun gider yok.' : ayDonemi.ad + ' için gider girilmedi.'}</p><button type="button" class="btn btn--cizgi" data-y-dialog="gider-ekle">Gider ekle</button></div>}
+
+    <dialog class="y-modal" id="gider-ekle" data-hata-ac={acikPencere === 'gider-ekle' || q0.get('yeni') ? '1' : undefined} aria-labelledby="gider-ekle-baslik">
+      <div class="y-modal__bas"><strong id="gider-ekle-baslik">Yeni gider</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+      {acikPencere === 'gider-ekle' && hatalar.length > 0 && <p class="y-uyari">{hatalar[0]}</p>}
+      <form method="post" class="y-izgara" enctype="multipart/form-data">
+        <input type="hidden" name="eylem" value="gider-ekle" />
+        <div class="y-izgara y-izgara--2">
+          <label class="y-alan">Tarih<input name="tarih" type="date" required max={bugun} value={String(acikPencere === 'gider-ekle' && taslak?.get('tarih') || (ay === bugun.slice(0, 7) ? bugun : ayDonemi.son))} /></label>
+          <label class="y-alan">Tutar (TL)<input name="tutar" inputmode="decimal" required placeholder="249,90" autocomplete="off" value={String(acikPencere === 'gider-ekle' ? taslak?.get('tutar') ?? '' : '')} /></label>
+        </div>
+        <label class="y-alan">Kategori<select name="kategori" required>{Object.entries(GIDER_KATEGORILERI).map(([id, ad]) => <option value={id} selected={(acikPencere === 'gider-ekle' ? taslak?.get('kategori') : q0.get('yeni')) === id}>{ad}</option>)}</select></label>
+        <label class="y-alan">Açıklama<input name="not" maxlength="300" placeholder="Ör. Kasım Yurtiçi Kargo faturası" value={String(acikPencere === 'gider-ekle' ? taslak?.get('not') ?? '' : '')} /></label>
+        <label class="y-alan">Fiş veya fatura (isteğe bağlı)<input type="file" name="belge" accept="application/pdf,image/jpeg,image/png" capture="environment" /><small class="muted">Fotoğraf çekebilir veya PDF seçebilirsiniz · en fazla 10 MB</small></label>
+        <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Kaydet</button></div>
+      </form>
+    </dialog>
+
+    {duzenGider && <dialog class="y-modal" id="gider-duzenle" data-hata-ac="1" aria-labelledby="gider-duzenle-baslik">
+      <div class="y-modal__bas"><strong id="gider-duzenle-baslik">Gideri düzenle</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+      {acikPencere === 'gider-duzenle' && hatalar.length > 0 && taslak && <p class="y-uyari">{hatalar[0]}</p>}
+      <form method="post" class="y-izgara">
+        <input type="hidden" name="eylem" value="gider-duzenle" /><input type="hidden" name="id" value={duzenGider.id} />
+        <div class="y-izgara y-izgara--2">
+          <label class="y-alan">Tarih<input name="tarih" type="date" required max={bugun} value={duzenGider.tarih} /></label>
+          <label class="y-alan">Tutar (TL)<input name="tutar" inputmode="decimal" required value={duzenGider.tutarYazi} /></label>
+        </div>
+        <label class="y-alan">Kategori<select name="kategori" required>{Object.entries(GIDER_KATEGORILERI).map(([id, ad]) => <option value={id} selected={duzenGider.kategori === id}>{ad}</option>)}</select></label>
+        <label class="y-alan">Açıklama<input name="not" maxlength="300" value={duzenGider.not} /></label>
+        <div class="y-modal__alt"><a class="btn btn--cizgi" href={'?sekme=giderler&ay=' + ay}>Vazgeç</a><button class="btn btn--sepet" type="submit">Kaydet</button></div>
+      </form>
+    </dialog>}
+  </>}
+
+  {sekme === 'trendyol' && <>
+    <section class="y-kart">
+      <div class="y-kart__bas"><h2>Hakediş raporu yükle</h2><a class="y-link" href={disari('sablon')}>Boş şablonu indir (CSV)</a></div>
+      <p class="y-help">Trendyol mağaza bağlantısı (API) henüz kurulmadı. Satıcı panelinden indirdiğiniz hakediş/ödeme raporunu şablondaki başlıklarla CSV veya XLSX olarak yükleyin. Aynı kayıt numarası tekrar yüklenirse güncellenir, iki kez sayılmaz.</p>
+      <form class="y-sonraki" method="post" enctype="multipart/form-data">
+        <input type="hidden" name="eylem" value="trendyol-al" />
+        <label class="y-alan">Rapor dosyası<input type="file" accept=".csv,.xlsx" name="rapor" required /></label>
+        <button class="btn btn--sepet" type="submit">İçe aktar</button>
+      </form>
+    </section>
+    <form class="y-toolbar" method="get">
+      <input type="hidden" name="sekme" value="trendyol" />
+      <label class="y-alan">Başlangıç<input type="date" name="baslangic" value={bas} required /></label>
+      <label class="y-alan">Bitiş<input type="date" name="bitis" value={son} required /></label>
+      <button class="btn btn--cizgi">Uygula</button>
+    </form>
+    <section class="y-kart">
+      <h2>“Hesabıma ne kadar yatacak?”</h2>
+      <dl class="y-hesap">
+        <div><dt>Brüt satış</dt><dd>{finansPara(rapor.trendyol.reduce((t, x) => t + x.brut, 0))}</dd></div>
+        {(['indirim', 'iade', 'komisyon', 'hizmet', 'kargo', 'diger'] as const).map((k) => <div class="eksi"><dt>{TRENDYOL_TUTARLARI[k]}</dt><dd>−{finansPara(rapor.trendyol.reduce((t, x) => t + x[k], 0))}</dd></div>)}
+        <div class="sonuc"><dt>Beklenen hakediş</dt><dd>{finansPara(rapor.trendyolBeklenen)}</dd></div>
+        <div><dt>Bankaya geçen</dt><dd>{finansPara(banka)}</dd></div>
+        <div><dt>Ödeme bekleyen</dt><dd>{finansPara(kalanlar)}</dd></div>
+      </dl>
+      {farklar > 0 && <p class="y-uyari">{farklar} kayıtta bankaya geçen tutar beklenen hakedişten farklı. Aşağıdaki “Fark” sütununu kontrol edin.</p>}
+    </section>
+    {rapor.trendyol.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Kayıt no</th><th>Tarih</th><th class="y-sayi">Brüt</th><th class="y-sayi">Beklenen</th><th class="y-sayi">Bankaya geçen</th><th class="y-sayi">Fark</th><th>Kesintiler</th></tr></thead><tbody>
+      {rapor.trendyol.map((s) => <tr><td data-etiket="Kayıt">{s.id}</td><td data-etiket="Tarih">{s.tarih}</td><td data-etiket="Brüt" class="y-sayi">{finansPara(s.brut)}</td><td data-etiket="Beklenen" class="y-sayi">{finansPara(hakEdis(s))}</td>
+        <td data-etiket="Banka" class="y-sayi">{s.banka === undefined ? <span class="y-chip y-chip--turuncu">Bekleniyor</span> : finansPara(s.banka)}</td>
+        <td data-etiket="Fark" class="y-sayi">{s.banka === undefined ? '—' : <span class:list={['y-chip', s.banka !== hakEdis(s) ? 'y-chip--kirmizi' : 'y-chip--yesil']}>{finansPara(s.banka - hakEdis(s))}</span>}</td>
+        <td data-etiket="Kesintiler"><details><summary>Detay</summary><dl class="y-money-lines y-money-lines--kucuk">{(['indirim', 'iade', 'komisyon', 'hizmet', 'kargo', 'diger'] as const).map((k) => <div><dt>{TRENDYOL_TUTARLARI[k]}</dt><dd>{finansPara(s[k])}</dd></div>)}</dl></details></td></tr>)}
+    </tbody></table></div> : <p class="y-kart muted">Bu dönemde içe aktarılmış Trendyol kaydı yok.</p>}
+  </>}
+
+  {sekme === 'raporlar' && <>
+    <form class="y-toolbar" method="get">
+      <input type="hidden" name="sekme" value="raporlar" />
+      <label class="y-alan">Başlangıç<input type="date" name="baslangic" value={bas} required /></label>
+      <label class="y-alan">Bitiş<input type="date" name="bitis" value={son} required /></label>
+      <button class="btn btn--cizgi">Uygula</button>
+      <span class="y-hazir-aralik">{hazirAraliklar.map(([ad, b, s]) => <a class="y-chip y-chip--gri" aria-current={b === bas && s === son ? 'true' : undefined} href={'?sekme=raporlar&baslangic=' + b + '&bitis=' + s}>{ad}</a>)}</span>
+    </form>
+    <section class="y-kart"><div class="y-kart__bas"><h2>Dönem özeti · {bas} – {son}</h2><a class="btn btn--sepet" href={disari('pdf')}>PDF indir</a></div>
+      <dl class="y-hesap">
+        <div><dt>Onaylı web satışları <small>{rapor.satislar.length} sipariş</small></dt><dd>{finansPara(rapor.webSatis)}</dd></div>
+        <div class="eksi"><dt>İade ve iptal geri ödemeleri</dt><dd>−{finansPara(rapor.webIade)}</dd></div>
+        <div class="ara"><dt>Net web satışı</dt><dd>{finansPara(rapor.webSatis - rapor.webIade)}</dd></div>
+        <div class="alt"><dt>Satışa dahil kargo tahsilatı</dt><dd>{finansPara(rapor.kargo)}</dd></div>
+        <div class="alt"><dt>Fiyatlara yansıyan indirimler</dt><dd>{finansPara(rapor.webIndirim)}</dd></div>
+        <div><dt>Trendyol beklenen hakediş</dt><dd>{finansPara(rapor.trendyolBeklenen)}</dd></div>
+        <div class="eksi"><dt>Giderler</dt><dd>−{finansPara(rapor.gider)}</dd></div>
+        {Object.entries(rapor.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
+        <div class="sonuc"><dt>Kalan (tahmini)</dt><dd>{finansPara(kalan(rapor))}</dd></div>
+      </dl>
+      {rapor.tahmini === undefined && <p class="y-uyari">Ürün alış maliyeti girilmediği için kalan tutar kesin değildir.</p>}
+      <p class="y-help">Satışlar ödeme tarihine, iadeler geri ödeme tarihine göre sayılır. KDV, tahsilat ve muhasebe kârı ayrı değerlendirilir.</p>
+    </section>
+    <section class="y-kart">
+      <h2>Muhasebeci için dışa aktar</h2>
+      <p class="y-help">Tek Excel dosyasında: aylık özet, satışlar (belge numaralarıyla), iade ve iptaller, giderler, Trendyol kesintileri ve belge listesi.</p>
+      <div class="y-ust-aksiyonlar">
+        <a class="btn btn--sepet" href={disari('excel')}>Excel indir</a>
+        <a class="btn btn--cizgi" href={disari('zip')}>Belgeler ve fişler (ZIP)</a>
+      </div>
+      <details class="y-block-gap"><summary>Ayrı CSV dosyaları</summary>
+        <ul class="y-task-list">{[['aylik', 'Aylık özet'], ['satislar', 'Satış raporu'], ['iade-iptal', 'İade ve iptal raporu'], ['giderler', 'Gider listesi'], ['trendyol', 'Komisyon ve pazaryeri kesintileri'], ['belgeler', 'Belge (fatura) listesi']].map(([id, ad]) => <li><a href={disari(id!)}><span>{ad}</span><span>CSV indir ›</span></a></li>)}</ul>
+      </details>
+    </section>
+  </>}
+</Yonetim>

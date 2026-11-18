@@ -4,8 +4,9 @@ import Ikon from '../components/Ikon.astro';
 import { yasalSite } from '../lib/yasal';
 import { ODEME_BAGLI, SMS_BAGLI, epostaBagli } from '../lib/altyapi';
 const k = Astro.locals.katalog;
+const kartli = ODEME_BAGLI();
 /* Ödeme bağlı değilken buton ve metinler "ödeme alınıyor" izlenimi vermez (bkz. lib/altyapi.ts). */
-const gonderEtiketi = ODEME_BAGLI ? 'Ödemeye Geç' : 'Sipariş Kaydı Oluştur';
+const gonderEtiketi = ODEME_BAGLI() ? 'Ödemeye Geç' : 'Sipariş Kaydı Oluştur';
 const iletisimNotu = SMS_BAGLI
   ? 'Sipariş ve kargo bilgileriniz SMS ile gelir.'
   : 'Telefonunuz kargo görevlisi ve sipariş takibi için gereklidir.';
@@ -22,7 +23,7 @@ const iletisimNotu = SMS_BAGLI
       <div class="toplamlar" data-ozet-toplamlar></div>
     </aside>
 
-    <form class="odeme-form" novalidate data-odeme-form>
+    <form class="odeme-form" method="post" novalidate data-odeme-form>
       <div class="hata-ozeti" role="alert" tabindex="-1" data-hata-ozeti></div>
 
       <section class="adim" aria-labelledby="a1">
@@ -35,8 +36,8 @@ const iletisimNotu = SMS_BAGLI
             <span class="hata">05 ile başlayan 11 haneli numarayı girin.</span>
           </div>
           <div class="alan">
-            <label for="eposta">E-posta <span class="ops">(isteğe bağlı)</span></label>
-            <input id="eposta" name="eposta" type="email" autocomplete="email" inputmode="email" data-eposta />
+            <label for="eposta">E-posta {!kartli && <span class="ops">(isteğe bağlı)</span>}</label>
+            <input id="eposta" name="eposta" type="email" autocomplete="email" inputmode="email" data-eposta required={kartli} maxlength={kartli ? 100 : 120} />
             <span class="ipucu">{epostaBagli() ? 'Yazarsanız sipariş özetiniz e-postayla da gelir.' : 'Yazarsanız faturanızı e-postayla gönderebiliriz.'}</span>
             <span class="hata">Geçerli bir e-posta adresi girin.</span>
           </div>
@@ -90,27 +91,32 @@ const iletisimNotu = SMS_BAGLI
       </section>
 
       <section class="adim" aria-labelledby="a4">
-        <h2 id="a4"><span class="no">4</span>{ODEME_BAGLI ? 'Onay ve ödeme' : 'Onay'}</h2>
+        <h2 id="a4"><span class="no">4</span>{ODEME_BAGLI() ? 'Onay ve ödeme' : 'Onay'}</h2>
         <label class="onay">
           <input type="checkbox" id="sozlesme" name="sozlesme" required data-sozlesme />
           <span><button type="button" class="link-btn" data-yasal-ac="on-bilgilendirme">Ön Bilgilendirme Formu</button>'nu ve <button type="button" class="link-btn" data-yasal-ac="mesafeli-satis">Mesafeli Satış Sözleşmesi</button>'ni okudum, onaylıyorum.</span>
         </label>
-        <p class="small muted" style="margin:10px 0 16px">Kişisel verileriniz yalnızca siparişinizi teslim etmek ve fatura düzenlemek için işlenir. <a href="/yasal/kvkk-aydinlatma-metni" target="_blank" rel="noopener">Aydınlatma metni</a></p>
-        {ODEME_BAGLI ? (
+        <p class="small muted" style="margin:10px 0 16px">Verileriniz sipariş, teslimat, fatura{kartli && <> ve ödeme</>} işlemleri için kullanılır. <a href="/yasal/kvkk-aydinlatma-metni" target="_blank" rel="noopener">Aydınlatma metni</a></p>
+        {ODEME_BAGLI() ? (
           <div class="odeme-kutu">
-            <Ikon ad="kilit" boyut={18} /> Kart bilgilerinizi bir sonraki adımda lisanslı ödeme kuruluşunun 3D Secure korumalı sayfasında girersiniz. Kart bilgileriniz bizde saklanmaz.
+            <Ikon ad="kilit" boyut={18} /> Kart bilgilerinizi PayTR ödeme ekranına girersiniz.
           </div>
         ) : (
-          <div class="odeme-kutu odeme-kutu--bekliyor" data-verify="iyzico / PayTR bağlanınca lib/altyapi.ts → ODEME_BAGLI = true">
+          <div class="odeme-kutu odeme-kutu--bekliyor">
             <Ikon ad="saat" boyut={18} /> <strong>Online ödeme henüz devrede değil.</strong> Bu adım yalnızca sipariş kaydı oluşturur; kartınızdan ücret alınmaz ve kayıt, ödeme alınana kadar kesinleşmiş sipariş sayılmaz.
           </div>
         )}
         <button class="btn btn--sepet btn--block btn--buyuk" type="submit" style="margin-top:14px" data-gonder data-gonder-taban={gonderEtiketi}>
-          <Ikon ad={ODEME_BAGLI ? 'kilit' : 'belge'} boyut={18} /><span data-gonder-etiket>{gonderEtiketi}</span>
+          <Ikon ad={ODEME_BAGLI() ? 'kilit' : 'belge'} boyut={18} /><span data-gonder-etiket>{gonderEtiketi}</span>
         </button>
         <a class="odeme-yardim" href={k.whatsapp('Merhaba, sipariş verirken yardıma ihtiyacım var.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={20} />Takıldınız mı? WhatsApp: {k.site.telefonGorunen}</a>
       </section>
     </form>
+    {kartli && <section class="adim" data-paytr-ekran hidden>
+      <h1 tabindex="-1" data-paytr-baslik>Kartla ödeme</h1>
+      <iframe data-paytr-form title="PayTR kartla ödeme ekranı" referrerpolicy="no-referrer" allow="payment" width="100%" height="740" style="border:0"></iframe>
+      <p><a data-paytr-takip>Sipariş durumunu kontrol et</a></p>
+    </section>}
   </div>
 
   <dialog class="yasal-pencere" data-yasal-pencere aria-labelledby="yasal-baslik">
@@ -120,7 +126,7 @@ const iletisimNotu = SMS_BAGLI
     </div>
     <div class="govde belge-metin" data-yasal-govde></div>
   </dialog>
-  <script type="application/json" id="satici-veri" set:html={JSON.stringify(yasalSite(k.site))} />
+  <script type="application/json" id="satici-veri" set:html={JSON.stringify(yasalSite(k.site)).replace(/</g, '\\u003c')} />
 
   <script>
     import '../scripts/odeme';

@@ -1,15 +1,16 @@
+import { paytrAyari } from './paytr';
+
 /**
  * Hangi dış hizmetler GERÇEKTEN bağlı? Sitedeki vaatler buna göre değişir:
  * bağlı olmayan bir hizmet için müşteriye söz verilmez ("SMS ile gelir", "3D Secure", "Siparişiniz alındı" gibi).
  *
- * - odeme: iyzico / PayTR entegrasyonu yazılıp test edilince true yapılacak (bkz. pages/api/siparis.ts TODO).
  * - sms:   SMS sağlayıcısı (Netgsm, İletimerkezi vb.) lib/bildirim.ts → smsGonder() içine bağlanınca true yapılacak.
  * - eposta: .env'de SMTP_HOST tanımlıysa otomatik açılır.
  */
 const ortam = (ad: string): string | undefined =>
   process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
 
-export const ODEME_BAGLI = false;
+export const ODEME_BAGLI = () => !!paytrAyari();
 export const SMS_BAGLI = false;
 export const epostaBagli = (): boolean => !!ortam('SMTP_HOST');
 

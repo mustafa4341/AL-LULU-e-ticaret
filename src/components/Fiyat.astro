@@ -23,7 +23,7 @@ const buyuk = boyut === 'buyuk';
 <div class:list={['fiyat-kutu', `fiyat-kutu--${boyut}`, `fiyat-kutu--${sunum}`, { 'fiyat-kutu--indirimli': indirimli || bilgi.enDusuk }]}>
   {indirimli && sunum === 'kampanya' && buyuk && (
     <div class="fiyat-kampanya-ust">
-      <span class="fiyat-rozet-buyuk">%{bilgi.yuzde} İNDİRİM</span>
+      <span class="fiyat-rozet-buyuk"><Ikon ad="trend" boyut={16} />%{bilgi.yuzde} İNDİRİM</span>
       {bilgi.enDusuk && <span class="fiyat-endusuk"><Ikon ad="trend" boyut={16} />Son {bilgi.enDusukGun} Günün En Düşük Fiyatı</span>}
     </div>
   )}
@@ -32,11 +32,11 @@ const buyuk = boyut === 'buyuk';
   )}
   <div class="fiyat-satir">
     {indirimli && sunum === 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
-    {indirimli && sunum === 'dengeli' && <span class="rozet rozet--indirim fiyat-yuzde">%{bilgi.yuzde}</span>}
-    {indirimli && sunum === 'kampanya' && !buyuk && <span class="rozet rozet--indirim fiyat-yuzde">%{bilgi.yuzde}</span>}
+    {indirimli && sunum === 'dengeli' && <span class="rozet rozet--indirim fiyat-yuzde"><Ikon ad="trend" boyut={boyut === 'kucuk' ? 12 : 15} />%{bilgi.yuzde}{buyuk && ' İndirim'}</span>}
+    {indirimli && sunum === 'kampanya' && !buyuk && <span class="rozet rozet--indirim fiyat-yuzde"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
     <span class:list={['fiyat', { 'fiyat--indirimli': indirimli && sunum !== 'sade' }]}>{formatTL(bilgi.fiyat)}</span>
     {indirimli && sunum !== 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
-    {indirimli && sunum === 'sade' && <span class="fiyat-yuzde-sade">%{bilgi.yuzde}</span>}
+    {indirimli && sunum === 'sade' && <span class="fiyat-yuzde-sade"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde}</span>}
   </div>
   {indirimli && buyuk && sunum === 'dengeli' && <p class="fiyat-tasarruf">{formatTL(tasarruf)} daha az ödüyorsunuz</p>}
   {indirimli && sunum === 'kampanya' && <p class="fiyat-tasarruf fiyat-tasarruf--kampanya">{formatTL(tasarruf)} tasarruf</p>}

@@ -1,0 +1,11 @@
+---
+const { secenekler, aktif = secenekler[0]?.[0] } = Astro.props as {
+  secenekler: [string, string][];
+  aktif?: string;
+};
+---
+<div class="y-sekmeler" role="tablist" aria-label="Düzenleme bölümleri">
+  {secenekler.map(([id, ad]) => (
+    <button type="button" role="tab" data-sekme={id} aria-selected={id === aktif} tabindex={id === aktif ? 0 : -1}>{ad}</button>
+  ))}
+</div>

@@ -22,7 +22,7 @@ export type Durum = z.infer<typeof DurumSema>;
 export const GorselSema = z.object({ src: metin.min(1), alt: metin.default('') });
 export type Gorsel = z.infer<typeof GorselSema>;
 
-export const FiyatKaydiSema = z.object({ tarih: z.string(), fiyat: tl.positive() });
+export const FiyatKaydiSema = z.object({ tarih: z.string(), fiyat: tl.positive(), dogrulandi: z.boolean().optional() });
 export type FiyatKaydi = z.infer<typeof FiyatKaydiSema>;
 
 export const KategoriSema = z.object({
@@ -51,12 +51,12 @@ export const UrunSema = z.object({
   /** Her fiyat değişikliği buraya otomatik eklenir. "Eski fiyat" ve "son 30 günün en düşüğü" buradan hesaplanır. */
   fiyatGecmisi: z.array(FiyatKaydiSema).default([]),
   /** Fiyat düşüşünü indirim olarak göster (önceki fiyat otomatik hesaplanır, elle girilemez). */
-  kampanya: z.object({ baslangic: z.string(), etiket: metin.optional() }).nullable().default(null),
+  kampanya: z.object({ baslangic: z.string(), etiket: metin.optional(), oncekiFiyat: tl.positive().optional() }).nullable().default(null),
   /** Sepette ek indirim (%), 0 = yok */
   sepetteIndirim: z.number().int().min(0).max(50).default(0),
   /** Fırsat ürünü: vitrinde öne çıkar. bitis verilirse gerçek geri sayım gösterilir ve
    *  sepette indirim o an otomatik biter (sahte, kendini yenileyen sayaç yok). */
-  firsat: z.object({ etiket: metin.optional(), bitis: z.string().optional() }).nullable().default(null),
+  firsat: z.object({ etiket: metin.optional(), bitis: z.string().optional(), stil: z.enum(['firsat', 'flas', 'ozel']).optional() }).nullable().default(null),
   stok: z.number().int().min(0),
   maxAdet: z.number().int().min(1).max(50).default(5),
   sku: metin.default(''),
@@ -80,6 +80,9 @@ export const UrunSema = z.object({
   sss: z.array(SSSSema).default([]),
   birlikteIyiGider: z.array(id).default([]),
   oneCikan: z.boolean().default(false),
+  /** "En Çok Satan" rozeti: sitedeki satış eşiği dolmadan önce, mağaza sahibinin başka kanallardaki
+   *  (pazar yeri, mağaza, sosyal medya) GERÇEK satışlarına dayanarak panelden açılır. */
+  cokSatan: z.boolean().default(false),
   oncelik: z.number().int().default(0),
   dogrula: z.array(metin).default([]),
 });
@@ -129,6 +132,16 @@ export const AnaSayfaSema = z.object({
 });
 export type AnaSayfaAyarlari = z.infer<typeof AnaSayfaSema>;
 
+export const TadilatSema = z.object({
+  aktif: z.boolean().default(false),
+  baslik: metin.default('Sitemiz kısa süreliğine bakımda'),
+  aciklama: metin.default('Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.'),
+  tahminiSure: metin.default(''),
+  whatsappGoster: z.boolean().default(true),
+  siparisTakipAcik: z.boolean().default(true),
+});
+export type TadilatAyarlari = z.infer<typeof TadilatSema>;
+
 export const SiteSema = z.object({
   ad: metin.min(1),
   slogan: metin.default(''),
@@ -161,6 +174,15 @@ export const SiteSema = z.object({
   cokSatanEsik: z.number().int().min(1).default(10),
   /** Fiyat/indirim sunumu: A sade · B kampanya · C dengeli (önerilen) */
   fiyatSunumu: z.enum(['sade', 'kampanya', 'dengeli']).default('dengeli'),
+  /** Tek adımda siteyi tadilata (bakıma) alma ayarları */
+  tadilat: TadilatSema.default({
+    aktif: false,
+    baslik: 'Sitemiz kısa süreliğine bakımda',
+    aciklama: 'Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.',
+    tahminiSure: '',
+    whatsappGoster: true,
+    siparisTakipAcik: true,
+  }),
 });
 export type SiteAyarlari = z.infer<typeof SiteSema>;
 
@@ -172,6 +194,7 @@ export const MagazaSema = z.object({
   urunler: z.array(UrunSema),
   setler: z.array(SetSema).default([]),
   anaSayfa: AnaSayfaSema,
+  paytrStokIslemleri: z.array(z.string()).optional(),
 });
 export type Magaza = z.infer<typeof MagazaSema>;
 
@@ -200,6 +223,8 @@ export const SiparisKalemSema = z.object({
   birimFiyat: tl,
   indirim: tl.default(0),
   toplam: tl,
+  /** Sipariş anındaki kampanya öncesi birim fiyat (yalnız gerçek indirimde; üstü çizili gösterim için) */
+  oncekiBirim: tl.optional(),
 });
 
 export const SiparisSema = z.object({
@@ -217,14 +242,26 @@ export const SiparisSema = z.object({
   urunlerToplami: tl,
   setIndirimi: tl,
   sepetIndirimi: tl,
+  /** Kampanya indirimi (önceki fiyat − satış fiyatı); urunlerToplami zaten indirimli fiyattır, bu yalnızca gösterim içindir */
+  kampanyaIndirimi: tl.default(0),
   kargo: tl,
   toplam: tl,
   kargoTakip: metin.optional(),
   kargoFirma: metin.optional(),
   yoneticiNotu: metin.optional(),
+  iptalNotu: metin.optional(),
   stokDusuldu: z.boolean().default(false),
+  paytr: z.object({
+    ref: z.string().regex(/^AL[a-f0-9]{32}$/),
+    test: z.boolean(),
+    beklemeBitis: z.number().int(),
+    sonuc: z.enum(['bekliyor', 'odendi', 'basarisiz']),
+    stokEksik: z.boolean().optional(),
+  }).optional(),
   /** Onaylanan sözleşme sürümü (metin veri/sozlesmeler/ altında) */
   sozlesmeSurumu: metin.optional(),
-  gecmis: z.array(z.object({ tarih: z.string(), durum: SiparisDurumSema, not: metin.optional() })).default([]),
+  gecmis: z.array(z.object({
+    tarih: z.string(), durum: SiparisDurumSema, not: metin.optional(), islem: metin.optional(), takipUrl: metin.optional(),
+  })).default([]),
 });
 export type Siparis = z.infer<typeof SiparisSema>;

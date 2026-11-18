@@ -1,110 +1,229 @@
 ---
+import { siparisKargoBaglantisi } from '../../lib/kargoTakip';
 import Base from '../../layouts/Base.astro';
 import Ikon from '../../components/Ikon.astro';
 import { siparisleriOku } from '../../lib/depo';
 import { formatTL } from '../../lib/fiyat';
-import { SIPARIS_DURUM_ADLARI } from '../../lib/sema';
-import { ODEME_BAGLI, bildirimKanali } from '../../lib/altyapi';
+import { bildirimKanali } from '../../lib/altyapi';
+import { iadeEdildi } from '../../lib/siparisAkisi';
 
 const k = Astro.locals.katalog;
 const s = (await siparisleriOku()).find((x) => x.no === Astro.params.no);
 const token = Astro.url.searchParams.get('t');
 if (!s || !token || token !== s.token) return Astro.rewrite('/404');
 const yeni = Astro.url.searchParams.has('yeni');
-const asamalar = ['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi'] as const;
-const sira = asamalar.indexOf(s.durum as (typeof asamalar)[number]);
-const wa = k.whatsapp(`Merhaba, ${s.no} numaralı siparişim hakkında bilgi almak istiyorum.`);
-const takipUrl = s.kargoTakip ? k.kargoTakipUrl(s.kargoTakip) : undefined;
-const tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
-const kayit = JSON.stringify({ no: s.no, t: s.token, tarih: s.tarih, toplam: s.toplam });
-/* Ödeme alınmadan "Siparişiniz alındı/onaylandı" denmez: başlık ve ikon siparişin gerçek durumunu söyler. */
+
+/* Müşterinin gördüğü adımlar. Ödeme alınmadan "Siparişiniz alındı" denmez. */
+const asamalar = [
+  ['odendi', 'Sipariş alındı'],
+  ['hazirlaniyor', 'Hazırlanıyor'],
+  ['kargoda', 'Kargoda'],
+  ['teslim-edildi', 'Teslim edildi'],
+] as const;
+const sira = asamalar.findIndex(([d]) => d === s.durum);
 const odendi = sira >= 0;
+const iade = iadeEdildi(s);
+const odemeBasarisiz = s.durum === 'iptal' && s.paytr?.sonuc === 'basarisiz';
+const odemeBekleniyor = s.durum === 'odeme-bekliyor' && !!s.paytr && s.paytr.sonuc === 'bekliyor';
+const manuelBekliyor = s.durum === 'odeme-bekliyor' && !s.paytr;
 const kanal = bildirimKanali(!!s.musteri.eposta);
+
+type Gorunum = { ikon: 'tik' | 'saat' | 'kapat' | 'kargo' | 'iade' | 'kutu'; ton: 'ok' | 'bekliyor' | 'hata'; baslik: string; metin: string };
+const gorunum: Gorunum = iade
+  ? { ikon: 'iade', ton: 'bekliyor', baslik: 'İade tamamlandı', metin: 'Bu siparişin iadesi işlendi.' }
+  : odemeBasarisiz
+    ? { ikon: 'kapat', ton: 'hata', baslik: 'Ödeme tamamlanamadı', metin: 'Bu sipariş için ödeme alınmadı. Sepetiniz duruyor; dilerseniz tekrar deneyebilirsiniz.' }
+    : s.durum === 'iptal'
+      ? { ikon: 'kapat', ton: 'hata', baslik: 'Sipariş iptal edildi', metin: 'Sorunuz olursa WhatsApp’tan bize yazabilirsiniz.' }
+      : odemeBekleniyor
+        ? { ikon: 'saat', ton: 'bekliyor', baslik: 'Ödeme onayı bekleniyor', metin: 'Bankanızdan onay gelince bu sayfa kendiliğinden güncellenir. Lütfen tekrar ödeme yapmayın.' }
+        : manuelBekliyor
+          ? { ikon: 'saat', ton: 'bekliyor', baslik: 'Sipariş kaydınız alındı', metin: 'Ödeme henüz alınmadı. Kaydınız, ödeme alınana kadar kesinleşmiş sipariş sayılmaz.' }
+          : s.durum === 'kargoda'
+            ? { ikon: 'kargo', ton: 'ok', baslik: 'Siparişiniz kargoda', metin: 'Kargo takip bilgileri aşağıda.' }
+            : s.durum === 'teslim-edildi'
+              ? { ikon: 'tik', ton: 'ok', baslik: 'Siparişiniz teslim edildi', metin: 'Bizi tercih ettiğiniz için teşekkür ederiz.' }
+              : s.durum === 'hazirlaniyor'
+                ? { ikon: 'kutu', ton: 'ok', baslik: 'Siparişiniz hazırlanıyor', metin: 'Kargoya verildiğinde takip numarası burada görünür.' }
+                : { ikon: 'tik', ton: 'ok', baslik: s.paytr?.test ? 'Test ödemesi onaylandı' : 'Siparişiniz alındı',
+                    metin: `Teşekkür ederiz ${s.musteri.ad}. Ödemeniz onaylandı, siparişiniz hazırlanmak üzere sıraya alındı.${kanal ? ` Kargo bilgileri ${kanal} ile gelecek.` : ''}` };
+
+const wa = k.whatsapp(`Merhaba, ${s.no} numaralı siparişim hakkında bilgi almak istiyorum.`);
+const kargoBaglanti = siparisKargoBaglantisi(s, k.site.kargo);
+const tarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Istanbul' });
+const kayit = JSON.stringify({ no: s.no, t: s.token, tarih: s.tarih, toplam: s.toplam });
+const sepetiTemizle = yeni && (!s.paytr || (odendi && !s.paytr.test));
 const telGorunen = s.musteri.tel.replace(/^(\d{4})(\d{3})(\d{2})(\d{2})$/, '$1 $2 $3 $4');
+const GECMIS_ADLARI: Record<string, string> = {
+  'odeme-bekliyor': 'Sipariş oluşturuldu', odendi: 'Ödeme onaylandı', hazirlaniyor: 'Hazırlanıyor',
+  kargoda: 'Kargoya verildi', 'teslim-edildi': 'Teslim edildi', iptal: s.paytr?.sonuc === 'basarisiz' ? 'Ödeme tamamlanamadı' : 'İptal edildi',
+};
+const gecmis = [...s.gecmis].reverse().map((g) => ({
+  ad: g.islem === 'iade-tamamlandi' ? 'İade tamamlandı' : GECMIS_ADLARI[g.durum] ?? g.durum,
+  tarih: g.tarih,
+}));
 ---
 <Base baslik={`Sipariş ${s.no} | ${k.site.ad}`} aciklama="Sipariş durumu" indekslenmesin sade>
   <div class="container siparis-sonuc">
-    <div class="siparis-tamam">
-      {yeni && odendi && (
-        <>
-          <div class="siparis-tamam__ikon">
-            <svg class="ciz-tik" width="40" height="40" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12 5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-          </div>
-          <h1>Siparişiniz onaylandı</h1>
-          <p class="muted" style="margin-top:8px">Teşekkür ederiz {s.musteri.ad}. Ödemeniz alındı.{kanal && <> Kargo bilgileriniz {kanal} ile gelecek.</>}</p>
-        </>
-      )}
-      {yeni && !odendi && s.durum !== 'iptal' && (
-        <>
-          <div class="siparis-tamam__ikon siparis-tamam__ikon--bekliyor"><Ikon ad="saat" boyut={36} /></div>
-          <h1>Sipariş kaydınız oluşturuldu</h1>
-          <p class="muted" style="margin-top:8px">Teşekkür ederiz {s.musteri.ad}. <strong>Ödeme henüz alınmadı</strong>; siparişiniz ödeme bekliyor olarak kaydedildi.</p>
-        </>
-      )}
-      {!yeni && <h1>Sipariş durumu</h1>}
-      <span class="siparis-no">{s.no}</span>
-      <p class:list={['siparis-durum', { 'siparis-durum--bekliyor': s.durum === 'odeme-bekliyor' }]}>{SIPARIS_DURUM_ADLARI[s.durum]}</p>
-      {s.durum !== 'iptal' && (
-        <>
-          <div class="durum-cizgi" aria-hidden="true">{asamalar.map((_, i) => <span class:list={{ 'is-tamam': i <= sira }} />)}</div>
-          <div class="durum-adlari" aria-hidden="true">{asamalar.map((a) => <span>{SIPARIS_DURUM_ADLARI[a]}</span>)}</div>
-        </>
+    <section class="sd-kart" aria-labelledby="sd-baslik">
+      <div class:list={['sd-ikon', 'sd-ikon--' + gorunum.ton]} aria-hidden="true">
+        {gorunum.ikon === 'tik' && yeni
+          ? <svg class="ciz-tik" width="38" height="38" viewBox="0 0 24 24"><path d="m5 12 5 5 9-10" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
+          : <Ikon ad={gorunum.ikon} boyut={34} />}
+      </div>
+      <h1 id="sd-baslik">{gorunum.baslik}</h1>
+      <p class="sd-metin">{gorunum.metin}</p>
+      {s.paytr?.test && <p class="sd-etiket">Test siparişi</p>}
+
+      <div class="sd-no">
+        <span>Sipariş numaranız</span>
+        <strong translate="no">{s.no}</strong>
+        <button type="button" class="sd-kopyala" data-kopyala={s.no}>Kopyala</button>
+      </div>
+
+      {odendi && !iade && (
+        <ol class="sd-adimlar" aria-label="Sipariş durumu">
+          {asamalar.map(([, ad], i) => (
+            <li class:list={{ 'is-tamam': i < sira, 'is-simdi': i === sira }} aria-current={i === sira ? 'step' : undefined}>
+              <span class="sd-adimlar__nokta" aria-hidden="true">{i <= sira ? '✓' : i + 1}</span>
+              <span>{ad}</span>
+            </li>
+          ))}
+        </ol>
       )}
 
-      {takipUrl && (
-        <div class="kargo-bilgi">
-          <p><strong>{s.kargoFirma || k.site.kargo.firma}</strong> · Takip no: <strong>{s.kargoTakip}</strong></p>
-          <a class="btn btn--sepet btn--block" href={takipUrl} target="_blank" rel="noopener"><Ikon ad="kargo" boyut={20} />Kargonu takip et</a>
+      {odemeBekleniyor && (
+        <p class="sd-yenile" data-otomatik-yenile>
+          <span class="sd-yukleniyor" aria-hidden="true"></span>
+          <span data-yenile-metin>Ödeme sonucu kontrol ediliyor…</span>
+          <a href={Astro.url.pathname + Astro.url.search} hidden data-yenile-baglanti>Durumu yenile</a>
+        </p>
+      )}
+
+      {kargoBaglanti && !iade && (
+        <div class="sd-kargo">
+          <p><strong>{kargoBaglanti.firma}</strong> · Takip no: <strong translate="no">{s.kargoTakip}</strong></p>
+          <a class="btn btn--sepet btn--block" href={kargoBaglanti.url} target="_blank" rel="noopener"><Ikon ad="kargo" boyut={20} />Kargonu takip et</a>
         </div>
       )}
 
-      {s.durum === 'odeme-bekliyor' && !ODEME_BAGLI && (
-        <p class="taslak-not" style="text-align:left">Kartınızdan ücret alınmadı. Online ödeme altyapımız henüz devrede değil; bu kayıt ödeme alınana kadar kesinleşmiş sipariş sayılmaz. Sorunuz olursa WhatsApp'tan yazabilirsiniz.</p>
-      )}
+      <div class="sd-aksiyon">
+        {odemeBasarisiz && <a class="btn btn--sepet btn--block" href="/odeme"><Ikon ad="kilit" boyut={18} />Ödemeyi tekrar dene</a>}
+        <a class="btn btn--wa btn--block" href={wa} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={20} />WhatsApp’tan bilgi al</a>
+        {!odemeBasarisiz && <a class="btn btn--cizgi btn--block" href="/">Alışverişe devam et</a>}
+      </div>
 
-      {yeni && (
-        <p class="taslak-not" style="text-align:left;background:#F0F6FF;color:#1E3A5F">
-          <strong>Siparişinizi nasıl takip edersiniz?</strong> Hesap gerekmez: bu sayfa bu cihazda kayıtlı kalır ve
-          <a href="/siparis-takip">Sipariş Takip</a> sayfasında listelenir. Başka bir cihazdan sipariş numaranız ve telefonunuzla açabilirsiniz.
+      {(yeni || odendi) && s.durum !== 'iptal' && (
+        <p class="sd-bilgi">
+          Bu sayfaya istediğiniz zaman <a href={'/siparis-takip?no=' + encodeURIComponent(s.no)}>Sipariş Takip</a> sayfasından,
+          sipariş numaranız ve telefon numaranızla ulaşabilirsiniz. Üyelik gerekmez.
         </p>
       )}
-      <a class="btn btn--wa" style="margin-top:14px" href={wa} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={22} />WhatsApp'tan bilgi al</a>
-    </div>
-
-    <div class="kart-kutu">
-      <h2>Sipariş geçmişi</h2>
-      <ol class="zaman-cizelgesi">
-        {[...s.gecmis].reverse().map((g) => <li><span>{SIPARIS_DURUM_ADLARI[g.durum]}{g.not && <span class="muted"> · {g.not}</span>}</span><time datetime={g.tarih}>{tarih.format(new Date(g.tarih))}</time></li>)}
-      </ol>
-    </div>
+    </section>
 
     <div class="kart-kutu">
       <h2>Ürünler</h2>
       <div class="toplamlar">
-        {s.kalemler.map((x) => <div class="siparis-kalem"><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}</span><span class="siparis-kalem__tutar">{formatTL(x.toplam)}</span></div>)}
+        {s.kalemler.map((x) => <div class="siparis-kalem"><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}</span><span class="siparis-kalem__tutar">{x.oncekiBirim && <s class="siparis-kalem__eski">{formatTL(x.oncekiBirim * x.adet)}</s>}<span class:list={{ 'fiyat--indirimli': !!x.oncekiBirim }}>{formatTL(x.toplam)}</span></span></div>)}
       </div>
       <div class="toplamlar" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
+        {s.kampanyaIndirimi > 0 && <div><span>Ürünler</span><span>{formatTL(s.urunlerToplami + s.kampanyaIndirimi)}</span></div>}
+        {s.kampanyaIndirimi > 0 && <div class="kazanc"><span>İndirim</span><span>−{formatTL(s.kampanyaIndirimi)}</span></div>}
         {s.setIndirimi > 0 && <div class="kazanc"><span>Set indirimi</span><span>−{formatTL(s.setIndirimi)}</span></div>}
         {s.sepetIndirimi > 0 && <div class="kazanc"><span>Sepette indirim</span><span>−{formatTL(s.sepetIndirimi)}</span></div>}
         <div><span>Kargo</span><span>{s.kargo ? formatTL(s.kargo) : 'Bedava'}</span></div>
         <div class="genel"><span>Toplam</span><span>{formatTL(s.toplam)}</span></div>
       </div>
     </div>
+
     <div class="kart-kutu">
-      <h2>Teslimat</h2>
+      <h2>Teslimat bilgileri</h2>
       <p>{s.musteri.ad} {s.musteri.soyad} · <span style="white-space:nowrap">{telGorunen}</span></p>
       <p class="muted">{s.teslimat.adres}, {s.teslimat.ilce} / {s.teslimat.il}</p>
     </div>
-    <p style="text-align:center;margin-top:20px"><a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`}>Onayladığınız sözleşmeler</a> · <a href="/">Alışverişe devam et</a></p>
+
+    <details class="kart-kutu sd-gecmis">
+      <summary><h2>Sipariş geçmişi</h2></summary>
+      <ol class="zaman-cizelgesi">
+        {gecmis.map((g) => <li><span>{g.ad}</span><time datetime={g.tarih}>{tarih.format(new Date(g.tarih))}</time></li>)}
+      </ol>
+    </details>
+
+    <p class="sd-alt"><a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`}>Onayladığınız sözleşmeler</a></p>
   </div>
 
-  <script is:inline define:vars={{ kayit, yeni }}>
+  <script is:inline define:vars={{ kayit, sepetiTemizle, paytrRef: s.paytr?.ref ?? null, bekliyor: odemeBekleniyor }}>
     // Hesapsız takip: bu cihazdan verilen siparişleri hatırla
     try {
       const k = JSON.parse(kayit);
       const liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]').filter((x) => x.no !== k.no);
       localStorage.setItem('allulu_siparislerim', JSON.stringify([k, ...liste].slice(0, 20)));
-      if (yeni) localStorage.removeItem('allulu_sepet_v2');
+      if (sepetiTemizle) {
+        const paytrTakip = paytrRef && JSON.parse(sessionStorage.getItem('allulu_paytr_takip') || 'null');
+        if (!paytrRef || (paytrTakip?.ref === paytrRef && paytrTakip.sepet === localStorage.getItem('allulu_sepet_v2'))) {
+          localStorage.removeItem('allulu_sepet_v2');
+        }
+        if (paytrTakip?.ref === paytrRef) sessionStorage.removeItem('allulu_paytr_takip');
+      }
     } catch (e) {}
+
+    // Numarayı kopyala
+    document.querySelectorAll('[data-kopyala]').forEach((b) => b.addEventListener('click', async () => {
+      try { await navigator.clipboard.writeText(b.dataset.kopyala); b.textContent = 'Kopyalandı'; }
+      catch (e) { b.textContent = b.dataset.kopyala; }
+      setTimeout(() => { b.textContent = 'Kopyala'; }, 2000);
+    }));
+
+    // Ödeme sonucu bekleniyorsa sayfayı kısa aralıklarla yenile (en fazla ~2 dakika)
+    if (bekliyor) {
+      const anahtar = 'allulu_yenile_' + JSON.parse(kayit).no;
+      let deneme = 0;
+      try { deneme = Number(sessionStorage.getItem(anahtar) || 0); } catch (e) {}
+      if (deneme < 24) {
+        try { sessionStorage.setItem(anahtar, String(deneme + 1)); } catch (e) {}
+        setTimeout(() => location.reload(), 5000);
+      } else {
+        const m = document.querySelector('[data-yenile-metin]');
+        if (m) m.textContent = 'Onay henüz gelmedi. Kartınızdan çekim yapıldıysa sipariş kısa sürede onaylanır.';
+        document.querySelector('[data-yenile-baglanti]')?.removeAttribute('hidden');
+        document.querySelector('.sd-yukleniyor')?.remove();
+      }
+    }
   </script>
 </Base>
+
+<style>
+  .sd-kart { text-align: center; padding: 28px 20px 22px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg); }
+  .sd-ikon { width: 72px; height: 72px; border-radius: 50%; margin: 0 auto 12px; display: grid; place-items: center; animation: damga-gir .5s var(--spring) both; }
+  .sd-ikon--ok { background: var(--yesil-soft); color: var(--yesil); }
+  .sd-ikon--bekliyor { background: var(--gold-soft); color: var(--gold-ink); }
+  .sd-ikon--hata { background: var(--indirim-soft); color: var(--danger); }
+  .sd-kart h1 { font-size: clamp(28px, 7vw, 38px); line-height: 1.1; }
+  .sd-metin { margin: 8px auto 0; max-width: 46ch; color: var(--ink-2); }
+  .sd-etiket { display: inline-block; margin-top: 8px; padding: 2px 10px; border-radius: 999px; background: var(--gold-soft); color: var(--gold-ink); font-size: 13px; font-weight: 600; }
+  .sd-no { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 4px 10px; margin: 18px auto 0; padding: 12px 14px; max-width: 420px; border: 1px dashed #D8C9A4; border-radius: var(--r); background: #FCFAF4; }
+  .sd-no span { width: 100%; font-size: 13px; color: var(--ink-3); }
+  .sd-no strong { font-size: 22px; letter-spacing: .04em; font-variant-numeric: tabular-nums; }
+  .sd-kopyala { border: 1px solid var(--line); background: #fff; border-radius: 999px; padding: 5px 12px; font: 600 13px/1.2 var(--font-sans); color: var(--gold-ink); cursor: pointer; }
+  .sd-adimlar { list-style: none; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; margin: 22px 0 4px; padding: 0; position: relative; }
+  .sd-adimlar li { display: grid; justify-items: center; gap: 6px; font-size: 12px; color: var(--ink-3); position: relative; }
+  .sd-adimlar li + li::before { content: ""; position: absolute; top: 13px; right: 50%; width: 100%; height: 2px; background: var(--line); z-index: 0; }
+  .sd-adimlar li.is-tamam + li::before { background: var(--yesil); }
+  .sd-adimlar__nokta { position: relative; z-index: 1; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); color: var(--ink-3); font-weight: 700; font-size: 12px; border: 2px solid var(--line); }
+  .sd-adimlar .is-tamam .sd-adimlar__nokta { background: var(--yesil); border-color: var(--yesil); color: #fff; }
+  .sd-adimlar .is-simdi .sd-adimlar__nokta { background: var(--yesil); border-color: var(--yesil); color: #fff; box-shadow: 0 0 0 4px var(--yesil-soft); }
+  .sd-adimlar .is-simdi, .sd-adimlar .is-tamam { color: var(--ink); font-weight: 600; }
+  .sd-yenile { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 16px; font-size: 14px; color: var(--gold-ink); flex-wrap: wrap; }
+  .sd-yukleniyor { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--gold-soft); border-top-color: var(--gold-ink); animation: sd-don 0.9s linear infinite; }
+  @keyframes sd-don { to { transform: rotate(360deg); } }
+  .sd-kargo { display: grid; gap: 8px; margin-top: 16px; padding: 14px; border-radius: var(--r); background: var(--surface-2); text-align: left; }
+  .sd-aksiyon { display: grid; gap: 8px; margin: 18px auto 0; max-width: 420px; }
+  .sd-bilgi { margin: 16px auto 0; max-width: 46ch; font-size: 13.5px; color: var(--ink-3); }
+  .sd-gecmis summary { cursor: pointer; list-style: none; display: flex; justify-content: space-between; align-items: center; }
+  .sd-gecmis summary::after { content: "+"; font-size: 20px; color: var(--ink-3); }
+  .sd-gecmis[open] summary::after { content: "−"; }
+  .sd-gecmis summary h2 { margin: 0; }
+  .sd-gecmis summary::-webkit-details-marker { display: none; }
+  .sd-alt { text-align: center; margin-top: 18px; font-size: 14px; }
+  @media (prefers-reduced-motion: reduce) { .sd-ikon, .sd-yukleniyor { animation: none; } }
+</style>

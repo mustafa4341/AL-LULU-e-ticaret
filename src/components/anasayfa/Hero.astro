@@ -1,29 +1,42 @@
 ---
+/* Ana sayfa vitrini — müşteri ilk bakışta 4 soruya cevap bulmalı:
+   Ne satılıyor? (büyük, tıklanabilir görsel) · Neden değerli? (3 madde)
+   Ne kadar avantajlı? (fiyat; GERÇEK indirim varsa üstü çizili + % rozeti) · Nasıl alırım? (butonlar)
+   Rozetler yalnız doğru bilgiden: "En Çok Satan" gerçek satıştan, "%X İndirim" fiyat geçmişinden (lib/fiyat.ts). */
 import Fiyat from '../Fiyat.astro';
 import Ikon from '../Ikon.astro';
 import KargoSayaci from '../KargoSayaci.astro';
 import FirsatSayaci from '../FirsatSayaci.astro';
+import OzellikListesi from '../OzellikListesi.astro';
+import { metindenIkon } from '../../lib/ozellik';
 const k = Astro.locals.katalog;
 const h = k.anaSayfa.hero;
 const urun = k.urunBul(h.urunId);
 const gorsel = urun ? k.anaGorsel(urun) : undefined;
 const rozet = urun ? k.rozetler(urun) : undefined;
 const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
+/* Görselin sol üst etiketi: gerçek durum varsa o (En Çok Satan / Fırsat / Son N Adet), yoksa panel → "Üst başlık" */
+const etiket = rozet?.damga ?? h.ustBaslik;
+const href = urun ? `/urun/${urun.id}` : '/';
 ---
 {urun && (
-  <section class="hero" aria-labelledby="hero-baslik">
+  <section class="hero hero--vitrin" aria-labelledby="hero-baslik">
     <div class="container hero__grid">
-      <a class="hero__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
+      <a class="hero__vitrin" href={href} aria-label={`${urun.marka} ${urun.kisaAd} ürün sayfasını aç`}>
         {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-ucus-gorsel />}
-        {rozet?.damga && <span class="damga damga--buyuk"><span>{rozet.damga}</span></span>}
+        {urun && k.cokSatanMi(urun) ? (
+          <span class="cok-satan-damga hero__cok-satan" aria-label="En Çok Satan"><span>En Çok<br />Satan</span></span>
+        ) : (
+          etiket && <span class:list={['hero__etiket', { 'hero__etiket--durum': !!rozet?.damga }]}>{rozet?.damga && <Ikon ad="yildiz" boyut={13} />}{etiket}</span>
+        )}
+        {bilgi?.onceki && <span class="hero__indirim"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
+        <span class="hero__incele-hap">Ürünü incele <Ikon ad="sag" boyut={16} /></span>
       </a>
       <div class="hero__metin">
-        {bilgi?.firsat ? <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} /> : <p class="eyebrow eyebrow--altin">{h.ustBaslik}</p>}
-        <h1 id="hero-baslik">{h.baslik}</h1>
+        {bilgi?.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} />}
+        <h1 id="hero-baslik"><a href={href}>{h.baslik}</a></h1>
         <p class="hero__alt">{h.altBaslik}</p>
-        {h.maddeler.length > 0 && (
-          <ul class="hero__maddeler">{h.maddeler.slice(0, 3).map((m) => <li><Ikon ad="tik" boyut={18} />{m}</li>)}</ul>
-        )}
+        <OzellikListesi kucuk maddeler={h.maddeler.slice(0, 3).map((m) => ({ ikon: metindenIkon(m), metin: m }))} dipnot="" />
         <div class="hero__fiyat"><Fiyat bilgi={bilgi!} boyut="buyuk" /></div>
         {rozet?.serit && <p class="hero__kargo"><Ikon ad="kargo" boyut={18} />{rozet.serit} · Vergiler dahil</p>}
         <div class="hero__cta">
@@ -32,7 +45,10 @@ const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
             <Ikon ad="canta" boyut={18} /><span data-etiket>Sepete Ekle</span>
           </button>
         </div>
-        <a class="hero__incele" href={`/urun/${urun.id}`}>Ürünü incele <Ikon ad="sag" boyut={16} /></a>
+        <a class="hero__detay" href={href}>
+          <span><strong>Ürünü incele</strong><span>Fotoğraflar, pişirme süreleri, teknik özellikler</span></span>
+          <Ikon ad="sag" boyut={18} />
+        </a>
         {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">* Fissler verisi; yemeğe ve miktara göre değişir.</p>}
         <KargoSayaci kompakt />
       </div>

@@ -1,0 +1,163 @@
+---
+import '../styles/global.css';
+import Ikonlar from './Ikonlar.astro';
+import Ikon from './Ikon.astro';
+
+const k = Astro.locals.katalog;
+const site = k.site;
+const t = site.tadilat;
+if (t.aktif && !Astro.locals.yonetici) {
+  Astro.response.status = 503;
+  Astro.response.headers.set('Retry-After', '3600');
+}
+---
+<!doctype html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>{t.baslik} · {site.ad}</title>
+    <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      body.tadilat-sayfa {
+        min-height: 100dvh;
+        display: flex;
+        flex-direction: column;
+        background: radial-gradient(circle at 50% 0%, #2B251D 0%, #15120E 70%);
+        color: #F4E7C5;
+      }
+      .tadilat-sahne {
+        flex: 1;
+        display: grid;
+        place-items: center;
+        padding: 28px 16px;
+      }
+      .tadilat-kart {
+        width: min(540px, 100%);
+        background: #FFFFFF;
+        color: var(--ink);
+        border-radius: 24px;
+        padding: 36px 28px;
+        text-align: center;
+        box-shadow: 0 24px 64px rgba(0, 0, 0, .45);
+        border: 1px solid #EAD49B;
+      }
+      .tadilat-logo {
+        width: 164px;
+        height: auto;
+        margin: 0 auto 18px;
+      }
+      .tadilat-rozet {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 14px;
+        border-radius: 999px;
+        background: var(--gold-soft);
+        border: 1px solid #EAD49B;
+        color: var(--gold-ink);
+        font-size: 12.5px;
+        font-weight: 800;
+        letter-spacing: .06em;
+        text-transform: uppercase;
+        margin-bottom: 14px;
+      }
+      .tadilat-kart h1 {
+        font-family: var(--font-serif);
+        font-size: clamp(28px, 6vw, 38px);
+        line-height: 1.15;
+        color: var(--ink);
+      }
+      .tadilat-aciklama {
+        margin-top: 12px;
+        color: var(--ink-2);
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .tadilat-sure {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 18px;
+        padding: 10px 16px;
+        border-radius: 12px;
+        background: var(--surface-2);
+        color: var(--ink);
+        font-size: 14px;
+        font-weight: 700;
+      }
+      .tadilat-aksiyonlar {
+        display: grid;
+        gap: 10px;
+        margin-top: 24px;
+      }
+      .tadilat-alt {
+        margin-top: 22px;
+        padding-top: 16px;
+        border-top: 1px solid var(--line);
+        font-size: 13px;
+        color: var(--ink-3);
+      }
+    </style>
+  </head>
+  <body class="tadilat-sayfa">
+    <Ikonlar />
+    {Astro.locals.yonetici && (
+      <div class="yonetici-serit" style="background:#3B270C;border-bottom:1px solid #6E4B1A;padding:8px 14px">
+        <Ikon ad="ayar" boyut={15} />
+        <span>
+          <strong>Yönetici Önizlemesi:</strong> {t.aktif ? 'Site şu an müşterilere kapalı (Tadilat Modunda).' : 'Tadilat modu şu an kapalı (bu ekran önizlemedir).'}
+        </span>
+        {t.aktif && (
+          <form method="post" action="/yonetim/tadilat" style="display:inline">
+            <input type="hidden" name="islem" value="kapat" />
+            <input type="hidden" name="geri" value="/" />
+            <button type="submit" style="background:#0A7F3F;color:#fff;border:0;border-radius:999px;padding:4px 12px;font-size:12px;font-weight:700;margin-left:6px">🚀 Tek Tıkla Yayına Aç</button>
+          </form>
+        )}
+        <a href="/" style="margin-left:8px;text-decoration:underline">Vitrine dön</a>
+        <a href="/yonetim" style="margin-left:8px;text-decoration:underline">Yönetim Paneli</a>
+      </div>
+    )}
+
+    <main class="tadilat-sahne">
+      <div class="tadilat-kart">
+        <img class="tadilat-logo" src="/img/logo/al-lulu-home.webp" alt={site.ad} width="320" height="285" />
+        <div>
+          <span class="tadilat-rozet"><Ikon ad="ayar" boyut={15} />Bakım & Yenileme Çalışması</span>
+        </div>
+        <h1>{t.baslik || 'Sitemiz kısa süreliğine bakımda'}</h1>
+        <p class="tadilat-aciklama">{t.aciklama || 'Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.'}</p>
+
+        {t.tahminiSure && (
+          <div class="tadilat-sure">
+            <Ikon ad="saat" boyut={18} />
+            <span>Tahmini açılış: {t.tahminiSure}</span>
+          </div>
+        )}
+
+        <div class="tadilat-aksiyonlar">
+          {t.whatsappGoster && (
+            <a class="btn btn--wa btn--block" href={k.whatsapp('Merhaba, siteniz bakımda görünüyor. Bilgi alabilir miyim?')} target="_blank" rel="noopener">
+              <Ikon ad="whatsapp" boyut={22} />WhatsApp Destek: {site.telefonGorunen}
+            </a>
+          )}
+          {t.siparisTakipAcik && (
+            <a class="btn btn--cizgi btn--block" href="/siparis-takip">
+              <Ikon ad="kargo" boyut={18} />Mevcut Siparişimi Takip Et
+            </a>
+          )}
+        </div>
+
+        <p class="tadilat-alt">
+          {site.ad} · {site.slogan || 'Orijinal ve garantili mutfak ürünleri'}
+          {site.calismaSaatleri && <><br />{site.calismaSaatleri}</>}
+        </p>
+      </div>
+    </main>
+  </body>
+</html>

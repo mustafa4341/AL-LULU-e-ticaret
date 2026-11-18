@@ -1,0 +1,22 @@
+---
+const { id, tur, kayit = '' } = Astro.props as {
+  id: string;
+  tur: 'urun' | 'site' | 'set';
+  kayit?: string;
+};
+---
+<aside id={id} class="y-onizleme" data-onizleme={tur} data-kayit={kayit} hidden aria-label="Mağaza önizlemesi">
+  <div class="y-onizleme-ust">
+    <strong>Mağaza önizlemesi</strong>
+    <div class="y-ust-aksiyonlar">
+      <button class="y-icon-button" type="button" data-onizleme-odak hidden>İlgili alan</button>
+      <button class="y-icon-button" type="button" data-ekran="masaustu" aria-pressed="true">Masaüstü</button>
+      <button class="y-icon-button" type="button" data-ekran="mobil" aria-pressed="false">Mobil</button>
+      <button class="y-icon-button" type="button" data-onizleme-genis aria-pressed="false">Genişlet</button>
+    </div>
+  </div>
+  <p class="y-onizleme-mesaj" data-onizleme-mesaj role="status"></p>
+  <div class="y-onizleme-sahne" data-onizleme-sahne>
+    <iframe title="Müşterinin gördüğü mağaza" sandbox="allow-same-origin" referrerpolicy="no-referrer"></iframe>
+  </div>
+</aside>

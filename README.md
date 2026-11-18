@@ -20,12 +20,13 @@ npm run dev
 
 | Ekran | Yapabildikleriniz |
 |---|---|
-| **Özet** | Bugünkü siparişler, gönderilecekler, ciro, stoğu azalan ürünler |
-| **Ürünler** | Listeden hızlı fiyat/stok/durum değişikliği · Yeni ürün · Görsel yükleme/sıralama/silme · İndirim · Sepette indirim · Rozetler · Özellikler · SSS · Tamamlayıcı ürünler |
-| **Siparişler** | Durum değiştirme (Ödendi → Hazırlanıyor → Kargoda → Teslim edildi), kargo takip no, müşteriye tek tıkla WhatsApp. "Ödendi"de stok otomatik düşer, "İptal"de geri eklenir. |
-| **Setler** | Ürün kombinasyonları: yüzde ya da sabit set fiyatı. Sitede "Ayrı ayrı X TL → Set Y TL" olarak görünür. |
-| **Kategoriler** | Ekle, sırala, ikon seç, menüde/ana sayfada göster |
-| **Ayarlar** | WhatsApp/telefon, e-posta, kargo ücreti ve "kargo bedava" sınırı, kesim saati, taksit, üst şerit duyuruları, ana sayfa bölümleri ve sırası, satıcı (yasal) bilgileri |
+| **Genel Bakış (`/yonetim`)** | Tek adımda siteyi tadilata (bakıma) alma / yayına açma · Onaylı ciro, kargolanacaklar, kargodakiler, iptal edilenler · Son siparişlerde tek tıkla "Kargolandı / Ödendi / İptal Et" · Eklenen tüm ürünlerin stok, indirim ve satış tablosu · Son fiyat değişimleri günlüğü |
+| **Sipariş & Satış (`/yonetim/siparisler`)** | Satış ve ciro özeti · Ürün bazlı satış/kargo/iptal/kalan stok raporu · Sipariş listesinde tek adımda **"Ürün Kargolandı"** (takip no + kargo firması + hazır WhatsApp mesajı) ve **"Sipariş İptal Edildi"** (iptal nedeni + otomatik stok iadesi) alanları |
+| **Ürünler & Stok (`/yonetim/urunler`)** | Filtre sekmeleri (Yayında, Taslak, İndirim & Fırsat, Kritik Stok) ve anlık arama · Satır içi hızlı fiyat, sepette % indirim, üstü çizili kampanya, stok ve durum güncelleme · Her ürünün açılır fiyat geçmişi ve tüm fiyat değişimleri günlüğü |
+| **Ürün Ekle / Düzenle (`/yonetim/urunler/[id]`)** | **Canlı Vitrin Demosu:** Sol tarafta yazarken sağda **Ürün Kartı**, **Ürün Detay Sayfası** ve **"Kaydedince Sitede Neler Değişecek?"** etki listesini anlık önizleme · Hangi kutuya ne yazıldığının sitedeki yerini gösteren akıllı alan rehberi |
+| **Setler (`/yonetim/setler`)** | Ürün kombinasyonları: belirli ürüne %, tüm sete % ya da sabit set fiyatı. Sitede "Ayrı ayrı X TL → Set Y TL" olarak görünür. |
+| **Kategoriler (`/yonetim/kategoriler`)** | Ekle, sırala, ikon seç, menüde/ana sayfada göster |
+| **Site Düzeni (`/yonetim/ayarlar`)** | **Canlı Site & Tadilat Önizlemeli:** Tek adımda tadilat (bakım) modu ve bakım mesajı · Ana sayfa vitrin (Hero) ürünü, başlıkları ve **↑/↓ butonlarıyla görsel bölüm sıralama** · Üst şerit duyuruları · Hazır kargo takip şablonları (Yurtiçi, Aras, MNG, Sürat, PTT, HepsiJet, Kolay Gelsin) · İletişim ve yasal satıcı bilgileri |
 
 Taslak ürünler sadece siz giriş yapmışken sitede görünür ("Örnek" etiketiyle), müşteriler göremez.
 
@@ -38,11 +39,13 @@ Taslak ürünler sadece siz giriş yapmışken sitede görünür ("Örnek" etike
 3. **Set indirimi:** Ayrı ayrı toplam ile set fiyatı arasındaki fark, gerçek kazanç olarak gösterilir.
 4. **Otomatik rozetler:** "En Çok Satan" (gerçek satışlardan, eşik Ayarlar'da), "Son X Adet" (stok ≤ 3), "Kargo Bedava" (sınırın üzerindeki ürünler).
 
-## Veriler ve yedek
+## Veriler, Bulut Veritabanı (Supabase) ve Yedek
 
-- Tüm mağaza verisi: `veri/magaza.json` · Siparişler: `veri/siparisler.json` · Yüklenen görseller: `veri/yuklemeler/`
-- Panelde her kayıtta `veri/yedekler/` altına otomatik yedek alınır (son 50 kayıt).
-- **`veri/` klasörünü düzenli olarak yedekleyin**, siparişler oradadır.
+- **Supabase Bulut Veritabanı & Storage (`yrbvywobqnrqqvkndvqj`):** `.env` dosyasında `SUPABASE_URL`, `SUPABASE_KEY` ve `SUPABASE_SUNUCU_ANAHTARI` tanımlı olduğunda tüm mağaza, ürün, kategori, set, sipariş, sözleşme ve görsel işlemleri doğrudan **Supabase Postgres + Storage** üzerinde çalışır:
+  - Tablolar: `site_ayarlari`, `kategoriler`, `urunler`, `setler`, `siparisler`, `sozlesmeler`, `magaza_yedekler`, `medya_dosyalari` ve `storage.buckets` (`medya`).
+  - Rapor Görünümleri (Views): `ozet_urun_stok_ve_fiyat`, `ozet_gunluk_siparis_ciro`.
+  - Otomatik Tetikleyiciler (Triggers): Supabase Table Editor üzerinden doğrudan yapılan ürün fiyat değişiklikleri otomatik olarak `fiyat_gecmisi` dizisine, sipariş durum/kargo takip değişiklikleri ise `gecmis` dizisine işlenir.
+- **Yerel Senkron Yedek:** Supabase aktifken bile yapılan her değişiklik yerel `veri/magaza.json`, `veri/siparisler.json`, `veri/sozlesmeler/`, `veri/yuklemeler/` ve `veri/yedekler/` altına eşzamanlı olarak yedeklenir.
 
 ## Yayına alma (canlı site)
 
@@ -70,7 +73,14 @@ Canlıya almadan önce:
 
 ## Ödeme
 
-Ödeme kuruluşu (iyzico / PayTR) henüz bağlı değil. Siparişler "Ödeme bekleniyor" durumunda kaydedilir. Bağlantı noktası: `src/pages/api/siparis.ts` (TODO). Fiyatlar ve stok sunucuda yeniden hesaplanır; tarayıcıdan gelen tutara güvenilmez.
+Kartlı ödeme PayTR Sanal POS iFrame API ile çalışır. Varsayılan `PAYTR_MOD=kapali` ayarı mevcut sipariş kaydı akışını kullanır.
+
+1. [PayTR Sanal POS](https://www.paytr.com/paytr-sanal-pos) başvurusunu mağazanın yasal sahibi tamamlar. PayTR Mağaza Paneli → Destek & Kurulum → Entegrasyon Bilgileri bölümünden mağaza numarası, anahtar ve salt alınır.
+2. HTTPS test sunucusunda `PAYTR_MOD=test`, `PAYTR_SITE_URL` (adresin yalnızca origin kısmı), `PAYTR_MERCHANT_ID`, `PAYTR_MERCHANT_KEY` ve `PAYTR_MERCHANT_SALT` sunucu ortamına girilir. Anahtarlar ve salt hosting servisinin gizli değişkenlerinde tutulur. Üretimden ayrı `VERI_KLASORU` kullanılır.
+3. PayTR Mağaza Paneli → Destek & Kurulum → Ayarlar → Bildirim URL alanına `https://<site>/api/odeme/paytr` yazılır. Bu adres internete açık olmalı. Ters vekil dışarıdan gelen yönlendirme başlıklarını güvenilir HTTPS ve istemci IP değerleriyle değiştirmeli. Dosya deposu için tek Node.js örneği ve kalıcı disk kullanılmalı.
+4. [PayTR test akışında](https://dev.paytr.com/iframe-api) başarılı, reddedilen ve yarım bırakılan işlemler ile mobil banka doğrulaması, bildirim ve sipariş durumu kontrol edilir. 3D Secure zorunluluğu mağaza hesabı için PayTR ile doğrulanır. Test siparişleri gerçek stok, ciro veya müşteri bildirimi oluşturmaz. PayTR onayından sonra canlı sunucuda `PAYTR_MOD=canli` ile açılır. Entegrasyon tek çekime ayarlıdır.
+
+Kart alanları PayTR iFrame’i içinde açılır. Siparişin kesinleşmesi, imza ve tutarı doğrulanmış sunucudan sunucuya bildirime bağlıdır. Ödeme tamamlanana kadar stok geçici ayrılır. İşlem sonunda stok uyuşmazlığı kaldıysa yönetim panelinde uyarı görünür. İadeler PayTR Mağaza Paneli'nden takip edilir ve mağaza kayıtlarıyla mutabakat gerektirir.
 
 ## Güvenlik özeti
 

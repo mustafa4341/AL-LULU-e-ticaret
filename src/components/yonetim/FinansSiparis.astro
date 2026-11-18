@@ -1,0 +1,98 @@
+---
+/* Sipariş detayındaki "Belgeler" kartı ve "Belge Oluştur" penceresi (önizlemeli). */
+import Ikon from '../Ikon.astro';
+import { BELGE_DURUMLARI, BELGE_TURLERI, belgeGecerli, type Belge, type BelgeTuru } from '../../lib/finans';
+import { iadeEdildi } from '../../lib/siparisAkisi';
+import type { Siparis } from '../../lib/sema';
+import { yTarih } from '../../lib/yonetimRapor';
+const { siparis: s, belgeler } = Astro.props as { siparis: Siparis; belgeler: Belge[] };
+const geri = '/yonetim/siparisler/' + s.no;
+const iptal = s.durum === 'iptal';
+const turler = (Object.keys(BELGE_TURLERI) as BelgeTuru[]).filter((t) => !iptal || t === 'iade');
+const varsayilan: BelgeTuru = iptal || iadeEdildi(s) ? 'iade' : 'ozet';
+const ACIKLAMA: Record<BelgeTuru, string> = {
+  ozet: 'Fiyatlı, satıcı ve alıcı bilgili özet. Muhasebe ve müşteri için.',
+  fis: 'Paketin içine konan teşekkür fişi. Hediye için fiyatlar gizlenebilir.',
+  paket: 'Fiyatsız hazırlık listesi: ürün, SKU, adet ve kontrol kutuları.',
+  iade: 'Müşterinin dolduracağı iade talep formu.',
+};
+const mevcut = Object.fromEntries(belgeler.filter(belgeGecerli).map((b) => [b.tur, b.belgeNo ?? 'kayıtlı'])) as Partial<Record<BelgeTuru, string>>;
+const durumSinifi = (d: Belge['durum']) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyor' ? 'turuncu' : d === 'iptal' ? 'gri' : 'yesil';
+const sirali = [...belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturma));
+---
+{!s.paytr?.test && <section class="y-kart" id="belgeler">
+  <div class="y-kart__bas">
+    <h2>Belgeler</h2>
+    <button class="btn btn--cizgi" type="button" data-y-dialog="belge-olustur"><Ikon ad="belge" boyut={16} />Belge Oluştur</button>
+  </div>
+  {sirali.length === 0 && <p class="muted">Bu sipariş için henüz belge hazırlanmadı.</p>}
+  {sirali.length > 0 && <ul class="y-belge-listesi">
+    {sirali.map((b) => <li class:list={{ 'is-iptal': b.durum === 'iptal' }}>
+      <span class="y-belge-listesi__ad">
+        <strong>{BELGE_TURLERI[b.tur]}</strong>
+        <small class="muted">{b.belgeNo ?? 'Numarasız eski kayıt'} · {yTarih.format(new Date(b.olusturma))}{b.fiyatGizle ? ' · fiyatsız' : ''}</small>
+      </span>
+      <span class:list={['y-chip', 'y-chip--' + durumSinifi(b.durum)]}>{BELGE_DURUMLARI[b.durum]}</span>
+      <span class="y-belge-listesi__is">
+        {['duzenlendi', 'gonderildi', 'iptal'].includes(b.durum) && <>
+          <a class="y-link" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Görüntüle</a>
+          <a class="y-link" href={'/yonetim/finans/belge?id=' + b.id}>İndir</a>
+        </>}
+        {b.durum === 'duzenlendi' && <form method="post" action="/yonetim/finans/belge">
+          <input type="hidden" name="id" value={b.id} /><input type="hidden" name="geri" value={geri} />
+          <button class="y-icon-button y-link" type="submit" name="islem" value="gonderildi">Gönderildi</button>
+        </form>}
+        {b.durum === 'hata' && <form method="post" action="/yonetim/finans/belge">
+          <input type="hidden" name="no" value={s.no} /><input type="hidden" name="tur" value={b.tur} /><input type="hidden" name="geri" value={geri} />
+          <input type="hidden" name="indir" value="0" />
+          <button class="btn btn--cizgi" type="submit" name="islem" value="olustur">Yeniden dene</button>
+        </form>}
+      </span>
+    </li>)}
+  </ul>}
+
+  <dialog class="y-modal y-modal--genis" id="belge-olustur" aria-labelledby="belge-olustur-baslik">
+    <div class="y-modal__bas">
+      <strong id="belge-olustur-baslik">Belge Oluştur · {s.no}</strong>
+      <form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form>
+    </div>
+    <div class="y-belge-duzen">
+      <form method="post" action="/yonetim/finans/belge" class="y-belge-form" data-belge-form data-no={s.no}>
+        <input type="hidden" name="geri" value={geri} /><input type="hidden" name="no" value={s.no} />
+        <fieldset class="y-tur-secimi">
+          <legend>Belge türü</legend>
+          {turler.map((t) => <label>
+            <input type="radio" name="tur" value={t} checked={t === varsayilan} data-mevcut={mevcut[t] ?? ''} />
+            <span><strong>{BELGE_TURLERI[t]}</strong><small>{ACIKLAMA[t]}</small>{mevcut[t] && <em>Düzenlendi · {mevcut[t]}</em>}</span>
+          </label>)}
+          <label class="is-pasif" title="Kargo firması veya Trendyol entegrasyonu gerekir">
+            <input type="radio" disabled />
+            <span><strong>Kargo etiketi (taşıma)</strong><small>Kargo firmasının resmî barkodu, kargo entegrasyonu bağlanınca oluşturulur.</small></span>
+          </label>
+          <label class="is-pasif" title="Yetkili e-belge entegratörü gerekir">
+            <input type="radio" disabled />
+            <span><strong>e-Fatura / e-Arşiv</strong><small>Resmî fatura yalnızca GİB uyumlu entegratör üzerinden düzenlenir.</small></span>
+          </label>
+        </fieldset>
+        <label class="y-alan">Bu belgeye özel not <span class="muted">(isteğe bağlı)</span>
+          <textarea name="not" rows="2" maxlength="400" placeholder="Ör. Hediye paketi yapıldı."></textarea>
+        </label>
+        <label class="y-secim" data-fiyat-secenek><input type="checkbox" name="fiyatGizle" value="1" />Fiyatları gizle (hediye gönderimi)</label>
+        <div class="y-belge-mevcut" data-belge-mevcut hidden>
+          <p><strong data-belge-mevcut-no></strong> numaralı belge zaten var. Tekrar oluşturmak aynı belgeyi indirir.</p>
+          <label class="y-secim"><input type="checkbox" name="yenile" value="1" />Yeni sürüm düzenle (eskisi “iptal” olarak arşivde kalır)</label>
+        </div>
+        <div class="y-modal__alt">
+          <button class="btn btn--cizgi" type="submit" name="indir" value="0" formnovalidate>Sadece kaydet</button>
+          <button class="btn btn--sepet" type="submit" name="islem" value="olustur" data-belge-gonder>Oluştur ve İndir</button>
+        </div>
+        <input type="hidden" name="islem" value="olustur" />
+        <p class="y-help">Belge numarası ve tarihi kayıt anında verilir. <a class="y-link" href="/yonetim/finans?sekme=belgeler&ayar=1">Belge ayarları</a></p>
+      </form>
+      <figure class="y-belge-onizleme" aria-live="polite">
+        <img alt="Belge önizlemesi" data-belge-onizleme width="595" height="842" />
+        <figcaption data-belge-onizleme-durum>Önizleme hazırlanıyor…</figcaption>
+      </figure>
+    </div>
+  </dialog>
+</section>}

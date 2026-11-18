@@ -155,6 +155,17 @@ export function sepetHesapla(kalemler: readonly SepetKalemi[], ik: IstemciKatalo
   };
 }
 
+/** Kampanya indirimi: fiyat geçmişinden doğrulanmış önceki fiyat ile satış fiyatı arasındaki fark (her ürün için).
+ *  Ödenecek tutarı değiştirmez (satış fiyatı zaten indirimli); sepette ve siparişte "indirim" satırı olarak gösterilir. */
+export function satirKampanyaIndirimi(s: HesapSatiri, ik: IstemciKatalog): number {
+  if (s.tip !== 'urun') return 0;
+  const onceki = ik.urunler[s.id]?.onceki;
+  return onceki && onceki > s.birimFiyat ? (onceki - s.birimFiyat) * s.adet : 0;
+}
+export function kampanyaIndirimi(satirlar: readonly HesapSatiri[], ik: IstemciKatalog): number {
+  return satirlar.reduce((t, s) => t + satirKampanyaIndirimi(s, ik), 0);
+}
+
 /** Sepetteki her ürünün toplam kullanımı (setlerin içindekiler dahil) */
 export function urunKullanimi(kalemler: readonly SepetKalemi[], ik: IstemciKatalog): Map<string, number> {
   const m = new Map<string, number>();
@@ -163,4 +174,15 @@ export function urunKullanimi(kalemler: readonly SepetKalemi[], ik: IstemciKatal
     else ik.setler[k.id]?.kalemler.forEach((s) => m.set(s.urunId, (m.get(s.urunId) ?? 0) + s.adet * k.adet));
   }
   return m;
+}
+export function setToplamlari(
+  satirlar: { adet: number; birim: number; indirimliBirim?: number }[],
+  fiyatlama: { tip: 'yuzde'; oran: number } | { tip: 'sabit'; fiyat: number } | { tip: 'kalem' },
+) {
+  const ayriAyri = satirlar.reduce((t, d) => t + d.birim * d.adet, 0);
+  const fiyat = fiyatlama.tip === 'yuzde' ? Math.floor(ayriAyri * (100 - fiyatlama.oran) / 1000) * 10
+    : fiyatlama.tip === 'sabit' ? fiyatlama.fiyat
+    : satirlar.reduce((t, d) => t + (d.indirimliBirim ?? d.birim) * d.adet, 0);
+  const kazanc = Math.max(0, ayriAyri - fiyat);
+  return { ayriAyri, fiyat, kazanc, yuzde: ayriAyri ? Math.round(kazanc * 100 / ayriAyri) : 0 };
 }

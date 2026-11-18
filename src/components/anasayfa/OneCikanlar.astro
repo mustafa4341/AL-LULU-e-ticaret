@@ -3,15 +3,18 @@ import Ikon from '../Ikon.astro';
 import UrunKarti from '../UrunKarti.astro';
 const k = Astro.locals.katalog;
 const urunler = k.oneCikanUrunler();
+/* Tek ürün varken iki sütunlu ray yarım ekran boş bırakıyordu: tek ürün tam genişlik, yatay kart olur
+   ve "Tümünü gör" gizlenir (gidecek başka ürün yok). */
+const tek = urunler.length === 1;
 ---
 {urunler.length > 0 && (
   <section class="bolum bolum--beyaz" aria-labelledby="one-cikan-baslik">
     <div class="container">
       <div class="bolum-bas">
-        <div><p class="eyebrow eyebrow--altin">Seçtiklerimiz</p><h2 id="one-cikan-baslik">{k.anaSayfa.oneCikanlarBaslik}</h2></div>
-        <a class="bolum-bas__link" href="/urunler">Tümünü gör <Ikon ad="sag" boyut={16} /></a>
+        <div><p class="eyebrow eyebrow--altin">Seçtiklerimiz</p><h2 id="one-cikan-baslik">{tek ? 'Öne çıkan ürün' : k.anaSayfa.oneCikanlarBaslik}</h2></div>
+        {!tek && <a class="bolum-bas__link" href="/urunler">Tümünü gör <Ikon ad="sag" boyut={16} /></a>}
       </div>
-      <div class="urun-ray">{urunler.map((u) => <UrunKarti urun={u} konum="one-cikanlar" />)}</div>
+      <div class:list={['urun-ray', { 'urun-ray--tek': tek }]}>{urunler.map((u) => <UrunKarti urun={u} konum="one-cikanlar" yatay={tek} />)}</div>
     </div>
   </section>
 )}
