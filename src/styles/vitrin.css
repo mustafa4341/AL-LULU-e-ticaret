@@ -82,13 +82,13 @@
   overflow: hidden;
   color: #fff;
   background: radial-gradient(circle at 50% 45%, #ff8a1f 0%, #f26b0f 58%, #e25a06 64%, #ffb04d 66%, #ff9a2e 78%, #f27a12 100%);
-  box-shadow: 0 4px 12px #8d370c4d, inset 0 0 0 2px #ffffff59;
+  box-shadow: 0 6px 16px #c04a0059, inset 0 0 0 2px #ffffff59;
   font-size: .8125rem;
   font-weight: 900;
   line-height: 1.05;
   text-align: center;
   text-transform: uppercase;
-  rotate: -8deg;
+  rotate: -10deg;
   pointer-events: none;
 }
 .urun-rozeti > span {
@@ -103,22 +103,18 @@
   text-wrap: balance;
 }
 .urun-rozeti > svg { color: #fff8ec; filter: drop-shadow(0 1px 1px #692800); }
+.urun-rozeti--cok-satan { font-size: .9375rem; line-height: .98; }
 .firsat-cip svg { flex: none; }
 .kart > .urun-rozeti { --rozet-cap: 64px; inset: 8px auto auto 8px; padding: 7px; font-size: .6875rem; }
 .kart > .urun-rozeti > svg { width: 12px; }
 @media (min-width: 900px) {
-  .hero__vitrin > .urun-rozeti { --rozet-cap: 104px; font-size: 1rem; }
-  .urun-rozeti--galeri { --rozet-cap: 96px; top: 16px; left: 104px; font-size: .9375rem; }
+  .hero__vitrin > .urun-rozeti { --rozet-cap: 108px; inset: 18px auto auto 18px; font-size: 1rem; }
+  .hero__vitrin > .urun-rozeti--cok-satan { font-size: 1.1875rem; }
+  .urun-rozeti--galeri { --rozet-cap: 104px; top: 16px; left: 104px; font-size: 1.125rem; }
 }
 
 .hero__vitrin img { animation: none; }
 .hero__etiket, .hero__incele-hap { z-index: 2; }
-.hero__indirim, .urun-indirim-cip, .kart__indirim {
-  color: #792b3b;
-  border: 1px solid #edd2d8;
-  background: #fff5f5;
-  box-shadow: 0 2px 7px #62273812;
-}
 .kart__serit { background: #f6f2e7; color: #544021; border-top: 1px solid #ece3cf; }
 
 @media (prefers-reduced-motion: no-preference) {
