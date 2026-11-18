@@ -6,6 +6,14 @@ import type { FiyatKaydi } from './sema';
 
 const GUN = 24 * 60 * 60 * 1000;
 
+/**
+ * İndirimli satışta "önceki fiyat" penceresi: indirimin başlangıcından önceki 10 gün.
+ * Ticari Reklam ve Haksız Ticari Uygulamalar Yönetmeliği m.14/3 (RG 01.07.2026/33297, yürürlük 01.08.2026).
+ * Aynı yönetmelik m.14/5: başka bir satış kanalındaki (pazar yeri, mağaza, sosyal medya) fiyat bu sitedeki
+ * indirim için esas alınamaz — fiyat geçmişine yalnız bu sitede gerçekten uygulanan fiyatlar girer.
+ */
+export const YASAL_INDIRIM_GUN = 10;
+
 export function formatTL(n: number): string {
   return new Intl.NumberFormat('tr-TR', { maximumFractionDigits: 0 }).format(Math.round(n)) + ' TL';
 }

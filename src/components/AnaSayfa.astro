@@ -10,10 +10,12 @@ import AmiralHikaye from './anasayfa/AmiralHikaye.astro';
 import NedenBiz from './anasayfa/NedenBiz.astro';
 import SSSBolumu from './anasayfa/SSSBolumu.astro';
 import { magazaVerisi } from '../lib/seo';
+import { hizmeteUygunSSS } from '../lib/altyapi';
 
 /* Bölümler panel → Ayarlar → Ana sayfa'daki sırayla gösterilir. */
 const bilesenler = { hero: Hero, firsatlar: Firsatlar, guven: Guven, kategoriler: Kategoriler, oneCikanlar: OneCikanlar, setler: Setler, amiralHikaye: AmiralHikaye, nedenBiz: NedenBiz, sss: SSSBolumu } as const;
 const k = Astro.locals.katalog;
+const sss = hizmeteUygunSSS(k.anaSayfa.sss);
 ---
 <Base
   baslik={`${k.site.ad} | Fissler Düdüklü Tencere ve Premium Mutfak Ürünleri`}
@@ -22,9 +24,9 @@ const k = Astro.locals.katalog;
   yapisalVeri={[
     ...magazaVerisi(k.site),
     // Ana sayfadaki "Aklınızdaki sorular" bölümü görünüyorsa aynı soru-cevaplar
-    ...(k.anaSayfa.bolumler.includes('sss') && k.anaSayfa.sss.length ? [{
+    ...(k.anaSayfa.bolumler.includes('sss') && sss.length ? [{
       '@context': 'https://schema.org', '@type': 'FAQPage',
-      mainEntity: k.anaSayfa.sss.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
+      mainEntity: sss.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
     }] : []),
   ]}
 >

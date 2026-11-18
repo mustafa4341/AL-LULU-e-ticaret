@@ -238,8 +238,9 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
             <input name="cokSatanEsik" inputmode="numeric" value={s.cokSatanEsik} />
           </div>
           <div class="y-alan">
-            <label>İndirim Referans Süresi (Gün)</label>
+            <label>"Son … Günün En Düşük Fiyatı" Rozeti (Gün)</label>
             <input name="indirimReferansGun" inputmode="numeric" value={s.indirimReferansGun} />
+            <span class="y-ipucu">Üstü çizili önceki fiyat bu ayardan etkilenmez: yasa gereği indirimden önceki 10 günde bu sitede uygulanan en düşük fiyattır.</span>
           </div>
         </div>
         <div class="y-izgara y-izgara--2" style="margin-top:10px">
@@ -297,6 +298,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
       <!-- 6. ANA SAYFA SSS -->
       <section class="y-kart" id="sss-bolum" data-bolum="sss" hidden={aktifBolum !== "sss"}>
         <h2>Sık Sorulan Sorular</h2>
+        <p class="y-ipucu" style="margin:-4px 0 10px">Kartlı ödeme (PayTR) açılana kadar içinde "taksit" geçen sorular sitede gösterilmez; ödeme açılınca kendiliğinden görünür.</p>
         <div class="y-tekrar">
           {a.sss.map((x) => (
             <div class="y-tekrar__satir">

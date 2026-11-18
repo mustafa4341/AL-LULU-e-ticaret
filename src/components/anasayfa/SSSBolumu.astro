@@ -1,12 +1,14 @@
 ---
 import SSS from '../SSS.astro';
+import { hizmeteUygunSSS } from '../../lib/altyapi';
 const k = Astro.locals.katalog;
+const maddeler = hizmeteUygunSSS(k.anaSayfa.sss);
 ---
-{k.anaSayfa.sss.length > 0 && (
+{maddeler.length > 0 && (
   <section class="bolum" id="sss" aria-labelledby="sss-baslik">
     <div class="container">
       <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">Sık sorulanlar</p><h2 id="sss-baslik">Aklınızdaki sorular</h2></div></div>
-      <SSS maddeler={k.anaSayfa.sss} />
+      <SSS maddeler={maddeler} />
     </div>
   </section>
 )}

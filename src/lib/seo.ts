@@ -3,6 +3,7 @@
  * mağazanın yapısal verisi. Tüm bilgiler paneldeki GERÇEK ayarlardan üretilir; uydurma puan/yorum yoktur.
  */
 import type { SiteAyarlari } from './sema';
+import { bosYasalBilgi } from './yonetimSite';
 
 const GUNLER: [RegExp, string[]][] = [
   [/her\s*gün/i, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']],
@@ -47,8 +48,10 @@ export function magazaVerisi(site: SiteAyarlari): Record<string, unknown>[] {
       logo: `${url}/img/logo/icon-512.png`, image: `${url}/img/logo/al-lulu-home.png`,
       email: site.eposta, telephone: site.telefon, areaServed: { '@type': 'Country', name: 'Türkiye' },
       currenciesAccepted: 'TRY',
-      ...(site.satici.unvan.trim() ? { legalName: site.satici.unvan } : {}),
-      ...(site.satici.adres.trim() ? { address: { '@type': 'PostalAddress', streetAddress: site.satici.adres, addressCountry: 'TR' } } : {}),
+      // "[Ticari Unvan]" gibi doldurulmamış şablonlar Google'a gönderilmez; panelde gerçek bilgi girilince otomatik eklenir
+      ...(!bosYasalBilgi(site.satici.unvan) ? { legalName: site.satici.unvan } : {}),
+      ...(!bosYasalBilgi(site.satici.adres) ? { address: { '@type': 'PostalAddress', streetAddress: site.satici.adres, addressCountry: 'TR' } } : {}),
+      ...(!bosYasalBilgi(site.satici.vergiDairesiNo) && /\d{10,11}/.test(site.satici.vergiDairesiNo) ? { taxID: site.satici.vergiDairesiNo.match(/\d{10,11}/)![0] } : {}),
       contactPoint: [iletisim, ...(site.kurumsalEposta ? [{ '@type': 'ContactPoint', contactType: 'sales', email: site.kurumsalEposta, availableLanguage: 'tr' }] : [])],
       hasMerchantReturnPolicy: {
         '@type': 'MerchantReturnPolicy', applicableCountry: 'TR',

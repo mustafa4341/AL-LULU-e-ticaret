@@ -3,8 +3,14 @@
  * Google Alışveriş, Akakçe, Cimri ve diğer fiyat karşılaştırma siteleri bu biçimi kabul eder.
  * Panel verisinden her istekte üretilir: fiyat (müşterinin ödediği), stok, görseller, kargo hep güncel.
  * Yalnız yayındaki ürünler; uydurma barkod (GTIN) yazılmaz — panelde yoksa marka + model kodu (MPN) kullanılır.
+ *
+ * Bilerek <g:sale_price> YOK: (1) Akakçe/Cimri gibi siteler <g:price>'ı müşterinin ödeyeceği fiyat olarak okur,
+ * eski fiyatı oraya yazmak bizi pahalı gösterir; (2) indirimli satış reklamında önceki fiyat yalnız AYNI kanalda
+ * (bu sitede) son 10 günde uygulanan en düşük fiyat olabilir (Ticari Reklam Yön. m.14/3 ve 14/5, RG 01.07.2026/33297).
+ * Google fiyat düşüşünü kendi fiyat geçmişinden zaten hesaplar.
  */
 import type { APIRoute } from 'astro';
+import { urunGtin } from '../lib/urunKimlik';
 
 const x = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 const tl = (n: number) => `${n.toFixed(2)} TRY`;
@@ -23,6 +29,8 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     const kargoUcreti = odenecek >= kargo.ucretsizEsik ? 0 : kargo.ucret;
     const cumle = (v: string) => { const t = v.replace(/\*+/g, '').replace(/\s*\|\s*/g, ': ').trim(); return /[.!?]$/.test(t) ? t : t + '.'; };
     const aciklama = [u.ozet, ...u.oneCikanBilgiler.map((o) => o.metin)].filter(Boolean).map(cumle).join(' ');
+    // Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa (lib/urunKimlik.ts)
+    const gtin = urunGtin(u);
     return `    <item>
       <g:id>${x(u.id)}</g:id>
       <g:title>${x(`${u.marka} ${u.ad}`)}</g:title>
@@ -33,7 +41,7 @@ ${gorseller.slice(1, 10).map((g) => `      <g:additional_image_link>${x(g)}</g:a
       <g:availability>${k.stoktaMi(u) ? 'in_stock' : 'out_of_stock'}</g:availability>
       <g:price>${tl(odenecek)}</g:price>
       <g:brand>${x(u.marka)}</g:brand>
-${u.sku ? `      <g:mpn>${x(u.sku)}</g:mpn>\n` : ''}      <g:identifier_exists>${u.sku ? 'yes' : 'no'}</g:identifier_exists>
+${gtin ? `      <g:gtin>${gtin}</g:gtin>\n` : ''}${u.sku ? `      <g:mpn>${x(u.sku)}</g:mpn>\n` : ''}      <g:identifier_exists>${gtin || u.sku ? 'yes' : 'no'}</g:identifier_exists>
       <g:condition>new</g:condition>
 ${kat ? `      <g:product_type>${x(`Ev ve Mutfak > ${kat.ad}`)}</g:product_type>\n` : ''}      <g:google_product_category>Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Cookware &amp; Bakeware</g:google_product_category>
       <g:quantity>${Math.max(0, u.stok)}</g:quantity>

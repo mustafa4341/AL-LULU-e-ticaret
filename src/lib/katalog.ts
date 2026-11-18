@@ -3,7 +3,7 @@
  * Her istekte middleware tarafından oluşturulur ve Astro.locals.katalog ile her bileşene ulaşır.
  */
 import type { Durum, Kategori, Magaza, Urun, UrunSeti } from './sema';
-import { gecerliSepetteIndirim, oncekiFiyat, sepetteFiyat, setToplamlari, sonGunlerinEnDusugu, type IstemciKatalog, type IstemciSet, type IstemciUrun } from './fiyat';
+import { YASAL_INDIRIM_GUN, gecerliSepetteIndirim, oncekiFiyat, sepetteFiyat, setToplamlari, sonGunlerinEnDusugu, type IstemciKatalog, type IstemciSet, type IstemciUrun } from './fiyat';
 
 export interface FiyatBilgisi {
   fiyat: number;
@@ -92,8 +92,10 @@ export class Katalog {
       else gecmis.length = 0;
     }
     const elle = u.kampanya?.oncekiFiyat;
+    // Önceki fiyat: indirimin başlangıcından önceki 10 günde BU SİTEDE uygulanan en düşük fiyat
+    // (Ticari Reklam Yön. m.14/3 ve 14/5, RG 01.07.2026/33297, yürürlük 01.08.2026). Panel ayarı bunu değiştirmez.
     const onceki = u.kampanya
-      ? elle && elle > u.fiyat ? elle : oncekiFiyat(gecmis, u.kampanya.baslangic, gun, u.fiyat)
+      ? elle && elle > u.fiyat ? elle : oncekiFiyat(gecmis, u.kampanya.baslangic, YASAL_INDIRIM_GUN, u.fiyat)
       : undefined;
     const sepetteYuzde = gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }, simdi);
     return {

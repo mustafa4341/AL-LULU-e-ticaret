@@ -1,8 +1,13 @@
 ---
 import Ikon from './Ikon.astro';
 import Logo from './Logo.astro';
+import { bosYasalBilgi } from '../lib/yonetimSite';
 const k = Astro.locals.katalog;
 const site = k.site;
+/* "[Ticari Unvan]" gibi doldurulmamış şablonlar müşteriye gösterilmez; panelde girilince kendiliğinden görünür */
+const unvan = bosYasalBilgi(site.satici.unvan) ? '' : site.satici.unvan;
+const adres = bosYasalBilgi(site.satici.adres) ? '' : site.satici.adres;
+const etbis = bosYasalBilgi(site.satici.etbis) ? '' : site.satici.etbis;
 const kategoriler = k.gorunurKategoriler({ menu: true });
 const yil = new Date().getFullYear();
 ---
@@ -59,13 +64,13 @@ const yil = new Date().getFullYear();
           <a href={`tel:${site.telefon}`}>Tel: {site.telefonGorunen}</a><br />
           <a href={`mailto:${site.eposta}`}>{site.eposta}</a><br />
           {site.kurumsalEposta && site.kurumsalEposta !== site.eposta && <>Kurumsal: <a href={`mailto:${site.kurumsalEposta}`}>{site.kurumsalEposta}</a><br /></>}
-          <span data-verify="Ticari unvan ve adres">{site.satici.unvan}<br />{site.satici.adres}</span>
+          {(unvan || adres) && <span>{unvan}{unvan && adres && <br />}{adres}</span>}
         </address>
       </div>
     </div>
     <div class="footer-bottom">
       <span>© {yil} {site.ad}. Fissler ve Vitaquick, Fissler GmbH'nin tescilli markalarıdır.</span>
-      <span data-verify="ETBİS kaydı">ETBİS: {site.satici.etbis}</span>
+      {etbis && <span>ETBİS: {etbis}</span>}
     </div>
   </div>
 </footer>

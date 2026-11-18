@@ -21,6 +21,9 @@ interface Props {
   kirinti?: [string, string][];
   /** Open Graph türü (ürün sayfasında "product") */
   ogTuru?: 'website' | 'product';
+  /** Ürün sayfası: Meta (Facebook/Instagram) kataloğu ve paylaşım önizlemeleri için product:* etiketleri.
+   *  id, ürün akışındaki g:id ile aynıdır; böylece Meta sayfayı katalogdaki ürünle eşleştirir. */
+  urunMeta?: { id: string; marka: string; fiyat: number; stokta: boolean; gtin?: string };
   /** Ürün sayfası: alt menü yerine satın alma çubuğu */
   altCubuk?: boolean;
   indekslenmesin?: boolean;
@@ -29,7 +32,7 @@ interface Props {
   /** Sayfaya özel ilk duyuru (ör. ürün sayfasında "Bu üründe kargo bedava") */
   ozelDuyuru?: string;
 }
-const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, kirinti, ogTuru = 'website', altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
+const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, kirinti, ogTuru = 'website', urunMeta, altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
 const k = Astro.locals.katalog;
 const onizleme = Astro.locals.vitrinOnizleme;
 /* Google Tag Manager kimliği (Vercel: GTM_KIMLIGI). Yönetici ve önizleme ziyaretleri ölçülmez. */
@@ -74,6 +77,18 @@ const geriYol = Astro.url.pathname;
     <meta property="og:type" content={ogTuru} />
     <meta property="og:url" content={kanonik} />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content={baslik} />
+    <meta name="twitter:description" content={aciklama} />
+    <meta name="twitter:image" content={ogGorsel} />
+    {urunMeta && <>
+      <meta property="product:brand" content={urunMeta.marka} />
+      <meta property="product:price:amount" content={urunMeta.fiyat.toFixed(2)} />
+      <meta property="product:price:currency" content="TRY" />
+      <meta property="product:availability" content={urunMeta.stokta ? 'in stock' : 'out of stock'} />
+      <meta property="product:condition" content="new" />
+      <meta property="product:retailer_item_id" content={urunMeta.id} />
+      {urunMeta.gtin && <meta property="product:gtin" content={urunMeta.gtin} />}
+    </>}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />

@@ -1,4 +1,5 @@
 import type { APIRoute } from 'astro';
+import { YASAL_SAYFALAR } from '../lib/yasal';
 
 export const GET: APIRoute = async ({ locals, site }) => {
   const k = locals.katalog;
@@ -11,7 +12,7 @@ export const GET: APIRoute = async ({ locals, site }) => {
     // Boş sayfalar (ürünsüz kategori, setsiz setler sayfası) Google'a bildirilmez; o sayfalar "noindex" döner
     ...(k.tumSetler().length ? [{ loc: '/setler', priority: '0.8' }] : []),
     { loc: '/bilgi', priority: '0.6' },
-    { loc: '/siparis-takip', priority: '0.5' },
+    // /siparis-takip "noindex" döndüğü için burada yok (site haritası yalnız dizine eklenebilir adresleri içerir)
   ];
 
   for (const kat of k.magaza.kategoriler) {
@@ -20,6 +21,8 @@ export const GET: APIRoute = async ({ locals, site }) => {
   for (const u of k.magaza.urunler.filter((x) => x.durum === 'yayinda')) {
     yollar.push({ loc: `/urun/${u.id}`, priority: '0.9' });
   }
+  // İade, kargo, garanti ve sözleşme sayfaları: Merchant Center ve arama motorları politikaları buradan okur
+  for (const y of YASAL_SAYFALAR) yollar.push({ loc: `/yasal/${y.yol}`, priority: '0.3' });
 
   const xml =
     `<?xml version="1.0" encoding="UTF-8"?>\n` +

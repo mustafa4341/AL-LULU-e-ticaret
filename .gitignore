@@ -13,6 +13,10 @@ veri/sozlesmeler/
 veri/yedekler/
 veri/yuklemeler/
 veri/finans/
+veri/gorsel-yedek/
+
+# İşletme stratejisi ve araştırma notları (depo herkese açık: yalnız bu bilgisayarda kalır)
+strateji-arastirma/
 
 # Yerel araç ayarları
 .claude/settings.local.json

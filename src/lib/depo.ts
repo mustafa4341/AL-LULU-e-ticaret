@@ -12,6 +12,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from './supabase.types';
 import { MagazaSema, SiparisSema, type Magaza, type Siparis } from './sema';
 import { magazaTutarlilik } from './katalog';
+import { magazaDegisikliginiBildir } from './indexnow';
 
 const ortam = (ad: string): string | undefined =>
   process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
@@ -186,6 +187,8 @@ async function magazaYaz(degistir: (m: Magaza) => void): Promise<Magaza> {
     if (kayit.error) throw new Error('Mağaza veritabanına kaydedilemedi.');
     const kaydedilen = kayit.data ? MagazaSema.parse(kayit.data) : yeni;
     await magazaYansit(kaydedilen);
+    // Değişen ürün sayfalarını Bing/Yandex'e bildir (yalnız canlıda; hata kaydı etkilemez, en fazla 3 sn)
+    await magazaDegisikliginiBildir(mevcut, kaydedilen);
     return kaydedilen;
   }
 
