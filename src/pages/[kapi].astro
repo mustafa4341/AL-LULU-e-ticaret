@@ -1,0 +1,10 @@
+---
+/*
+ * Tek parçalı bilinmeyen adresler buraya düşer.
+ * Gizli yönetim giriş adresini (YONETIM_GIRIS_YOLU) middleware yakalar; bu sayfa yalnızca
+ * Vercel'in eşleşmeyen adreslere zorla "404" durumu vermesini önlemek için vardır
+ * (aksi halde gizli giriş sayfası 404 durumuyla açılır, giriş sonrası yönlendirme bozulabilir).
+ * Diğer her adres normal "sayfa bulunamadı" sayfasını gösterir.
+ */
+return Astro.rewrite('/404');
+---
