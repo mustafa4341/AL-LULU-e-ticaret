@@ -35,7 +35,17 @@ organik sıra satın alınamaz. Kazanılabilir yol şudur:
 
 ## Sizin yapmanız gerekenler 👤 (öncelik sırasıyla)
 
-### 1. Google Search Console — Google'dan gelen ziyaretleri görmek (en önemli, ~10 dk)
+### ✅ 1. Google Search Console — TAMAMLANDI (18.11.2026)
+info@alluluhome.com hesabında `alluluhome.com` alan mülkü doğrulandı, site haritası gönderildi, ana sayfa ve Vitaquick sayfası için dizine ekleme istendi (ana sayfa zaten Google'daydı).
+Raporlar: <https://search.google.com/u/1/search-console?resource_id=sc-domain:alluluhome.com> → **Performans** (2–3 gün sonra dolar).
+
+### Ürün akışı (Merchant Center, Akakçe, Cimri) ✅
+Adres: **<https://alluluhome.com/urun-akisi.xml>** — Google Alışveriş biçiminde, panelden otomatik, fiyat/stok/kargo hep güncel.
+- **Akakçe:** <https://www.akakce.com/magaza-basvuru/> → Hemen Başvur. Tıklama başına ücretlidir. Başvuruda XML adresi olarak yukarıdakini verin; kendi biçimlerini isterlerse gönderdikleri şablonu bana iletin, ikinci bir akış eklerim.
+- **Cimri:** cimri.com → sayfanın altındaki "Mağaza Başvurusu / İş Ortaklığı" → aynı XML adresi.
+- İkisi de ödeme alınabilen bir site ister: **PayTR canlıya alınmadan başvuru reddedilebilir.**
+
+### (eski adımlar, bilgi için) Search Console
 1. <https://search.google.com/search-console> → info@alluluhome.com ile girin.
 2. Sol üstte `alluluhome.com` mülkü görünüyorsa **kayıt zaten var** (DNS'teki doğrulama kaydı yerinde). Yoksa **Mülk ekle → Alan** → `alluluhome.com` → Cloudflare'de TXT zaten var, **Doğrula**.
 3. **Site haritaları** → `sitemap.xml` → Gönder.
@@ -54,7 +64,7 @@ organik sıra satın alınamaz. Kazanılabilir yol şudur:
 - Ürünler sekmesine Vitaquick'i ekleyin. Gerçek müşterilerden **yorum isteyin** (yorum satın almayın, kendiniz yazmayın — Google siler ve ceza verir).
 
 ### 3. Google Merchant Center — ücretsiz "Alışveriş" listesi (~20 dk)
-<https://merchants.google.com> → işletme bilgileri → **Ürünler → Web sitesinden ürün ekle (otomatik)**.
+<https://merchants.google.com> → işletme bilgileri → **Ürünler → Ürün kaynağı ekle → Dosya → Planlanmış getirme (URL)** → `https://alluluhome.com/urun-akisi.xml` (günlük).
 Sitedeki ürün verisi (fiyat, stok, kargo, iade) hazır. Kargo ayarı: 1.000 TL üzeri ücretsiz, altı 99 TL, 1–3 iş günü.
 Not: Kartlı ödeme (PayTR) kapalıyken Google "satın alınamıyor" uyarısı verebilir; PayTR canlıya alınınca sorun kalmaz.
 
