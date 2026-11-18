@@ -109,7 +109,7 @@ export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ 
   }, true);
   if (durumDegistiMi) {
     const link = new URL('/siparis/' + guncel.no + '?t=' + guncel.token, girdi.origin).href;
-    durumDegisti(guncel, m.site, link).catch(() => undefined);
+    await durumDegisti(guncel, m.site, link).catch(() => undefined);
   }
   return { siparis: guncel, mesaj };
 }

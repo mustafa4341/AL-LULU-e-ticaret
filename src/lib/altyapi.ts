@@ -12,7 +12,7 @@ const ortam = (ad: string): string | undefined =>
 
 export const ODEME_BAGLI = () => !!paytrAyari();
 export const SMS_BAGLI = false;
-export const epostaBagli = (): boolean => !!ortam('SMTP_HOST');
+export const epostaBagli = (): boolean => !!ortam('SMTP_HOST') && !!ortam('SMTP_PAROLA');
 
 /** Müşteriye bildirim hangi kanaldan gider? ("SMS", "SMS ve e-posta", "e-posta" ya da hiçbiri) */
 export function bildirimKanali(musteriEpostaVerdi: boolean): string | undefined {

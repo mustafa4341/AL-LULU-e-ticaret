@@ -42,7 +42,9 @@ const geriYol = Astro.url.pathname;
     <meta name="theme-color" content="#FFFFFF" />
     {(indekslenmesin || onizleme) && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={kanonik} />
-    <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
+    <!-- Google arama sonucundaki ikon için 48'in katı boyutlar -->
+    <link rel="icon" href="/img/logo/favicon-48.png" type="image/png" sizes="48x48" />
+    <link rel="icon" href="/img/logo/favicon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/img/logo/apple-touch-icon.png" />
     <meta property="og:site_name" content={k.site.ad} />
     <meta property="og:locale" content="tr_TR" />

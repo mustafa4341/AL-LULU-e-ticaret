@@ -17,6 +17,8 @@ interface ImportMetaEnv {
   readonly SMTP_KULLANICI?: string;
   readonly SMTP_PAROLA?: string;
   readonly SMTP_GONDEREN?: string;
+  readonly EPOSTA_YANIT?: string;
+  readonly SIPARIS_BILDIRIM_EPOSTA?: string;
 }
 
 interface ImportMeta {

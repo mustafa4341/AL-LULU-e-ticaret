@@ -38,7 +38,8 @@ export const POST: APIRoute = async ({ request }) => {
       const s = sonuc.siparis;
       const adres = new URL(`/siparis/${s.no}?t=${s.token}`, ayar.origin).href;
       const belgeAdresi = new URL(`/siparis/${s.no}/sozlesmeler?t=${s.token}`, ayar.origin).href;
-      void Promise.all([magazaOku(), sozlesmeOku(s.no)])
+      // Beklenir: Vercel'de yanıttan sonra kalan işler kesilebilir (zaman aşımları bildirim.ts'de kısa tutuldu)
+      await Promise.all([magazaOku(), sozlesmeOku(s.no)])
         .then(([m, belge]) => siparisAlindi(s, m.site, adres, belge ? { ...belge, baglanti: belgeAdresi } : undefined))
         .catch(() => console.error('[PayTR] Sipariş bildirimi gönderilemedi', s.no));
     }
