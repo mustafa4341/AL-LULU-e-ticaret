@@ -5,12 +5,14 @@ import vercel from '@astrojs/vercel';
 
 const SITE = 'https://alluluhome.com'; // gerçek alan adı (değişirse burayı ve paneldeki "Site Adresi"ni değiştirin)
 const ALAN = new URL(SITE).hostname.replace(/^www\./, '');
-const VERCEL_ORTAMI = Boolean(process.env.VERCEL);
+const vercelOrtam = Boolean(process.env.VERCEL);
 
 export default defineConfig({
   site: SITE,
   output: 'server',              // sayfalar her istekte güncel veriyle üretilir (panel değişiklikleri anında yansır)
-  adapter: VERCEL_ORTAMI ? vercel() : node({ mode: 'standalone' }),
+  adapter: vercelOrtam
+    ? vercel({ includeFiles: ['./public/img/logo/yazi.png'] })
+    : node({ mode: 'standalone' }),
   trailingSlash: 'never',
   prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
   security: {

@@ -15,7 +15,18 @@ const sira = Astro.url.searchParams.get('sira') ?? 'yeni';
 const bas = Astro.url.searchParams.get('baslangic') ?? '';
 const son = Astro.url.searchParams.get('bitis') ?? '';
 const aranan = q.toLocaleLowerCase('tr');
-const [tum, finans, { site }] = await Promise.all([siparisleriOku(), finansOku(), magazaOku()]);
+const [tum, finans, magaza] = await Promise.all([siparisleriOku(), finansOku(), magazaOku()]);
+const { site } = magaza;
+/* Listede siparişin içeriği açıkça görünsün: ilk ürünün fotoğrafı + "1 × Ürün adı, 2 × ..." */
+function urunOzeti(s: Siparis) {
+  const ilk = s.kalemler[0];
+  const urun = (id: string) => magaza.urunler.find((u) => u.id === id);
+  const gorsel = !ilk ? undefined : ilk.tip === 'set'
+    ? magaza.setler.find((x) => x.id === ilk.id)?.gorsel?.src ?? urun(ilk.parcalar[0]?.urunId ?? '')?.gorseller[0]?.src
+    : urun(ilk.id)?.gorseller[0]?.src;
+  const metin = s.kalemler.map((k) => `${k.adet} × ${k.tip === 'set' ? 'Set: ' : ''}${k.ad}`).join(', ');
+  return { gorsel, metin };
+}
 const gercek = tum.filter((s) => !s.paytr?.test);
 
 /* Barkod okuyucu / numara ile doğrudan açma ("AL" ve tire yazılmasa da bulunur) */
@@ -118,13 +129,14 @@ const tarihsizAdres = '?' + new URLSearchParams({ durum: filtre, ...(q ? { q } :
       <table class="y-tablo y-siparis-tablo">
         <thead><tr>
           <th class="y-sec"><input type="checkbox" data-y-tumu aria-label="Görünen siparişlerin tümünü seç" /></th>
-          <th>Sipariş No</th><th class="y-kanal">Kanal</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Ödeme</th><th>Kargo</th><th>Belge</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th>
+          <th>Sipariş No</th><th class="y-kanal">Kanal</th><th>Müşteri</th><th>Ürünler</th><th class="y-sayi">Tutar</th><th>Ödeme</th><th>Kargo</th><th>Belge</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th>
         </tr></thead>
         <tbody>{liste.map((s) => {
           const detay = '/yonetim/siparisler/' + s.no;
           const o = odemeChip(s), k = kargoChip(s), b = belgeChip(s);
           const takip = siparisKargoBaglantisi(s, site.kargo);
           const hazirlanabilir = s.durum !== 'iptal' && !iadeEdildi(s);
+          const uo = urunOzeti(s);
           return <tr data-satir={s.no}>
             <td class="y-sec"><input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} /></td>
             <td data-etiket="Sipariş" class="y-siparis-no">
@@ -134,6 +146,10 @@ const tarihsizAdres = '?' + new URLSearchParams({ durum: filtre, ...(q ? { q } :
             </td>
             <td data-etiket="Kanal" class="y-kanal">Web</td>
             <td data-etiket="Müşteri">{s.musteri.ad} {s.musteri.soyad}<small class="y-table-note">{s.teslimat.ilce} / {s.teslimat.il}</small></td>
+            <td data-etiket="Ürünler" class="y-urunler"><a class="y-urun-ozet" href={detay} title={uo.metin}>
+              {uo.gorsel ? <img src={uo.gorsel} alt="" width="36" height="36" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={18} /></span>}
+              <span>{uo.metin}</span>
+            </a></td>
             <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{formatTL(s.toplam)}</strong></td>
             <td data-etiket="Ödeme"><span class:list={['y-chip', 'y-chip--' + o.renk]}>{o.yazi}</span></td>
             <td data-etiket="Kargo"><span class:list={['y-chip', 'y-chip--' + k.renk]}>{k.yazi}</span></td>

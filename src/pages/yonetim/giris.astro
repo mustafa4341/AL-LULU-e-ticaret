@@ -2,25 +2,27 @@
 import '../../styles/global.css';
 import '../../styles/yonetim.css';
 import { basariliGiris, basarisizGiris, girisEngelliMi, oturumAc, parolaDogruMu, yonetimHazirMi } from '../../lib/oturum';
+import { istemciIp } from '../../lib/guvenlik';
 
 let hata = '';
 const hazir = yonetimHazirMi();
 const hedefHam = Astro.url.searchParams.get('d') ?? '/yonetim';
-const hedef = hedefHam.startsWith('/yonetim') ? hedefHam : '/yonetim';
+const hedef = /^\/yonetim(\/[\w\-/]*)?$/.test(hedefHam) ? hedefHam : '/yonetim';
 if (Astro.locals.yonetici) return Astro.redirect(hedef);
 
 if (Astro.request.method === 'POST' && hazir) {
-  const ip = Astro.clientAddress;
-  if (girisEngelliMi(ip)) {
-    hata = 'Çok fazla hatalı deneme. 10 dakika sonra tekrar deneyin.';
+  const ip = istemciIp(Astro.request, Astro.clientAddress);
+  if (await girisEngelliMi(ip)) {
+    await new Promise((r) => setTimeout(r, 600));
+    hata = 'Çok fazla hatalı deneme yapıldı. Lütfen 15 dakika sonra tekrar deneyin.';
   } else {
     const f = await Astro.request.formData();
     if (parolaDogruMu(String(f.get('parola') ?? ''))) {
-      basariliGiris(ip);
+      await basariliGiris(ip);
       oturumAc(Astro.cookies, Astro.url.protocol === 'https:');
-      return Astro.redirect(hedef);
+      return Astro.redirect(hedef, 303);
     }
-    basarisizGiris(ip);
+    await basarisizGiris(ip);
     await new Promise((r) => setTimeout(r, 600)); // kaba kuvvet denemelerini yavaşlat
     hata = 'Parola hatalı.';
   }
@@ -32,7 +34,8 @@ if (Astro.request.method === 'POST' && hazir) {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Yönetim girişi · Al Lulu Home</title>
+    <meta name="referrer" content="no-referrer" />
+    <title>Giriş</title>
     <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
   </head>
   <body class="y-giris">
@@ -46,7 +49,7 @@ if (Astro.request.method === 'POST' && hazir) {
           {hata && <p class="y-bildirim y-bildirim--hata" role="alert">{hata}</p>}
           <div class="y-alan">
             <label for="parola">Parola</label>
-            <input id="parola" name="parola" type="password" autocomplete="current-password" required autofocus />
+            <input id="parola" name="parola" type="password" autocomplete="current-password" required autofocus maxlength="200" />
           </div>
           <button class="btn btn--sepet btn--block" type="submit">Giriş yap</button>
         </>

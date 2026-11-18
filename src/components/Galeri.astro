@@ -68,6 +68,6 @@ const n = gorseller.length;
         <button class="buyutec__ok buyutec__ok--sag" type="button" data-buyutec-sonraki aria-label="Sonraki görsel"><Ikon ad="sag" boyut={26} /></button>
       </>
     )}
-    <script type="application/json" data-buyutec-veri set:html={JSON.stringify(gorseller)} />
+    <script type="application/json" data-buyutec-veri set:html={JSON.stringify(gorseller).replace(/</g, '\\u003c')} />
   </dialog>
 )}

@@ -450,6 +450,8 @@ export type Database = {
       siparis_kaydet: { Args: { s: Json }; Returns: undefined };
       siparisleri_oku: { Args: Record<string, never>; Returns: Json };
       sunucu_yetkili_mi: { Args: Record<string, never>; Returns: boolean };
+      /** p_artir: 0 = oku, 1 = say, null = sıfırla → penceredeki deneme sayısı */
+      istek_say: { Args: { p_anahtar: string; p_pencere_sn: number; p_artir: number | null }; Returns: number };
     };
     Enums: {
       [_ in never]: never;

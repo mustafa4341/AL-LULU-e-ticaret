@@ -16,7 +16,8 @@ import { magazaTutarlilik } from './katalog';
 const ortam = (ad: string): string | undefined =>
   process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
 
-const KOK = path.resolve(process.env.VERI_KLASORU ?? import.meta.env.VERI_KLASORU ?? 'veri');
+const varsayilanVeriKoku = process.env.VERCEL ? path.join(process.env.TMPDIR ?? '/tmp', 'veri') : 'veri';
+const KOK = path.resolve(process.env.VERI_KLASORU ?? import.meta.env.VERI_KLASORU ?? varsayilanVeriKoku);
 export const VERI_KOKU = KOK;
 const MAGAZA = path.join(KOK, 'magaza.json');
 const SIPARISLER = path.join(KOK, 'siparisler.json');
@@ -547,6 +548,7 @@ export async function gorselOku(goreliYol: string): Promise<{ veri: Buffer; tur:
     '.png': 'image/png',
   };
   const temizYol = goreliYol.replace(/^\/+/, '').replace(/\\/g, '/');
+  if (temizYol.startsWith('_')) return null;
   const tam = path.resolve(YUKLEME_KOKU, temizYol);
   if (!tam.startsWith(YUKLEME_KOKU + path.sep)) return null;
   const tur = TURLER[path.extname(tam).toLowerCase()];

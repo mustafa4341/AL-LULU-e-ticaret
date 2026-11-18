@@ -3,13 +3,12 @@ import Base from '../layouts/Base.astro';
 import Ikon from '../components/Ikon.astro';
 import { siparisleriOku } from '../lib/depo';
 import { SMS_BAGLI } from '../lib/altyapi';
+import { istemciIp, sinirAsildi } from '../lib/guvenlik';
 
 const k = Astro.locals.katalog;
 let hata = '';
 let girilenNo = (Astro.url.searchParams.get('no') ?? '').slice(0, 30);
 let girilenTel = '';
-const kayit = globalThis as unknown as { __takipDenemeleri?: Map<string, number[]> };
-const denemeler: Map<string, number[]> = (kayit.__takipDenemeleri ??= new Map<string, number[]>());
 
 /** Müşteri numarayı nasıl yazarsa yazsın (küçük harf, boşluklu, tiresiz, "AL" olmadan) doğru biçime çevirir. */
 function numaraDuzelt(girdi: string): string | undefined {
@@ -19,14 +18,12 @@ function numaraDuzelt(girdi: string): string | undefined {
 }
 
 if (Astro.request.method === 'POST') {
-  const ip = Astro.clientAddress;
-  const simdi = Date.now();
-  const onceki = (denemeler.get(ip) ?? []).filter((t) => simdi - t < 600_000);
-  denemeler.set(ip, [...onceki, simdi]);
+  // IP başına 10 dakikada 10 deneme (sayaç Supabase'te: tüm sunucu kopyalarında ortak)
+  const fazla = await sinirAsildi('takip', istemciIp(Astro.request, Astro.clientAddress));
   const f = await Astro.request.formData();
   girilenNo = String(f.get('no') ?? '').slice(0, 30);
   girilenTel = String(f.get('tel') ?? '').slice(0, 20);
-  if (onceki.length >= 10) {
+  if (fazla) {
     hata = 'Çok fazla deneme yaptınız. Lütfen 10 dakika sonra tekrar deneyin.';
   } else {
     const no = numaraDuzelt(girilenNo);

@@ -2,7 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { magazaOku, VERI_KOKU } from './depo';
+import { magazaOku, supabaseIstemci, VERI_KOKU } from './depo';
 import { BelgeAyarSema, FinansSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type TrendyolSatiri } from './finans';
 import { logoDataUri, svgdenPdf, svgdenPng } from './finansPdf';
 import { A4, siparisBelgesiSvg, type SaticiBilgisi } from './belgeSablon';
@@ -13,6 +13,9 @@ const kok = path.join(VERI_KOKU, 'finans');
 const kayit = path.join(kok, 'kayitlar.json');
 const arsiv = path.join(kok, 'belgeler');
 const giderDosyalari = path.join(kok, 'gider-ekleri');
+const BULUT_KAYIT = '_finans/kayitlar.json';
+const bulutBelge = (id: string) => `_finans/belgeler/${id}`;
+const bulutGiderEki = (id: string) => `_finans/gider-ekleri/${id}`;
 let kuyruk: Promise<unknown> = Promise.resolve();
 
 async function yaz(dosya: string, veri: string | Buffer) {
@@ -26,9 +29,47 @@ async function yaz(dosya: string, veri: string | Buffer) {
   }
 }
 
+async function bulutOku(bulutYol: string): Promise<Buffer | undefined> {
+  const sb = supabaseIstemci();
+  if (!sb) return undefined;
+  const { data, error } = await sb
+    .from('medya_dosyalari')
+    .select('veri_base64')
+    .eq('yol', bulutYol)
+    .eq('aktif', true)
+    .maybeSingle();
+  if (error || !data?.veri_base64) return undefined;
+  return Buffer.from(data.veri_base64, 'base64');
+}
+
+async function bulutYaz(bulutYol: string, veri: string | Buffer, icerikTuru: string): Promise<void> {
+  const sb = supabaseIstemci();
+  if (!sb) return;
+  const buf = typeof veri === 'string' ? Buffer.from(veri, 'utf8') : veri;
+  const { error } = await sb.from('medya_dosyalari').upsert({
+    yol: bulutYol,
+    icerik_turu: icerikTuru,
+    boyut: Math.max(1, buf.length),
+    veri_base64: buf.toString('base64'),
+    aktif: true,
+  });
+  if (error) throw new Error(`Supabase finans kayıt hatası: ${error.message}`);
+}
+
 export async function finansOku(): Promise<Finans> {
+  const bulutVeri = await bulutOku(BULUT_KAYIT);
+  if (bulutVeri) {
+    try {
+      return FinansSema.parse(JSON.parse(bulutVeri.toString('utf8')));
+    } catch {
+      throw new Error('Finans kayıtları şu anda okunamadı.');
+    }
+  }
   try {
-    return FinansSema.parse(JSON.parse(await fs.readFile(kayit, 'utf8')));
+    const metin = await fs.readFile(kayit, 'utf8');
+    const ayrilmis = FinansSema.parse(JSON.parse(metin));
+    await bulutYaz(BULUT_KAYIT, metin, 'application/json').catch(() => undefined);
+    return ayrilmis;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === 'ENOENT') return FinansSema.parse({ belgeler: [], giderler: [], trendyol: [], olaylar: [] });
     throw new Error('Finans kayıtları şu anda okunamadı.');
@@ -40,7 +81,9 @@ function sirala<T>(islem: () => Promise<T>): Promise<T> {
   return is;
 }
 async function kaydet(f: Finans) {
-  await yaz(kayit, JSON.stringify(FinansSema.parse(f), null, 2));
+  const metin = JSON.stringify(FinansSema.parse(f), null, 2);
+  await bulutYaz(BULUT_KAYIT, metin, 'application/json');
+  await yaz(kayit, metin).catch(() => undefined);
 }
 const yol = (klasor: string, id: string) => path.join(klasor, id);
 const idGecerli = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -90,7 +133,11 @@ export function belgeHazirla(s: Siparis, tur: BelgeTuru, secenek: BelgeSecenegi 
     const f = await finansOku();
     const o = secenekTemizle(secenek);
     const gecerli = f.belgeler.find((b) => b.siparisNo === s.no && b.tur === tur && belgeGecerli(b));
-    if (gecerli && !secenek.yenile && await fs.stat(yol(arsiv, gecerli.id)).then(() => true, () => false)) return gecerli;
+    if (gecerli && !secenek.yenile) {
+      const yerelVar = await fs.stat(yol(arsiv, gecerli.id)).then(() => true, () => false);
+      const bulutVar = yerelVar || Boolean(await bulutOku(bulutBelge(gecerli.id)));
+      if (bulutVar) return gecerli;
+    }
     const tarih = simdi();
     if (gecerli) {
       gecerli.durum = 'iptal';
@@ -118,7 +165,9 @@ export function belgeHazirla(s: Siparis, tur: BelgeTuru, secenek: BelgeSecenegi 
     await kaydet(f);
     try {
       const svgler = await belgeSvgleri(s, tur, f.ayarlar, belge.belgeNo ?? belge.id.slice(0, 8), new Date(belge.olusturma), o);
-      await yaz(yol(arsiv, belge.id), await svgdenPdf(svgler, A4.w, A4.h, 150));
+      const pdf = await svgdenPdf(svgler, A4.w, A4.h, 150);
+      await bulutYaz(bulutBelge(belge.id), pdf, 'application/pdf');
+      await yaz(yol(arsiv, belge.id), pdf).catch(() => undefined);
       belge.durum = 'duzenlendi';
     } catch (e) {
       console.error('[belge] PDF üretilemedi', s.no, tur, (e as Error)?.message);
@@ -181,7 +230,11 @@ export async function belgeOku(id: string) {
   if (!idGecerli(id)) return undefined;
   const b = (await finansOku()).belgeler.find((x) => x.id === id);
   if (!b || !['gonderildi', 'duzenlendi', 'iptal'].includes(b.durum)) return undefined;
-  const veri = await fs.readFile(yol(arsiv, b.id)).catch(() => undefined);
+  let veri: Buffer | undefined = await fs.readFile(yol(arsiv, b.id)).catch(() => undefined);
+  if (!veri) {
+    veri = await bulutOku(bulutBelge(b.id));
+    if (veri) await yaz(yol(arsiv, b.id), veri).catch(() => undefined);
+  }
   return veri ? { kayit: b, veri } : undefined;
 }
 export function giderEkle(girdi: Omit<Gider, 'id' | 'olusturma' | 'ek'>, dosya?: File) {
@@ -207,7 +260,8 @@ export function giderEkle(girdi: Omit<Gider, 'id' | 'olusturma' | 'ek'>, dosya?:
         }
       }
       gider.ek = { ad: dosya.name.slice(0, 120), boyut: veri.length, tur };
-      await yaz(yol(giderDosyalari, id), veri);
+      await bulutYaz(bulutGiderEki(id), veri, tur);
+      await yaz(yol(giderDosyalari, id), veri).catch(() => undefined);
     }
     f.giderler.unshift(gider);
     f.olaylar.push({ tarih: gider.olusturma, islem: 'gider-eklendi:' + id });
@@ -224,7 +278,11 @@ export async function giderEki(id: string) {
   if (!idGecerli(id)) return undefined;
   const gider = (await finansOku()).giderler.find((g) => g.id === id);
   if (!gider?.ek) return undefined;
-  const veri = await fs.readFile(yol(giderDosyalari, id)).catch(() => undefined);
+  let veri: Buffer | undefined = await fs.readFile(yol(giderDosyalari, id)).catch(() => undefined);
+  if (!veri) {
+    veri = await bulutOku(bulutGiderEki(id));
+    if (veri) await yaz(yol(giderDosyalari, id), veri).catch(() => undefined);
+  }
   return veri ? { ...gider.ek, veri } : undefined;
 }
 export function trendyolKaydet(satirlar: TrendyolSatiri[]) {

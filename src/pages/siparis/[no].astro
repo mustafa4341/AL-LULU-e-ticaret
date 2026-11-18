@@ -127,7 +127,7 @@ const gecmis = [...s.gecmis].reverse().map((g) => ({
         {s.kalemler.map((x) => <div class="siparis-kalem"><span>{x.adet} × {x.tip === 'set' ? 'Set: ' : ''}{x.ad}</span><span class="siparis-kalem__tutar">{x.oncekiBirim && <s class="siparis-kalem__eski">{formatTL(x.oncekiBirim * x.adet)}</s>}<span class:list={{ 'fiyat--indirimli': !!x.oncekiBirim }}>{formatTL(x.toplam)}</span></span></div>)}
       </div>
       <div class="toplamlar" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line)">
-        {s.kampanyaIndirimi > 0 && <div><span>Ürünler</span><span>{formatTL(s.urunlerToplami + s.kampanyaIndirimi)}</span></div>}
+        {(s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi) > 0 && <div><span>Ürünler</span><span>{formatTL(s.urunlerToplami + s.kampanyaIndirimi)}</span></div>}
         {s.kampanyaIndirimi > 0 && <div class="kazanc"><span>İndirim</span><span>−{formatTL(s.kampanyaIndirimi)}</span></div>}
         {s.setIndirimi > 0 && <div class="kazanc"><span>Set indirimi</span><span>−{formatTL(s.setIndirimi)}</span></div>}
         {s.sepetIndirimi > 0 && <div class="kazanc"><span>Sepette indirim</span><span>−{formatTL(s.sepetIndirimi)}</span></div>}

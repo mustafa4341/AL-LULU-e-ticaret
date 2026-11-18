@@ -5,6 +5,7 @@
  */
 import crypto from 'node:crypto';
 import type { AstroCookies } from 'astro';
+import { denemeSay, sinirda } from './guvenlik';
 
 export const CEREZ = 'yonetim_oturum';
 const SURE_SN = 12 * 60 * 60;
@@ -46,18 +47,29 @@ export function oturumGecerli(deger: string | undefined): boolean {
   return Number(p[1]) > Date.now() / 1000;
 }
 
-/* Giriş denemesi sınırı: IP başına 10 dakikada 5 deneme */
-const denemeler = new Map<string, { sayi: number; sifirla: number }>();
-export function girisEngelliMi(ip: string): boolean {
-  const d = denemeler.get(ip);
-  return !!d && d.sifirla > Date.now() && d.sayi >= 5;
+/**
+ * Gizli giriş adresi (.env / Vercel: YONETIM_GIRIS_YOLU, ör. "kapi-7f3k9q2m8x").
+ * Tanımlıysa giriş sayfası yalnızca bu adreste açılır; /yonetim ile başlayan her adres,
+ * giriş yapmamış ziyaretçiye sıradan "sayfa bulunamadı" sayfası gösterir (panelin varlığı belli olmaz).
+ */
+export function girisYolu(): string | undefined {
+  const ham = ortam('YONETIM_GIRIS_YOLU')?.trim().toLowerCase().replace(/^\/+|\/+$/g, '');
+  if (!ham) return undefined;
+  if (!/^[a-z0-9][a-z0-9-]{11,63}$/.test(ham) || ham.startsWith('yonetim')) {
+    console.error('[yönetim] YONETIM_GIRIS_YOLU geçersiz: en az 12 karakter, yalnız küçük harf, rakam ve tire olmalı. Varsayılan giriş adresi kullanılıyor.');
+    return undefined;
+  }
+  return '/' + ham;
 }
-export function basarisizGiris(ip: string): void {
-  const simdi = Date.now();
-  const d = denemeler.get(ip);
-  if (!d || d.sifirla < simdi) denemeler.set(ip, { sayi: 1, sifirla: simdi + 10 * 60 * 1000 });
-  else d.sayi++;
+
+/* Giriş denemesi sınırı: IP başına 15 dakikada 5, tüm siteye saatte 30 hatalı parola (Supabase'te kalıcı sayaç) */
+export async function girisEngelliMi(ip: string): Promise<boolean> {
+  const [kisi, genel] = await Promise.all([sinirda('giris', ip), sinirda('girisGenel', 'tum')]);
+  return kisi || genel;
 }
-export function basariliGiris(ip: string): void {
-  denemeler.delete(ip);
+export async function basarisizGiris(ip: string): Promise<void> {
+  await Promise.all([denemeSay('giris', ip, 1), denemeSay('girisGenel', 'tum', 1)]);
+}
+export async function basariliGiris(ip: string): Promise<void> {
+  await denemeSay('giris', ip, null);
 }

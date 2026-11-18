@@ -300,6 +300,63 @@ document.querySelectorAll<HTMLSelectElement>('[data-kargo-sablon]').forEach((sec
   });
 });
 
+/* ---------- Büyük fotoğrafları göndermeden önce küçült ----------
+ * Canlı sunucu (Vercel) tek istekte en fazla ~4,5 MB kabul eder; telefon fotoğrafları çoğu zaman bundan büyüktür.
+ * Fotoğraf tarayıcıda en uzun kenarı 2000 px olacak şekilde küçültülür (sunucu zaten 1600 px'e indirir, kalite kaybı olmaz). */
+const KUCULTME_ESIGI = 900 * 1024;
+const ISTEK_SINIRI = 4 * 1024 * 1024;
+const kucultulebilir = (f: File) => ['image/jpeg', 'image/png', 'image/webp'].includes(f.type) && f.size > KUCULTME_ESIGI;
+async function gorselKucult(f: File): Promise<File> {
+  if (!kucultulebilir(f)) return f;
+  try {
+    const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
+    const olcek = Math.min(1, 2000 / Math.max(bmp.width, bmp.height));
+    const tuval = document.createElement('canvas');
+    tuval.width = Math.max(1, Math.round(bmp.width * olcek));
+    tuval.height = Math.max(1, Math.round(bmp.height * olcek));
+    tuval.getContext('2d')!.drawImage(bmp, 0, 0, tuval.width, tuval.height);
+    bmp.close();
+    const blob = (r: string) => new Promise<Blob | null>((ok) => tuval.toBlob(ok, r, 0.88));
+    // Saydam PNG'de arka plan kararmasın: önce WebP (saydamlığı korur), desteklenmiyorsa JPEG
+    let sonuc = await blob('image/webp');
+    if (!sonuc || sonuc.type !== 'image/webp') sonuc = f.type === 'image/png' ? await blob('image/png') : await blob('image/jpeg');
+    if (!sonuc || sonuc.size >= f.size) return f;
+    const uzanti = sonuc.type === 'image/webp' ? '.webp' : sonuc.type === 'image/png' ? '.png' : '.jpg';
+    return new File([sonuc], f.name.replace(/\.[^.]+$/, '') + uzanti, { type: sonuc.type, lastModified: f.lastModified });
+  } catch {
+    return f;
+  }
+}
+document.addEventListener('change', async (e) => {
+  const input = e.target;
+  if (!(input instanceof HTMLInputElement) || input.type !== 'file' || input.dataset.kucultuldu) return;
+  const dosyalar = [...(input.files ?? [])];
+  if (!dosyalar.some(kucultulebilir)) { setTimeout(() => toplamKontrol(input)); return; }
+  e.stopImmediatePropagation(); // asıl işleyiciler küçültülmüş dosyalarla tekrar çalışır
+  input.form?.setAttribute('aria-busy', 'true');
+  const yeni = await Promise.all(dosyalar.map(gorselKucult));
+  input.form?.removeAttribute('aria-busy');
+  const dt = new DataTransfer();
+  yeni.forEach((f) => dt.items.add(f));
+  input.dataset.kucultuldu = '1';
+  input.files = dt.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  delete input.dataset.kucultuldu;
+  setTimeout(() => toplamKontrol(input));
+}, true);
+function toplamKontrol(input: HTMLInputElement) {
+  const form = input.form;
+  if (!form) return;
+  const toplam = [...form.querySelectorAll<HTMLInputElement>('input[type="file"]')]
+    .reduce((t, i) => t + [...(i.files ?? [])].reduce((a, f) => a + f.size, 0), 0);
+  if (toplam > ISTEK_SINIRI) {
+    input.setCustomValidity('Seçilen dosyalar birlikte çok büyük (en fazla 4 MB). Fotoğrafları birkaç seferde ekleyin.');
+    input.reportValidity();
+  } else if (input.validationMessage.startsWith('Seçilen dosyalar birlikte')) {
+    input.setCustomValidity('');
+  }
+}
+
 const dosyaUrl = new WeakMap<HTMLInputElement, string[]>();
 const dosyaTurleri = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'image/heic', 'image/heif']);
 document.querySelectorAll<HTMLInputElement>('[data-gorsel-sec]').forEach((input) => {
@@ -559,6 +616,33 @@ document.addEventListener('click', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open]').forEach((d) => { d.open = false; });
 });
+/* Menü, tablonun kaydırılabilir kutusunun içinde kesilmesin ve tabloyu kaydırmasın:
+ * açılınca ekrana sabitlenir; aşağıda yer yoksa yukarı doğru açılır. Sayfa kayınca kapanır. */
+function satirMenusuKonumla(d: HTMLDetailsElement) {
+  const menu = d.querySelector<HTMLElement>(':scope > div');
+  const ozet = d.querySelector<HTMLElement>(':scope > summary');
+  if (!menu || !ozet) return;
+  if (!d.open) { menu.removeAttribute('style'); return; }
+  Object.assign(menu.style, { position: 'fixed', top: '0px', left: '0px', right: 'auto', visibility: 'hidden', zIndex: '80', maxHeight: `${innerHeight - 16}px`, overflowY: 'auto' });
+  const r = ozet.getBoundingClientRect();
+  const m = menu.getBoundingClientRect();
+  let sol = d.classList.contains('y-row-menu--sag') ? r.right - m.width : r.left;
+  sol = Math.max(8, Math.min(sol, innerWidth - m.width - 8));
+  let ust = r.bottom + 4;
+  if (ust + m.height > innerHeight - 8 && r.top - m.height - 4 >= 8) ust = r.top - m.height - 4;
+  ust = Math.max(8, Math.min(ust, innerHeight - m.height - 8));
+  Object.assign(menu.style, { top: `${ust}px`, left: `${sol}px`, visibility: '' });
+}
+document.addEventListener('toggle', (e) => {
+  if (e.target instanceof HTMLDetailsElement && e.target.classList.contains('y-row-menu')) satirMenusuKonumla(e.target);
+}, true);
+const satirMenuleriniKapat = (e: Event) => {
+  document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open]').forEach((d) => {
+    if (!(e.target instanceof Node && d.contains(e.target))) d.open = false;
+  });
+};
+addEventListener('scroll', satirMenuleriniKapat, { capture: true, passive: true });
+addEventListener('resize', satirMenuleriniKapat, { passive: true });
 
 /* ---------- Barkod okuyucu: panelde sipariş barkodu okutulunca sipariş açılır ---------- */
 {

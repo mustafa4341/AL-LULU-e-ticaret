@@ -84,7 +84,12 @@ Kart alanları PayTR iFrame’i içinde açılır. Siparişin kesinleşmesi, imz
 
 ## Güvenlik özeti
 
-- Panel: parola + imzalı, HttpOnly, SameSite=Strict oturum çerezi (12 saat); IP başına giriş denemesi sınırı.
+- Panel: parola + imzalı, HttpOnly, SameSite=Strict oturum çerezi (12 saat).
+- **Gizli giriş adresi:** `YONETIM_GIRIS_YOLU` (.env ve Vercel → Settings → Environment Variables) tanımlıysa giriş formu yalnızca `https://alluluhome.com/<YONETIM_GIRIS_YOLU>` adresinde açılır. Giriş yapmamış biri için `/yonetim` ile başlayan her adres sıradan "sayfa bulunamadı" sayfasıdır; robots.txt panel adresini anmaz. Tanımlı değilse eski `/yonetim/giris` adresi çalışır.
+- Deneme sınırları Supabase'te kalıcıdır (`istek_sinirlari` tablosu, `istek_say` fonksiyonu): yönetim girişi IP başına 15 dakikada 5 + tüm siteye saatte 30 hatalı parola; sipariş IP başına saatte 10; sipariş takip IP başına 10 dakikada 10. Ham IP saklanmaz (HMAC özeti).
+- Site Cloudflare arkasında: gerçek ziyaretçi IP'si yalnızca istek Cloudflare adreslerinden geldiyse `cf-connecting-ip` başlığından alınır (`src/lib/guvenlik.ts`). Sözleşme kaydı ve PayTR'ye giden IP budur.
+- Tüm sayfalarda tıklama tuzağı (başka sitenin çerçevesi), tür karışıklığı ve kamera/mikrofon/konum izinlerine karşı güvenlik başlıkları; ödeme sayfası yalnızca PayTR çerçevesine izin verir.
+- Panelde seçilen büyük fotoğraflar gönderilmeden önce tarayıcıda küçültülür (Vercel tek istekte ~4,5 MB sınırı).
 - Başka sitelerden gelen form gönderimleri engellenir (CSRF).
 - Yüklenen görseller yeniden kodlanır (konum/EXIF bilgisi silinir) ve küçültülür.
 - Taslak ürünler ve iç notlar canlı sitenin koduna girmez.

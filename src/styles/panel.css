@@ -258,6 +258,33 @@ a.y-chip:hover { filter: brightness(.96); }
 .y-money-lines--kucuk { max-width: none; margin-top: 8px; font-size: 13px; }
 .y-money-lines--kucuk > div { padding: 5px 0; }
 
+/* Sipariş detayı: ürünler fotoğraflı, set içeriği açık */
+.y-siparis-kalem-liste--gorselli { list-style: none; margin: 0; padding: 0; }
+.y-siparis-kalem-liste.y-siparis-kalem-liste--gorselli > li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 10px; }
+.y-kalem-gorsel { width: 56px; height: 56px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--y-border); }
+.y-kalem-gorsel--yok { display: grid; place-items: center; color: #b3a58c; }
+.y-kalem-bilgi { display: grid; gap: 2px; min-width: 0; }
+.y-kalem-bilgi > strong { font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.y-kalem-bilgi .y-chip { margin-right: 2px; vertical-align: 1px; }
+.y-kalem-parcalar { margin: 4px 0 0; padding: 6px 0 0 14px; border-top: 1px dashed var(--y-border); font-size: 12.5px; color: #4f4436; }
+.y-siparis-kalem-liste .y-kalem-parcalar li { display: list-item; padding: 1px 0; background: none; border: 0; border-radius: 0; }
+.y-kalem-tutar { display: grid; justify-items: end; gap: 1px; white-space: nowrap; }
+.y-kalem-tutar s { font-size: 12px; }
+@media (max-width: 480px) {
+  .y-siparis-kalem-liste.y-siparis-kalem-liste--gorselli > li { grid-template-columns: 44px minmax(0, 1fr); }
+  .y-siparis-kalem-liste--gorselli .y-kalem-gorsel { width: 44px; height: 44px; }
+  .y-kalem-tutar { grid-column: 2; justify-items: start; }
+}
+
+/* Sipariş listesi: ürün özeti sütunu */
+.y-urun-ozet { display: flex; align-items: center; gap: 8px; min-width: 0; max-width: 260px; }
+.y-panel a.y-urun-ozet { color: inherit; text-decoration: none; }
+.y-panel a.y-urun-ozet:hover > span:last-child { text-decoration: underline; }
+.y-urun-ozet img, .y-urun-ozet .y-kalem-gorsel--yok { display: grid; place-items: center; color: #b3a58c; flex: none; width: 36px; height: 36px; border-radius: 7px; object-fit: contain; background: #fff; border: 1px solid var(--y-border); }
+.y-urun-ozet > span:last-child { min-width: 0; font-size: 13px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 1180px) and (min-width: 761px) { .y-panel .y-siparis-tablo .y-urun-ozet { max-width: 170px; } }
+@media (max-width: 760px) { .y-panel .y-tablo-kap--kart .y-tablo td.y-urunler { grid-column: 1 / -1; } .y-urun-ozet { max-width: none; } }
+
 /* Sipariş listesi */
 .y-filtreler { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 10px; padding: 4px; border: 1px solid var(--y-border); border-radius: 10px; background: #fff; scrollbar-width: thin; }
 .y-filtreler a { display: inline-flex; align-items: center; gap: 6px; flex: none; padding: 6px 11px; border-radius: 7px; color: #5f5446; text-decoration: none; font-size: 13px; white-space: nowrap; }

@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /odeme
+Disallow: /siparis/
+Disallow: /tadilat
+
+Sitemap: https://alluluhome.com/sitemap.xml

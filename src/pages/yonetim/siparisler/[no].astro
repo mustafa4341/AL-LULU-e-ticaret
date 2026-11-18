@@ -11,7 +11,7 @@ import { siparisDurumGuncelle } from '../../../lib/urunIslem';
 import { BELGE_TURLERI, belgeGecerli } from '../../../lib/finans';
 import { gonderildi, IADE_ISLEMI, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
 import { odemeEtiketi, yTarih } from '../../../lib/yonetimRapor';
-import { SIPARIS_DURUM_ADLARI } from '../../../lib/sema';
+import { SIPARIS_DURUM_ADLARI, type Siparis } from '../../../lib/sema';
 
 const no = Astro.params.no ?? '';
 const s = (await siparisleriOku()).find((x) => x.no === no);
@@ -34,7 +34,18 @@ if (Astro.request.method === 'POST') {
     hatalar = [mesaj.startsWith('Supabase') ? 'Sipariş kaydedilemedi. Sayfayı yenileyerek tekrar deneyin.' : mesaj];
   }
 }
-const { site } = await magazaOku();
+const magaza = await magazaOku();
+const { site } = magaza;
+/* Ürünler açıkça: fotoğraf, ad, model (SKU) ve setin içindeki her ürün */
+const urunBilgi = (id: string) => magaza.urunler.find((u) => u.id === id);
+const kalemGorseli = (k: Siparis['kalemler'][number]) => k.tip === 'set'
+  ? magaza.setler.find((x) => x.id === k.id)?.gorsel?.src ?? urunBilgi(k.parcalar[0]?.urunId ?? '')?.gorseller[0]?.src
+  : urunBilgi(k.id)?.gorseller[0]?.src;
+const parcaAdi = (id: string) => { const u = urunBilgi(id); return u ? `${u.marka} ${u.kisaAd}` : id; };
+/* Ürünler (liste fiyatı) − indirimler + kargo = Toplam. Satır tutarlarına indirim zaten yansıdığı için
+   "Ürünler" satırı gösterilmezse indirim iki kez düşülmüş gibi görünür. */
+const listeToplami = s.urunlerToplami + s.kampanyaIndirimi;
+const indirimVar = s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
 const belgeler = s.paytr?.test ? [] : (await finansOku()).belgeler.filter((b) => b.siparisNo === no);
 const sonraki = siradakiDurum(s);
 const iade = iadeEdildi(s);
@@ -194,10 +205,28 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
     </section>
     <section class="y-kart">
       <h2>Ürünler ve Tutar</h2>
-      <ul class="y-siparis-kalem-liste">{s.kalemler.map((k) => <li><span>{k.adet} × {k.ad}{k.sku && <small class="muted"> · {k.sku}</small>}</span><strong>{formatTL(k.toplam)}</strong></li>)}</ul>
+      <ul class="y-siparis-kalem-liste y-siparis-kalem-liste--gorselli">{s.kalemler.map((k) => {
+        const gorsel = kalemGorseli(k);
+        return <li>
+          {gorsel ? <img class="y-kalem-gorsel" src={gorsel} alt="" width="56" height="56" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={22} /></span>}
+          <span class="y-kalem-bilgi">
+            <strong>{k.adet} × {k.tip === 'set' && <span class="y-chip y-chip--gri">Set</span>} {k.ad}</strong>
+            {k.sku && <small class="muted">Model: {k.sku}</small>}
+            {k.tip === 'set' && k.parcalar.length > 0 && <ul class="y-kalem-parcalar" aria-label="Set içeriği">
+              {k.parcalar.map((p) => <li>{p.adet * k.adet} × {parcaAdi(p.urunId)}{urunBilgi(p.urunId)?.sku && <small class="muted"> · {urunBilgi(p.urunId)!.sku}</small>}</li>)}
+            </ul>}
+          </span>
+          <span class="y-kalem-tutar">
+            {k.oncekiBirim && <s class="muted">{formatTL(k.oncekiBirim * k.adet)}</s>}
+            <strong>{formatTL(k.toplam)}</strong>
+          </span>
+        </li>;
+      })}</ul>
       <dl class="y-money-lines y-money-lines--kucuk">
+        {indirimVar && <div><dt>Ürünler (liste fiyatı)</dt><dd>{formatTL(listeToplami)}</dd></div>}
+        {s.kampanyaIndirimi > 0 && <div><dt>Kampanya indirimi</dt><dd>−{formatTL(s.kampanyaIndirimi)}</dd></div>}
         {s.setIndirimi > 0 && <div><dt>Set indirimi</dt><dd>−{formatTL(s.setIndirimi)}</dd></div>}
-        {s.sepetIndirimi > 0 && <div><dt>Sepet indirimi</dt><dd>−{formatTL(s.sepetIndirimi)}</dd></div>}
+        {s.sepetIndirimi > 0 && <div><dt>Sepette indirim</dt><dd>−{formatTL(s.sepetIndirimi)}</dd></div>}
         <div><dt>Kargo</dt><dd>{s.kargo ? formatTL(s.kargo) : 'Ücretsiz'}</dd></div>
         <div><dt><strong>Toplam</strong></dt><dd><strong>{formatTL(s.toplam)}</strong></dd></div>
       </dl>

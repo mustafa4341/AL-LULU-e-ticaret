@@ -1,7 +1,7 @@
 import { defineMiddleware } from 'astro:middleware';
 import { Katalog } from './lib/katalog';
 import { magazaOku, satisAdetleri } from './lib/depo';
-import { CEREZ, oturumGecerli } from './lib/oturum';
+import { CEREZ, girisYolu, oturumGecerli } from './lib/oturum';
 import { PAYTR_BILDIRIM, PAYTR_ORIGIN } from './lib/paytr';
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
@@ -32,8 +32,20 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const yonetici = oturumGecerli(ctx.cookies.get(CEREZ)?.value);
   ctx.locals.yonetici = yonetici;
 
+  // Gizli giriş adresi (YONETIM_GIRIS_YOLU): giriş sayfası yalnızca bu adreste açılır.
+  const gizliGiris = girisYolu();
+  if (gizliGiris && yol === gizliGiris) {
+    if (yonetici) return ctx.redirect('/yonetim');
+    if (!['GET', 'HEAD', 'POST'].includes(ctx.request.method)) return new Response(null, { status: 405 });
+    const yanit = await next('/yonetim/giris');
+    gizliBasliklar(yanit);
+    return yanit;
+  }
+
   const panel = yol === '/yonetim' || yol.startsWith('/yonetim/') || yol.startsWith('/api/yonetim');
-  if (panel && yol !== '/yonetim/giris' && !yonetici) {
+  if (panel && !yonetici && (gizliGiris || yol !== '/yonetim/giris')) {
+    // Gizli adres tanımlıysa panelin varlığı belli olmasın: sıradan "sayfa bulunamadı" sayfası
+    if (gizliGiris) return ctx.rewrite('/404');
     if (yol.startsWith('/api/')) return new Response('Yetkisiz', { status: 401 });
     return ctx.redirect(`/yonetim/giris?d=${encodeURIComponent(yol)}`);
   }
@@ -68,12 +80,38 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     yanit.headers.set('Cache-Control', 'no-store');
     yanit.headers.set('X-Robots-Tag', 'noindex');
   }
-  yanit.headers.set('X-Content-Type-Options', 'nosniff');
-  yanit.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  ortakBasliklar(yanit);
+  if (yol === '/odeme/sonuc') {
+    // PayTR ödeme bitince bu sayfayı kendi çerçevesinin içinde açar: yalnızca PayTR ve kendi sitemiz çerçeveleyebilir
+    yanit.headers.delete('X-Frame-Options');
+    yanit.headers.set('Content-Security-Policy', `frame-ancestors 'self' ${PAYTR_ORIGIN}; base-uri 'self'; object-src 'none'`);
+  }
   // Adresinde gizli anahtar (t= / ref=) olan sayfalar başka sitelere adres sızdırmasın.
   // /siparis-takip bu kapsamda değil: formu normal kaynak bilgisiyle gönderilmeli.
   if (yol === '/odeme' || yol.startsWith('/odeme/') || yol.startsWith('/siparis/')) yanit.headers.set('Referrer-Policy', 'no-referrer');
-  if (yol === '/odeme') yanit.headers.set('Content-Security-Policy', `frame-src 'self' ${PAYTR_ORIGIN}; frame-ancestors 'none'; base-uri 'self'`);
-  if (panel) yanit.headers.set('X-Frame-Options', 'SAMEORIGIN');
+  if (yol === '/odeme') {
+    yanit.headers.set('Content-Security-Policy', `frame-src 'self' ${PAYTR_ORIGIN}; frame-ancestors 'none'; base-uri 'self'; object-src 'none'`);
+    yanit.headers.set('X-Frame-Options', 'DENY');
+  }
   return yanit;
 });
+
+/** Tüm yanıtlar: tıklama tuzağı (başka sitenin sayfamızı çerçeve içinde göstermesi), tür karışıklığı ve gereksiz tarayıcı izinlerine karşı.
+ *  Çerçeve izni yalnızca kendi sitemize: paneldeki canlı önizleme mağaza sayfalarını iframe içinde açar. */
+function ortakBasliklar(yanit: Response) {
+  const h = yanit.headers;
+  h.set('X-Content-Type-Options', 'nosniff');
+  h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  h.set('X-Frame-Options', 'SAMEORIGIN');
+  if (!h.has('Content-Security-Policy')) h.set('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+  h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=()');
+}
+
+function gizliBasliklar(yanit: Response) {
+  ortakBasliklar(yanit);
+  yanit.headers.set('Cache-Control', 'no-store');
+  yanit.headers.set('X-Robots-Tag', 'noindex, nofollow');
+  yanit.headers.set('Referrer-Policy', 'no-referrer');
+  yanit.headers.set('X-Frame-Options', 'DENY');
+  yanit.headers.set('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'");
+}

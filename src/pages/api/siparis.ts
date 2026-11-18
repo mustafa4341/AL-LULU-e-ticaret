@@ -8,6 +8,7 @@ import { siparisAlindi } from '../../lib/bildirim';
 import type { Siparis } from '../../lib/sema';
 import { Katalog } from '../../lib/katalog';
 import { paytrAyari, paytrFormUrl, paytrIstendi, PAYTR_SURE_DK } from '../../lib/paytr';
+import { istemciIp, sinirAsildi } from '../../lib/guvenlik';
 
 /* Sipariş oluşturma — fiyatlar ve stok SUNUCUDA katalogdan yeniden hesaplanır. */
 const metin = (min = 1, max = 300) => z.string().trim().min(min).max(max);
@@ -29,22 +30,23 @@ const Girdi = z.object({
   onay: z.literal(true),
 });
 
-const sinir = new Map<string, number[]>();
 const json = (veri: unknown, status = 200) =>
   Response.json(veri, { status, headers: { 'Cache-Control': 'no-store' } });
 
-export const POST: APIRoute = async ({ request, locals, clientAddress, url }) => {
+export const POST: APIRoute = async ({ request, locals, clientAddress: baglananAdres, url }) => {
   const paytr = paytrAyari();
   if (paytrIstendi() && (!paytr || paytr.origin !== url.origin)) {
     return json({ hata: 'Online ödeme geçici olarak kullanılamıyor. Lütfen daha sonra tekrar deneyin.' }, 503);
   }
-  // IP başına saatte 10 sipariş denemesi
-  const simdi = Date.now();
-  const gecmis = (sinir.get(clientAddress) ?? []).filter((t) => simdi - t < 3600_000);
-  if (gecmis.length >= 10) return json({ hata: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin veya WhatsApp üzerinden yazın.' }, 429);
-  sinir.set(clientAddress, [...gecmis, simdi]);
-  // Süresi dolan IP kayıtları temizlenir (sunucu belleği sınırsız büyümesin)
-  if (sinir.size > 5000) for (const [ip, z] of sinir) if (!z.some((t) => simdi - t < 3600_000)) sinir.delete(ip);
+  if (!(request.headers.get('content-type') ?? '').toLowerCase().startsWith('application/json')) {
+    return json({ hata: 'Geçersiz istek.' }, 415);
+  }
+  // Gerçek ziyaretçi adresi (site Cloudflare arkasında) — sözleşme kaydına da bu yazılır
+  const clientAddress = istemciIp(request, baglananAdres);
+  // IP başına saatte 10 sipariş denemesi (sayaç Supabase'te: tüm sunucu kopyalarında ortak)
+  if (!locals.yonetici && await sinirAsildi('siparis', clientAddress)) {
+    return json({ hata: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin veya WhatsApp üzerinden yazın.' }, 429);
+  }
 
   const g = Girdi.safeParse(await request.json().catch(() => null));
   if (!g.success) return json({ hata: 'Lütfen bilgileri kontrol edin.', ayrinti: g.error.issues.map((i) => i.path.join('.')) }, 400);
@@ -141,6 +143,7 @@ export const POST: APIRoute = async ({ request, locals, clientAddress, url }) =>
 
   const takip = new URL(`/siparis/${no}?t=${siparis.token}`, url.origin).href;
   const sozlesmeBaglantisi = new URL(`/siparis/${no}/sozlesmeler?t=${siparis.token}`, url.origin).href;
-  siparisAlindi(siparis, k.site, takip, { ...belgeler, baglanti: sozlesmeBaglantisi }).catch((e) => console.error('[bildirim]', e));
+  // Beklenir: Vercel'de yanıt döndükten sonra arka planda kalan işler kesilebilir, e-posta hiç gitmez.
+  await siparisAlindi(siparis, k.site, takip, { ...belgeler, baglanti: sozlesmeBaglantisi }).catch((e) => console.error('[bildirim]', e));
   return json({ no, token: siparis.token, toplam: hesap.toplam });
 };
