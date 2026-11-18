@@ -10,7 +10,7 @@ interface Props {
 const { etiket, tur, konum } = Astro.props;
 const ikon = { 'cok-satan': 'yildiz', firsat: 'etiket', stok: 'kutu' } as const;
 ---
-<span class:list={['urun-rozeti', `urun-rozeti--${tur}`, konum && `urun-rozeti--${konum}`]}>
+<span class:list={['urun-rozeti', konum && `urun-rozeti--${konum}`]}>
   <Ikon ad={ikon[tur]} boyut={14} />
   <span>{etiket}</span>
 </span>

@@ -164,6 +164,7 @@ $$('[data-galeri]').forEach((gal) => {
   const ray = $('[data-galeri-ray]', gal)!;
   const slaytlar = $$('.galeri__slayt', ray);
   if (slaytlar.length < 2) return;
+  const kucukRay = $('[data-galeri-kucukler]', gal);
   const kucukler = $$('[data-galeri-kucuk]', gal);
   const noktalar = $$('.galeri__noktalar span', gal);
   const sayac = $('[data-galeri-sayac]', gal);
@@ -172,6 +173,15 @@ $$('[data-galeri]').forEach((gal) => {
     aktif = i;
     noktalar.forEach((n, j) => n.classList.toggle('is-active', j === i));
     kucukler.forEach((b, j) => b.setAttribute('aria-current', j === i ? 'true' : 'false'));
+    const kucuk = kucukler[i];
+    if (kucukRay && kucuk) {
+      const alan = kucukRay.getBoundingClientRect(), dugme = kucuk.getBoundingClientRect();
+      const kayma = (bas: number, son: number, sinirBas: number, sinirSon: number) =>
+        bas < sinirBas ? bas - sinirBas : Math.max(0, son - sinirSon);
+      const left = kayma(dugme.left, dugme.right, alan.left, alan.right);
+      const top = kayma(dugme.top, dugme.bottom, alan.top, alan.bottom);
+      if (left || top) kucukRay.scrollBy({ left, top, behavior: 'instant' });
+    }
     if (sayac) sayac.textContent = `${i + 1} / ${slaytlar.length}`;
     gal.dataset.aktif = String(i);
     if (i > 0 && !goruldu) { goruldu = true; track('view_item_gallery'); }
@@ -266,14 +276,17 @@ $$('[data-galeri]').forEach((gal) => {
   const sayaclar = $$('[data-firsat-sayac]').flatMap((kutu) => {
     const bitis = Date.parse(kutu.dataset.firsatSayac ?? '');
     const sure = $('[data-firsat-sure]', kutu), tarih = $('[data-firsat-bitis]', kutu);
-    return Number.isFinite(bitis) && sure && tarih ? [{ kutu, bitis, sure, tarih }] : [];
+    const gunBolumu = sure && $('[data-firsat-gun]', sure);
+    const sayilar = sure ? $$('[data-firsat-deger]', sure) : [];
+    return Number.isFinite(bitis) && sure && tarih && gunBolumu && sayilar.length === 4
+      ? [{ kutu, bitis, sure, tarih, gunBolumu, sayilar }] : [];
   });
   if (!sayaclar.length) return;
   const iki = (n: number) => String(n).padStart(2, '0');
   let yenileniyor = false;
   const tik = () => {
     const simdi = Date.now();
-    for (const { kutu, bitis, sure, tarih } of sayaclar) {
+    for (const { kutu, bitis, sure, tarih, gunBolumu, sayilar } of sayaclar) {
       if (kutu.hidden) continue;
       const kalan = bitis - simdi;
       if (kalan <= 0) {
@@ -291,9 +304,13 @@ $$('[data-galeri]').forEach((gal) => {
         continue;
       }
       const sn = Math.ceil(kalan / 1000), gun = Math.floor(sn / 86400);
-      sure.textContent = `${gun ? `${gun} gün ` : ''}${iki(Math.floor((sn % 86400) / 3600))}:${iki(Math.floor((sn % 3600) / 60))}:${iki(sn % 60)}`;
-      sure.hidden = false;
-      tarih.classList.add('visually-hidden');
+      const degerler = [String(gun), iki(Math.floor((sn % 86400) / 3600)), iki(Math.floor((sn % 3600) / 60)), iki(sn % 60)];
+      sayilar.forEach((el, i) => { if (el.textContent !== degerler[i]) el.textContent = degerler[i]!; });
+      gunBolumu.hidden = gun === 0;
+      if (sure.hidden) {
+        sure.hidden = false;
+        tarih.classList.add('visually-hidden');
+      }
       kutu.classList.toggle('is-yaklasiyor', kalan <= 3600000);
     }
   };

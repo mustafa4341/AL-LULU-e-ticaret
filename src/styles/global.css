@@ -485,7 +485,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 @media (min-width: 900px) { .urun-ust { grid-template-columns: minmax(0,1.1fr) minmax(0,1fr); gap: 48px; align-items: start; padding-bottom: 64px; } .urun-bilgi { position: sticky; top: 130px; } }
 .urun-galeri-kap { position: relative; }
 .galeri { margin-inline: calc(var(--gutter) * -1); }
-@media (min-width: 900px) { .galeri { margin-inline: 0; display: grid; grid-template-columns: 76px minmax(0,1fr); gap: 14px; } }
+@media (min-width: 900px) { .galeri { --galeri-kucuk-genislik: 76px; position: relative; margin-inline: 0; display: grid; grid-template-columns: var(--galeri-kucuk-genislik) minmax(0,1fr); gap: 14px; } }
 .galeri__sahne { position: relative; min-width: 0; }
 @media (min-width: 900px) { .galeri__sahne { grid-column: 2; grid-row: 1; } }
 .galeri__ray { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior-x: contain; background: #fff; }
@@ -508,8 +508,9 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
   .galeri__ok { display: grid; place-items: center; position: absolute; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line); background: var(--surface); box-shadow: var(--shadow); opacity: 0; transition: opacity .2s; z-index: 2; }
   .galeri__sahne:hover .galeri__ok, .galeri__ok:focus-visible { opacity: 1; }
   .galeri__ok--sol { left: 12px; } .galeri__ok--sag { right: 12px; }
-  .galeri__kucukler { display: flex; flex-direction: column; gap: 10px; grid-column: 1; grid-row: 1; }
-  .galeri__kucukler button { width: 76px; aspect-ratio: 3/4; padding: 0; border-radius: var(--r-sm); overflow: hidden; border: 2px solid var(--line); background: #fff; transition: border-color .15s; }
+  .galeri__kucukler { position: absolute; inset: 0 auto 0 0; width: var(--galeri-kucuk-genislik); display: flex; flex-direction: column; gap: 8px; overflow: hidden auto; scrollbar-width: thin; scrollbar-color: #bdb0a0 transparent; }
+  .galeri__kucukler button { flex: none; width: 100%; aspect-ratio: 1; padding: 0; border-radius: var(--r-sm); overflow: hidden; border: 2px solid var(--line); background: #fff; transition: border-color .15s; }
+  .galeri__kucukler button:focus-visible { outline-offset: -4px; }
   .galeri__kucukler img { width: 100%; height: 100%; object-fit: contain; }
   .galeri__kucukler button[aria-current="true"] { border-color: var(--sepet-h); }
 }

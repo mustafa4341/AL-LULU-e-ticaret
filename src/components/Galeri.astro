@@ -38,7 +38,7 @@ const n = gorseller.length;
   </div>
   {n > 1 && (
     <>
-      <div class="galeri__kucukler" aria-label="Görsel seç">
+      <div class="galeri__kucukler" data-galeri-kucukler aria-label="Görsel seç">
         {gorseller.map((g, i) => (
           <button type="button" data-galeri-kucuk aria-current={i === 0 ? 'true' : 'false'} aria-label={`Görsel ${i + 1}`}>
             <img src={g.src} alt="" width="76" height="101" loading="lazy" />

@@ -5,7 +5,12 @@ const tarih = new Date(bitis);
 const bicim = new Intl.DateTimeFormat('tr-TR', { timeZone: 'Europe/Istanbul', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const bitisMetni = bicim.format(tarih);
 ---
-<span class="firsat-sure">
-  <span data-firsat-sure hidden aria-hidden="true"></span>
+<span class="firsat-sure" title={`Bitiş: ${bitisMetni}, Türkiye saati`}>
+  <span class="firsat-sure__degerler" data-firsat-sure hidden aria-hidden="true">
+    <span data-firsat-gun hidden><b data-firsat-deger></b> gün</span>
+    <span><b data-firsat-deger></b> sa</span>
+    <span><b data-firsat-deger></b> dk</span>
+    <span><b data-firsat-deger></b> sn</span>
+  </span>
   <time datetime={bitis} data-firsat-bitis aria-label={`Bitiş zamanı ${bitisMetni}, Türkiye saati`}>{bitisMetni}</time>
 </span>
