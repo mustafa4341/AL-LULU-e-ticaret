@@ -9,23 +9,23 @@ import Setler from './anasayfa/Setler.astro';
 import AmiralHikaye from './anasayfa/AmiralHikaye.astro';
 import NedenBiz from './anasayfa/NedenBiz.astro';
 import SSSBolumu from './anasayfa/SSSBolumu.astro';
+import { magazaVerisi } from '../lib/seo';
 
 /* Bölümler panel → Ayarlar → Ana sayfa'daki sırayla gösterilir. */
 const bilesenler = { hero: Hero, firsatlar: Firsatlar, guven: Guven, kategoriler: Kategoriler, oneCikanlar: OneCikanlar, setler: Setler, amiralHikaye: AmiralHikaye, nedenBiz: NedenBiz, sss: SSSBolumu } as const;
 const k = Astro.locals.katalog;
 ---
 <Base
-  baslik={`${k.site.ad} | Fissler Vitaquick ve premium mutfak ürünleri`}
-  aciklama="Orijinal, faturalı ve garantili premium mutfak ürünleri. Fissler Vitaquick® Premium 6 L düdüklü tencere, hızlı sipariş, aynı gün kargo."
+  baslik={`${k.site.ad} | Fissler Düdüklü Tencere ve Premium Mutfak Ürünleri`}
+  aciklama="Orijinal, faturalı ve 2 yıl garantili Fissler Vitaquick® Premium 6 L düdüklü tencere ve premium mutfak ürünleri. Hızlı sipariş, hafta içi aynı gün kargo."
   aktif="ana"
   yapisalVeri={[
-    {
-      '@context': 'https://schema.org', '@type': 'OnlineStore', name: k.site.ad, url: k.site.url,
-      logo: `${k.site.url}/img/logo/icon-512.png`, image: `${k.site.url}/img/logo/al-lulu-home.png`,
-      email: k.site.eposta, telephone: k.site.telefon,
-      contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', email: k.site.eposta, telephone: k.site.telefon, availableLanguage: 'tr' },
-    },
-    { '@context': 'https://schema.org', '@type': 'WebSite', name: k.site.ad, url: k.site.url, inLanguage: 'tr-TR' },
+    ...magazaVerisi(k.site),
+    // Ana sayfadaki "Aklınızdaki sorular" bölümü görünüyorsa aynı soru-cevaplar
+    ...(k.anaSayfa.bolumler.includes('sss') && k.anaSayfa.sss.length ? [{
+      '@context': 'https://schema.org', '@type': 'FAQPage',
+      mainEntity: k.anaSayfa.sss.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
+    }] : []),
   ]}
 >
   {k.anaSayfa.bolumler.map((ad) => { const Bolum = bilesenler[ad]; return <Bolum />; })}

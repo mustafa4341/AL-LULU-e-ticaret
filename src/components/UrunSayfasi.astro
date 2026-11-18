@@ -46,7 +46,11 @@ const yapisalVeri = {
   sku: urun.sku || undefined,
   mpn: urun.sku || undefined,
   description: urun.ozet,
+  url: new URL(`/urun/${urun.id}`, site.url).href,
+  ...(kat ? { category: kat.ad } : {}),
   image: urun.gorseller.map((g) => new URL(g.src, site.url).href),
+  // Teknik bilgiler: Google ve yapay zekâ aramaları ürünü bu özelliklerle eşleştirir (yalnız paneldeki gerçek veri)
+  ...(urun.teknik.length ? { additionalProperty: urun.teknik.map(([ad, deger]) => ({ '@type': 'PropertyValue', name: ad, value: deger })) } : {}),
   offers: {
     // Müşterinin ödeyeceği fiyat (sepette indirim varsa o); süreli fırsatta bitiş tarihi
     '@type': 'Offer', priceCurrency: 'TRY', price: String(gosterilenFiyat),
@@ -72,8 +76,13 @@ const yapisalVeri = {
     },
   },
 };
+/* Sayfadaki "Bu ürün hakkında" soruları (yalnız sayfada görünen metin) */
+const sssVerisi = urun.sss.length ? {
+  '@context': 'https://schema.org', '@type': 'FAQPage',
+  mainEntity: urun.sss.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
+} : undefined;
 ---
-<Base baslik={`${urun.marka} ${urun.ad} | ${site.ad}`} aciklama={`${urun.marka} ${urun.ad}: ${urun.ozet} ${formatTL(urun.fiyat)}, vergiler dahil.`} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={yapisalVeri} ogTuru="product" kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [`${urun.marka} ${urun.kisaAd}`, `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
+<Base baslik={`${urun.marka} ${urun.ad} | ${site.ad}`} aciklama={`${urun.marka} ${urun.ad}: ${urun.ozet} ${formatTL(gosterilenFiyat)}, vergiler dahil.`} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [`${urun.marka} ${urun.kisaAd}`, `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
   <div class="container">
     <nav aria-label="Konum" class="kirinti-kap--urun">
       <ol class="kirinti">
