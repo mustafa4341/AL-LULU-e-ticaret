@@ -7,6 +7,7 @@ import AltMenu from '../components/AltMenu.astro';
 import YanMenu from '../components/YanMenu.astro';
 import SepetPaneli from '../components/SepetPaneli.astro';
 import Footer from '../components/Footer.astro';
+import CerezOnay from '../components/CerezOnay.astro';
 
 interface Props {
   baslik: string;
@@ -26,6 +27,9 @@ interface Props {
 const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
 const k = Astro.locals.katalog;
 const onizleme = Astro.locals.vitrinOnizleme;
+/* Google Tag Manager kimliği (Vercel: GTM_KIMLIGI). Yönetici ve önizleme ziyaretleri ölçülmez. */
+const gtmHam = process.env.GTM_KIMLIGI ?? import.meta.env.GTM_KIMLIGI ?? '';
+const gtm = /^GTM-[A-Z0-9]{4,12}$/.test(gtmHam) && !onizleme && !Astro.locals.yonetici ? gtmHam : '';
 const kok = Astro.site ?? new URL(k.site.url);
 const kanonik = new URL(Astro.url.pathname, kok).href;
 const ogGorsel = new URL(gorsel, kok).href;
@@ -43,9 +47,11 @@ const geriYol = Astro.url.pathname;
     {(indekslenmesin || onizleme) && <meta name="robots" content="noindex" />}
     <link rel="canonical" href={kanonik} />
     <!-- Google arama sonucundaki ikon için 48'in katı boyutlar -->
+    <link rel="icon" href="/img/logo/favicon-32.png" type="image/png" sizes="32x32" />
     <link rel="icon" href="/img/logo/favicon-48.png" type="image/png" sizes="48x48" />
     <link rel="icon" href="/img/logo/favicon-192.png" type="image/png" sizes="192x192" />
     <link rel="apple-touch-icon" href="/img/logo/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
     <meta property="og:site_name" content={k.site.ad} />
     <meta property="og:locale" content="tr_TR" />
     <meta property="og:title" content={baslik} />
@@ -56,6 +62,12 @@ const geriYol = Astro.url.pathname;
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="preload" as="image" href="/img/logo/yazi.webp" />
     <script is:inline>document.documentElement.classList.add('js');</script>
+    {gtm && <script is:inline>
+      /* Consent Mode varsayılanı: onay verilene kadar her şey kapalı (GTM de yüklenmez) */
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ window.dataLayer.push(arguments); } /* GTM yalnızca "arguments" nesnesini komut sayar */
+      gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500 });
+    </script>}
     {yapisalVeri && <script type="application/ld+json" set:html={JSON.stringify(yapisalVeri).replace(/</g, '\\u003c')} />}
   </head>
   <body class:list={{ 'alt-cubuklu': altCubuk, 'alt-menulu': !altCubuk && !sade }}>
@@ -112,12 +124,14 @@ const geriYol = Astro.url.pathname;
     <YanMenu />
     <SepetPaneli />
     <div class="toast" data-toast role="status" aria-live="polite"></div>
+    {gtm && <CerezOnay gtm={gtm} />}
     <div class="dev-banner">Doğrulama modu: sarı çerçeveli metinler teyit bekliyor</div>
     <script type="application/json" id="katalog-veri" set:html={JSON.stringify(k.istemci()).replace(/</g, '\\u003c')} />
 
     <script>
       import '../scripts/ui';
       import '../scripts/sepet';
+      import '../scripts/olaylar';
     </script>
   </body>
 </html>

@@ -1,0 +1,143 @@
+---
+/**
+ * Çerez onayı + Google Tag Manager (Basic Consent Mode).
+ * KVKK: Analitik çerezler kullanıcı "Kabul et" demeden ÇALIŞMAZ; GTM betiği hiç yüklenmez.
+ * Kabul / Reddet eşit görünür. Tercih bu cihazda 12 ay saklanır; alt bilgideki "Çerez tercihleri"nden değiştirilir.
+ * Yalnızca GTM_KIMLIGI (ör. GTM-ABC1234) tanımlıysa gösterilir; tanımlı değilse sitede hiçbir analitik çerez yoktur.
+ */
+interface Props { gtm: string }
+const { gtm } = Astro.props;
+---
+<div class="cerez" data-cerez data-gtm={gtm} hidden role="dialog" aria-modal="false" aria-labelledby="cerez-baslik">
+  <div class="cerez__kutu">
+    <p class="cerez__baslik" id="cerez-baslik">Çerez tercihleri</p>
+    <p class="cerez__metin">
+      Sitenin çalışması için gerekli olanlar dışında, yalnızca izin verirseniz <strong>analitik çerezler</strong> kullanırız.
+      Bunlar sitenin nasıl kullanıldığını anlamamıza yardımcı olur. Reklam çerezi kullanmıyoruz.
+      <a href="/yasal/gizlilik-ve-cerez-politikasi">Ayrıntılar</a>
+    </p>
+    <div class="cerez__tercihler" data-cerez-tercihler hidden>
+      <label class="cerez__secim"><input type="checkbox" checked disabled /> <span><strong>Zorunlu</strong> — sepet ve sipariş için gerekli, kapatılamaz</span></label>
+      <label class="cerez__secim"><input type="checkbox" data-cerez-analitik /> <span><strong>Analitik</strong> — ziyaret istatistikleri (Google Analytics)</span></label>
+    </div>
+    <div class="cerez__butonlar">
+      <button type="button" class="cerez__btn" data-cerez-red>Reddet</button>
+      <button type="button" class="cerez__btn" data-cerez-kabul>Tümünü kabul et</button>
+      <button type="button" class="cerez__btn cerez__btn--cizgi" data-cerez-yonet>Tercihleri yönet</button>
+      <button type="button" class="cerez__btn" data-cerez-kaydet hidden>Seçimimi kaydet</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ANAHTAR = 'allulu-cerez';
+  const SURE = 365 * 24 * 60 * 60 * 1000;
+  const kutu = document.querySelector<HTMLElement>('[data-cerez]');
+  const gtm = kutu?.dataset.gtm ?? '';
+  type Tercih = { analitik: boolean; t: number };
+
+  function oku(): Tercih | null {
+    try {
+      const v = JSON.parse(localStorage.getItem(ANAHTAR) ?? 'null') as Tercih | null;
+      return v && typeof v.analitik === 'boolean' && Date.now() - v.t < SURE ? v : null;
+    } catch { return null; }
+  }
+  function gtag(..._a: unknown[]) { (window as unknown as { dataLayer: unknown[] }).dataLayer.push(arguments); }
+
+  let yuklendi = false;
+  function gtmYukle() {
+    if (yuklendi || !/^GTM-[A-Z0-9]{4,12}$/.test(gtm)) return;
+    yuklendi = true;
+    gtag('consent', 'update', { analytics_storage: 'granted' });
+    window.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
+    const s = document.createElement('script');
+    s.async = true;
+    s.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(gtm);
+    document.head.appendChild(s);
+  }
+  function analitikCerezleriSil() {
+    for (const c of document.cookie.split(';')) {
+      const ad = c.split('=')[0].trim();
+      if (/^(_ga|_gid|_gat)/.test(ad)) {
+        for (const alan of [location.hostname, '.' + location.hostname.replace(/^www\./, '')]) {
+          document.cookie = `${ad}=; Max-Age=0; path=/; domain=${alan}`;
+        }
+        document.cookie = `${ad}=; Max-Age=0; path=/`;
+      }
+    }
+  }
+  function kaydet(analitik: boolean) {
+    const onceki = oku();
+    try { localStorage.setItem(ANAHTAR, JSON.stringify({ analitik, t: Date.now() })); } catch { /* gizli pencere */ }
+    if (kutu) kutu.hidden = true;
+    if (analitik) gtmYukle();
+    else {
+      gtag('consent', 'update', { analytics_storage: 'denied' });
+      analitikCerezleriSil();
+      // GTM bu sayfada yüklendiyse durdurmanın kesin yolu sayfayı yenilemektir
+      if (yuklendi || onceki?.analitik) location.reload();
+    }
+  }
+  function ac(tercihlerle = false) {
+    if (!kutu) return;
+    kutu.hidden = false;
+    const t = oku();
+    const kutucuk = kutu.querySelector<HTMLInputElement>('[data-cerez-analitik]');
+    if (kutucuk) kutucuk.checked = t?.analitik ?? false;
+    kutu.querySelector<HTMLElement>('[data-cerez-tercihler]')!.hidden = !tercihlerle;
+    kutu.querySelector<HTMLElement>('[data-cerez-kaydet]')!.hidden = !tercihlerle;
+    kutu.querySelector<HTMLElement>('[data-cerez-yonet]')!.hidden = tercihlerle;
+  }
+
+  if (kutu && gtm) {
+    const t = oku();
+    if (t) { if (t.analitik) gtmYukle(); } else ac();
+    kutu.querySelector('[data-cerez-kabul]')?.addEventListener('click', () => kaydet(true));
+    kutu.querySelector('[data-cerez-red]')?.addEventListener('click', () => kaydet(false));
+    kutu.querySelector('[data-cerez-yonet]')?.addEventListener('click', () => ac(true));
+    kutu.querySelector('[data-cerez-kaydet]')?.addEventListener('click', () =>
+      kaydet(!!kutu.querySelector<HTMLInputElement>('[data-cerez-analitik]')?.checked));
+    document.querySelectorAll<HTMLElement>('[data-cerez-ac]').forEach((b) => {
+      b.hidden = false;
+      b.addEventListener('click', (e) => { e.preventDefault(); ac(true); });
+    });
+  }
+</script>
+
+<style>
+  .cerez { position: fixed; z-index: 90; left: 12px; right: 12px; bottom: 12px; display: flex; justify-content: center; pointer-events: none; }
+  :global(body.alt-menulu) .cerez { bottom: calc(var(--alt-menu-h) + 10px); }
+  :global(body.alt-cubuklu) .cerez { bottom: calc(var(--alt-cubuk-h) + 10px); }
+  .cerez[hidden] { display: none; }
+  .cerez__kutu {
+    pointer-events: auto; width: 100%; max-width: 640px; background: var(--surface); color: var(--ink);
+    border: 1px solid var(--line); border-top: 3px solid var(--gold); border-radius: var(--r-lg);
+    box-shadow: 0 12px 40px rgba(27,25,22,.18); padding: 16px 18px;
+  }
+  .cerez__baslik { margin: 0 0 4px; font-weight: 800; font-size: 16px; }
+  .cerez__metin { margin: 0; font-size: 14px; line-height: 1.5; }
+  .cerez__metin a { color: var(--gold-ink); text-decoration: underline; }
+  .cerez__tercihler { display: grid; gap: 8px; margin: 12px 0 0; }
+  .cerez__tercihler[hidden] { display: none; }
+  .cerez__secim { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.4; }
+  .cerez__secim input { width: 20px; height: 20px; margin-top: 1px; accent-color: var(--gold-ink); flex: none; }
+  .cerez__butonlar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  /* Kabul ve Reddet aynı görünür (KVKK: ret seçeneği soluklaştırılmaz) */
+  .cerez__btn {
+    flex: 1 1 140px; min-height: 44px; padding: 10px 14px; border-radius: var(--r); border: 2px solid var(--ink);
+    background: var(--ink); color: #fff; font: inherit; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  }
+  .cerez__btn--cizgi { background: transparent; color: var(--ink); }
+  .cerez__btn[hidden] { display: none; }
+  .cerez__btn:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  /* Telefonda ürün ve fiyatı fazla kapatmasın */
+  @media (max-width: 560px) {
+    .cerez { left: 8px; right: 8px; }
+    .cerez__kutu { padding: 12px 14px; }
+    .cerez__baslik { font-size: 15px; }
+    .cerez__metin { font-size: 13px; line-height: 1.45; }
+    .cerez__butonlar { gap: 6px; margin-top: 10px; }
+    .cerez__btn { flex-basis: 110px; min-height: 42px; padding: 8px 10px; font-size: 13.5px; }
+    .cerez__btn--cizgi { flex-basis: 100%; min-height: 36px; border: 0; text-decoration: underline; padding: 4px; }
+  }
+</style>

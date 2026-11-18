@@ -52,6 +52,22 @@ const yapisalVeri = {
     availability: stokta ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition: 'https://schema.org/NewCondition', url: new URL(`/urun/${urun.id}`, site.url).href,
     seller: { '@type': 'Organization', name: site.ad },
+    // Google Merchant Center / ücretsiz ürün listelemeleri için kargo ve iade bilgisi
+    shippingDetails: {
+      '@type': 'OfferShippingDetails',
+      shippingRate: { '@type': 'MonetaryAmount', value: String(urun.fiyat >= site.kargo.ucretsizEsik ? 0 : site.kargo.ucret), currency: 'TRY' },
+      shippingDestination: { '@type': 'DefinedRegion', addressCountry: 'TR' },
+      deliveryTime: {
+        '@type': 'ShippingDeliveryTime',
+        handlingTime: { '@type': 'QuantitativeValue', minValue: 0, maxValue: 1, unitCode: 'DAY' },
+        transitTime: { '@type': 'QuantitativeValue', minValue: site.kargo.teslimGun[0], maxValue: site.kargo.teslimGun[1], unitCode: 'DAY' },
+      },
+    },
+    hasMerchantReturnPolicy: {
+      '@type': 'MerchantReturnPolicy', applicableCountry: 'TR',
+      returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow', merchantReturnDays: site.iadeGun,
+      returnMethod: 'https://schema.org/ReturnByMail', returnFees: 'https://schema.org/FreeReturn',
+    },
   },
 };
 ---
@@ -65,7 +81,7 @@ const yapisalVeri = {
       </ol>
     </nav>
 
-    <section class="urun-ust" aria-labelledby="urun-adi">
+    <section class="urun-ust" aria-labelledby="urun-adi" data-ga-urun={urun.id}>
       <div class="urun-galeri-kap">
         <Galeri gorseller={urun.gorseller} yedekIkon={kat?.ikon} />
         {rozet.damga && <span class="damga damga--buyuk urun-damga"><span>{rozet.damga}</span></span>}

@@ -12,6 +12,9 @@ import { BELGE_TURLERI, belgeGecerli } from '../../../lib/finans';
 import { gonderildi, IADE_ISLEMI, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
 import { odemeEtiketi, yTarih } from '../../../lib/yonetimRapor';
 import { SIPARIS_DURUM_ADLARI, type Siparis } from '../../../lib/sema';
+import { EPOSTA_TUR_ADLARI, epostaKayitlari, epostaYenidenGonder } from '../../../lib/bildirim';
+import { EPOSTA_GIDEN_DURUMLAR } from '../../../lib/epostaSablon';
+import { epostaBagli } from '../../../lib/altyapi';
 
 const no = Astro.params.no ?? '';
 const s = (await siparisleriOku()).find((x) => x.no === no);
@@ -22,6 +25,12 @@ if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
   forma = f;
   try {
+    if (metin(f, 'eylem') === 'eposta') {
+      const r = await epostaYenidenGonder(no, metin(f, 'epostaTur'), Astro.url.origin);
+      if (r === 'hata') throw new Error('E-posta gönderilemedi. Ayrıntı aşağıdaki E-postalar bölümünde.');
+      if (r === 'kapali') throw new Error('E-posta gönderimi kapalı (SMTP ayarları eksik).');
+      return Astro.redirect('/yonetim/siparisler/' + no + '?ok=' + encodeURIComponent('E-posta gönderildi.') + '#epostalar', 303);
+    }
     const sonuc = await siparisDurumGuncelle({
       no, eylem: metin(f, 'eylem'), durum: metin(f, 'durum'),
       kargoTakip: istegeBagli(f, 'kargoTakip'), kargoFirma: istegeBagli(f, 'kargoFirma'),
@@ -56,6 +65,13 @@ const musteriTel = '90' + s.musteri.tel.replace(/\D/g, '').replace(/^(?:90|0)/, 
 const wa = /^90\d{10}$/.test(musteriTel) ? 'https://wa.me/' + musteriTel + '?text=' : undefined;
 const takipMesaj = kargo && wa && wa + encodeURIComponent('Merhaba ' + s.musteri.ad + ', ' + s.no + ' numaralı siparişiniz ' + kargo.firma + ' ile gönderildi. Takip no: ' + s.kargoTakip + ' · ' + kargo.url);
 const musteriSayfasi = '/siparis/' + s.no + '?t=' + s.token;
+const epostaAcik = epostaBagli();
+const epostalar = await epostaKayitlari(s.no);
+const yenidenSecenekler = [
+  ...(s.musteri.eposta ? ['alindi'] : []),
+  'magaza',
+  ...(s.musteri.eposta && (EPOSTA_GIDEN_DURUMLAR as readonly string[]).includes(s.durum) ? ['durum-' + s.durum] : []),
+];
 
 /* Adım çizgisi: ödeme, hazırlık ve kargo ayrı ayrı izlenir */
 const odemeTamam = ['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi'].includes(s.durum) || (iptal && (s.paytr?.sonuc === 'odendi' || s.gecmis.some((g) => g.durum === 'odendi')));
@@ -234,6 +250,24 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
   </div>
 
   <FinansSiparis siparis={s} belgeler={belgeler} />
+
+  <details class="y-kart" id="epostalar" open={epostalar.some((e) => e.durum === 'hata') || forma?.get('eylem') === 'eposta'}>
+    <summary><strong>E-postalar</strong> {epostalar.length > 0 && <span class:list={['y-chip', epostalar.some((e) => e.durum === 'hata') ? 'y-chip--kirmizi' : 'y-chip--gri']}>{epostalar.filter((e) => e.durum === 'gonderildi').length}/{epostalar.length} gönderildi</span>}</summary>
+    {!epostaAcik && <p class="muted">E-posta gönderimi kapalı: Vercel'de SMTP_PAROLA (Google uygulama şifresi) girilmemiş.</p>}
+    {epostalar.length === 0
+      ? <p class="muted">Bu sipariş için kayıtlı e-posta yok{s.musteri.eposta ? '' : ' (müşteri e-posta adresi vermemiş)'}.</p>
+      : <ul class="y-gecmis">{epostalar.map((e) => <li>
+          <span>{yTarih.format(new Date(e.tarih))}</span>
+          <span><strong>{e.ad}</strong> · {e.alici} · {e.durum === 'gonderildi' ? '✓ Gönderildi' : e.durum === 'hata' ? '✗ Gönderilemedi' : 'Gönderiliyor…'}{e.deneme > 1 && ` (${e.deneme}. deneme)`}{e.sonHata && <small class="muted"> — {e.sonHata}</small>}</span>
+        </li>)}</ul>}
+    {epostaAcik && yenidenSecenekler.length > 0 && <form method="post" class="y-sonraki">
+      <input type="hidden" name="eylem" value="eposta" />
+      <label class="y-alan">Yeniden gönder
+        <select name="epostaTur">{yenidenSecenekler.map((t) => <option value={t}>{EPOSTA_TUR_ADLARI[t]}</option>)}</select>
+      </label>
+      <button class="btn btn--cizgi" type="submit">Gönder</button>
+    </form>}
+  </details>
 
   <details class="y-kart">
     <summary><strong>İşlem geçmişi ve iç not</strong></summary>

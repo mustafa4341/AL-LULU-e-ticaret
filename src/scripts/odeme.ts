@@ -1,7 +1,7 @@
 /* Al Lulu Home — tek sayfa ödeme: doğrulama, özet, ön bilgilendirme, sunucuya sipariş gönderimi */
 import { DEGISTI, adetAyarla, sepetKalemleri, sepetOzeti, satirHtml, toplamlarHtml } from './sepet';
 import { formatTL, katalog, urunBul } from './katalog';
-import { track } from './analitik';
+import { satirlardanUrunler, track } from './analitik';
 import { mesafeliSatisSozlesmesi, onBilgilendirmeFormu, type YasalSite, type YasalSiparis } from '../lib/yasal';
 
 const $ = <T extends HTMLElement = HTMLElement>(s: string, r: ParentNode = document) => r.querySelector<T>(s);
@@ -64,7 +64,8 @@ function baslat(): void {
     ac.setAttribute('aria-expanded', String(acik));
     ozet.classList.toggle('is-kapali', !acik);
   });
-  track('begin_checkout', { currency: 'TRY', value: sepetOzeti().toplam });
+  const ilkOzet = sepetOzeti();
+  track('begin_checkout', { currency: 'TRY', value: ilkOzet.toplam, items: satirlardanUrunler(ilkOzet.satirlar) });
 
   /* ---------- Alanlar ---------- */
   const il = $<HTMLSelectElement>('[data-il]')!;
@@ -153,6 +154,8 @@ function baslat(): void {
     const o = sepetOzeti();
     const sepet = localStorage.getItem('allulu_sepet_v2');
     const kurumsal = (form.elements.namedItem('fatura_tipi') as RadioNodeList).value === 'kurumsal';
+    const gaUrunler = satirlardanUrunler(o.satirlar);
+    track('add_shipping_info', { currency: 'TRY', value: o.toplam, shipping_tier: o.kargo ? 'Ücretli kargo' : 'Ücretsiz kargo', items: gaUrunler });
     try {
       const yanit = await fetch('/api/siparis', {
         method: 'POST',
@@ -177,6 +180,8 @@ function baslat(): void {
         throw new Error('red');
       }
       track('purchase_intent', { transaction_id: veri.no, value: veri.toplam, currency: 'TRY' });
+      // Satın alma (purchase) burada DEĞİL, ödeme gerçekten onaylanınca sipariş sayfasında gönderilir
+      track('add_payment_info', { currency: 'TRY', value: veri.toplam, payment_type: veri.odemeUrl ? 'Kredi kartı' : 'Manuel ödeme', items: gaUrunler });
       const takip = `/siparis/${encodeURIComponent(veri.no)}?t=${encodeURIComponent(veri.token)}&yeni`;
       if (veri.odemeUrl) {
         const url = new URL(veri.odemeUrl);

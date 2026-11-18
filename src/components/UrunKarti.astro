@@ -21,7 +21,7 @@ const stokta = k.stoktaMi(urun);
 const kat = k.kategoriBul(urun.kategoriler[0]!);
 const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
 ---
-<article class:list={["kart", { "kart--firsat": !!bilgi.firsat, "kart--yatay": yatay }]} data-urun-kart data-fiyat={siralamaFiyati} data-reveal>
+<article class:list={["kart", { "kart--firsat": !!bilgi.firsat, "kart--yatay": yatay }]} data-urun-kart data-urun-id={urun.id} data-fiyat={siralamaFiyati} data-reveal>
   <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
     {gorsel ? (
       <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-ucus-gorsel />

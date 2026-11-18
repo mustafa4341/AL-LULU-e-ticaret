@@ -19,6 +19,8 @@ interface ImportMetaEnv {
   readonly SMTP_GONDEREN?: string;
   readonly EPOSTA_YANIT?: string;
   readonly SIPARIS_BILDIRIM_EPOSTA?: string;
+  /** Google Tag Manager kapsayıcı kimliği, ör. GTM-ABC1234 (yalnız çerez onayıyla yüklenir) */
+  readonly GTM_KIMLIGI?: string;
 }
 
 interface ImportMeta {

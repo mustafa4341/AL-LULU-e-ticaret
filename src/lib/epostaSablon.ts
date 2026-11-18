@@ -41,19 +41,21 @@ function urunTablosu(s: Siparis): string {
     `<strong>${kacis(k.ad)}</strong><br><span style="color:${R.soluk};font-size:13px">${k.adet} adet${k.icerik ? ' · ' + kacis(k.icerik) : ''}</span>`,
     kacis(formatTL(k.toplam)),
   )).join('');
-  // Satır toplamları indirimli tutardır; indirim satırları gösteriliyorsa hesap tutsun diye önce liste fiyatı toplamı yazılır
+  // Satır toplamları indirimli tutardır. Panel ve sipariş sayfasıyla aynı hesap:
+  // Ürünler (liste fiyatı) = urunlerToplami + kampanyaIndirimi; ardından tüm indirimler düşülür.
   const ek = [
-    s.setIndirimi || s.sepetIndirimi ? satir('Ürünler (liste fiyatı)', kacis(formatTL(s.urunlerToplami)), `color:${R.soluk}`) : '',
+    indirimVar(s) ? satir('Ürünler (liste fiyatı)', kacis(formatTL(s.urunlerToplami + s.kampanyaIndirimi)), `color:${R.soluk}`) : '',
+    s.kampanyaIndirimi ? satir('Kampanya indirimi', `−${kacis(formatTL(s.kampanyaIndirimi))}`, `color:${R.yesil}`) : '',
     s.setIndirimi ? satir('Set indirimi', `−${kacis(formatTL(s.setIndirimi))}`, `color:${R.yesil}`) : '',
     s.sepetIndirimi ? satir('Sepette indirim', `−${kacis(formatTL(s.sepetIndirimi))}`, `color:${R.yesil}`) : '',
     satir('Kargo', s.kargo ? kacis(formatTL(s.kargo)) : '<span style="color:#0A7F3F;font-weight:bold">Ücretsiz</span>'),
   ].join('');
   const toplam = `<tr><td style="padding:14px 0 4px;${YAZI};font-size:16px;font-weight:bold;color:${R.yazi}">Toplam</td>
 <td align="right" style="padding:14px 0 4px;${YAZI};font-size:20px;font-weight:bold;color:${R.yazi};white-space:nowrap">${kacis(formatTL(s.toplam))}</td></tr>`;
-  const avantaj = s.kampanyaIndirimi
-    ? `<tr><td colspan="2" align="right" style="${YAZI};font-size:13px;color:${R.yesil};padding-bottom:4px">Bu siparişte ${kacis(formatTL(s.kampanyaIndirimi))} avantaj sağladınız</td></tr>` : '';
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${kalemler}${ek}${toplam}${avantaj}</table>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">${kalemler}${ek}${toplam}</table>`;
 }
+
+const indirimVar = (s: Siparis) => s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
 
 const adresMetni = (s: Siparis) =>
   `<strong>${kacis(s.musteri.ad)} ${kacis(s.musteri.soyad)}</strong><br>${kacis(s.teslimat.adres)}<br>${kacis(s.teslimat.ilce)} / ${kacis(s.teslimat.il)}<br><span style="color:${R.soluk}">${kacis(s.musteri.tel)}</span>`;
@@ -86,7 +88,8 @@ ${o.altNot ? `<br><span style="font-size:12px">${o.altNot}</span>` : ''}
 
 const satirlarMetin = (s: Siparis) => [
   ...s.kalemler.map((k) => `• ${k.adet} × ${k.ad} — ${formatTL(k.toplam)}`),
-  s.setIndirimi || s.sepetIndirimi ? `Ürünler (liste fiyatı): ${formatTL(s.urunlerToplami)}` : '',
+  indirimVar(s) ? `Ürünler (liste fiyatı): ${formatTL(s.urunlerToplami + s.kampanyaIndirimi)}` : '',
+  s.kampanyaIndirimi ? `Kampanya indirimi: −${formatTL(s.kampanyaIndirimi)}` : '',
   s.setIndirimi ? `Set indirimi: −${formatTL(s.setIndirimi)}` : '',
   s.sepetIndirimi ? `Sepette indirim: −${formatTL(s.sepetIndirimi)}` : '',
   `Kargo: ${s.kargo ? formatTL(s.kargo) : 'Ücretsiz'}`,

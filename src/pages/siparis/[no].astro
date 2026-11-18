@@ -62,6 +62,17 @@ const gecmis = [...s.gecmis].reverse().map((g) => ({
   ad: g.islem === 'iade-tamamlandi' ? 'İade tamamlandı' : GECMIS_ADLARI[g.durum] ?? g.durum,
   tarih: g.tarih,
 }));
+/* GA4 "purchase": yalnızca ödemesi gerçekten onaylanmış, test olmayan siparişte; iptal/iade edilmişse gönderilmez.
+   Aynı sipariş numarası bu cihazda bir kez gönderilir (GA4 de transaction_id ile tekrarı ayıklar). */
+const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
+  ? JSON.stringify({
+      transaction_id: s.no, currency: 'TRY', value: s.toplam, shipping: s.kargo,
+      items: s.kalemler.map((x) => ({
+        item_id: x.sku ?? x.id, item_name: x.ad, ...(x.tip === 'set' ? { item_category: 'Set' } : {}),
+        price: Math.round((x.toplam / x.adet) * 100) / 100, quantity: x.adet,
+      })),
+    })
+  : null;
 ---
 <Base baslik={`Sipariş ${s.no} | ${k.site.ad}`} aciklama="Sipariş durumu" indekslenmesin sade>
   <div class="container siparis-sonuc">
@@ -152,6 +163,18 @@ const gecmis = [...s.gecmis].reverse().map((g) => ({
     <p class="sd-alt"><a href={`/siparis/${s.no}/sozlesmeler?t=${s.token}`}>Onayladığınız sözleşmeler</a></p>
   </div>
 
+  {gaSatinAlma && <script is:inline define:vars={{ gaSatinAlma }}>
+    try {
+      const v = JSON.parse(gaSatinAlma);
+      const gonderilen = JSON.parse(localStorage.getItem('allulu_ga_satin') || '[]');
+      if (!gonderilen.includes(v.transaction_id)) {
+        window.dataLayer = window.dataLayer || [];
+        window.dataLayer.push({ ecommerce: null });
+        window.dataLayer.push({ event: 'purchase', ecommerce: v });
+        localStorage.setItem('allulu_ga_satin', JSON.stringify([...gonderilen, v.transaction_id].slice(-50)));
+      }
+    } catch { /* gizli pencere */ }
+  </script>}
   <script is:inline define:vars={{ kayit, sepetiTemizle, paytrRef: s.paytr?.ref ?? null, bekliyor: odemeBekleniyor }}>
     // Hesapsız takip: bu cihazdan verilen siparişleri hatırla
     try {

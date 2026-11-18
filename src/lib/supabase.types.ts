@@ -12,6 +12,21 @@ export type Database = {
   };
   public: {
     Tables: {
+      eposta_kayitlari: {
+        Row: {
+          anahtar: string; siparis_no: string; tur: string; alici: string; durum: string; deneme: number;
+          son_hata: string | null; mesaj_id: string | null; olusturma: string; gonderim: string | null; guncelleme: string;
+        };
+        Insert: {
+          anahtar: string; siparis_no: string; tur: string; alici: string; durum?: string; deneme?: number;
+          son_hata?: string | null; mesaj_id?: string | null; olusturma?: string; gonderim?: string | null; guncelleme?: string;
+        };
+        Update: {
+          anahtar?: string; siparis_no?: string; tur?: string; alici?: string; durum?: string; deneme?: number;
+          son_hata?: string | null; mesaj_id?: string | null; olusturma?: string; gonderim?: string | null; guncelleme?: string;
+        };
+        Relationships: [];
+      };
       kategoriler: {
         Row: {
           aciklama: string;
@@ -452,6 +467,7 @@ export type Database = {
       sunucu_yetkili_mi: { Args: Record<string, never>; Returns: boolean };
       /** p_artir: 0 = oku, 1 = say, null = sıfırla → penceredeki deneme sayısı */
       istek_say: { Args: { p_anahtar: string; p_pencere_sn: number; p_artir: number | null }; Returns: number };
+      eposta_gonderim_al: { Args: { p_anahtar: string; p_siparis_no: string; p_tur: string; p_alici: string; p_zorla?: boolean }; Returns: boolean };
     };
     Enums: {
       [_ in never]: never;

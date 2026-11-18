@@ -5,7 +5,7 @@
 import { formatTL, katalog, setBul, urunBul } from './katalog';
 import { kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
 import { cekmeceAc, sepeteUcur, toast } from './ui';
-import { track } from './analitik';
+import { satirlardanUrunler, track } from './analitik';
 
 export type { KalemTipi, SepetKalemi };
 const ANAHTAR = 'allulu_sepet_v2';
@@ -52,7 +52,7 @@ export function ekle(tip: KalemTipi, id: string, adet = 1): number {
   if (m) m.adet += n; else kalemler.push({ tip, id, adet: n });
   kaydet();
   const s = sepetHesapla([{ tip, id, adet: n }], katalog).satirlar[0];
-  if (s) track('add_to_cart', { currency: 'TRY', value: s.toplam, items: [{ item_id: s.sku ?? s.id, item_name: s.ad, price: s.birimFiyat, quantity: n }] });
+  if (s) track('add_to_cart', { currency: 'TRY', value: s.toplam, items: satirlardanUrunler([s]) });
   return n;
 }
 
@@ -60,7 +60,11 @@ export function adetAyarla(tip: KalemTipi, id: string, adet: number): void {
   const k = kalemler.find((x) => x.tip === tip && x.id === id);
   if (!k) return;
   const yeni = Math.max(0, Math.min(k.adet + eklenebilir(tip, id), adet));
-  if (yeni === 0) { kalemler = kalemler.filter((x) => x !== k); track('remove_from_cart', { item_id: id }); }
+  if (yeni === 0) {
+    const s = sepetHesapla([k], katalog).satirlar[0];
+    kalemler = kalemler.filter((x) => x !== k);
+    if (s) track('remove_from_cart', { currency: 'TRY', value: s.toplam, items: satirlardanUrunler([s]) });
+  }
   else k.adet = yeni;
   kaydet();
 }
@@ -285,10 +289,12 @@ document.addEventListener('click', (e) => {
     return;
   }
 
-  if (t.hasAttribute('data-odemeye-gec')) track('begin_checkout', { currency: 'TRY', value: sepetOzeti().toplam });
+  // begin_checkout ödeme sayfası açılınca gönderilir (scripts/odeme.ts); iki kez sayılmasın
 });
 
 document.getElementById('sepet')?.addEventListener('cekmece:acildi', () => {
+  const o = sepetOzeti();
+  if (o.satirlar.length) track('view_cart', { currency: 'TRY', value: o.toplam, items: satirlardanUrunler(o.satirlar) });
   window.setTimeout(() => document.querySelector('[data-sepet-bildirim]')?.classList.remove('is-visible'), 3500);
 });
 

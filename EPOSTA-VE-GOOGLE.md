@@ -9,10 +9,21 @@ Sıra önem derecesine göredir. ✅ = hazır, 👤 = sizin yapmanız gereken (g
 | Alan adının e-postası Google'a yönleniyor (MX) | ✅ Cloudflare'de doğru |
 | SPF kaydı | ✅ `v=spf1 include:_spf.google.com ~all` |
 | Google alan adı doğrulaması | ✅ TXT kaydı var |
-| **DKIM imzası** | ✅ DNS'te yayında (seçici `alluluhome.com`); Google'da "Kimlik doğrulamayı başlat" basılmalı |
+| **DKIM imzası** | ✅ yayında ve Google'da başlatıldı |
 | **DMARC kaydı** | ✅ yayında (`p=none`); 2–4 hafta sonra `p=quarantine` |
-| Sipariş e-posta şablonları + gönderim kodu | ✅ hazır, SMTP bilgisi girilince çalışır (Adım 3) |
-| Google arama ikonu (favicon) | ✅ 48 ve 192 piksel eklendi |
+| Sipariş e-posta şablonları + gönderim kodu | ✅ canlıda |
+| Vercel SMTP ayarları | ✅ 6/7 girildi — 👤 yalnızca `SMTP_PAROLA` (uygulama şifresi) eksik |
+| E-posta kaydı, tekrar gönderim engeli, panelden yeniden gönder | ✅ Supabase `eposta_kayitlari` |
+| Çerez onayı + Google Tag Manager (Consent Mode, temel) | ✅ kod hazır — 👤 `GTM_KIMLIGI` girilince açılır (Adım 6) |
+| GA4 e-ticaret olayları | ✅ view_item_list, select_item, view_item, add_to_cart, remove_from_cart, view_cart, begin_checkout, add_shipping_info, add_payment_info, purchase |
+| Google arama ikonu, webmanifest | ✅ 32/48/192 px, `/favicon.ico`, `/site.webmanifest` |
+| Ürün yapısal verisi (Merchant Center) | ✅ fiyat, stok, marka, SKU + kargo ve iade bilgisi |
+
+**Bilinçli olarak yapılmayanlar:**
+- **Resend / Supabase Edge Function:** Aynı işi Google Workspace hesabınızla ek ücretsiz ve ikinci bir DNS/SPF kurulumu olmadan yapıyoruz. Günde 2.000 e-postayı geçerseniz veya teslim/geri dönme (bounce) takibi gerekirse Resend'e geçilir; şablonlar aynen kullanılır.
+- **Teslim edildi / geri döndü takibi:** Gmail SMTP bunu bildirmez. Ulaşmayan e-postalar "Teslim edilemedi" yanıtı olarak info@ gelen kutusuna düşer.
+- **GA4 "refund" (iade):** Sunucudan GA4'e veri göndermek için ayrı API anahtarı gerekir; iade sayısı az olduğu için şimdilik yok.
+- **Siparişe reklam/indirim eklenmez:** İşlem e-postalarında tanıtım olursa ticari ileti (İYS) kurallarına girer.
 
 ## Hangi e-posta ne işe yarıyor?
 
@@ -103,4 +114,23 @@ Kaydettikten sonra **Deployments → son dağıtım → Redeploy**. (Yerelde den
 3. **URL denetimi** → ana sayfa ve ürün sayfası → **Dizine eklenmesini iste**.
 4. **Google İşletme Profili** <https://business.google.com> → mağaza adı, telefon, site, logo. Haritalarda ve marka aramasında görünür.
 5. **Google Merchant Center** <https://merchants.google.com> → ücretsiz ürün listelemeleri ("Alışveriş" sekmesi). Ürün sayfalarında gerekli yapısal veri (fiyat, stok, marka) zaten var; Merchant Center'da "web sitesinden otomatik bul" seçilebilir.
-6. **Google Analytics (GA4):** KVKK gereği çerez onay penceresi olmadan eklenmemeli. İsterseniz onay penceresiyle birlikte ekleriz (sonraki iş).
+6. Google Analytics için Adım 6'ya geçin.
+
+## Adım 6 — Google Analytics 4 + Tag Manager 👤 ~20 dk
+
+Sitede çerez onay penceresi ve tüm e-ticaret olayları hazır; yalnızca Google tarafındaki hesaplar açılıp kimlik girilecek.
+Pencere, kimlik girilene kadar **görünmez** (o zamana kadar sitede analitik çerez yoktur).
+
+1. **GA4:** <https://analytics.google.com> → Yönetici → **Mülk oluştur** (Al Lulu Home, Türkiye, TRY, İstanbul saati) → **Veri akışı: Web** → `https://alluluhome.com`. Çıkan **Ölçüm kimliğini** (`G-XXXXXXX`) not edin.
+2. **GTM:** <https://tagmanager.google.com> → Hesap oluştur → Kapsayıcı: `alluluhome.com`, **Web**. Çıkan **`GTM-XXXXXXX`** kimliğini not edin. Siteye kod yapıştırmanız GEREKMEZ; site bunu kendisi yükler.
+3. GTM içinde:
+   - **Etiket → Google Etiketi** → Etiket kimliği `G-XXXXXXX` → Tetikleyici: **Initialization - All Pages**.
+   - **Etiket → GA4 Etkinliği** → Ölçüm kimliği `G-XXXXXXX`, Etkinlik adı `{{Event}}`, **Diğer ayarlar → E-ticaret verilerini gönder → Data Layer** → Tetikleyici: **Özel etkinlik**, "normal ifade" işaretli, etkinlik adı:
+     `view_item_list|select_item|view_item|add_to_cart|remove_from_cart|view_cart|begin_checkout|add_shipping_info|add_payment_info|purchase`
+   - **Önizle** ile siteyi açıp çerezi kabul edin, ürüne bakın, sepete ekleyin; olaylar Tag Assistant'ta görünmeli → **Yayınla**.
+4. **Vercel** → al-lulu-e-ticaret → Settings → Environment Variables → `GTM_KIMLIGI` = `GTM-XXXXXXX` (Production) → Redeploy. İsterseniz kimliği bana yazın, ben girerim (gizli bilgi değildir).
+5. GA4 → Yönetici → **DebugView**'de olayları kontrol edin. "purchase" yalnızca ödemesi onaylanmış siparişte, sipariş sayfasında bir kez gönderilir.
+
+**Çerez penceresi:** "Reddet" ve "Tümünü kabul et" eşit görünür; kabul edilmeden Google Tag Manager hiç yüklenmez (Consent Mode, temel yöntem).
+Tercih 12 ay saklanır; alt bilgideki **"Çerez tercihleri"** ile değiştirilir. Gizlilik ve Çerez Politikası buna göre güncellendi.
+Yönetici girişliyken ve panel önizlemesinde ölçüm yapılmaz. Analitik verisi Google'ın yurt dışı sunucularında işlenir; KVKK aydınlatma metni ve yurt dışı aktarım için mali müşavir/hukukçu teyidi önerilir.

@@ -427,10 +427,11 @@ export function gizlilikCerez(s: YasalSite): string {
   <ul class="belge-liste">
     <li><strong>Zorunlu tarayıcı depolaması (localStorage):</strong> Sepetinizdeki ürünler ve bu cihazdan verdiğiniz siparişlerin numaraları, siz silene kadar yalnızca kendi cihazınızda tutulur. Sitenin çalışması için gereklidir, onay gerektirmez.</li>
     <li><strong>Zorunlu oturum çerezi:</strong> Yalnızca yönetim paneline giriş yapan site yöneticileri için kullanılır.</li>
-    <li><strong>Analitik ve reklam çerezleri:</strong> Şu anda kullanılmamaktadır. İleride kullanılırsa, açık onayınız alınmadan çalıştırılmayacak; kabul ve ret seçenekleri eşit şekilde sunulacaktır.</li>
+    <li><strong>Analitik çerezler (Google Analytics, Google Etiket Yöneticisi aracılığıyla):</strong> Sitenin hangi sayfalarının ziyaret edildiğini, ürünlerin ne sıklıkla görüntülendiğini ve sepete eklendiğini toplu istatistik olarak ölçmek için kullanılır. <strong>Yalnızca çerez penceresinde açıkça izin verirseniz</strong> çalışır; izin vermezseniz bu çerezler hiç yüklenmez ve sitenin tüm özelliklerini kullanmaya devam edersiniz. Bu veriler Google LLC'nin yurt dışındaki sunucularında işlenebilir. Tercihiniz bu cihazda 12 ay saklanır.</li>
+    <li><strong>Reklam çerezleri:</strong> Kullanılmamaktadır.</li>
   </ul>
   <h2>3. Çerezleri yönetme</h2>
-  <p>Tarayıcınızın ayarlarından çerezleri ve site verilerini silebilir veya engelleyebilirsiniz. Zorunlu depolamayı engellemeniz hâlinde sepet özelliği çalışmayabilir.</p>
+  <p>Tercihinizi istediğiniz zaman sayfanın altındaki <strong>"Çerez tercihleri"</strong> bağlantısından değiştirebilirsiniz; izninizi geri aldığınızda analitik çerezler silinir. Ayrıca tarayıcınızın ayarlarından çerezleri ve site verilerini silebilir veya engelleyebilirsiniz. Zorunlu depolamayı engellemeniz hâlinde sepet özelliği çalışmayabilir.</p>
   <h2>4. Güvenlik</h2>
   <p>Site HTTPS ile şifrelenir. Kart bilgileri yalnızca lisanslı ödeme kuruluşunun 3D Secure sayfasında girilir.</p>`;
 }
