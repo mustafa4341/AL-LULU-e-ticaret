@@ -3,9 +3,9 @@
  * Google Tag Manager, kullanıcı çerez penceresinde izin verirse yüklenir (components/CerezOnay.astro)
  * ve bu kuyruktaki olayları GA4'e iletir. Olay adları GA4 e-ticaret standardındadır.
  *
- * E-ticaret olayları GA4'ün beklediği biçimde gönderilir: önce { ecommerce: null } (önceki ürün verisi temizlensin),
- * sonra { event, ecommerce: { currency, value, items, ... } }. GTM'de GA4 olay etiketinde
- * "E-ticaret verilerini gönder → Data Layer" seçilmelidir.
+ * Olaylar gtag('event', ad, parametreler) olarak gönderilir; GA4'ün oluşturduğu Google etiketi (GTM-5BLF4TXQ)
+ * bunları ek ayar gerekmeden okur. Ayrıca "dl_<ad>" adıyla standart dataLayer e-ticaret biçimi de yazılır
+ * (ileride GTM'de özel etiket kurulursa çift sayım olmasın diye ad farklıdır).
  */
 import type { HesapSatiri } from '../lib/fiyat';
 
@@ -33,12 +33,16 @@ export interface Ga4Urun {
   quantity: number;
 }
 
+/** gtag komutu: Google etiketi yalnız "arguments" nesnesini komut olarak okur */
+function gtag(..._a: unknown[]): void { window.dataLayer.push(arguments); }
+
 export function track(event: string, params: Record<string, unknown> = {}): void {
+  // 1) Google etiketi (GA4) doğrudan okur: gtag('event', ...)
+  gtag('event', event, params);
+  // 2) GTM'de özel etiket kurulursa diye standart dataLayer biçimi
   if (ETICARET.has(event)) {
     window.dataLayer.push({ ecommerce: null });
-    window.dataLayer.push({ event, ecommerce: params });
-  } else {
-    window.dataLayer.push({ event, ...params });
+    window.dataLayer.push({ event: 'dl_' + event, ecommerce: params });
   }
 }
 

@@ -169,8 +169,9 @@ const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
       const gonderilen = JSON.parse(localStorage.getItem('allulu_ga_satin') || '[]');
       if (!gonderilen.includes(v.transaction_id)) {
         window.dataLayer = window.dataLayer || [];
+        (function () { window.dataLayer.push(arguments); })('event', 'purchase', v); // Google etiketi (GA4)
         window.dataLayer.push({ ecommerce: null });
-        window.dataLayer.push({ event: 'purchase', ecommerce: v });
+        window.dataLayer.push({ event: 'dl_purchase', ecommerce: v });
         localStorage.setItem('allulu_ga_satin', JSON.stringify([...gonderilen, v.transaction_id].slice(-50)));
       }
     } catch { /* gizli pencere */ }

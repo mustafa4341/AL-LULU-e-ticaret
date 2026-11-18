@@ -49,6 +49,7 @@ const { gtm } = Astro.props;
     if (yuklendi || !/^GTM-[A-Z0-9]{4,12}$/.test(gtm)) return;
     yuklendi = true;
     gtag('consent', 'update', { analytics_storage: 'granted' });
+    gtag('js', new Date());
     window.dataLayer.push({ 'gtm.start': Date.now(), event: 'gtm.js' });
     const s = document.createElement('script');
     s.async = true;

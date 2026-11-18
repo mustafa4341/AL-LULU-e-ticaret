@@ -119,7 +119,16 @@ Kaydettikten sonra **Deployments → son dağıtım → Redeploy**. (Yerelde den
 5. **Google Merchant Center** <https://merchants.google.com> → ücretsiz ürün listelemeleri ("Alışveriş" sekmesi). Ürün sayfalarında gerekli yapısal veri (fiyat, stok, marka) zaten var; Merchant Center'da "web sitesinden otomatik bul" seçilebilir.
 6. Google Analytics için Adım 6'ya geçin.
 
-## Adım 6 — Google Analytics 4 + Tag Manager 👤 ~20 dk
+## Adım 6 — Google Analytics 4 ✅ KURULDU (18.11.2026)
+
+- GA4 hesabı "Al Lulu Home", mülk `alluluhome.com` (Türkiye saati, TL), veri akışı "Al Lulu Home web" — info@alluluhome.com hesabında.
+- Google'ın oluşturduğu etiket: **GTM-5BLF4TXQ** → Vercel `GTM_KIMLIGI`. Site, çerez onayı verilince bu etiketi yükler.
+- E-ticaret olayları `gtag('event', …)` ile doğrudan GA4'e gider; Tag Manager'da ayrıca etiket kurmak **gerekmez**.
+- Raporlar: <https://analytics.google.com/analytics/web/?authuser=1> → Raporlar → Gerçek zamanlı / Para kazanma.
+- Veri paylaşımı ayarlarında "Google ürünleri", "Modelleme" ve "İşletme önerileri" kapalı bırakıldı (gizlilik).
+- Aşağıdaki adımlar artık yalnızca bilgi amaçlıdır.
+
+### (bilgi) Elle kurulum adımları
 
 Sitede çerez onay penceresi ve tüm e-ticaret olayları hazır; yalnızca Google tarafındaki hesaplar açılıp kimlik girilecek.
 Pencere, kimlik girilene kadar **görünmez** (o zamana kadar sitede analitik çerez yoktur).
