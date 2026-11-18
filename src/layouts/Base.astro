@@ -15,7 +15,12 @@ interface Props {
   gorsel?: string;
   /** Aktif menü: 'ana', kategori id, 'urunler', 'setler' */
   aktif?: string;
-  yapisalVeri?: Record<string, unknown>;
+  /** JSON-LD: tek nesne ya da birden çok (ör. Product + BreadcrumbList) */
+  yapisalVeri?: Record<string, unknown> | Record<string, unknown>[];
+  /** Ziyaretçinin geldiği yol: [ad, adres] çiftleri; BreadcrumbList olarak eklenir (son öğe bu sayfa) */
+  kirinti?: [string, string][];
+  /** Open Graph türü (ürün sayfasında "product") */
+  ogTuru?: 'website' | 'product';
   /** Ürün sayfası: alt menü yerine satın alma çubuğu */
   altCubuk?: boolean;
   indekslenmesin?: boolean;
@@ -24,7 +29,7 @@ interface Props {
   /** Sayfaya özel ilk duyuru (ör. ürün sayfasında "Bu üründe kargo bedava") */
   ozelDuyuru?: string;
 }
-const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
+const { baslik, aciklama, gorsel = '/img/logo/al-lulu-home.png', aktif, yapisalVeri, kirinti, ogTuru = 'website', altCubuk = false, indekslenmesin = false, sade = false, ozelDuyuru } = Astro.props;
 const k = Astro.locals.katalog;
 const onizleme = Astro.locals.vitrinOnizleme;
 /* Google Tag Manager kimliği (Vercel: GTM_KIMLIGI). Yönetici ve önizleme ziyaretleri ölçülmez. */
@@ -33,6 +38,15 @@ const gtm = /^GTM-[A-Z0-9]{4,12}$/.test(gtmHam) && !onizleme && !Astro.locals.yo
 const kok = Astro.site ?? new URL(k.site.url);
 const kanonik = new URL(Astro.url.pathname, kok).href;
 const ogGorsel = new URL(gorsel, kok).href;
+const jsonLd: Record<string, unknown>[] = [
+  ...(Array.isArray(yapisalVeri) ? yapisalVeri : yapisalVeri ? [yapisalVeri] : []),
+  ...(kirinti?.length ? [{
+    '@context': 'https://schema.org', '@type': 'BreadcrumbList',
+    itemListElement: [['Ana sayfa', '/'] as [string, string], ...kirinti].map(([ad, yol], i) => ({
+      '@type': 'ListItem', position: i + 1, name: ad, item: new URL(yol, kok).href,
+    })),
+  }] : []),
+];
 const duyurular = ozelDuyuru ? [ozelDuyuru, ...k.site.duyurular.filter((d) => !/kargo bedava/i.test(d))] : k.site.duyurular;
 const geriYol = Astro.url.pathname;
 ---
@@ -57,6 +71,9 @@ const geriYol = Astro.url.pathname;
     <meta property="og:title" content={baslik} />
     <meta property="og:description" content={aciklama} />
     <meta property="og:image" content={ogGorsel} />
+    <meta property="og:type" content={ogTuru} />
+    <meta property="og:url" content={kanonik} />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -68,7 +85,7 @@ const geriYol = Astro.url.pathname;
       function gtag(){ window.dataLayer.push(arguments); } /* GTM yalnızca "arguments" nesnesini komut sayar */
       gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500 });
     </script>}
-    {yapisalVeri && <script type="application/ld+json" set:html={JSON.stringify(yapisalVeri).replace(/</g, '\\u003c')} />}
+    {jsonLd.map((v) => <script type="application/ld+json" set:html={JSON.stringify(v).replace(/</g, '\\u003c')} />)}
   </head>
   <body class:list={{ 'alt-cubuklu': altCubuk, 'alt-menulu': !altCubuk && !sade }}>
     <a class="skip-link" href="#main">İçeriğe geç</a>

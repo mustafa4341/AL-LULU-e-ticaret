@@ -7,8 +7,8 @@
  *   SMTP_HOST=smtp.gmail.com  SMTP_PORT=465
  *   SMTP_KULLANICI=info@alluluhome.com (tek gerçek hesap)   SMTP_PAROLA=<Google "uygulama şifresi", 16 harf>
  *   SMTP_GONDEREN="Al Lulu Home <musteri@alluluhome.com>"  (takma ad; Gmail > Farklı gönder listesinde olmalı)
- *   EPOSTA_YANIT=info@alluluhome.com            (müşteri "Yanıtla"ya basınca buraya gider)
- *   SIPARIS_BILDIRIM_EPOSTA=<info@ dışı bir kutu>   (yeni sipariş bildirimi; virgülle birden çok adres)
+ *   EPOSTA_YANIT=musteri@alluluhome.com         (müşteri "Yanıtla"ya basınca buraya gider)
+ *   SIPARIS_BILDIRIM_EPOSTA=halime.karsu@alluluhome.com   (yeni sipariş bildirimi; virgülle birden çok adres)
  * SMS için: SMS sağlayıcısı (Netgsm, İletimerkezi vb.) seçildiğinde smsGonder() doldurulacak.
  */
 import nodemailer, { type Transporter } from 'nodemailer';

@@ -31,9 +31,12 @@ Workspace'te **tek gerçek hesap var: info@alluluhome.com**. musteri@ ve halime.
 
 | Adres | Görevi |
 |---|---|
-| **info@alluluhome.com** | Giriş yapılan hesap; site e-postaları bu hesabın uygulama şifresiyle gönderilir. Müşteri "Yanıtla"ya basınca cevap buraya gelir |
-| **musteri@alluluhome.com** (takma ad) | Müşterinin gördüğü **gönderen** ("Al Lulu Home <musteri@…>") |
-| **Yeni sipariş bildirimi** | info@ **dışında** bir kutu (ör. kişisel Gmail). Gmail, bir hesabın kendi takma adına gönderdiği e-postayı gelen kutusuna koymaz; halime.karsu@'ya gönderilirse bildirimi görmezsiniz |
+| **info@alluluhome.com** | Giriş yapılan tek hesap; site e-postaları bu hesabın uygulama şifresiyle gönderilir. Sitede alt bilgide "Kurumsal" adres |
+| **musteri@alluluhome.com** (takma ad) | Müşteri hizmetleri: e-postaların **göndereni** ve **yanıt adresi**; sitede, sözleşmelerde ve iade bildiriminde görünen adres |
+| **halime.karsu@alluluhome.com** (takma ad) | Her yeni siparişte "Yeni sipariş geldi" bildirimi |
+
+Hepsi aynı info@ kutusuna düşer. Gmail filtresiyle ayırın: Ayarlar → Filtreler → **Kime:** `halime.karsu@alluluhome.com` → etiket "Siparişler", **Asla spam'e gönderme**. Aynı şekilde `musteri@` için "Müşteri" etiketi.
+Not: Gmail, hesabın kendi takma adına gönderdiği bir e-postayı bazen yalnızca "Gönderilenler"de gösterir. İlk deneme siparişinde bildirim gelen kutusunda görünmezse bildirim adresini başka bir kutuya alırız.
 
 ## Otomatik giden e-postalar
 
@@ -90,8 +93,8 @@ Cloudflare → DNS → Kayıt ekle:
 | `SMTP_KULLANICI` | `info@alluluhome.com` |
 | `SMTP_PAROLA` | *16 harfli uygulama şifresi* |
 | `SMTP_GONDEREN` | `Al Lulu Home <musteri@alluluhome.com>` |
-| `EPOSTA_YANIT` | `info@alluluhome.com` |
-| `SIPARIS_BILDIRIM_EPOSTA` | info@ dışında bakılan bir adres (ör. kişisel Gmail) |
+| `EPOSTA_YANIT` | `musteri@alluluhome.com` |
+| `SIPARIS_BILDIRIM_EPOSTA` | `halime.karsu@alluluhome.com` |
 
 Kaydettikten sonra **Deployments → son dağıtım → Redeploy**. (Yerelde denemek için aynıları `.env` dosyasına.)
 

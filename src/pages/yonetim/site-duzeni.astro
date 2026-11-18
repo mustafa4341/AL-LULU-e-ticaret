@@ -285,7 +285,8 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
         <div class="y-izgara y-izgara--2">
           <div class="y-alan"><label for="telefon">WhatsApp / Telefon Numarası</label><input id="telefon" name="telefon" type="tel" value={s.telefonGorunen} required data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan"><label for="eposta">E-posta Adresi</label><input id="eposta" name="eposta" type="email" value={s.eposta} required /></div>
+          <div class="y-alan"><label for="eposta">Müşteri Hizmetleri E-postası</label><input id="eposta" name="eposta" type="email" value={s.eposta} required /><small class="muted">Sitede, sözleşmelerde ve iade bildirimlerinde görünür.</small></div>
+          <div class="y-alan"><label for="kurumsalEposta">Kurumsal E-posta (isteğe bağlı)</label><input id="kurumsalEposta" name="kurumsalEposta" type="email" value={s.kurumsalEposta} placeholder="info@alluluhome.com" /><small class="muted">Alt bilgide "Kurumsal / iş birliği" olarak görünür.</small></div>
           <div class="y-alan"><label for="calismaSaatleri">Çalışma Saatleri</label><input id="calismaSaatleri" name="calismaSaatleri" value={s.calismaSaatleri} placeholder="Hafta içi 09:00–18:00" /></div>
           <div class="y-alan"><label for="url">Site Adresi (URL)</label><input id="url" name="url" value={s.url} required /></div>
           <div class="y-alan"><label for="ad">Mağaza Adı</label><input id="ad" name="ad" value={s.ad} required data-site-demo-sekme="anasayfa" /></div>

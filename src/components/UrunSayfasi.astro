@@ -48,7 +48,9 @@ const yapisalVeri = {
   description: urun.ozet,
   image: urun.gorseller.map((g) => new URL(g.src, site.url).href),
   offers: {
-    '@type': 'Offer', priceCurrency: 'TRY', price: String(urun.fiyat),
+    // Müşterinin ödeyeceği fiyat (sepette indirim varsa o); süreli fırsatta bitiş tarihi
+    '@type': 'Offer', priceCurrency: 'TRY', price: String(gosterilenFiyat),
+    ...(bilgi.sepette && urun.firsat?.bitis ? { priceValidUntil: urun.firsat.bitis.slice(0, 10) } : {}),
     availability: stokta ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition: 'https://schema.org/NewCondition', url: new URL(`/urun/${urun.id}`, site.url).href,
     seller: { '@type': 'Organization', name: site.ad },
@@ -71,7 +73,7 @@ const yapisalVeri = {
   },
 };
 ---
-<Base baslik={`${urun.marka} ${urun.ad} | ${site.ad}`} aciklama={`${urun.marka} ${urun.ad}: ${urun.ozet} ${formatTL(urun.fiyat)}, vergiler dahil.`} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={yapisalVeri} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
+<Base baslik={`${urun.marka} ${urun.ad} | ${site.ad}`} aciklama={`${urun.marka} ${urun.ad}: ${urun.ozet} ${formatTL(urun.fiyat)}, vergiler dahil.`} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={yapisalVeri} ogTuru="product" kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [`${urun.marka} ${urun.kisaAd}`, `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
   <div class="container">
     <nav aria-label="Konum" class="kirinti-kap--urun">
       <ol class="kirinti">

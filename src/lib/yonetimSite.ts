@@ -20,7 +20,7 @@ export function siteFormu(f: FormData, m: Magaza, bolumler: string[], onizleme =
       telefonGorunen: '0' + [d.slice(0, 3), d.slice(3, 6), d.slice(6, 8), d.slice(8)].join(' '),
     });
     Object.assign(s, {
-      ad: metin(f, 'ad'), slogan: metin(f, 'slogan'), eposta: metin(f, 'eposta'),
+      ad: metin(f, 'ad'), slogan: metin(f, 'slogan'), eposta: metin(f, 'eposta'), kurumsalEposta: metin(f, 'kurumsalEposta'),
       calismaSaatleri: metin(f, 'calismaSaatleri'),
     });
     if (url && ['https:', 'http:'].includes(url.protocol)) s.url = metin(f, 'url');

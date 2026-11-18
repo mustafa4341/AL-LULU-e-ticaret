@@ -3,7 +3,7 @@ import Base from '../layouts/Base.astro';
 import UrunListesi from '../components/UrunListesi.astro';
 const k = Astro.locals.katalog;
 ---
-<Base baslik={`Tüm ürünler | ${k.site.ad}`} aciklama={`${k.site.ad}'daki tüm orijinal, faturalı ve garantili mutfak ürünleri.`} aktif="urunler">
+<Base baslik={`Tüm ürünler | ${k.site.ad}`} aciklama={`${k.site.ad}'daki tüm orijinal, faturalı ve garantili mutfak ürünleri.`} aktif="urunler" kirinti={[['Tüm ürünler', '/urunler']]}>
   <div class="container">
     <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li aria-current="page">Tüm ürünler</li></ol></nav>
     <header class="liste-bas"><h1>Tüm ürünler</h1><p>Az ama özenle seçilmiş ürünler. Hepsi orijinal, faturalı ve garantili.</p></header>

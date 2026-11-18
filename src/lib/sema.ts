@@ -146,7 +146,10 @@ export const SiteSema = z.object({
   ad: metin.min(1),
   slogan: metin.default(''),
   url: metin.url(),
+  /** Müşteri hizmetleri adresi: sitede, sözleşmelerde, iade/cayma bildiriminde */
   eposta: metin.email(),
+  /** Kurumsal / iş birliği adresi (isteğe bağlı, alt bilgide) */
+  kurumsalEposta: z.union([metin.email(), z.literal('')]).default(''),
   /** +90 ile, boşluksuz */
   telefon: metin.regex(/^\+90\d{10}$/, '+90 ile başlayan 13 karakter'),
   telefonGorunen: metin.min(1),

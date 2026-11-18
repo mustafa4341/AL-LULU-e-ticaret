@@ -18,7 +18,15 @@ const k = Astro.locals.katalog;
   baslik={`${k.site.ad} | Fissler Vitaquick ve premium mutfak ürünleri`}
   aciklama="Orijinal, faturalı ve garantili premium mutfak ürünleri. Fissler Vitaquick® Premium 6 L düdüklü tencere, hızlı sipariş, aynı gün kargo."
   aktif="ana"
-  yapisalVeri={{ '@context': 'https://schema.org', '@type': 'Organization', name: k.site.ad, url: k.site.url, logo: `${k.site.url}/img/logo/al-lulu-home.png`, email: k.site.eposta, telephone: k.site.telefon }}
+  yapisalVeri={[
+    {
+      '@context': 'https://schema.org', '@type': 'OnlineStore', name: k.site.ad, url: k.site.url,
+      logo: `${k.site.url}/img/logo/icon-512.png`, image: `${k.site.url}/img/logo/al-lulu-home.png`,
+      email: k.site.eposta, telephone: k.site.telefon,
+      contactPoint: { '@type': 'ContactPoint', contactType: 'customer service', email: k.site.eposta, telephone: k.site.telefon, availableLanguage: 'tr' },
+    },
+    { '@context': 'https://schema.org', '@type': 'WebSite', name: k.site.ad, url: k.site.url, inLanguage: 'tr-TR' },
+  ]}
 >
   {k.anaSayfa.bolumler.map((ad) => { const Bolum = bilesenler[ad]; return <Bolum />; })}
 </Base>

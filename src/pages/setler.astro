@@ -5,7 +5,7 @@ const k = Astro.locals.katalog;
 const setler = k.tumSetler();
 const amiral = k.urunBul(k.anaSayfa.hero.urunId);
 ---
-<Base baslik={`Setler & Fırsatlar | ${k.site.ad}`} aciklama="Birlikte alındığında set fiyatıyla daha avantajlı ürün kombinasyonları." aktif="setler">
+<Base baslik={`Setler & Fırsatlar | ${k.site.ad}`} aciklama="Birlikte alındığında set fiyatıyla daha avantajlı ürün kombinasyonları." aktif="setler" indekslenmesin={setler.length === 0} kirinti={[['Setler & Fırsatlar', '/setler']]}>
   <div class="container" style="padding-bottom:64px">
     <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li aria-current="page">Setler & Fırsatlar</li></ol></nav>
     <header class="liste-bas">

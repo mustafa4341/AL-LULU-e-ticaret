@@ -8,13 +8,14 @@ export const GET: APIRoute = async ({ locals, site }) => {
   const yollar: { loc: string; priority: string }[] = [
     { loc: '/', priority: '1.0' },
     { loc: '/urunler', priority: '0.9' },
-    { loc: '/setler', priority: '0.8' },
+    // Boş sayfalar (ürünsüz kategori, setsiz setler sayfası) Google'a bildirilmez; o sayfalar "noindex" döner
+    ...(k.tumSetler().length ? [{ loc: '/setler', priority: '0.8' }] : []),
     { loc: '/bilgi', priority: '0.6' },
     { loc: '/siparis-takip', priority: '0.5' },
   ];
 
   for (const kat of k.magaza.kategoriler) {
-    yollar.push({ loc: `/kategori/${kat.id}`, priority: '0.8' });
+    if (k.kategoriUrunleri(kat.id).length) yollar.push({ loc: `/kategori/${kat.id}`, priority: '0.8' });
   }
   for (const u of k.magaza.urunler.filter((x) => x.durum === 'yayinda')) {
     yollar.push({ loc: `/urun/${u.id}`, priority: '0.9' });

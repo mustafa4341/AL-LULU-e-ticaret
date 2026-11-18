@@ -58,6 +58,7 @@ const yil = new Date().getFullYear();
           <a href={k.whatsapp()} target="_blank" rel="noopener">WhatsApp: {site.telefonGorunen}</a><br />
           <a href={`tel:${site.telefon}`}>Tel: {site.telefonGorunen}</a><br />
           <a href={`mailto:${site.eposta}`}>{site.eposta}</a><br />
+          {site.kurumsalEposta && site.kurumsalEposta !== site.eposta && <>Kurumsal: <a href={`mailto:${site.kurumsalEposta}`}>{site.kurumsalEposta}</a><br /></>}
           <span data-verify="Ticari unvan ve adres">{site.satici.unvan}<br />{site.satici.adres}</span>
         </address>
       </div>
