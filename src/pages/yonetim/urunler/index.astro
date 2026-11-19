@@ -96,6 +96,8 @@ const aranan = soru.toLocaleLowerCase('tr').trim();
 const esik = (id: string) => kritikEsik(envanter, id);
 const urunAdi = new Map(m.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`]));
 const azalan = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= esik(u.id)).length;
+/* 1 TL = taslak ürünün fiyatı henüz girilmedi (yayinEksikleri ile aynı kural) */
+const fiyatGirilmedi = (u: (typeof m.urunler)[number]) => u.fiyat <= 1;
 /* Şablonda "<=" yazılırsa Astro derleyicisi etiket sanıyor; rozet metni burada hesaplanır */
 const stokYazisi = (u: (typeof m.urunler)[number]) => u.durum !== 'yayinda' ? undefined
   : u.stok === 0 ? 'Tükendi' : u.stok <= esik(u.id) ? `${u.stok} · Azalıyor` : undefined;
@@ -131,7 +133,7 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
     {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return <>
       <tr id={'u-' + u.id}>
         <td><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" />}</span><span><a class="y-link" href={'/yonetim/urunler/' + u.id}>{u.marka} {u.kisaAd}</a><small class="y-table-note">{u.gorseller.length ? u.sku : 'Fotoğraf eksik'}</small></span></div></td>
-        <td class="y-nowrap"><strong>{formatTL(u.fiyat)}</strong>{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
+        <td class="y-nowrap">{fiyatGirilmedi(u) ? <span class="y-stok-rozet y-stok-rozet--kritik">Fiyat girilmedi</span> : <strong>{formatTL(u.fiyat)}</strong>}{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
         <td>{fiyat.yuzde ? <span>%{fiyat.yuzde} fiyat indirimi</span> : null}{fiyat.sepette && <small class="y-table-note">Sepette %{fiyat.sepette.yuzde} · {formatTL(fiyat.sepette.fiyat)}</small>}{!fiyat.yuzde && !fiyat.sepette && '—'}</td>
         <td>{stokYazisi(u) ? <span class="y-stok-rozet y-stok-rozet--kritik">{stokYazisi(u)}</span> : <strong>{u.stok}</strong>}</td><td><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>{u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}</td>
         <td><div class="y-row-actions">

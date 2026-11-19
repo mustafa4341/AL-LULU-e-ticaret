@@ -11,7 +11,11 @@ export const BOS_URUN: Urun = {
 export function yayinEksikleri(u: Urun): string[] {
   const eksik: string[] = [];
   if (!u.ad.trim()) eksik.push('ürün adı');
-  if (!(u.fiyat > 0)) eksik.push('fiyat');
+  // 1 TL = "fiyat henüz girilmedi" yer tutucusu (taslak ürünler için)
+  if (!(u.fiyat > 1)) eksik.push('gerçek satış fiyatı');
+  // "!" ile başlayan kontrol notları (Gelişmiş › Doğrulanacaklar) kapanmadan yayına alınmaz
+  const acik = u.dogrula.filter((d) => d.trim().startsWith('!'));
+  if (acik.length) eksik.push(`“!” ile işaretli ${acik.length} kontrol notu (Gelişmiş sekmesi › Doğrulanacaklar)`);
   if (!u.kategoriler.length) eksik.push('kategori');
   if (!u.gorseller.length) eksik.push('en az 1 fotoğraf');
   return eksik;
