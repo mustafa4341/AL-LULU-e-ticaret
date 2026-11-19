@@ -27,7 +27,7 @@ const href = urun ? `/urun/${urun.id}` : '/';
       <a class="hero__vitrin" href={href} aria-label={`${urun.marka} ${urun.kisaAd} ürün sayfasını aç`}>
         {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-yuklenen-gorsel />}
         {rozet?.damga ? (
-          <UrunRozeti etiket={rozet.damga} tur={rozetTuru} />
+          <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} />
         ) : (
           etiket && <span class="hero__etiket">{etiket}</span>
         )}

@@ -29,7 +29,7 @@
     },
     "iadeGun": 14,
     "tadilat": {
-      "aktif": false,
+      "aktif": true,
       "baslik": "Sitemiz kısa süreliğine bakımda",
       "aciklama": "Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.",
       "tahminiSure": "",
@@ -51,7 +51,7 @@
     "calismaSaatleri": "Hafta içi 09:00–18:00",
     "indirimReferansGun": 30
   },
-  "surum": 59,
+  "surum": 61,
   "setler": [
     {
       "ad": "Vitaquick + Buhar Aparatı Seti",
@@ -476,10 +476,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "18/10 Çelik",
-        "22 cm Uyumlu",
-        "Kutusuz"
+        "damga:yok",
+        "22 cm Vitaquick® Uyumlu",
+        "18/10 Paslanmaz Çelik",
+        "Kutusuz · Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -752,10 +752,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "Paslanmaz Çelik",
-        "Titanium 2X",
-        "Thermo-Signal™"
+        "damga:lacivert:250°C Fırına Girer",
+        "Paslanmaz Çelik · Titanium 2X",
+        "Thermo-Signal™ Gösterge",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -914,10 +914,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "18/10 Çelik",
-        "8 Parça · Cam Kapaklı",
-        "İndüksiyon Uyumlu"
+        "damga:kirmizi:Son 1 Adet",
+        "Cam Kapaklı · 18/10 Çelik",
+        "İndüksiyon Uyumlu",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1062,10 +1062,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "18/10 Çelik",
-        "9 Parça Set",
-        "İndüksiyon Uyumlu"
+        "damga:altin:Ömürlük Çelik",
+        "9 Parça · İndüksiyon Uyumlu",
+        "18/10 Paslanmaz Çelik",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1201,10 +1201,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "18/10 Çelik",
-        "Superthermic Taban",
-        "İndüksiyon Uyumlu"
+        "damga:kirmizi:Son 1 Adet",
+        "Superthermic Taban · 18/10 Çelik",
+        "İndüksiyon Uyumlu",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1359,10 +1359,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "750 ml Hazne",
-        "Elektriksiz",
-        "Paracord İp"
+        "damga:yok",
+        "750 ml · Paracord İpli",
+        "Kaymaz Silikon Taban",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1537,10 +1537,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
+        "damga:lacivert:Dolapta Yer Açar",
+        "Tek Sap · 10 kg Taşır",
         "Fransa Üretimi",
-        "10 Parça Set",
-        "Çıkarılabilir Sap"
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1721,10 +1721,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "Fransa Üretimi",
-        "4 Parça Set",
-        "Çıkarılabilir Sap"
+        "damga:yok",
+        "Fransa Üretimi · Çıkarılabilir Sap",
+        "16-18-20 cm İç İçe Geçer",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -1879,10 +1879,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "500 ml Hazne",
-        "Elektriksiz",
-        "Çift Bıçak"
+        "damga:yesil:5 Saniyede Doğrar",
+        "Elektriksiz · Çift Çelik Bıçak",
+        "500 ml Şeffaf Hazne",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -2040,10 +2040,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "Fransa Üretimi",
-        "Titanium 2X",
-        "Thermo-Signal™"
+        "damga:yok",
+        "Fransa Üretimi · Titanium 2X",
+        "Thermo-Signal™ Gösterge",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -2190,10 +2190,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "2’li Tava Seti",
-        "24 + 28 cm",
-        "Kolay Temizlik"
+        "damga:yesil:Kolay Temizlik",
+        "24 + 28 cm · 2’li Tava Seti",
+        "İç-Dış Yapışmaz Yüzey",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -2342,10 +2342,10 @@
       "kampanya": null,
       "oneCikan": false,
       "rozetler": [
-        "Orijinal Ürün",
-        "22×28 cm · 50 gr",
-        "10’lu Paket",
-        "Katkısız Pamuk"
+        "damga:kirmizi:Son 2 Paket",
+        "Katkısız Saf Pamuk · 22×28 cm",
+        "10’lu Paket · 50 gr",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -2513,10 +2513,10 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "Orijinal Ürün",
-        "6 Kişilik · 30 Parça",
-        "18/10 Çelik",
-        "Monoblok Bıçak"
+        "damga:altin:Monoblok Bıçak",
+        "6 Kişilik · 18/10 Çelik",
+        "Bulaşık Makinesine Uygun",
+        "Orijinal Ürün"
       ],
       "gorseller": [
         {
@@ -2627,7 +2627,7 @@
     "setlerBaslik": "Setler & fırsatlar",
     "oneCikanlarBaslik": "Öne çıkan ürünler"
   },
-  "guncelleme": "2026-11-19T15:15:40.918Z",
+  "guncelleme": "2026-11-19T15:35:51.672Z",
   "kategoriler": [
     {
       "ad": "Düdüklü Tencereler",

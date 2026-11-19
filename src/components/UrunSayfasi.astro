@@ -33,7 +33,7 @@ const soruUrl = k.whatsapp(`Merhaba, ${urun.marka} ${urun.kisaAd} hakkında bir 
 const stokHaberUrl = k.whatsapp(`${urun.kisaAd} stoğa girince haber verir misiniz?`);
 const gosterilenFiyat = bilgi.sepette?.fiyat ?? bilgi.fiyat;
 const hacim = urun.teknik.find(([e]) => e.toLocaleLowerCase('tr') === 'hacim')?.[1];
-const guvenSatiri = [...urun.rozetler, ...(rozet.serit ? [rozet.serit] : [])].slice(0, 3);
+const guvenSatiri = [...rozet.kucuk, ...(rozet.serit ? [rozet.serit] : [])].slice(0, 3);
 /* Ödeme/SMS gerçekten bağlıysa söz verilir (lib/altyapi.ts) */
 const odemeSatiri = [ODEME_BAGLI() ? 'PayTR ile kartlı ödeme' : '', SMS_BAGLI ? 'Sipariş takibi SMS ile' : 'Hesapsız sipariş takibi'].filter(Boolean).join(' · ');
 /* Teknik tablo telefonda uzun kalıyordu: ilk 6 satır açık, kalanı "Tüm teknik özellikler" altında */
@@ -117,7 +117,7 @@ const sssVerisi = urunSSS.length ? {
     <section class="urun-ust" aria-labelledby="urun-adi" data-ga-urun={urun.id}>
       <div class="urun-galeri-kap">
         <Galeri gorseller={urun.gorseller} yedekIkon={kat?.ikon} />
-        {rozet.damga && k.cokSatanMi(urun) && <UrunRozeti etiket={rozet.damga} tur="cok-satan" konum="galeri" />}
+        {rozet.damga && !bilgi.firsat && <UrunRozeti etiket={rozet.damga} tur={k.cokSatanMi(urun) ? 'cok-satan' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik'} ton={rozet.damgaTon} konum="galeri" />}
         {bilgi.onceki && <span class="urun-indirim-cip"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
       </div>
 

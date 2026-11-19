@@ -18,7 +18,7 @@ const k = Astro.locals.katalog;
 const gorsel = k.anaGorsel(urun);
 const bilgi = k.fiyatBilgisi(urun);
 const rozet = k.rozetler(urun);
-const rozetTuru = k.cokSatanMi(urun) ? 'cok-satan' : bilgi.firsat ? 'firsat' : 'stok';
+const rozetTuru = k.cokSatanMi(urun) ? 'cok-satan' : bilgi.firsat ? 'firsat' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik';
 const stokta = k.stoktaMi(urun);
 const kat = k.kategoriBul(urun.kategoriler[0]!);
 const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
@@ -34,7 +34,7 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
     {bilgi.onceki && urun.durum !== 'taslak' && <span class="kart__indirim"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
     {rozet.serit && <span class="kart__serit"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>}
   </a>
-  {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} />}
+  {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} />}
   <div class="kart__govde">
     <h3 class="kart__ad"><a href={`/urun/${urun.id}`}><strong lang="en">{urun.marka}</strong> {urun.ad}</a></h3>
     {bilgi.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} boyut="kucuk" />}

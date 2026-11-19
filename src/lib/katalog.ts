@@ -30,9 +30,13 @@ export interface SetKalemDokumu {
   oran?: number;
 }
 
+export type RozetTonu = 'turuncu' | 'kirmizi' | 'altin' | 'lacivert' | 'yesil';
+
 export interface Rozetler {
-  /** Yuvarlak turuncu damga (en fazla 1) */
+  /** Yuvarlak damga (en fazla 1) */
   damga?: string;
+  /** Damga renk tonu */
+  damgaTon?: RozetTonu;
   /** Görselin altındaki şerit, ör. "Kargo Bedava" */
   serit?: string;
   /** Küçük rozetler */
@@ -125,15 +129,35 @@ export class Katalog {
   /** Sadece DOĞRU bilgilerden oluşan rozetler */
   rozetler(u: Urun): Rozetler {
     const kucuk: string[] = [];
+    let ozelDamga: { metin?: string; ton: RozetTonu | 'yok' } | undefined;
+    for (const r of u.rozetler) {
+      const m = /^damga:(turuncu|kirmizi|altin|lacivert|yesil|yok)(?::(.+))?$/i.exec(r.trim());
+      if (m) {
+        ozelDamga = { ton: m[1]!.toLowerCase() as RozetTonu | 'yok', metin: m[2]?.trim() };
+      } else {
+        kucuk.push(r);
+      }
+    }
     let damga: string | undefined;
-    if (this.cokSatanMi(u)) damga = 'En Çok Satan';
-    else if (this.firsatAktif(u)) damga = u.firsat?.etiket || 'Fırsat Ürünü';
-    else if (u.stok > 0 && u.stok <= 3) damga = `Son ${u.stok} Adet`;
-    // Elle yazılan rozetler (ör. "2 Yıl Garanti") ürünün önüne geçmesin: küçük güven etiketi olarak gösterilir
-    for (const r of u.rozetler) kucuk.push(r);
+    let damgaTon: RozetTonu | undefined;
+    if (this.cokSatanMi(u)) {
+      damga = 'En Çok Satan';
+      damgaTon = 'turuncu';
+    } else if (this.firsatAktif(u)) {
+      damga = u.firsat?.etiket || 'Fırsat Ürünü';
+      damgaTon = 'turuncu';
+    } else if (ozelDamga) {
+      if (ozelDamga.ton !== 'yok' && ozelDamga.metin) {
+        damga = ozelDamga.metin;
+        damgaTon = ozelDamga.ton;
+      }
+    } else if (u.stok === 1) {
+      damga = 'Son 1 Adet';
+      damgaTon = 'kirmizi';
+    }
     if (this.site.taksit.pesinFiyatinaTaksit) kucuk.push(`Peşin fiyatına ${this.site.taksit.pesinFiyatinaTaksit} taksit`);
     const serit = u.fiyat >= this.site.kargo.ucretsizEsik ? 'Kargo Bedava' : undefined;
-    return { damga, serit, kucuk };
+    return { damga, damgaTon, serit, kucuk };
   }
 
   /* ---------------- Kategoriler ---------------- */
