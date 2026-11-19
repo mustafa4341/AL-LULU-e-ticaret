@@ -6,12 +6,32 @@ import { siparisleriOku } from '../../lib/depo';
 import { formatTL } from '../../lib/fiyat';
 import { bildirimKanali } from '../../lib/altyapi';
 import { iadeEdildi } from '../../lib/siparisAkisi';
+import { siparisUrunleri, siparisYorumlari, yorumKaydet, yorumYazilabilir } from '../../lib/yorum';
 
 const k = Astro.locals.katalog;
 const s = (await siparisleriOku()).find((x) => x.no === Astro.params.no);
 const token = Astro.url.searchParams.get('t');
 if (!s || !token || token !== s.token) return Astro.rewrite('/404');
 const yeni = Astro.url.searchParams.has('yeni');
+
+/* Değerlendirme (yalnız teslim edilmiş siparişte; lib/yorum.ts) */
+let yorumHata = '';
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData().catch(() => null);
+  const urunId = String(f?.get('urunId') ?? '');
+  const puan = Number(f?.get('puan'));
+  const metin = String(f?.get('metin') ?? '').trim().slice(0, 1500);
+  if (!Number.isInteger(puan) || puan < 1 || puan > 5) yorumHata = 'Lütfen 1 ile 5 arasında bir puan seçin.';
+  else {
+    try {
+      await yorumKaydet(s, { urunId, puan, metin });
+      return Astro.redirect(`/siparis/${s.no}?t=${s.token}&yorum=tamam#degerlendir`, 303);
+    } catch (e) { yorumHata = (e as Error).message; }
+  }
+}
+const yorumTamam = Astro.url.searchParams.get('yorum') === 'tamam';
+const degerlendirilecek = yorumYazilabilir(s) ? siparisUrunleri(s, (id) => k.urunBul(id)?.kisaAd) : [];
+const mevcutYorumlar = degerlendirilecek.length ? await siparisYorumlari(s.no) : [];
 
 /* Müşterinin gördüğü adımlar. Ödeme alınmadan "Siparişiniz alındı" denmez. */
 const asamalar = [
@@ -131,6 +151,34 @@ const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
         </p>
       )}
     </section>
+
+    {degerlendirilecek.length > 0 && (
+      <section class="kart-kutu yd" id="degerlendir" aria-labelledby="yd-baslik">
+        <h2 id="yd-baslik">Ürünü değerlendirin</h2>
+        <p class="muted">Görüşünüz diğer müşterilere yol gösterir. Adınız “{s.musteri.ad.trim().split(/\s+/)[0]} {s.musteri.soyad.trim().charAt(0)}.” olarak görünür; yorumunuz kısa bir kontrolden sonra yayınlanır.</p>
+        {yorumTamam && <p class="yd-mesaj yd-mesaj--ok" role="status">Teşekkürler, değerlendirmeniz alındı.</p>}
+        {yorumHata && <p class="yd-mesaj yd-mesaj--hata" role="alert">{yorumHata}</p>}
+        {degerlendirilecek.map((u) => {
+          const m = mevcutYorumlar.find((y) => y.urunId === u.id);
+          return (
+            <form method="post" class="yd-form">
+              <input type="hidden" name="urunId" value={u.id} />
+              <strong>{u.ad}</strong>
+              {m && <small class="muted">{m.durum === 'yayinda' ? 'Yayında' : m.durum === 'reddedildi' ? 'Yayınlanmadı' : 'Kontrol ediliyor'} · düzenleyip tekrar gönderebilirsiniz</small>}
+              <fieldset class="yd-yildiz">
+                <legend>Puanınız</legend>
+                {[5, 4, 3, 2, 1].map((p) => <>
+                  <input type="radio" name="puan" value={p} id={`p-${u.id}-${p}`} checked={m?.puan === p} required />
+                  <label for={`p-${u.id}-${p}`} title={`${p} yıldız`}>★</label>
+                </>)}
+              </fieldset>
+              <textarea name="metin" rows="3" maxlength="1500" placeholder="Ürünü nasıl buldunuz? (isteğe bağlı)">{m?.metin ?? ''}</textarea>
+              <button class="btn btn--sepet" type="submit">{m ? 'Güncelle' : 'Gönder'}</button>
+            </form>
+          );
+        })}
+      </section>
+    )}
 
     <div class="kart-kutu">
       <h2>Ürünler</h2>

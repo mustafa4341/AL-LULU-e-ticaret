@@ -11,7 +11,7 @@ import type { IkonAdi } from '../lib/sema';
 interface Props {
   baslik: string;
   altBaslik?: string;
-  aktif?: 'ozet' | 'urunler' | 'kategoriler' | 'setler' | 'siparisler' | 'site' | 'ayarlar' | 'finans';
+  aktif?: 'ozet' | 'urunler' | 'kategoriler' | 'setler' | 'yorumlar' | 'siparisler' | 'site' | 'ayarlar' | 'finans';
   basari?: string | null;
   hatalar?: string[];
   genis?: boolean;
@@ -28,8 +28,8 @@ const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
   ['finans', 'Finans & Belgeler', '/yonetim/finans', 'belge'],
   ['site', 'Site Düzeni', '/yonetim/site-duzeni', 'ayar'],
 ];
-const urunAlt = aktif === 'setler' || aktif === 'kategoriler';
-const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : 'Ayarlar');
+const urunAlt = aktif === 'setler' || aktif === 'kategoriler' || aktif === 'yorumlar';
+const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : aktif === 'yorumlar' ? 'Değerlendirmeler' : 'Ayarlar');
 ---
 <!doctype html>
 <html lang="tr">
@@ -72,6 +72,7 @@ const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'S
         {id === "urunler" && <div class="y-sidebar-sub">
           <a href="/yonetim/setler" aria-current={aktif === "setler" ? "page" : undefined}>Setler</a>
           <a href="/yonetim/kategoriler" aria-current={aktif === "kategoriler" ? "page" : undefined}>Kategoriler</a>
+          <a href="/yonetim/yorumlar" aria-current={aktif === "yorumlar" ? "page" : undefined}>Değerlendirmeler</a>
         </div>}
         {id === "site" && <div class="y-sidebar-sub"><a href="/yonetim/ayarlar" aria-current={aktif === "ayarlar" ? "page" : undefined}>Ayarlar ve yasal bilgiler</a></div>}
       </>)}

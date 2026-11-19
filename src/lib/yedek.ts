@@ -8,6 +8,7 @@ import { magazaOku, siparisleriOku, sozlesmeOku, supabaseIstemci, type SozlesmeK
 import { finansOku } from './finansDepo';
 import { csvOlustur, zipOlustur } from './finansArsiv';
 import { SIPARIS_DURUM_ADLARI } from './sema';
+import { tumYorumlar } from './yorum';
 
 const SON_YEDEK = '_yedek/son.json';
 export const YEDEK_ARALIGI_GUN = 30;
@@ -53,7 +54,7 @@ const saat = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeStyle: '
 
 /** Yedek ZIP'ini hazırlar ve son yedek tarihini kaydeder */
 export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
-  const [magaza, siparisler, finans] = await Promise.all([magazaOku(), siparisleriOku(), finansOku()]);
+  const [magaza, siparisler, finans, yorumlar] = await Promise.all([magazaOku(), siparisleriOku(), finansOku(), tumYorumlar()]);
   const sozlesmeler = await tumSozlesmeler(siparisler.map((s) => s.no));
   const simdi = new Date();
   const gun = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Istanbul' }).format(simdi);
@@ -76,6 +77,7 @@ export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
     'magaza.json           Ürünler, setler, kategoriler ve site ayarları',
     'sozlesmeler.json      Müşterilerin onayladığı sözleşmelerin tam metni (yasal kayıt)',
     'finans.json           Belgeler, giderler ve Trendyol kayıtları',
+    'yorumlar.json         Müşteri değerlendirmeleri',
     '',
     'Fotoğraflar bu yedekte yoktur. Bu dosyada müşteri kişisel verileri bulunur:',
     'şifreli bir klasörde / güvenli bir yerde saklayın, kimseyle paylaşmayın.',
@@ -88,6 +90,7 @@ export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
     { ad: 'magaza.json', veri: json(magaza) },
     { ad: 'sozlesmeler.json', veri: json(sozlesmeler) },
     { ad: 'finans.json', veri: json(finans) },
+    { ad: 'yorumlar.json', veri: json(yorumlar) },
   ], true);
   await sonYedekKaydet(simdi.toISOString());
   return { ad: `allulu-yedek-${gun}.zip`, veri };

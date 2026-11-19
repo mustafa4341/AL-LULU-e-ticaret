@@ -300,11 +300,12 @@ ${baslikSatiri('Gönderilen ürünler')}${urunTablosu(s, site, gorsel)}`;
 <p style="margin:0">${no} numaralı siparişiniz teslim edildi. Ürününüzü güzel günlerde, afiyetle kullanmanızı dileriz.</p>
 ${adimCubugu(s)}
 ${kutu(`<strong style="${SERIF};font-size:16px;font-weight:normal">Küçük bir hatırlatma</strong><br>Faturanızı ve garanti belgenizi saklamanızı öneririz. Ürünle ilgili herhangi bir sorunuz olursa bu e-postayı yanıtlamanız yeterli; size hemen yardımcı oluruz.`)}
-${takipButonu}`;
+<p style="margin:22px 0 0;text-align:center">Ürünü biraz kullandıktan sonra görüşünüzü paylaşır mısınız? Yorumunuz diğer müşterilere yol gösterir.</p>
+${buton('Ürünü Değerlendir ★', takipUrl + '#degerlendir')}`;
     return {
       konu: `Siparişiniz teslim edildi — ${s.no}`,
       html: cerceve(site, { onYazi: 'Siparişiniz teslim edildi. Bizi tercih ettiğiniz için teşekkürler.', ust: 'Teslim edildi', baslik: 'Afiyetle kullanın', icerik, altNot: altNot(s) }),
-      metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz teslim edildi. Faturanızı ve garanti belgenizi saklamanızı öneririz.\nSipariş detayı: ${takipUrl}${imza(site)}`,
+      metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz teslim edildi. Faturanızı ve garanti belgenizi saklamanızı öneririz.\nÜrünü değerlendirmek için: ${takipUrl}#degerlendir${imza(site)}`,
     };
   }
 

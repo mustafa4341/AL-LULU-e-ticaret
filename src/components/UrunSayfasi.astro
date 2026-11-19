@@ -16,6 +16,7 @@ import OzellikListesi from './OzellikListesi.astro';
 import { formatTL } from '../lib/fiyat';
 import { ODEME_BAGLI, SMS_BAGLI, hizmeteUygunSSS } from '../lib/altyapi';
 import { gtinAlani, urunGtin } from '../lib/urunKimlik';
+import { ozet, urunYorumlari } from '../lib/yorum';
 
 const k = Astro.locals.katalog;
 const { urun } = Astro.props as { urun: import('../lib/sema').Urun };
@@ -43,6 +44,11 @@ const teknikKalan = urun.teknik.slice(TEKNIK_ACIK);
 const gtin = urunGtin(urun);
 const urunSSS = hizmeteUygunSSS(urun.sss);
 const kok = site.url.replace(/\/$/, '');
+/* Yalnız doğrulanmış alıcıların panelde onaylanan yorumları (lib/yorum.ts); yoksa yapısal veriye puan yazılmaz */
+const yorumlar = await urunYorumlari(urun.id).catch(() => []);
+const puanOzet = ozet(yorumlar);
+const yildiz = (p: number) => '★'.repeat(Math.round(p)) + '☆'.repeat(5 - Math.round(p));
+const yorumTarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Istanbul' });
 
 const yapisalVeri = {
   '@context': 'https://schema.org',
@@ -83,6 +89,14 @@ const yapisalVeri = {
       returnMethod: 'https://schema.org/ReturnByMail', returnFees: 'https://schema.org/FreeReturn',
     },
   },
+  ...(puanOzet.adet ? {
+    aggregateRating: { '@type': 'AggregateRating', ratingValue: String(puanOzet.ortalama), reviewCount: puanOzet.adet, bestRating: '5', worstRating: '1' },
+    review: yorumlar.slice(0, 10).map((y) => ({
+      '@type': 'Review', author: { '@type': 'Person', name: y.ad }, datePublished: y.tarih.slice(0, 10),
+      reviewRating: { '@type': 'Rating', ratingValue: String(y.puan), bestRating: '5', worstRating: '1' },
+      ...(y.metin ? { reviewBody: y.metin } : {}),
+    })),
+  } : {}),
 };
 /* Sayfadaki "Bu ürün hakkında" soruları (yalnız sayfada görünen metin) */
 const sssVerisi = urunSSS.length ? {
@@ -195,14 +209,37 @@ const sssVerisi = urunSSS.length ? {
     </section>
   )}
 
-  <section class="yorum-kompakt" aria-labelledby="yorum-baslik">
-    <div class="container">
-      <div class="yorum-bos" data-reveal>
-        <Ikon ad="yildiz" boyut={22} />
-        <p><strong id="yorum-baslik">Değerlendirmeler yakında.</strong> Yalnızca gerçek siparişlerden gelen yorumları yayınlıyoruz.</p>
+  {puanOzet.adet === 0 ? (
+    <section class="yorum-kompakt" aria-labelledby="yorum-baslik">
+      <div class="container">
+        <div class="yorum-bos" data-reveal>
+          <Ikon ad="yildiz" boyut={22} />
+          <p><strong id="yorum-baslik">Değerlendirmeler yakında.</strong> Yalnızca gerçek siparişlerden gelen yorumları yayınlıyoruz.</p>
+        </div>
       </div>
-    </div>
-  </section>
+    </section>
+  ) : (
+    <section class="bolum" id="degerlendirmeler" aria-labelledby="yorum-baslik">
+      <div class="container yorumlar">
+        <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">Müşteri değerlendirmeleri</p><h2 id="yorum-baslik">Alanlar ne diyor?</h2></div></div>
+        <div class="yorumlar-ozet">
+          <strong>{puanOzet.ortalama.toLocaleString('tr-TR')}</strong>
+          <span class="yildizlar" aria-label={`5 üzerinden ${puanOzet.ortalama}`}>{yildiz(puanOzet.ortalama)}</span>
+          <span class="muted">{puanOzet.adet} değerlendirme · yalnızca bu ürünü satın alan müşterilerden</span>
+        </div>
+        {yorumlar.slice(0, 20).map((y) => (
+          <article class="yorum">
+            <div class="yorum__ust">
+              <span><b>{y.ad}</b> · <span class="yildizlar" aria-label={`${y.puan} yıldız`}>{yildiz(y.puan)}</span></span>
+              <span><span class="yorum__dogrulanmis">✓ Doğrulanmış alıcı</span> · <time datetime={y.tarih}>{yorumTarih.format(new Date(y.tarih))}</time></span>
+            </div>
+            {y.metin && <p>{y.metin}</p>}
+            {y.yanit && <div class="yorum__yanit"><b>{site.ad}:</b> {y.yanit}</div>}
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
 
   {urunSSS.length > 0 && (
     <section class="bolum bolum--beyaz" aria-labelledby="urun-sss">

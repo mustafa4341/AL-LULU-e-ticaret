@@ -1,0 +1,59 @@
+---
+import Yonetim from '../../layouts/Yonetim.astro';
+import { tumYorumlar, yorumGuncelle, type YorumDurumu } from '../../lib/yorum';
+import { yTarih } from '../../lib/yonetimRapor';
+
+let hatalar: string[] = [];
+let basari: string | null = null;
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const id = String(f.get('id') ?? '');
+  const eylem = String(f.get('eylem') ?? '');
+  try {
+    if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Yorum bulunamadı.');
+    if (eylem === 'yanit') {
+      const yanit = String(f.get('yanit') ?? '').trim().slice(0, 1000);
+      await yorumGuncelle(id, { yanit: yanit || null });
+      basari = 'Yanıt kaydedildi.';
+    } else if (eylem === 'yayinda' || eylem === 'reddedildi' || eylem === 'bekliyor') {
+      await yorumGuncelle(id, { durum: eylem as YorumDurumu });
+      basari = eylem === 'yayinda' ? 'Yorum yayınlandı.' : eylem === 'reddedildi' ? 'Yorum yayından kaldırıldı.' : 'Yorum beklemeye alındı.';
+    }
+  } catch (e) { hatalar = [(e as Error).message]; }
+}
+const filtre = (Astro.url.searchParams.get('durum') ?? 'bekliyor') as YorumDurumu | 'tumu';
+const tum = await tumYorumlar();
+const liste = filtre === 'tumu' ? tum : tum.filter((y) => y.durum === filtre);
+const sayi = (d: YorumDurumu) => tum.filter((y) => y.durum === d).length;
+const urunAdi = (id: string) => Astro.locals.katalog.urunBul(id)?.kisaAd ?? id;
+const sekmeler: [YorumDurumu | 'tumu', string][] = [['bekliyor', `Onay bekleyen (${sayi('bekliyor')})`], ['yayinda', `Yayında (${sayi('yayinda')})`], ['reddedildi', `Yayınlanmayan (${sayi('reddedildi')})`], ['tumu', 'Tümü']];
+---
+<Yonetim baslik="Değerlendirmeler" altBaslik="Yalnızca teslim edilmiş siparişlerin müşterileri yorum yazabilir" aktif="yorumlar" basari={basari} hatalar={hatalar}>
+  <section class="y-kart">
+    <p class="muted" style="margin-top:0">
+      Kural: Olumsuz yorumlar da yayınlanmalı. Yalnızca hakaret, kişisel bilgi (telefon, adres) veya ürünle ilgisiz içerik içeren yorumları “Yayınlama”.
+      Olumsuz yoruma kibar bir yanıt yazmak güven verir.
+    </p>
+    <nav class="y-sekme" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
+      {sekmeler.map(([d, ad]) => <a class:list={['y-chip', d === filtre ? 'y-chip--turuncu' : 'y-chip--gri']} href={`/yonetim/yorumlar?durum=${d}`}>{ad}</a>)}
+    </nav>
+    {liste.length === 0 ? <p class="muted">Bu listede yorum yok.</p> : liste.map((y) => (
+      <article style="border-top:1px solid var(--line);padding:14px 0;display:grid;gap:8px">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
+          <span><b>{'★'.repeat(y.puan)}{'☆'.repeat(5 - y.puan)}</b> · {y.ad} · {urunAdi(y.urunId)}</span>
+          <span class="muted"><a class="y-link" href={`/yonetim/siparisler/${y.siparisNo}`}>{y.siparisNo}</a> · {yTarih.format(new Date(y.tarih))}</span>
+        </div>
+        {y.metin ? <p style="margin:0;white-space:pre-line">{y.metin}</p> : <p class="muted" style="margin:0">(Yalnız puan verildi)</p>}
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          {y.durum !== 'yayinda' && <form method="post"><input type="hidden" name="id" value={y.id} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="yayinda">Yayınla</button></form>}
+          {y.durum !== 'reddedildi' && <form method="post"><input type="hidden" name="id" value={y.id} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="reddedildi">Yayınlama</button></form>}
+        </div>
+        <form method="post" style="display:grid;gap:6px">
+          <input type="hidden" name="id" value={y.id} />
+          <textarea name="yanit" rows="2" maxlength="1000" placeholder="Mağaza yanıtı (isteğe bağlı, yorumun altında görünür)">{y.yanit ?? ''}</textarea>
+          <button class="btn btn--cizgi btn--kucuk" name="eylem" value="yanit" style="justify-self:start">Yanıtı kaydet</button>
+        </form>
+      </article>
+    ))}
+  </section>
+</Yonetim>

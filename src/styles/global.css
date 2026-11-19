@@ -1162,3 +1162,29 @@ mark.yer { background: #EEF3FA; color: #1E3A5F; padding: 0 4px; border-radius: 4
 @media (min-width: 900px) { .hero__vitrin img { inset: auto; left: 8%; top: 10%; width: 84%; height: 80%; } }
 .hero__vitrin img { top: 3%; height: 94%; }
 @media (min-width: 900px) { .hero__vitrin img { top: 6%; height: 88%; } }
+
+/* ── Değerlendirmeler (lib/yorum.ts) ── */
+.yd .muted { margin: 4px 0 12px; font-size: 14px; }
+.yd-form { display: grid; gap: 8px; padding: 14px 0; border-top: 1px solid var(--line); }
+.yd-form textarea { width: 100%; font: inherit; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--r-md, 10px); resize: vertical; }
+.yd-form .btn { justify-self: start; }
+.yd-yildiz { border: 0; padding: 0; margin: 0; display: inline-flex; flex-direction: row-reverse; justify-content: flex-end; gap: 2px; }
+.yd-yildiz legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.yd-yildiz input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.yd-yildiz label { font-size: 30px; line-height: 1; color: #d9d2c4; cursor: pointer; padding: 2px; }
+.yd-yildiz input:checked ~ label, .yd-yildiz label:hover, .yd-yildiz label:hover ~ label { color: var(--gold); }
+.yd-yildiz input:focus-visible + label { outline: 2px solid var(--gold); border-radius: 4px; }
+.yd-mesaj { padding: 10px 12px; border-radius: 10px; font-size: 14px; margin: 0 0 8px; }
+.yd-mesaj--ok { background: #e9f6ee; color: #0a7f3f; }
+.yd-mesaj--hata { background: #fceeec; color: #a22825; }
+.yorumlar { max-width: 760px; display: grid; gap: 14px; }
+.yorumlar-ozet { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.yorumlar-ozet strong { font-size: 28px; line-height: 1; color: var(--ink); }
+.yildizlar { color: var(--gold); letter-spacing: 1px; font-size: 16px; }
+.yildizlar .bos { color: #d9d2c4; }
+.yorum { padding: 14px 16px; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--surface); }
+.yorum__ust { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 14px; color: var(--ink-2); }
+.yorum__ust b { color: var(--ink); }
+.yorum__dogrulanmis { font-size: 12px; color: #0a7f3f; }
+.yorum p { margin: 8px 0 0; color: var(--ink); line-height: 1.6; white-space: pre-line; }
+.yorum__yanit { margin-top: 10px; padding: 10px 12px; border-left: 3px solid var(--gold); background: rgba(201,160,74,.08); font-size: 14px; }

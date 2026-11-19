@@ -27,6 +27,21 @@ export type Database = {
         };
         Relationships: [];
       };
+      yorumlar: {
+        Row: {
+          id: string; siparis_no: string; urun_id: string; ad: string; puan: number; metin: string;
+          durum: string; yanit: string | null; olusturma: string; guncelleme: string;
+        };
+        Insert: {
+          id?: string; siparis_no: string; urun_id: string; ad: string; puan: number; metin?: string;
+          durum?: string; yanit?: string | null; olusturma?: string; guncelleme?: string;
+        };
+        Update: {
+          id?: string; siparis_no?: string; urun_id?: string; ad?: string; puan?: number; metin?: string;
+          durum?: string; yanit?: string | null; olusturma?: string; guncelleme?: string;
+        };
+        Relationships: [];
+      };
       kategoriler: {
         Row: {
           aciklama: string;

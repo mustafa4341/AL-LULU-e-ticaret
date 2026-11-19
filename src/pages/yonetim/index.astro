@@ -9,8 +9,10 @@ import { bosYasalBilgi } from '../../lib/yonetimSite';
 import { finansOku } from '../../lib/finansDepo';
 import { belgeGecerli, finansGunu, finansPara, hakEdis, raporla } from '../../lib/finans';
 import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from '../../lib/yedek';
+import { tumYorumlar } from '../../lib/yorum';
 
-const [m, tum, finans, sonYedek] = await Promise.all([magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined)]);
+const [m, tum, finans, sonYedek, yorumlar] = await Promise.all([magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined), tumYorumlar().catch(() => [])]);
+const bekleyenYorum = yorumlar.filter((y) => y.durum === 'bekliyor').length;
 const yedekGun = sonYedek ? Math.floor((Date.now() - Date.parse(sonYedek)) / 86_400_000) : undefined;
 const yedekGerekli = yedekGun === undefined || yedekGun >= YEDEK_ARALIGI_GUN;
 const siparisler = tum.filter((s) => !s.paytr?.test).sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih));
@@ -45,6 +47,7 @@ const isler = ([
   { ad: 'Hata veren belgeler (yeniden dene)', sayi: belgeHatasi.length, url: '/yonetim/finans?sekme=belgeler', ton: 'kirmizi' },
   { ad: 'Ödemesi kontrol edilecek (havale/EFT)', sayi: odemeKontrol.length, url: '/yonetim/siparisler?durum=odeme-bekliyor', ton: 'turuncu' },
   { ad: 'Ödemesi beklenen Trendyol hakedişi', sayi: trendyolBekleyen.length ? finansPara(trendyolBekleyen.reduce((t, x) => t + hakEdis(x), 0)) : 0, url: '/yonetim/finans?sekme=trendyol', ton: 'gri' },
+  { ad: 'Onay bekleyen müşteri değerlendirmesi', sayi: bekleyenYorum, url: '/yonetim/yorumlar', ton: 'turuncu' },
   { ad: 'Kritik stok (3 ve altı)', sayi: kritikStok.length, url: '/yonetim/urunler?filtre=kritik', ton: 'turuncu' },
   { ad: 'Yayındaki üründe fotoğraf eksik', sayi: fotosuz.length, url: fotosuz.length === 1 ? '/yonetim/urunler/' + fotosuz[0]!.id + '?bolum=fotograf' : '/yonetim/urunler', ton: 'gri' },
   { ad: 'Yayına hazır taslak set', sayi: taslakSetler.length, url: '/yonetim/setler', ton: 'gri' },
