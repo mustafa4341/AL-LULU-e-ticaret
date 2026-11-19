@@ -27,7 +27,7 @@ const href = urun ? `/urun/${urun.id}` : '/';
       <a class="hero__vitrin" href={href} aria-label={`${urun.marka} ${urun.kisaAd} ürün sayfasını aç`}>
         {gorsel && <img src={gorsel.src} alt="" width="400" height="400" fetchpriority="high" data-yuklenen-gorsel />}
         {rozet?.damga ? (
-          <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} />
+          <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} stil={rozet.damgaStil} />
         ) : (
           etiket && <span class="hero__etiket">{etiket}</span>
         )}
@@ -51,7 +51,7 @@ const href = urun ? `/urun/${urun.id}` : '/';
           <span><strong>Ürünü incele</strong><span>Fotoğraflar, pişirme süreleri, teknik özellikler</span></span>
           <Ikon ad="sag" boyut={18} />
         </a>
-        {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">* Fissler verisi; yemeğe ve miktara göre değişir.</p>}
+        {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">{urun.marka.toLocaleLowerCase('tr') === 'fissler' ? '* Fissler verisi; yemeğe ve miktara göre değişir.' : `* ${urun.marka} resmî ürün verisi.`}</p>}
         <KargoSayaci kompakt />
       </div>
     </div>

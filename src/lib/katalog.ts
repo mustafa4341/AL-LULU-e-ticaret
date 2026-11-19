@@ -30,15 +30,20 @@ export interface SetKalemDokumu {
   oran?: number;
 }
 
-export type RozetTonu = 'turuncu' | 'kirmizi' | 'altin' | 'lacivert' | 'yesil';
+export type RozetTonu = 'turuncu' | 'mercan' | 'kirmizi' | 'altin' | 'lacivert' | 'yesil';
+export type RozetStili = 'muhur' | 'serit';
 
 export interface Rozetler {
-  /** Yuvarlak damga (en fazla 1) */
+  /** Sol üst vitrin damgası (en fazla 1) */
   damga?: string;
   /** Damga renk tonu */
   damgaTon?: RozetTonu;
+  /** Damga biçimi: yuvarlak mühür veya köşe şeridi */
+  damgaStil?: RozetStili;
   /** Görselin altındaki şerit, ör. "Kargo Bedava" */
   serit?: string;
+  /** 5 ve daha az stok kalan ürünlerde alt şeritte dönen aciliyet mesajı */
+  stokSeridi?: string;
   /** Küçük rozetler */
   kucuk: string[];
 }
@@ -129,35 +134,41 @@ export class Katalog {
   /** Sadece DOĞRU bilgilerden oluşan rozetler */
   rozetler(u: Urun): Rozetler {
     const kucuk: string[] = [];
-    let ozelDamga: { metin?: string; ton: RozetTonu | 'yok' } | undefined;
+    let ozelDamga: { metin?: string; ton: RozetTonu | 'yok'; stil: RozetStili } | undefined;
     for (const r of u.rozetler) {
-      const m = /^damga:(turuncu|kirmizi|altin|lacivert|yesil|yok)(?::(.+))?$/i.exec(r.trim());
+      const m = /^damga:(?:(serit|muhur):)?(turuncu|mercan|kirmizi|altin|lacivert|yesil|yok)(?::(.+))?$/i.exec(r.trim());
       if (m) {
-        ozelDamga = { ton: m[1]!.toLowerCase() as RozetTonu | 'yok', metin: m[2]?.trim() };
+        ozelDamga = {
+          stil: (m[1]?.toLowerCase() as RozetStili | undefined) ?? 'muhur',
+          ton: m[2]!.toLowerCase() as RozetTonu | 'yok',
+          metin: m[3]?.trim(),
+        };
       } else {
         kucuk.push(r);
       }
     }
     let damga: string | undefined;
     let damgaTon: RozetTonu | undefined;
+    let damgaStil: RozetStili = 'muhur';
     if (this.cokSatanMi(u)) {
       damga = 'En Çok Satan';
       damgaTon = 'turuncu';
+      damgaStil = 'muhur';
     } else if (this.firsatAktif(u)) {
       damga = u.firsat?.etiket || 'Fırsat Ürünü';
       damgaTon = 'turuncu';
+      damgaStil = 'muhur';
     } else if (ozelDamga) {
       if (ozelDamga.ton !== 'yok' && ozelDamga.metin) {
         damga = ozelDamga.metin;
         damgaTon = ozelDamga.ton;
+        damgaStil = ozelDamga.stil;
       }
-    } else if (u.stok === 1) {
-      damga = 'Son 1 Adet';
-      damgaTon = 'kirmizi';
     }
     if (this.site.taksit.pesinFiyatinaTaksit) kucuk.push(`Peşin fiyatına ${this.site.taksit.pesinFiyatinaTaksit} taksit`);
     const serit = u.fiyat >= this.site.kargo.ucretsizEsik ? 'Kargo Bedava' : undefined;
-    return { damga, damgaTon, serit, kucuk };
+    const stokSeridi = u.stok > 0 && u.stok <= 5 ? `Son ${u.stok} Ürün` : undefined;
+    return { damga, damgaTon, damgaStil, serit, stokSeridi, kucuk };
   }
 
   /* ---------------- Kategoriler ---------------- */

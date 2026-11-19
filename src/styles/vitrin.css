@@ -67,6 +67,7 @@
 /* Katalog rozetleri */
 .urun-rozeti {
   --rozet-cap: 80px;
+  --rozet-golge: rgba(192, 74, 0, .38);
   position: absolute;
   z-index: 3;
   inset: 12px auto auto 12px;
@@ -75,14 +76,13 @@
   display: grid;
   place-content: center;
   justify-items: center;
-  gap: 3px;
   padding: 9px;
   border: 1px solid #dc6512;
   border-radius: 50%;
   overflow: hidden;
   color: #fff;
-  background: radial-gradient(circle at 50% 45%, #ff8a1f 0%, #f26b0f 58%, #e25a06 64%, #ffb04d 66%, #ff9a2e 78%, #f27a12 100%);
-  box-shadow: 0 6px 16px #c04a0059, inset 0 0 0 2px #ffffff59;
+  background: radial-gradient(circle at 46% 36%, #ff9b2e 0%, #f56d0f 56%, #de5202 64%, #ffbe5c 67%, #ff9724 80%, #ea6d0a 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #ffffff5e;
   font-size: .8125rem;
   font-weight: 900;
   line-height: 1.05;
@@ -104,53 +104,160 @@
 }
 .urun-rozeti--cok-satan { font-size: .875rem; line-height: 1.02; }
 
-/* Kırmızı: az kalan stok aciliyeti (Son 1 Adet / Son 2 Paket) */
+/* Mercan-Pembe (Trendyol Avantajlı Ürün / Süper Fiyat enerjisi) */
+.urun-rozeti--mercan {
+  --rozet-golge: rgba(225, 29, 72, .38);
+  border-color: #be123c;
+  background: radial-gradient(circle at 46% 36%, #ff5c8a 0%, #f41f56 56%, #c80e3e 64%, #ff94b2 67%, #ec2359 80%, #be123c 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #fff0f466;
+}
+.urun-rozeti--mercan > span { -webkit-text-stroke: 1.1px #6b0822; text-shadow: 0 1px 0 #800b29, 0 2px 3px rgba(80, 4, 24, .44); }
+
+/* Kırmızı: acil stok vurgusu */
 .urun-rozeti--kirmizi {
+  --rozet-golge: rgba(185, 28, 28, .38);
   border-color: #a6111c;
-  background: radial-gradient(circle at 50% 42%, #ef233c 0%, #c8102e 58%, #9e0a22 65%, #ff5c6c 68%, #d91e36 82%, #b00d24 100%);
-  box-shadow: 0 6px 16px rgba(176, 13, 36, .38), inset 0 0 0 2px #ffffff59;
+  background: radial-gradient(circle at 46% 36%, #ff3b4e 0%, #d4122e 56%, #a60a22 64%, #ff7a86 67%, #dc1e38 80%, #b00d24 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #ffffff5e;
 }
 .urun-rozeti--kirmizi > span { -webkit-text-stroke: 1.1px #5c0610; text-shadow: 0 1px 0 #700814, 0 2px 3px rgba(60, 0, 10, .45); }
 
-/* Altın: ömürlük çelik / çeyizlik kalite özellikleri */
+/* Parlak Altın: Yıldız Ürün / Favori Set (canlı, lüks şampanya-amber tonu) */
 .urun-rozeti--altin {
-  border-color: #8f681c;
-  background: radial-gradient(circle at 50% 42%, #cfa246 0%, #a67822 58%, #7d5712 65%, #ebca7e 68%, #ba8b2f 82%, #8c6318 100%);
-  box-shadow: 0 6px 16px rgba(125, 87, 18, .36), inset 0 0 0 2px #fff7df66;
+  --rozet-golge: rgba(217, 138, 10, .38);
+  border-color: #b46d04;
+  background: radial-gradient(circle at 46% 36%, #ffe066 0%, #f0a50f 56%, #c97b04 64%, #fff1a8 67%, #f5b31a 80%, #c88008 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #fffbe67a;
 }
-.urun-rozeti--altin > span { -webkit-text-stroke: 1.1px #472f05; text-shadow: 0 1px 0 #593b08, 0 2px 3px rgba(56, 36, 4, .45); }
+.urun-rozeti--altin > span { -webkit-text-stroke: 1.2px #613900; text-shadow: 0 1px 0 #734400, 0 2px 3px rgba(82, 46, 0, .46); }
 
-/* Lacivert: akıllı mühendislik ve fırın/depolama avantajı */
+/* Parlak Safir: mühendislik & akıllı özellikler */
 .urun-rozeti--lacivert {
-  border-color: #163254;
-  background: radial-gradient(circle at 50% 42%, #295a8f 0%, #1c3f6b 58%, #112947 65%, #5b90c7 68%, #224b7a 82%, #142f52 100%);
-  box-shadow: 0 6px 16px rgba(17, 41, 71, .38), inset 0 0 0 2px #e0eeff59;
+  --rozet-golge: rgba(29, 78, 216, .36);
+  border-color: #1e40af;
+  background: radial-gradient(circle at 46% 36%, #3b82f6 0%, #1d4ed8 56%, #1e3a8a 64%, #93c5fd 67%, #2563eb 80%, #1e40af 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #e0f2fe66;
 }
-.urun-rozeti--lacivert > span { -webkit-text-stroke: 1.1px #0a1a2e; text-shadow: 0 1px 0 #0d213a, 0 2px 3px rgba(8, 20, 38, .5); }
+.urun-rozeti--lacivert > span { -webkit-text-stroke: 1.1px #0c1f54; text-shadow: 0 1px 0 #10286b, 0 2px 3px rgba(10, 24, 68, .48); }
 
-/* Zümrüt yeşili: hız, kolay temizlik ve pratiklik */
+/* Canlı Zümrüt: hız, pratiklik ve kolay kullanım */
 .urun-rozeti--yesil {
-  border-color: #0e613b;
-  background: radial-gradient(circle at 50% 42%, #209961 0%, #147548 58%, #0c5432 65%, #54c992 68%, #188552 82%, #0e613b 100%);
-  box-shadow: 0 6px 16px rgba(12, 84, 50, .36), inset 0 0 0 2px #e3ffef59;
+  --rozet-golge: rgba(5, 150, 105, .36);
+  border-color: #047857;
+  background: radial-gradient(circle at 46% 36%, #22c58b 0%, #059669 56%, #047857 64%, #6ee7b7 67%, #10b981 80%, #047857 100%);
+  box-shadow: 0 6px 16px var(--rozet-golge), inset 0 0 0 2px #ecfdf566;
 }
-.urun-rozeti--yesil > span { -webkit-text-stroke: 1.1px #06301b; text-shadow: 0 1px 0 #083d23, 0 2px 3px rgba(4, 38, 20, .48); }
+.urun-rozeti--yesil > span { -webkit-text-stroke: 1.1px #043b29; text-shadow: 0 1px 0 #064e36, 0 2px 3px rgba(4, 48, 32, .48); }
+
+/* Trendyol tarzı modern köşe şerit rozeti (merak uyandıran & avantaj vurgulu rozetler) */
+.urun-rozeti--serit {
+  width: auto;
+  height: auto;
+  max-width: calc(100% - 16px);
+  inset: 9px auto auto 9px;
+  padding: 5px 10px;
+  border-radius: 8px;
+  rotate: 0deg;
+  font-size: .64rem;
+  font-weight: 850;
+  line-height: 1.15;
+  letter-spacing: .03em;
+  box-shadow: 0 4px 12px var(--rozet-golge), inset 0 1px 0 rgba(255, 255, 255, .38);
+}
+.urun-rozeti--serit > span {
+  -webkit-text-stroke: 0;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, .26);
+  white-space: nowrap;
+}
+.urun-rozeti--serit.urun-rozeti--turuncu { background: linear-gradient(135deg, #ff8c1a 0%, #ea580c 100%); border-color: #d94e06; }
+.urun-rozeti--serit.urun-rozeti--mercan { background: linear-gradient(135deg, #ff3366 0%, #e11d48 100%); border-color: #be123c; }
+.urun-rozeti--serit.urun-rozeti--kirmizi { background: linear-gradient(135deg, #ef233c 0%, #b91c1c 100%); border-color: #991b1b; }
+.urun-rozeti--serit.urun-rozeti--altin { background: linear-gradient(135deg, #f5b31a 0%, #d97706 100%); border-color: #b45309; }
+.urun-rozeti--serit.urun-rozeti--lacivert { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); border-color: #1e40af; }
+.urun-rozeti--serit.urun-rozeti--yesil { background: linear-gradient(135deg, #10b981 0%, #059669 100%); border-color: #047857; }
 
 .firsat-cip svg { flex: none; }
-.kart > .urun-rozeti { --rozet-cap: 68px; inset: 8px auto auto 8px; padding: 6px; font-size: .65rem; line-height: 1.06; }
+.kart > .urun-rozeti:not(.urun-rozeti--serit) { --rozet-cap: 70px; inset: 8px auto auto 8px; padding: 6px; font-size: .65rem; line-height: 1.06; }
 .kart > .urun-rozeti--cok-satan { font-size: .6875rem; line-height: 1.05; }
+.kart > .urun-rozeti--serit { inset: 8px auto auto 8px; padding: 5px 9px; font-size: .635rem; }
+@media (max-width: 440px) {
+  .kart > .urun-rozeti--serit { padding: 4px 7px; font-size: .58rem; letter-spacing: .015em; }
+}
 @media (min-width: 900px) {
-  .hero__vitrin > .urun-rozeti { --rozet-cap: 108px; inset: 18px auto auto 18px; font-size: 1rem; }
+  .hero__vitrin > .urun-rozeti:not(.urun-rozeti--serit) { --rozet-cap: 108px; inset: 18px auto auto 18px; font-size: 1rem; }
   .hero__vitrin > .urun-rozeti--cok-satan { font-size: 1.1875rem; }
-  .urun-rozeti--galeri { --rozet-cap: 104px; top: 16px; left: 104px; font-size: .95rem; }
+  .urun-rozeti--galeri:not(.urun-rozeti--serit) { --rozet-cap: 104px; top: 16px; left: 104px; font-size: .95rem; }
+  .urun-rozeti--galeri.urun-rozeti--serit { top: 18px; left: 104px; padding: 7px 14px; border-radius: 10px; font-size: .8125rem; }
 }
 
 .hero__vitrin img { animation: none; }
 .hero__etiket, .hero__incele-hap { z-index: 2; }
-.kart__serit { background: #f6f2e7; color: #544021; border-top: 1px solid #ece3cf; }
+
+/* Kart alt şeridi: Kargo Bedava & 5 ve daha az stokta 5 sn'de bir yukarı kayan kırmızı stok uyarısı */
+.kart__serit {
+  background: #f6f2e7;
+  color: #544021;
+  border-top: 1px solid #ece3cf;
+  height: 28px;
+  padding: 0 8px;
+  overflow: hidden;
+}
+.kart__serit--stok {
+  background: linear-gradient(90deg, #b91c1c, #dc2626);
+  color: #fff;
+  border-top: 1px solid #991b1b;
+  letter-spacing: .015em;
+}
+.kart__serit--donen {
+  display: block;
+  padding: 0;
+  border-top: 0;
+  background: #f6f2e7;
+}
+.kart__serit-oge {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.kart__serit-oge--kargo {
+  background: #f6f2e7;
+  color: #544021;
+  border-top: 1px solid #ece3cf;
+}
+.kart__serit-oge--stok {
+  background: linear-gradient(90deg, #b91c1c, #dc2626);
+  color: #fff;
+  border-top: 1px solid #991b1b;
+  letter-spacing: .015em;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .kart__serit-oge--kargo { animation: serit-kargo 10s cubic-bezier(.22, 1, .36, 1) infinite; }
+  .kart__serit-oge--stok { animation: serit-stok 10s cubic-bezier(.22, 1, .36, 1) infinite; }
+  @keyframes serit-kargo {
+    0%, 44% { transform: translateY(0); opacity: 1; }
+    50% { transform: translateY(-100%); opacity: .15; }
+    50.01%, 94% { transform: translateY(100%); opacity: 0; }
+    100% { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes serit-stok {
+    0%, 44% { transform: translateY(100%); opacity: 0; }
+    50%, 94% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(-100%); opacity: .15; }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .kart__serit-oge--kargo { display: none; }
+}
 
 @media (prefers-reduced-motion: no-preference) {
-  .urun-rozeti { animation: rozet-giris .3s var(--ease) both; transition: box-shadow .23s var(--ease); }
+  .urun-rozeti { animation: rozet-giris .3s var(--ease) both; transition: box-shadow .23s var(--ease), transform .23s var(--ease); }
   .urun-rozeti::after {
     content: "";
     position: absolute;
@@ -165,7 +272,10 @@
 }
 @media (hover: hover) {
   :is(.kart, .hero__vitrin, .urun-galeri-kap):hover > .urun-rozeti {
-    box-shadow: 0 5px 14px #8d370c60, inset 0 0 0 2px #fff1cc99;
+    box-shadow: 0 7px 18px var(--rozet-golge), inset 0 0 0 2px #fff8e699;
+  }
+  :is(.kart, .hero__vitrin, .urun-galeri-kap):hover > .urun-rozeti--serit {
+    box-shadow: 0 6px 16px var(--rozet-golge), inset 0 1px 0 rgba(255, 255, 255, .5);
   }
 }
 

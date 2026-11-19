@@ -32,9 +32,18 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
     )}
     {urun.durum === 'taslak' && <span class="rozet rozet--taslak kart__taslak">Örnek</span>}
     {bilgi.onceki && urun.durum !== 'taslak' && <span class="kart__indirim"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
-    {rozet.serit && <span class="kart__serit"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>}
+    {rozet.serit && rozet.stokSeridi ? (
+      <span class="kart__serit kart__serit--donen" aria-label={`${rozet.serit}, ${rozet.stokSeridi}`}>
+        <span class="kart__serit-oge kart__serit-oge--kargo"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>
+        <span class="kart__serit-oge kart__serit-oge--stok" aria-hidden="true"><Ikon ad="ates" boyut={13} />{rozet.stokSeridi}</span>
+      </span>
+    ) : rozet.serit ? (
+      <span class="kart__serit"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>
+    ) : rozet.stokSeridi ? (
+      <span class="kart__serit kart__serit--stok"><Ikon ad="ates" boyut={13} />{rozet.stokSeridi}</span>
+    ) : null}
   </a>
-  {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} />}
+  {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} stil={rozet.damgaStil} />}
   <div class="kart__govde">
     <h3 class="kart__ad"><a href={`/urun/${urun.id}`}><strong lang="en">{urun.marka}</strong> {urun.ad}</a></h3>
     {bilgi.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} boyut="kucuk" />}

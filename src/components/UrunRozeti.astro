@@ -1,16 +1,23 @@
 ---
-import type { RozetTonu } from '../lib/katalog';
+import type { RozetStili, RozetTonu } from '../lib/katalog';
 
 interface Props {
   etiket: string;
   tur: 'cok-satan' | 'firsat' | 'stok' | 'ozellik';
   ton?: RozetTonu;
+  stil?: RozetStili;
   konum?: 'galeri';
 }
 
-const { etiket, tur, ton = 'turuncu', konum } = Astro.props;
+const { etiket, tur, ton = 'turuncu', stil = 'muhur', konum } = Astro.props;
 const cokSatan = tur === 'cok-satan';
 ---
-<span class:list={['urun-rozeti', `urun-rozeti--${ton}`, konum && `urun-rozeti--${konum}`, { 'urun-rozeti--cok-satan': cokSatan }]}>
+<span class:list={[
+  'urun-rozeti',
+  `urun-rozeti--${ton}`,
+  stil === 'serit' && 'urun-rozeti--serit',
+  konum && `urun-rozeti--${konum}`,
+  { 'urun-rozeti--cok-satan': cokSatan && stil === 'muhur' },
+]}>
   <span>{etiket}</span>
 </span>

@@ -117,7 +117,7 @@ const sssVerisi = urunSSS.length ? {
     <section class="urun-ust" aria-labelledby="urun-adi" data-ga-urun={urun.id}>
       <div class="urun-galeri-kap">
         <Galeri gorseller={urun.gorseller} yedekIkon={kat?.ikon} />
-        {rozet.damga && !bilgi.firsat && <UrunRozeti etiket={rozet.damga} tur={k.cokSatanMi(urun) ? 'cok-satan' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik'} ton={rozet.damgaTon} konum="galeri" />}
+        {rozet.damga && !bilgi.firsat && <UrunRozeti etiket={rozet.damga} tur={k.cokSatanMi(urun) ? 'cok-satan' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik'} ton={rozet.damgaTon} stil={rozet.damgaStil} konum="galeri" />}
         {bilgi.onceki && <span class="urun-indirim-cip"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
       </div>
 
@@ -141,7 +141,7 @@ const sssVerisi = urunSSS.length ? {
           <p class="urun-fiyat__alt">Vergiler dahil{rozet.serit && <> · <strong class="yesil">{rozet.serit}</strong></>}</p>
         </div>
 
-        <OzellikListesi maddeler={urun.oneCikanBilgiler} />
+        <OzellikListesi maddeler={urun.oneCikanBilgiler} marka={urun.marka} />
 
         {stokta ? (
           <>
