@@ -20,7 +20,7 @@ const saticiAdi = bos(st.unvan) ? site.ad : '';
       <dl class="belge-dl">
         {saticiAdi && <><dt>Satıcı</dt><dd>{saticiAdi}</dd></>}
         {bilgiler.map((b) => <><dt>{b.etiket}</dt><dd>{b.v}</dd></>)}
-        <dt>Telefon / WhatsApp</dt><dd><a href={`tel:${site.telefon}`}>{site.telefonGorunen}</a>{site.calismaSaatleri && ` · ${site.calismaSaatleri}`}</dd>
+        <dt>WhatsApp Destek</dt><dd><a href={kt.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener">WhatsApp'tan yazın</a>{site.calismaSaatleri && ` · ${site.calismaSaatleri}`}</dd>
         <dt>E-posta</dt><dd><a href={`mailto:${site.eposta}`}>{site.eposta}</a></dd>
       </dl>
     </section>

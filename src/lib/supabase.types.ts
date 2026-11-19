@@ -355,6 +355,9 @@ export type Database = {
           cok_satan: boolean;
           dogrula: Json;
           durum: string;
+          fayda_alt_baslik: string | null;
+          fayda_baslik: string | null;
+          fayda_ust_baslik: string | null;
           faydalar: Json;
           firsat: Json | null;
           fiyat: number;
@@ -391,6 +394,9 @@ export type Database = {
           cok_satan?: boolean;
           dogrula?: Json;
           durum?: string;
+          fayda_alt_baslik?: string | null;
+          fayda_baslik?: string | null;
+          fayda_ust_baslik?: string | null;
           faydalar?: Json;
           firsat?: Json | null;
           fiyat: number;
@@ -427,6 +433,9 @@ export type Database = {
           cok_satan?: boolean;
           dogrula?: Json;
           durum?: string;
+          fayda_alt_baslik?: string | null;
+          fayda_baslik?: string | null;
+          fayda_ust_baslik?: string | null;
           faydalar?: Json;
           firsat?: Json | null;
           fiyat?: number;

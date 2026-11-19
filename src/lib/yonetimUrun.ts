@@ -35,6 +35,9 @@ export function urunFormu(f: FormData, temel: Urun): Urun {
     sepetteIndirim: Math.min(50, Math.max(0, sayi(f, 'sepetteIndirim'))),
     stok: Math.max(0, sayi(f, 'stok')), maxAdet: Math.max(1, sayi(f, 'maxAdet', 5)), sku: metin(f, 'sku'),
     ozet: metin(f, 'ozet'), garanti: istegeBagli(f, 'garanti'), hediye: istegeBagli(f, 'hediye'),
+    faydaUstBaslik: istegeBagli(f, 'faydaUstBaslik'),
+    faydaBaslik: istegeBagli(f, 'faydaBaslik'),
+    faydaAltBaslik: istegeBagli(f, 'faydaAltBaslik'),
     rozetler: satirlar(f, 'rozetler'), oneCikan: evet(f, 'oneCikan'), cokSatan: evet(f, 'cokSatan'), oncelik: sayi(f, 'oncelik'),
     oneCikanBilgiler: ikonlu.slice(0, 6),
     faydalar: (() => {

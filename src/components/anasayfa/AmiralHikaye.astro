@@ -1,4 +1,5 @@
 ---
+import Ikon from '../Ikon.astro';
 const k = Astro.locals.katalog;
 const urun = k.urunBul(k.anaSayfa.hero.urunId);
 const g = urun?.gorseller[2] ?? urun?.gorseller[0];
@@ -7,9 +8,10 @@ const g = urun?.gorseller[2] ?? urun?.gorseller[0];
   <section class="bolum amiral" aria-labelledby="amiral-baslik">
     <div class="container amiral__grid">
       <div class="amiral__gorsel" data-reveal>{g && <img src={g.src} alt={g.alt} width="400" height="400" loading="lazy" />}</div>
-      <div data-reveal>
+      <div class="amiral__icerik" data-reveal>
         <p class="eyebrow">Neden {urun.kisaAd}?</p>
         <h2 id="amiral-baslik">Güzel görünmesinin arkasında mühendislik var.</h2>
+        <p class="amiral__kaydir" aria-hidden="true">{urun.faydalar.length} özellik · yana kaydırın <Ikon ad="sag" boyut={14} /></p>
         <ol class="fayda-liste">
           {urun.faydalar.map((f, i) => <li><span class="no">{i + 1}</span><div><strong>{f.baslik}</strong><p>{f.metin}</p></div></li>)}
         </ol>

@@ -79,7 +79,7 @@ function saticiBlok(s: YasalSite): string {
     ${satir('Adres', st.adres)}
     ${satir('MERSİS no', st.mersis)}
     ${satir('Vergi dairesi / no', st.vergiDairesiNo)}
-    <dt>Telefon</dt><dd>${esc(s.telefonGorunen)}${s.calismaSaatleri ? ` (${esc(s.calismaSaatleri)})` : ''}</dd>
+    <dt>İletişim</dt><dd>WhatsApp Destek Hattı${s.calismaSaatleri ? ` (${esc(s.calismaSaatleri)})` : ''}</dd>
     <dt>E-posta</dt><dd>${esc(s.eposta)}</dd>
     ${bos(st.kep) ? '' : `<dt>KEP adresi</dt><dd>${esc(st.kep)}</dd>`}
     <dt>İnternet sitesi</dt><dd>${esc(s.url.replace(/^https?:\/\//, ''))}</dd>
@@ -135,7 +135,7 @@ function caymaBolumu(s: YasalSite, no: string): string {
   <p>ALICI, ürünün kendisine veya gösterdiği adresteki kişiye teslim edildiği günden itibaren <strong>${s.iadeGun} (${s.iadeGun === 14 ? 'on dört' : s.iadeGun}) gün</strong> içinde, herhangi bir gerekçe göstermeksizin ve cezai şart ödemeksizin sözleşmeden cayabilir. ALICI bu hakkı, sözleşmenin kurulmasından ürünün teslimine kadar geçen sürede de kullanabilir. Tek siparişte ayrı ayrı teslim edilen ürünlerde süre, son ürünün teslim alındığı gün başlar. Ürünün kargo şirketine verilmesi ALICI'ya teslim sayılmaz.</p>
 
   <h3>${no}.2 Cayma bildirimi</h3>
-  <p>Cayma bildirimi, süre dolmadan önce SATICI'ya yazılı olarak veya kalıcı veri saklayıcısı ile yapılır: <strong>${esc(s.eposta)}</strong> adresine e-posta${bos(s.satici.kep) ? '' : `, ${esc(s.satici.kep)} KEP adresi`}, WhatsApp hattı (${esc(s.telefonGorunen)}) üzerinden yazılı mesaj veya SATICI adresine posta yoluyla. Bildirimde sipariş numarası ve ALICI'nın adı soyadı belirtilmelidir; İptal ve İade Koşulları sayfasındaki örnek cayma formu kullanılabilir. Cayma hakkının süresi içinde kullanıldığını ispat yükü ALICI'ya aittir; bu nedenle bildirimin yazılı yapılması önerilir.</p>
+  <p>Cayma bildirimi, süre dolmadan önce SATICI'ya yazılı olarak veya kalıcı veri saklayıcısı ile yapılır: <strong>${esc(s.eposta)}</strong> adresine e-posta${bos(s.satici.kep) ? '' : `, ${esc(s.satici.kep)} KEP adresi`}, Site üzerindeki WhatsApp destek hattı üzerinden yazılı mesaj veya SATICI adresine posta yoluyla. Bildirimde sipariş numarası ve ALICI'nın adı soyadı belirtilmelidir; İptal ve İade Koşulları sayfasındaki örnek cayma formu kullanılabilir. Cayma hakkının süresi içinde kullanıldığını ispat yükü ALICI'ya aittir; bu nedenle bildirimin yazılı yapılması önerilir.</p>
 
   <h3>${no}.3 Ürünün geri gönderilmesi ve iade kargosu</h3>
   <p>ALICI, cayma bildirimini yönelttiği tarihten itibaren <strong>14 (on dört) gün içinde</strong> ürünü SATICI'ya geri göndermekle yükümlüdür. SATICI'nın iade için belirlediği taşıyıcı <strong>${esc(k.firma)}</strong>'dır. ALICI'ya cayma bildiriminden sonra bir iade kodu iletilir; ürün bu kodla ${esc(k.firma)} şubesine teslim edildiğinde ALICI'dan iade kargo ücreti alınmaz. ALICI'nın bulunduğu yerde ${esc(k.firma)} şubesi yoksa ürün, ALICI'dan ek ücret alınmaksızın SATICI tarafından teslim alınır. ALICI'nın kendi tercihiyle SATICI'nın belirlediği taşıyıcı dışında bir kargo şirketi kullanması halinde bu gönderimin ücreti SATICI tarafından karşılanmaz ve ödeme iade süresi ürünün SATICI'ya ulaştığı tarihten itibaren başlar.</p>
@@ -298,7 +298,7 @@ export function iptalIadeKosullari(s: YasalSite): string {
   </ol>
 
   <h2>2. Siparişin kargoya verilmeden önce iptali</h2>
-  <p>Siparişiniz kargoya verilmeden önce ${esc(s.eposta)} adresine e-posta veya WhatsApp (${esc(s.telefonGorunen)}) ile sipariş numaranızı yazarak iptal talep edebilirsiniz. İptal edilen siparişin ödemesi, talebin bize ulaştığı tarihten itibaren en geç 14 gün içinde, ödeme yaptığınız karta/araca tek seferde iade edilir. Kargoya verilmiş siparişlerde aşağıdaki cayma süreci uygulanır.</p>
+  <p>Siparişiniz kargoya verilmeden önce ${esc(s.eposta)} adresine e-posta veya Site üzerindeki WhatsApp destek hattımız ile sipariş numaranızı yazarak iptal talep edebilirsiniz. İptal edilen siparişin ödemesi, talebin bize ulaştığı tarihten itibaren en geç 14 gün içinde, ödeme yaptığınız karta/araca tek seferde iade edilir. Kargoya verilmiş siparişlerde aşağıdaki cayma süreci uygulanır.</p>
 
   <h2>3. Cayma hakkı</h2>
   ${caymaBolumu(s, '3')}
@@ -371,7 +371,7 @@ export function garantiKosullari(s: YasalSite): string {
   <h2>1. Orijinal ve garantili ürün</h2>
   <p>${esc(s.ad)} üzerinden satılan ürünler orijinaldir ve faturalı gönderilir. Garanti süresi ve garantiyi veren üretici/ithalatçı firma bilgisi, ürünle birlikte verilen garanti belgesinde ve ürün sayfasında yer alır.</p>
   <h2>2. Garanti başvurusu</h2>
-  <p>Garanti kapsamındaki talepleriniz için garanti belgesindeki yetkili servise başvurabilir veya bize ${esc(s.eposta)} ya da WhatsApp (${esc(s.telefonGorunen)}) üzerinden ulaşabilirsiniz; süreci sizin adınıza takip ederiz. Başvuruda fatura ve garanti belgesi istenebilir; lütfen saklayın.</p>
+  <p>Garanti kapsamındaki talepleriniz için garanti belgesindeki yetkili servise başvurabilir veya bize ${esc(s.eposta)} ya da Site üzerindeki WhatsApp destek hattımız üzerinden ulaşabilirsiniz; süreci sizin adınıza takip ederiz. Başvuruda fatura ve garanti belgesi istenebilir; lütfen saklayın.</p>
   <h2>3. Garanti kapsamı dışındaki durumlar</h2>
   <ul class="belge-liste">
     <li>Kullanım kılavuzuna ve güvenlik talimatlarına aykırı kullanım (ör. düdüklü tencerede en az/en çok doldurma seviyelerine uyulmaması, boş hâlde ısıtma, emniyet valflerinin kurcalanması),</li>

@@ -38,7 +38,7 @@ export function magazaVerisi(site: SiteAyarlari): Record<string, unknown>[] {
   const url = site.url.replace(/\/$/, '');
   const saatler = calismaSaatleriVerisi(site.calismaSaatleri);
   const iletisim = {
-    '@type': 'ContactPoint', contactType: 'customer service', email: site.eposta, telephone: site.telefon,
+    '@type': 'ContactPoint', contactType: 'customer service', email: site.eposta,
     availableLanguage: 'tr', areaServed: 'TR', ...(saatler.length ? { hoursAvailable: saatler } : {}),
   };
   return [
@@ -46,7 +46,7 @@ export function magazaVerisi(site: SiteAyarlari): Record<string, unknown>[] {
       '@context': 'https://schema.org', '@type': 'OnlineStore', '@id': `${url}/#magaza`,
       name: site.ad, url, description: site.slogan || undefined,
       logo: `${url}/img/logo/icon-512.png`, image: `${url}/img/logo/al-lulu-home.png`,
-      email: site.eposta, telephone: site.telefon, areaServed: { '@type': 'Country', name: 'Türkiye' },
+      email: site.eposta, areaServed: { '@type': 'Country', name: 'Türkiye' },
       currenciesAccepted: 'TRY',
       // "[Ticari Unvan]" gibi doldurulmamış şablonlar Google'a gönderilmez; panelde gerçek bilgi girilince otomatik eklenir
       ...(!bosYasalBilgi(site.satici.unvan) ? { legalName: site.satici.unvan } : {}),

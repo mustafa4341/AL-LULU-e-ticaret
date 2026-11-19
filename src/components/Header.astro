@@ -1,13 +1,13 @@
 ---
 /* Tek navigasyon kuralı:
-   • Mobil: üstte logo + WhatsApp + sepet; kategoriler alttaki menü çubuğundan (AltMenu).
-   • Masaüstü: kategoriler başlığın altındaki satırda. Hamburger menü yok. */
+   • Mobil: üstte logo + sipariş takip + sepet; kategoriler alttaki menü çubuğundan (AltMenu).
+   • Masaüstü: sağ üstte ayrılmış "Sipariş Takip" + sepet; kategoriler başlığın altındaki satırda. */
 import Ikon from './Ikon.astro';
 import Logo from './Logo.astro';
 import { ODEME_BAGLI } from '../lib/altyapi';
 
 interface Props {
-  /** Aktif kategori id'si, 'setler' veya 'urunler' */
+  /** Aktif kategori id'si, 'setler', 'urunler' veya 'takip' */
   aktif?: string;
   /** Ödeme sayfası: dikkat dağıtmayan sade başlık */
   sade?: boolean;
@@ -17,14 +17,15 @@ const k = Astro.locals.katalog;
 const kategoriler = k.gorunurKategoriler({ menu: true });
 const setVar = k.tumSetler().length > 0;
 const wa = k.whatsapp('Merhaba, bir sorum var.');
+const takipAktif = aktif === 'takip' || Astro.url.pathname.startsWith('/siparis');
 ---
 {sade ? (
   <header class="site-header site-header--sade">
     <div class="container header-row">
       <a class="header-logo" href="/" aria-label="Al Lulu Home ana sayfa"><Logo /></a>
       <div class="header-actions">
-        <a class="header-wa" href={wa} target="_blank" rel="noopener" aria-label={`WhatsApp destek ${k.site.telefonGorunen}`}>
-          <Ikon ad="whatsapp" boyut={20} /><span>Yardım: {k.site.telefonGorunen}</span>
+        <a class="header-wa" href={wa} target="_blank" rel="noopener" aria-label="WhatsApp destek">
+          <Ikon ad="whatsapp" boyut={20} /><span>WhatsApp Destek</span>
         </a>
         {Astro.url.pathname === '/odeme' && ODEME_BAGLI() && <span class="header-guvenli"><Ikon ad="kilit" boyut={16} /><span>PayTR ile ödeme</span></span>}
       </div>
@@ -35,9 +36,10 @@ const wa = k.whatsapp('Merhaba, bir sorum var.');
     <div class="container header-row">
       <a class="header-logo" href="/" aria-label="Al Lulu Home ana sayfa"><Logo /></a>
       <div class="header-actions">
-        <a class="header-wa" href={wa} target="_blank" rel="noopener" aria-label={`WhatsApp'tan yazın: ${k.site.telefonGorunen}`}>
-          <Ikon ad="whatsapp" boyut={22} /><span>{k.site.telefonGorunen}</span>
+        <a class:list={['header-takip', { 'is-active': takipAktif }]} href="/siparis-takip" aria-current={takipAktif ? 'page' : undefined}>
+          <Ikon ad="kargo" boyut={18} /><span>Sipariş Takip</span>
         </a>
+        <span class="header-ayirici" aria-hidden="true"></span>
         <button class="icon-btn cart-btn" type="button" data-cekmece-ac="sepet" aria-controls="sepet" aria-expanded="false" aria-label="Sepeti aç">
           <Ikon ad="canta" boyut={24} />
           <span class="cart-count" data-sepet-sayi data-bos="true">0</span>

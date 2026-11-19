@@ -66,6 +66,10 @@ export const UrunSema = z.object({
   rozetler: z.array(metin.min(1)).default([]),
   garanti: metin.optional(),
   hediye: metin.optional(),
+  /** Fayda bölümü üst/ana/alt başlığı (boşsa ürün kategorisine göre akıllı varsayılan kullanılır) */
+  faydaUstBaslik: metin.optional(),
+  faydaBaslik: metin.optional(),
+  faydaAltBaslik: metin.optional(),
   /** Fayda bölümleri: büyük başlık + kısa açıklama (+ isteğe bağlı görsel ve kaynak notu) */
   faydalar: z.array(z.object({
     baslik: metin.min(1), metin: metin.min(1), ikon: IkonSema.optional(), gorsel: metin.optional(), kaynak: metin.optional(),

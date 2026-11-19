@@ -24,7 +24,15 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
   const ogeler = k.tumUrunler().filter((u) => u.durum === 'yayinda' && u.gorseller.length).map((u) => {
     const b = k.fiyatBilgisi(u);
     const odenecek = b.sepette?.fiyat ?? b.fiyat;
-    const kat = k.kategoriBul(u.kategoriler[0]!);
+    const katId = u.kategoriler[0]!;
+    const kat = k.kategoriBul(katId);
+    const googleKat: Record<string, string> = {
+      'sofra': 'Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Tableware &gt; Flatware',
+      'mutfak-aletleri': 'Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Kitchen Tools &amp; Utensils',
+      'saklama': 'Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Food Storage',
+      'temizlik': 'Home &amp; Garden &gt; Household Supplies',
+    };
+    const gKat = googleKat[katId] ?? 'Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Cookware &amp; Bakeware';
     const gorseller = u.gorseller.map((g) => new URL(g.src, kok).href);
     const kargoUcreti = odenecek >= kargo.ucretsizEsik ? 0 : kargo.ucret;
     const cumle = (v: string) => { const t = v.replace(/\*+/g, '').replace(/\s*\|\s*/g, ': ').trim(); return /[.!?]$/.test(t) ? t : t + '.'; };
@@ -43,7 +51,7 @@ ${gorseller.slice(1, 10).map((g) => `      <g:additional_image_link>${x(g)}</g:a
       <g:brand>${x(u.marka)}</g:brand>
 ${gtin ? `      <g:gtin>${gtin}</g:gtin>\n` : ''}${u.sku ? `      <g:mpn>${x(u.sku)}</g:mpn>\n` : ''}      <g:identifier_exists>${gtin || u.sku ? 'yes' : 'no'}</g:identifier_exists>
       <g:condition>new</g:condition>
-${kat ? `      <g:product_type>${x(`Ev ve Mutfak > ${kat.ad}`)}</g:product_type>\n` : ''}      <g:google_product_category>Home &amp; Garden &gt; Kitchen &amp; Dining &gt; Cookware &amp; Bakeware</g:google_product_category>
+${kat ? `      <g:product_type>${x(`Ev ve Mutfak > ${kat.ad}`)}</g:product_type>\n` : ''}      <g:google_product_category>${gKat}</g:google_product_category>
       <g:quantity>${Math.max(0, u.stok)}</g:quantity>
       <g:shipping>
         <g:country>TR</g:country>

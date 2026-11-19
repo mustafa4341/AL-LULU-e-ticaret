@@ -19,7 +19,7 @@ const yil = new Date().getFullYear();
         <p class="footer-iletisim__alt">{site.calismaSaatleri || 'Her gün'} · Ortalama yanıt birkaç dakika</p>
       </div>
       <div class="footer-iletisim__butonlar">
-        <a class="btn btn--wa" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={22} />WhatsApp: {site.telefonGorunen}</a>
+        <a class="btn btn--wa" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={22} />WhatsApp'tan Yazın</a>
         <a class="btn btn--koyu-cizgi" href={`mailto:${site.eposta}`}><Ikon ad="eposta" boyut={20} />{site.eposta}</a>
       </div>
     </div>
@@ -60,16 +60,16 @@ const yil = new Date().getFullYear();
       <div>
         <h3>İletişim</h3>
         <address>
-          <a href={k.whatsapp()} target="_blank" rel="noopener">WhatsApp: {site.telefonGorunen}</a><br />
-          <a href={`tel:${site.telefon}`}>Tel: {site.telefonGorunen}</a><br />
+          <a href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener">WhatsApp Destek Hattı</a><br />
           <a href={`mailto:${site.eposta}`}>{site.eposta}</a><br />
           {site.kurumsalEposta && site.kurumsalEposta !== site.eposta && <>Kurumsal: <a href={`mailto:${site.kurumsalEposta}`}>{site.kurumsalEposta}</a><br /></>}
+          {site.calismaSaatleri && <span>{site.calismaSaatleri}<br /></span>}
           {(unvan || adres) && <span>{unvan}{unvan && adres && <br />}{adres}</span>}
         </address>
       </div>
     </div>
     <div class="footer-bottom">
-      <span>© {yil} {site.ad}. Fissler ve Vitaquick, Fissler GmbH'nin tescilli markalarıdır.</span>
+      <span>© {yil} {site.ad}. Sitede yer alan markalar ilgili hak sahiplerinin tescilli markalarıdır.</span>
       {etbis && <span>ETBİS: {etbis}</span>}
     </div>
   </div>

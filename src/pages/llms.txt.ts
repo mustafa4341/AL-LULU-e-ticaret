@@ -41,7 +41,7 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
 ## Mağaza bilgileri
 
 - Web sitesi: ${kok}
-- Müşteri hizmetleri: ${s.eposta} · WhatsApp/telefon ${s.telefonGorunen}${s.calismaSaatleri ? ` (${tek(s.calismaSaatleri)})` : ''}
+- Müşteri hizmetleri: ${s.eposta} · Site üzerinden WhatsApp destek${s.calismaSaatleri ? ` (${tek(s.calismaSaatleri)})` : ''}
 ${s.kurumsalEposta ? `- Kurumsal: ${s.kurumsalEposta}\n` : ''}- Satış bölgesi: Türkiye geneli, yalnız çevrim içi
 - Kargo: ${kargo.firma || 'anlaşmalı kargo'}; ${formatTL(kargo.ucretsizEsik)} ve üzeri siparişte ücretsiz, altında ${formatTL(kargo.ucret)}. Hafta içi saat ${kargo.kesimSaati}:00'e kadar ödemesi onaylanan siparişler genellikle aynı gün kargoya verilir; teslim süresi genellikle ${kargo.teslimGun[0]}–${kargo.teslimGun[1]} iş günü.
 - İade: Teslimden itibaren ${s.iadeGun} gün içinde cayma hakkı; anlaşmalı kargoyla iade ücretsizdir.

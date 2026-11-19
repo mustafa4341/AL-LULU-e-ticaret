@@ -604,6 +604,21 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
 
         <h2>Fayda Bölümleri </h2>
+        <p class="y-ipucu">Boş bırakırsanız ürünün kategorisine göre otomatik başlık (örn. "Neden bu takım?", "Neden bu tava?") gösterilir.</p>
+        <div class="y-izgara y-izgara--3" style="margin-bottom:12px">
+          <div class="y-alan">
+            <label for="faydaUstBaslik">Fayda Üst Başlığı</label>
+            <input id="faydaUstBaslik" name="faydaUstBaslik" value={u.faydaUstBaslik ?? ''} placeholder="Örn. Neden bu takım?" data-hedef-eleman="faydalar" />
+          </div>
+          <div class="y-alan">
+            <label for="faydaBaslik">Fayda Ana Başlığı (H2)</label>
+            <input id="faydaBaslik" name="faydaBaslik" value={u.faydaBaslik ?? ''} placeholder="Örn. Sofrada zarafet, elde kusursuz denge." data-hedef-eleman="faydalar" />
+          </div>
+          <div class="y-alan">
+            <label for="faydaAltBaslik">Fayda Alt Açıklaması</label>
+            <input id="faydaAltBaslik" name="faydaAltBaslik" value={u.faydaAltBaslik ?? ''} placeholder="Örn. 18/10 çelik ve monoblok bıçak farkı." data-hedef-eleman="faydalar" />
+          </div>
+        </div>
 
         <div class="y-tekrar">
           {u.faydalar.map((x) => (

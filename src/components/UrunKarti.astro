@@ -16,6 +16,8 @@ interface Props {
 const { urun, konum = 'liste', oncelikliYukle = false, yatay = false } = Astro.props;
 const k = Astro.locals.katalog;
 const gorsel = k.anaGorsel(urun);
+const tumGorseller = urun.gorseller.slice(0, 6);
+const cokluGorsel = tumGorseller.length > 1;
 const bilgi = k.fiyatBilgisi(urun);
 const rozet = k.rozetler(urun);
 const rozetTuru = k.cokSatanMi(urun) ? 'cok-satan' : bilgi.firsat ? 'firsat' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik';
@@ -24,11 +26,16 @@ const kat = k.kategoriBul(urun.kategoriler[0]!);
 const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
 ---
 <article class:list={["kart", { "kart--firsat": !!bilgi.firsat, "kart--yatay": yatay }]} data-urun-kart data-urun-id={urun.id} data-fiyat={siralamaFiyati} data-reveal>
-  <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true">
+  <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true" data-kart-galeri={cokluGorsel ? JSON.stringify(tumGorseller.map((g) => g.src)) : undefined}>
     {gorsel ? (
-      <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-yuklenen-gorsel />
+      <img src={gorsel.src} alt="" width="400" height="400" loading={oncelikliYukle ? 'eager' : 'lazy'} decoding="async" data-yuklenen-gorsel data-kart-img />
     ) : (
       <GorselYok ikon={kat?.ikon} />
+    )}
+    {cokluGorsel && (
+      <span class="kart__galeri-cizgi" data-kart-cizgiler>
+        {tumGorseller.map((_, i) => <span class:list={{ 'is-active': i === 0 }}></span>)}
+      </span>
     )}
     {urun.durum === 'taslak' && <span class="rozet rozet--taslak kart__taslak">Örnek</span>}
     {bilgi.onceki && urun.durum !== 'taslak' && <span class="kart__indirim"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}

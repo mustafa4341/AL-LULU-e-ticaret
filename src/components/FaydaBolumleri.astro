@@ -1,16 +1,83 @@
 ---
 /* Fayda bölümü — hızlı okunur: ikon + kalın başlık + tek cümle.
-   Telefonda kısa liste, masaüstünde 3 sütun. Kaynak notu varsa küçük gri yazı. */
+   Telefonda kısa liste, masaüstünde 3 sütun. Kaynak notu varsa küçük gri yazı.
+   Üst başlık, ana başlık ve alt başlık her ürüne özeldir; boşsa ürün kategorisine uygun varsayılan üretilir. */
 import Ikon from './Ikon.astro';
 import type { IkonAdi, Urun } from '../lib/sema';
 interface Props { urun: Urun }
 const { urun } = Astro.props;
 const VARSAYILAN: IkonAdi[] = ['saat', 'tencere', 'gosterge', 'ates', 'yildiz', 'kalkan'];
+
+const kat = urun.kategoriler[0] ?? '';
+const adKucuk = `${urun.ad} ${urun.kisaAd}`.toLocaleLowerCase('tr');
+const setMi = /set|takım|parça/i.test(adKucuk);
+
+function varsayilanBasliklar() {
+  if (kat === 'duduklu-tencere') {
+    return {
+      ust: 'Neden bu düdüklü tencere?',
+      ana: 'Daha az bekleme. Daha çok sofra keyfi.',
+      alt: 'Basınçlı pişirmenin günlük yemek hazırlığında ve uzun yıllar kullanımda yarattığı fark.',
+    };
+  }
+  if (kat === 'sofra') {
+    return {
+      ust: setMi ? 'Neden bu takım?' : 'Neden bu ürün?',
+      ana: 'Her öğünde zarafet, yıllarca ilk günkü parlaklık.',
+      alt: `${urun.marka} işçiliğinin günlük sofralarda ve misafir davetlerinde yarattığı fark.`,
+    };
+  }
+  if (kat === 'tava') {
+    return {
+      ust: setMi ? 'Neden bu tava seti?' : 'Neden bu tava?',
+      ana: 'Zahmetsiz pişirme, tam kıvamında lezzet.',
+      alt: 'Doğru ısı kontrolü ve dayanıklı yüzeyin günlük mutfakta yarattığı konfor.',
+    };
+  }
+  if (kat === 'tencere') {
+    return {
+      ust: setMi ? 'Neden bu tencere seti?' : 'Neden bu tencere?',
+      ana: 'Mutfakta yıllarca güvenle kullanacağınız temel parçalar.',
+      alt: 'Kaliteli gövde ve dengeli ısı dağılımının her yemekte yarattığı fark.',
+    };
+  }
+  if (kat === 'mutfak-aletleri') {
+    return {
+      ust: 'Neden bu doğrayıcı?',
+      ana: 'Mutfakta hazırlık süresini saniyelere indirin.',
+      alt: 'Elektriksiz, pratik ve homojen doğramanın günlük yemek hazırlığında sağladığı hız.',
+    };
+  }
+  if (kat === 'aksesuar') {
+    return {
+      ust: 'Neden bu aparat?',
+      ana: 'Tencerenizden tam verim, sofranızda sağlıklı lezzet.',
+      alt: 'Doğru tamamlayıcı parçanın pişirme kalitesinde ve kullanım ömründe yarattığı fark.',
+    };
+  }
+  if (kat === 'temizlik') {
+    return {
+      ust: 'Neden bu ürün?',
+      ana: 'İhtiyaç duyduğunuz her an pratik ve saf hijyen.',
+      alt: 'Doğal lif dokusunun evde, misafir ağırlarken ve seyahatte sağladığı konfor.',
+    };
+  }
+  return {
+    ust: `Neden ${urun.kisaAd}?`,
+    ana: 'Günlük kullanımda fark yaratan detaylar.',
+    alt: `${urun.marka} kalitesinin mutfağınızda ve evinizde sağladığı pratiklik.`,
+  };
+}
+
+const v = varsayilanBasliklar();
+const ustBaslik = urun.faydaUstBaslik || v.ust;
+const anaBaslik = urun.faydaBaslik || v.ana;
+const altBaslik = urun.faydaAltBaslik || v.alt;
 ---
 {urun.faydalar.length > 0 && (
   <section class="bolum bolum--beyaz faydalar" aria-labelledby="fayda-baslik">
     <div class="container">
-      <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">Neden bu tencere?</p><h2 id="fayda-baslik">Daha az bekleme. Daha çok sofra keyfi.</h2><p>Basınçlı pişirmenin günlük yemek hazırlığında yarattığı fark.</p></div></div>
+      <div class="bolum-bas"><div><p class="eyebrow eyebrow--altin">{ustBaslik}</p><h2 id="fayda-baslik">{anaBaslik}</h2><p>{altBaslik}</p></div></div>
       <ul class="fayda-liste-kisa">
         {urun.faydalar.map((f, i) => (
           <li class="fayda-oge" data-reveal>

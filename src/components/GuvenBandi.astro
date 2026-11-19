@@ -13,7 +13,7 @@ const maddeler: { ikon: IkonAdi; baslik: string; metin: string; href?: string }[
   ODEME_BAGLI()
     ? { ikon: 'kilit', baslik: 'Kartla ödeme', metin: 'PayTR ödeme ekranı' }
     : { ikon: 'belge', baslik: 'Sipariş takibi', metin: 'Hesap açmadan', href: '/siparis-takip' },
-  { ikon: 'whatsapp', baslik: 'WhatsApp destek', metin: s.telefonGorunen, href: k.whatsapp('Merhaba, bir sorum var.') },
+  { ikon: 'iade', baslik: `${s.iadeGun} gün iade`, metin: 'Koşulsuz cayma', href: '/yasal/iptal-iade-kosullari' },
 ];
 ---
 <section class="guven" aria-label="Alışveriş güvenceleri">

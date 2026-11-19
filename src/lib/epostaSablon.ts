@@ -134,7 +134,7 @@ ${o.guven === false ? '' : guvenSatiri()}
 ${o.ek ? `<tr><td style="height:16px"></td></tr><tr><td bgcolor="${R.kart}" style="border-radius:18px;padding:26px 30px;${YAZI};font-size:12px;line-height:1.55;color:${R.yazi}">${o.ek}</td></tr>` : ''}
 <tr><td align="center" style="padding:28px 16px 6px;${YAZI};font-size:13px;line-height:1.8;color:${R.soluk}">
 <strong style="color:${R.yazi}">Yardıma mı ihtiyacınız var?</strong><br>
-Bu e-postayı yanıtlayın ya da <a href="${kacis(wa)}" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none;white-space:nowrap">WhatsApp ${kacis(site.telefonGorunen)}</a> üzerinden yazın.
+Bu e-postayı yanıtlayın ya da <a href="${kacis(wa)}" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none;white-space:nowrap">WhatsApp destek hattımızdan</a> yazın.
 ${site.calismaSaatleri ? `<br><span style="font-size:12px">${kacis(site.calismaSaatleri)}</span>` : ''}
 </td></tr>
 <tr><td align="center" style="padding:14px 16px 4px"><table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr><td width="40" height="1" bgcolor="${R.altin}" style="font-size:0;line-height:0">&nbsp;</td></tr></table></td></tr>
@@ -154,7 +154,7 @@ const satirlarMetin = (s: Siparis) => [
   `Toplam: ${formatTL(s.toplam)}`,
 ].filter(Boolean).join('\n');
 
-const imza = (site: SiteAyarlari) => `\n\nSorunuz olursa bu e-postayı yanıtlayabilir ya da WhatsApp'tan yazabilirsiniz: ${site.telefonGorunen}\n${site.ad} · ${kok(site)}`;
+const imza = (site: SiteAyarlari) => `\n\nSorunuz olursa bu e-postayı yanıtlayabilir ya da sitemizdeki WhatsApp destek hattından bize yazabilirsiniz.\n${site.ad} · ${kok(site)}`;
 const altNot = (s: Siparis) => `Bu e-posta ${kacis(s.no)} numaralı siparişiniz için gönderilmiştir.`;
 
 /* ───────────────────────── Müşteri: Sipariş alındı ───────────────────────── */

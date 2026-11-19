@@ -53,7 +53,7 @@ const jsonLd: Record<string, unknown>[] = [
 ];
 const duyurular = ozelDuyuru ? [ozelDuyuru, ...k.site.duyurular.filter((d) => !/kargo bedava/i.test(d))] : k.site.duyurular;
 const geriYol = Astro.url.pathname;
-const vitrinGecisi = !onizleme && /^\/(?:urunler|setler|(?:urun|kategori)\/[^/]+)?$/.test(geriYol);
+const vitrinGecisi = !onizleme && !geriYol.startsWith('/yonetim');
 ---
 <!doctype html>
 <html lang="tr">
@@ -93,7 +93,7 @@ const vitrinGecisi = !onizleme && /^\/(?:urunler|setler|(?:urun|kategori)\/[^/]+
     </>}
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="preload" as="image" href="/img/logo/yazi.webp" />
     {vitrinGecisi && <style is:inline>@view-transition { navigation: auto; }</style>}
     {gtm && <script is:inline>
@@ -149,7 +149,7 @@ const vitrinGecisi = !onizleme && /^\/(?:urunler|setler|(?:urun|kategori)\/[^/]+
     {!altCubuk && !sade && <AltMenu aktif={aktif} />}
 
     {!sade && (
-      <a class="wa-yuzen" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener" aria-label={`WhatsApp'tan yazın: ${k.site.telefonGorunen}`}>
+      <a class="wa-yuzen" href={k.whatsapp('Merhaba, bir sorum var.')} target="_blank" rel="noopener" aria-label="WhatsApp'tan bize yazın">
         <Ikon ad="whatsapp" boyut={30} /><span class="wa-yuzen__metin">Sorunuz mu var?<strong>WhatsApp'tan yazın</strong></span>
       </a>
     )}
@@ -158,10 +158,139 @@ const vitrinGecisi = !onizleme && /^\/(?:urunler|setler|(?:urun|kategori)\/[^/]+
     <YanMenu />
     <SepetPaneli />
     <div class="toast" data-toast role="status" aria-live="polite"></div>
-    {vitrinGecisi && <div class="sayfa-yukleme" data-sayfa-yukleme hidden>
-      <span class="sayfa-yukleme__isaret" aria-hidden="true"><Ikon ad="saat" boyut={18} /></span>
-      <span role="status" data-sayfa-yukleme-metin></span>
-    </div>}
+    {vitrinGecisi && (
+      <div class="sayfa-iskelet" data-sayfa-yukleme hidden aria-hidden="true">
+        <!-- 1. Ana Sayfa İskeleti (Hero + Güvence Şeridi + Öne Çıkan 4'lü Ürün Rayı) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="ana">
+          <div class="container iskelet-hero">
+            <div class="iskelet-hero__metin">
+              <div class="sk sk--etiket"></div>
+              <div class="sk sk--baslik-buyuk"></div>
+              <div class="sk sk--satir"></div>
+              <div class="sk sk--satir sk--kisa"></div>
+              <div class="iskelet-maddeler">
+                <div class="sk sk--madde"></div>
+                <div class="sk sk--madde"></div>
+                <div class="sk sk--madde"></div>
+              </div>
+              <div class="sk sk--fiyat-kutu"></div>
+              <div class="iskelet-cta">
+                <div class="sk sk--buton"></div>
+                <div class="sk sk--buton"></div>
+              </div>
+            </div>
+            <div class="sk sk--hero-gorsel"></div>
+          </div>
+          <div class="iskelet-guven"><div class="container iskelet-guven__ic">{[1,2,3,4,5].map(() => <div class="sk sk--guven-oge"></div>)}</div></div>
+          <div class="container iskelet-bolum">
+            <div class="sk sk--etiket"></div>
+            <div class="sk sk--bolum-baslik"></div>
+            <div class="iskelet-urun-grid">{[1,2,3,4].map(() => (
+              <div class="iskelet-kart">
+                <div class="sk sk--kart-gorsel"></div>
+                <div class="sk sk--satir"></div>
+                <div class="sk sk--satir sk--kisa"></div>
+                <div class="sk sk--fiyat"></div>
+                <div class="sk sk--kart-buton"></div>
+              </div>
+            ))}</div>
+          </div>
+        </div>
+
+        <!-- 2. Ürün Detay Sayfası İskeleti (Sol Galeri + Sağ Bilgi & Satın Alma + Alt Fayda Kartları) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="urun">
+          <div class="container">
+            <div class="sk sk--kirinti"></div>
+            <div class="iskelet-urun-ust">
+              <div class="iskelet-galeri">
+                <div class="iskelet-kucukler">{[1,2,3,4].map(() => <div class="sk sk--kucuk-foto"></div>)}</div>
+                <div class="sk sk--ana-foto"></div>
+              </div>
+              <div class="iskelet-urun-bilgi">
+                <div class="sk sk--etiket"></div>
+                <div class="sk sk--urun-baslik"></div>
+                <div class="sk sk--satir sk--kisa"></div>
+                <div class="sk sk--fiyat-kutu"></div>
+                <div class="iskelet-maddeler">
+                  <div class="sk sk--madde"></div>
+                  <div class="sk sk--madde"></div>
+                  <div class="sk sk--madde"></div>
+                  <div class="sk sk--madde"></div>
+                </div>
+                <div class="iskelet-cta">
+                  <div class="sk sk--buton"></div>
+                  <div class="sk sk--buton"></div>
+                </div>
+                <div class="sk sk--kargo-kutu"></div>
+              </div>
+            </div>
+            <div class="iskelet-faydalar">{[1,2,3].map(() => <div class="sk sk--fayda-kart"></div>)}</div>
+          </div>
+        </div>
+
+        <!-- 3. Kategori / Tüm Ürünler Listeleme İskeleti (Başlık + Sol Yan Filtre + Ürün Kartları Izgarası) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="liste">
+          <div class="container">
+            <div class="sk sk--kirinti"></div>
+            <div class="sk sk--bolum-baslik"></div>
+            <div class="sk sk--satir sk--orta" style="margin-top:8px;margin-bottom:18px"></div>
+            <div class="iskelet-filtre-serit">{[1,2,3,4,5].map(() => <div class="sk sk--hap"></div>)}</div>
+            <div class="iskelet-liste-duzen">
+              <div class="iskelet-yan-filtre">{[1,2,3,4,5,6,7].map(() => <div class="sk sk--yan-satir"></div>)}</div>
+              <div>
+                <div class="iskelet-liste-arac"><div class="sk sk--etiket"></div><div class="sk sk--sirala"></div></div>
+                <div class="iskelet-urun-grid">{[1,2,3,4,5,6,7,8].map(() => (
+                  <div class="iskelet-kart">
+                    <div class="sk sk--kart-gorsel"></div>
+                    <div class="sk sk--satir"></div>
+                    <div class="sk sk--satir sk--kisa"></div>
+                    <div class="sk sk--fiyat"></div>
+                    <div class="sk sk--kart-buton"></div>
+                  </div>
+                ))}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Setler Sayfası İskeleti (Başlık + 2'li Set Kartları) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="setler">
+          <div class="container">
+            <div class="sk sk--kirinti"></div>
+            <div class="sk sk--bolum-baslik"></div>
+            <div class="sk sk--satir sk--orta" style="margin-top:8px;margin-bottom:22px"></div>
+            <div class="iskelet-set-grid">{[1,2].map(() => <div class="sk sk--set-kart"></div>)}</div>
+          </div>
+        </div>
+
+        <!-- 5. Sipariş Takip Sayfası İskeleti (Ortalanmış Takip Formu Kartı) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="takip">
+          <div class="container iskelet-takip">
+            <div class="iskelet-takip__kart">
+              <div class="sk sk--bolum-baslik"></div>
+              <div class="sk sk--satir" style="margin-top:10px;margin-bottom:18px"></div>
+              <div class="sk sk--etiket"></div>
+              <div class="sk sk--girdi"></div>
+              <div class="sk sk--etiket" style="margin-top:14px"></div>
+              <div class="sk sk--girdi"></div>
+              <div class="sk sk--buton" style="margin-top:18px;width:100%"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 6. Ödeme Sayfası İskeleti (Sol Adım Kartları + Sağ Sipariş Özeti) -->
+        <div class="iskelet-ekran" data-iskelet-ekran="odeme">
+          <div class="container iskelet-odeme">
+            <div class="iskelet-odeme__form">
+              <div class="sk sk--adim-kart"></div>
+              <div class="sk sk--adim-kart"></div>
+              <div class="sk sk--adim-kart"></div>
+            </div>
+            <div class="sk sk--ozet-kart"></div>
+          </div>
+        </div>
+      </div>
+    )}
     {gtm && <CerezOnay gtm={gtm} />}
     <div class="dev-banner">Doğrulama modu: sarı çerçeveli metinler teyit bekliyor</div>
     <script type="application/json" id="katalog-veri" set:html={JSON.stringify(k.istemci()).replace(/</g, '\\u003c')} />

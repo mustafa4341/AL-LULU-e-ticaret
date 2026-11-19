@@ -156,13 +156,13 @@ export function toplamlarHtml(o: ReturnType<typeof sepetOzeti>): string {
   const kampanya = kampanyaIndirimi(o.satirlar, katalog);
   const avantaj = o.setIndirimi + o.sepetIndirimi + kampanya;
   return `
-    <div><span>Ürünler</span><span>${formatTL(o.urunlerToplami + kampanya)}</span></div>
-    ${kampanya ? `<div class="kazanc"><span>İndirim</span><span>−${formatTL(kampanya)}</span></div>` : ''}
-    ${o.setIndirimi ? `<div class="kazanc"><span>Set indirimi</span><span>−${formatTL(o.setIndirimi)}</span></div>` : ''}
-    ${o.sepetIndirimi ? `<div class="kazanc"><span>Sepette indirim</span><span>−${formatTL(o.sepetIndirimi)}</span></div>` : ''}
-    <div><span>Kargo</span><span>${o.kargo ? formatTL(o.kargo) : '<strong class="yesil">Bedava</strong>'}</span></div>
-    <div class="genel"><span>Toplam</span><span>${formatTL(o.toplam)}</span></div>
-    ${avantaj > 0 ? `<p class="toplam-kazanc">${ikonSvg('etiket', 16)}<span>Bu siparişte toplam <strong>${formatTL(avantaj)}</strong> indirim kazanıyorsunuz</span></p>` : ''}`;
+    <div class="toplamlar__detay"><span>Ürünler</span><span>${formatTL(o.urunlerToplami + kampanya)}</span></div>
+    ${kampanya ? `<div class="kazanc toplamlar__detay"><span>İndirim</span><span>−${formatTL(kampanya)}</span></div>` : ''}
+    ${o.setIndirimi ? `<div class="kazanc toplamlar__detay"><span>Set indirimi</span><span>−${formatTL(o.setIndirimi)}</span></div>` : ''}
+    ${o.sepetIndirimi ? `<div class="kazanc toplamlar__detay"><span>Sepette indirim</span><span>−${formatTL(o.sepetIndirimi)}</span></div>` : ''}
+    <div class="toplamlar__kargo"><span>Kargo</span><span>${o.kargo ? formatTL(o.kargo) : '<strong class="yesil">Bedava</strong>'}</span></div>
+    <div class="genel"><span>Toplam${!o.kargo ? ' <small class="toplamlar__kargo-etiket">· Kargo bedava</small>' : ''}</span><span>${formatTL(o.toplam)}</span></div>
+    ${avantaj > 0 ? `<p class="toplam-kazanc">${ikonSvg('etiket', 16)}<span>Toplam <strong>${formatTL(avantaj)}</strong> indirim kazandınız</span></p>` : ''}`;
 }
 
 function oneriBul() {
@@ -253,7 +253,7 @@ function yansit(): void {
   govde.innerHTML = kargoKutusu + o.satirlar.map((s) => satirHtml(s)).join('') + oneriHtml;
   alt.innerHTML = `
     <div class="toplamlar">${toplamlarHtml(o)}</div>
-    <a class="btn btn--sepet btn--block btn--buyuk" href="/odeme" data-odemeye-gec>${ikonSvg('kilit', 18)}Ödemeye Geç · ${formatTL(o.toplam)}</a>
+    <a class="btn btn--sepet btn--block btn--buyuk" href="/odeme" data-odemeye-gec>${ikonSvg('kilit', 18)}Ödemeye Geç</a>
     <button class="btn btn--ghost btn--block" type="button" data-cekmece-kapat>Alışverişe devam et</button>`;
 }
 
@@ -291,15 +291,8 @@ document.addEventListener('click', (e) => {
     const n = ekle(tip, id, gecis ? 1 : adetKaynagi(t), gecis?.taban);
     if (!n) return;
     geriBildirim(t, gecis ? 'Sete geçildi' : 'Eklendi');
-    // Listeden hızlı ekleme: gezinmeyi bölme, bildirim göster. Ürün sayfası/hero: sepeti aç.
-    if (t.hasAttribute('data-hizli') || t.hasAttribute('data-sessiz')) {
-      toast('Sepete eklendi', { metin: 'Sepete git', cekmece: 'sepet' });
-      return;
-    }
-    const bildirim = document.querySelector('[data-sepet-bildirim]');
-    const mesaj = bildirim?.querySelector('span');
-    if (mesaj) mesaj.textContent = gecis ? 'Sepetiniz set fiyatıyla güncellendi' : 'Sepetinize eklendi';
-    bildirim?.classList.add('is-visible');
+    // Sepet içindeki öneriden ekleniyorsa sepet zaten açıktır; diğer tüm "Sepete Ekle" tıklamalarında sepet çekmecesi doğrudan açılır.
+    if (t.hasAttribute('data-sessiz')) return;
     cekmeceAc('sepet', tip === 'set' ? undefined : document.querySelector<HTMLElement>('[data-odemeye-gec]'));
     return;
   }
