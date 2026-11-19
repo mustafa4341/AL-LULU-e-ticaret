@@ -124,7 +124,8 @@ export const POST: APIRoute = async ({ request, locals, clientAddress: baglananA
   } catch (e) {
     if (e instanceof StokYetersiz) return json({ hata: 'Sepetinizdeki bir ürün için şu anda yeterli stok yok.', yenile: true }, 409);
     if (e instanceof SiparisNumarasiDolu) return json({ hata: 'Lütfen siparişinizi tekrar gönderin.' }, 409);
-    throw e;
+    console.error('[sipariş] Kayıt tamamlanamadı:', no, (e as Error).message);
+    return json({ hata: 'Sipariş kaydedilemedi. Sepetiniz korundu. Lütfen biraz sonra tekrar deneyin.' }, 503);
   }
 
   if (paytr) {

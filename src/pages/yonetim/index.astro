@@ -10,8 +10,18 @@ import { finansOku } from '../../lib/finansDepo';
 import { belgeGecerli, finansGunu, finansPara, hakEdis, raporla } from '../../lib/finans';
 import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from '../../lib/yedek';
 import { tumYorumlar } from '../../lib/yorum';
+import { KANALLAR, KANAL_LISTESI, PY_DURUM_ADLARI, PY_DURUM_RENK, bosAyarlar, kritikEsik, kurusTL } from '../../lib/pazaryeri';
+import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../lib/pazaryeriDepo';
+import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
+import { pazaryeriDurumu } from '../../components/yonetim/pazaryeriGorunumu';
+import { kanalToplamlari } from '../../lib/kanalOzeti';
+import KanalOzeti from '../../components/yonetim/KanalOzeti.astro';
+import BilgiKutusu from '../../components/yonetim/BilgiKutusu.astro';
 
-const [m, tum, finans, sonYedek, yorumlar] = await Promise.all([magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined), tumYorumlar().catch(() => [])]);
+const [m, tum, finans, sonYedek, yorumlar, pazar, envanter] = await Promise.all([
+  magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined), tumYorumlar().catch(() => []),
+  pazaryeriSiparisleriOku().catch(() => []), envanterAyarlariOku().catch(() => bosAyarlar()),
+]);
 const bekleyenYorum = yorumlar.filter((y) => y.durum === 'bekliyor').length;
 const yedekGun = sonYedek ? Math.floor((Date.now() - Date.parse(sonYedek)) / 86_400_000) : undefined;
 const yedekGerekli = yedekGun === undefined || yedekGun >= YEDEK_ARALIGI_GUN;
@@ -29,7 +39,21 @@ const stokUyusmazligi = siparisler.filter((s) => s.paytr?.stokEksik && s.durum !
 const iptalKargo = siparisler.filter((s) => s.durum === 'iptal' && s.kargoTakip);
 const belgeHatasi = finans.belgeler.filter((b) => b.durum === 'hata');
 const trendyolBekleyen = finans.trendyol.filter((x) => x.banka === undefined);
-const kritikStok = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= 3);
+const tukenen = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0);
+const kritikStok = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok > 0 && u.stok <= kritikEsik(envanter, u.id));
+const simdi = Date.now();
+const urunIdleri = new Set(m.urunler.map((u) => u.id));
+const pazarDurum = pazar.map((s) => ({ s, d: pazaryeriDurumu(s, simdi, urunIdleri) }));
+const pazarHazirlanacak = (k: string) => pazarDurum.filter(({ s, d }) => s.kanal === k && (d.hazirlanacak || d.hazirlaniyor)).length;
+const pazarKontrol = pazarDurum.filter(({ d }) => d.uyari.some((u) => u.renk === 'kirmizi')).length;
+const kanalHatasi = KANAL_LISTESI.filter((k) => envanter.kanallar[k].sonApiHata || envanter.kanallar[k].sonStokHata);
+const kanalGecikti = KANAL_LISTESI.filter((k) => {
+  const a = envanter.kanallar[k];
+  return pazaryeriApiDurumu(k) !== 'kapali' && a.stokBaslangic && !kanalHatasi.includes(k)
+    && (!a.sonApi || simdi - Date.parse(a.sonApi) > 30 * 60_000);
+});
+const ayOzeti = kanalToplamlari(siparisler, pazar, bugun.slice(0, 7) + '-01', bugun);
+const bugunOzeti = kanalToplamlari(siparisler, pazar, bugun, bugun);
 const fotosuz = m.urunler.filter((u) => !u.gorseller.length && u.durum === 'yayinda');
 const k = new Katalog(m);
 const taslakSetler = m.setler.filter((s) => s.durum === 'taslak' && k.setEngelleri(s).length === 0);
@@ -47,8 +71,13 @@ const isler = ([
   { ad: 'Hata veren belgeler (yeniden dene)', sayi: belgeHatasi.length, url: '/yonetim/finans?sekme=belgeler', ton: 'kirmizi' },
   { ad: 'Ödemesi kontrol edilecek (havale/EFT)', sayi: odemeKontrol.length, url: '/yonetim/siparisler?durum=odeme-bekliyor', ton: 'turuncu' },
   { ad: 'Ödemesi beklenen Trendyol hakedişi', sayi: trendyolBekleyen.length ? finansPara(trendyolBekleyen.reduce((t, x) => t + hakEdis(x), 0)) : 0, url: '/yonetim/finans?sekme=trendyol', ton: 'gri' },
+  ...kanalHatasi.map((k) => ({ ad: `${KANALLAR[k]} bağlantısında sorun var (ayrıntıyı görmek için dokunun)`, sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'kirmizi' as const })),
+  { ad: 'Pazaryeri siparişinde stok açığı / eşleşmeyen ürün', sayi: pazarKontrol, url: '/yonetim/siparisler?durum=kontrol', ton: 'kirmizi' },
+  ...KANAL_LISTESI.map((k) => ({ ad: `${KANALLAR[k]} siparişi hazırlanacak (kargo ${KANALLAR[k]} panelinden)`, sayi: pazarHazirlanacak(k), url: `/yonetim/siparisler?kanal=${k}&durum=islem`, ton: 'turuncu' as const })),
+  ...kanalGecikti.map((k) => ({ ad: `${KANALLAR[k]} siparişleri 30 dakikadır güncellenmedi`, sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'turuncu' as const })),
   { ad: 'Onay bekleyen müşteri değerlendirmesi', sayi: bekleyenYorum, url: '/yonetim/yorumlar', ton: 'turuncu' },
-  { ad: 'Kritik stok (3 ve altı)', sayi: kritikStok.length, url: '/yonetim/urunler?filtre=kritik', ton: 'turuncu' },
+  { ad: 'Tükenen ürün (sitede “stokta yok” görünüyor)', sayi: tukenen.length, url: '/yonetim/urunler?filtre=kritik', ton: 'kirmizi' },
+  { ad: `Azalan stok (${envanter.kritikVarsayilan} adet ve altı)`, sayi: kritikStok.length, url: '/yonetim/urunler?filtre=kritik', ton: 'turuncu' },
   { ad: 'Yayındaki üründe fotoğraf eksik', sayi: fotosuz.length, url: fotosuz.length === 1 ? '/yonetim/urunler/' + fotosuz[0]!.id + '?bolum=fotograf' : '/yonetim/urunler', ton: 'gri' },
   { ad: 'Yayına hazır taslak set', sayi: taslakSetler.length, url: '/yonetim/setler', ton: 'gri' },
   { ad: 'Eksik yasal bilgi: ' + eksik.join(', '), sayi: eksik.length, url: '/yonetim/ayarlar', ton: 'gri' },
@@ -58,15 +87,35 @@ const tarihBaslik = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'nu
 const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade edildi', 'gri'] : s.durum === 'iptal' ? ['İptal', 'gri']
   : s.durum === 'odeme-bekliyor' ? ['Ödeme bekleniyor', 'turuncu'] : s.durum === 'odendi' ? ['Hazırlanacak', 'turuncu']
   : s.durum === 'hazirlaniyor' ? ['Kargoya verilecek', 'turuncu'] : s.durum === 'kargoda' ? ['Kargoda', 'yesil'] : ['Teslim edildi', 'yesil'];
+/* Son siparişler: üç kanal birlikte, en yeni 8 */
+const sonSiparisler = [
+  ...siparisler.slice(0, 8).map((s) => { const [d, r] = durumYazi(s); return {
+    tarih: s.tarih, no: s.no, url: '/yonetim/siparisler/' + s.no, kanal: 'web', kanalAd: 'Web sitesi',
+    musteri: `${s.musteri.ad} ${s.musteri.soyad}`, tutar: formatTL(s.toplam), durum: d!, renk: r!,
+  }; }),
+  ...pazar.slice(0, 8).map((s) => ({
+    tarih: s.tarih, no: s.siparisNo, url: '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(s.id), kanal: s.kanal, kanalAd: KANALLAR[s.kanal],
+    musteri: s.musteri ?? '—', tutar: kurusTL(s.toplam), durum: PY_DURUM_ADLARI[s.durum], renk: PY_DURUM_RENK[s.durum],
+  })),
+].sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih)).slice(0, 8);
+const kanalAdresi = (k: string) => '/yonetim/siparisler?durum=tumu' + (k === 'tumu' ? '' : '&kanal=' + k);
+const pazaryeriKurulu = KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) !== 'kapali' || envanter.kanallar[k].stokBaslangic) || pazar.length > 0;
 ---
 <Yonetim baslik="Genel Bakış" altBaslik={tarihBaslik} aktif="ozet">
   <div class="y-metrics y-metrics--finans">
-    <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü satış</span><strong>{finansPara(bugunRapor.webSatis - bugunRapor.webIade)}</strong><small>{bugunRapor.satislar.length} onaylı sipariş</small></a>
-    <a class="y-metric" href="/yonetim/finans?sekme=ozet"><span>Bu ay satış</span><strong>{finansPara(ayRapor.webSatis - ayRapor.webIade)}</strong><small>{ayRapor.satislar.length} sipariş</small></a>
-    <a class="y-metric" href="/yonetim/finans?sekme=giderler"><span>Bu ay gider</span><strong>{finansPara(ayRapor.gider)}</strong><small>{ayRapor.giderler.length} kayıt</small></a>
-    <a class="y-metric" href="/yonetim/finans?sekme=ozet#ay-hesabi"><span>Bu ay kalan (tahmini)</span><strong>{finansPara(ayKalan)}</strong>
+    <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü satış · tüm kanallar</span><strong>{kurusTL(bugunOzeti.toplam.kurus)}</strong><small>{bugunOzeti.toplam.adet} sipariş{bugunRapor.webIade > 0 ? ' · web iadesi ' + kurusTL(bugunRapor.webIade) : ''}</small></a>
+    <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bu ay satış · tüm kanallar</span><strong>{kurusTL(ayOzeti.toplam.kurus)}</strong><small>{ayOzeti.toplam.adet} sipariş</small></a>
+    <a class="y-metric" href="/yonetim/finans?sekme=giderler"><span>Bu ay gider</span><strong>{kurusTL(ayRapor.gider)}</strong><small>{ayRapor.giderler.length} kayıt</small></a>
+    <a class="y-metric" href="/yonetim/finans?sekme=ozet#ay-hesabi"><span>Bu ay kalan (tahmini · web)</span><strong>{kurusTL(ayKalan)}</strong>
       <small class:list={{ 'y-uyari-kucuk': ayRapor.tahmini === undefined }}>{ayRapor.tahmini === undefined ? 'Ürün maliyeti girilmedi' : 'Giderler düşüldü'}</small></a>
   </div>
+
+  <KanalOzeti ozet={ayOzeti} donem="Bu ay" adres={kanalAdresi} />
+
+  {!pazaryeriKurulu && <BilgiKutusu baslik="Trendyol ve Hepsiburada siparişleri buraya nasıl gelecek?" anahtar="genel-pazaryeri" ton="ipucu">
+    <p>Mağazalar açılınca siparişler bu panele <strong>kendiliğinden</strong> gelir; ayrı bir yere bakmanıza gerek kalmaz. Kurulum bir kere yapılır.</p>
+    <p><a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanalları → adım adım kurulum</a></p>
+  </BilgiKutusu>}
 
   <section class="y-kart">
     <h2>Bugün yapılacaklar</h2>
@@ -84,14 +133,14 @@ const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade ed
 
   <section class="y-kart">
     <div class="y-kart__bas"><h2>Son siparişler</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu">Tümü</a></div>
-    {siparisler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+    {sonSiparisler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
       <thead><tr><th>Sipariş</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Durum</th></tr></thead>
-      <tbody>{siparisler.slice(0, 8).map((s) => { const [d, r] = durumYazi(s); return <tr>
-        <td data-etiket="Sipariş" class="y-nowrap"><a class="y-link" href={'/yonetim/siparisler/' + s.no}>{s.no}</a><small class="y-table-note">{yTarih.format(new Date(s.tarih))}</small></td>
-        <td data-etiket="Müşteri">{s.musteri.ad} {s.musteri.soyad}</td>
-        <td data-etiket="Tutar" class="y-sayi y-nowrap">{formatTL(s.toplam)}</td>
-        <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + r]}>{d}</span></td>
-      </tr>; })}</tbody>
+      <tbody>{sonSiparisler.map((s) => <tr>
+        <td data-etiket="Sipariş" class="y-nowrap"><a class="y-link" href={s.url}>{s.no}</a><small class="y-table-note"><span class:list={['kanal-etiket', 'kanal-etiket--' + s.kanal]}>{s.kanalAd}</span> · {yTarih.format(new Date(s.tarih))}</small></td>
+        <td data-etiket="Müşteri">{s.musteri}</td>
+        <td data-etiket="Tutar" class="y-sayi y-nowrap">{s.tutar}</td>
+        <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + s.renk]}>{s.durum}</span></td>
+      </tr>)}</tbody>
     </table></div> : <p class="muted">Henüz sipariş yok.</p>}
   </section>
 

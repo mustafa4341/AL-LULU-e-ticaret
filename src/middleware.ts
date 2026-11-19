@@ -8,6 +8,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   const yol = ctx.url.pathname;
   // PayTR'nin POST isteği uygulama oturumu taşımaz. Bu tek uç nokta HMAC doğrular.
   if (yol === PAYTR_BILDIRIM && ctx.request.method === 'POST') return next();
+  if (yol === '/api/pazaryeri-senkron' && ctx.request.method === 'GET') return next();
 
   // www.alluluhome.com → alluluhome.com: kartla ödeme, oturum ve sepet tek adreste çalışır (PayTR tek adrese bağlıdır)
   const anaAdres = import.meta.env.SITE ? new URL(import.meta.env.SITE) : undefined;

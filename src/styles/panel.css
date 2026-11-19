@@ -366,3 +366,12 @@ a.y-chip:hover { filter: brightness(.96); }
 .y-panel .y-tablo td.y-sayi { background: transparent; }
 @media (max-width: 1180px) { .y-panel .y-kanal { display: none !important; } }
 .y-panel .y-metric small.y-uyari-kucuk { color: var(--y-turuncu); }
+
+/* Dokunmatik ekranda rahat basılsın: açılır başlıklar ve kart başlığındaki bağlantılar en az 44 px (WCAG 2.5.5) */
+.y-panel details.y-kart > summary { display: flex; align-items: center; gap: 6px; min-height: 44px; cursor: pointer; }
+.y-panel .y-kart__bas > a { display: inline-flex; align-items: center; min-height: 44px; }
+.y-panel details.y-kart > summary { list-style: none; }
+.y-panel details.y-kart > summary::-webkit-details-marker { display: none; }
+.y-panel details.y-kart > summary::before { content: "\25B8"; flex: none; display: inline-block; width: 1em; color: #8a7f70; transition: transform .15s; }
+.y-panel details.y-kart[open] > summary::before { transform: rotate(90deg); }
+@media (prefers-reduced-motion: reduce) { .y-panel details.y-kart > summary::before { transition: none; } }

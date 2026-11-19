@@ -1,0 +1,57 @@
+---
+/** Web sitesi · Trendyol · Hepsiburada · Toplam satış kartları (kart tıklanınca o kanalın siparişleri açılır) */
+import { kurusTL } from '../../lib/pazaryeri';
+import type { KanalOzeti } from '../../lib/kanalOzeti';
+
+interface Props {
+  ozet: KanalOzeti;
+  donem: string;
+  /** kanal ('web' | 'trendyol' | 'hepsiburada' | 'tumu') → bağlantı */
+  adres: (kanal: string) => string;
+  secili?: string;
+  aciklama?: string;
+}
+const { ozet, donem, adres, secili, aciklama = 'İptal ve iadeler hariç. Karta dokunursanız o kanalın siparişleri açılır.' } = Astro.props;
+---
+<section class="kanal-ozet" aria-label={'Satışlar kanala göre · ' + donem}>
+  <div class="kanal-ozet__bas"><strong>Satışlar · {donem}</strong><span>{aciklama}</span></div>
+  <div class="kanal-ozet__kartlar">
+    {ozet.kanallar.map((k) => <a href={adres(k.kanal)} class:list={['kanal-karti', 'kanal-karti--' + k.kanal, { 'is-secili': secili === k.kanal }]} aria-current={secili === k.kanal ? 'true' : undefined}>
+      <span class="kanal-karti__ad">{k.ad}</span>
+      <strong>{kurusTL(k.kurus)}</strong>
+      <small>{k.adet} sipariş</small>
+    </a>)}
+    <a href={adres('tumu')} class:list={['kanal-karti', 'kanal-karti--toplam', { 'is-secili': secili === 'tumu' }]}>
+      <span class="kanal-karti__ad">Hepsi birlikte</span>
+      <strong>{kurusTL(ozet.toplam.kurus)}</strong>
+      <small>{ozet.toplam.adet} sipariş</small>
+    </a>
+  </div>
+</section>
+
+<style is:global>
+  .kanal-ozet { margin-bottom: 14px; }
+  .kanal-ozet__bas { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-bottom: 8px; }
+  .kanal-ozet__bas span { color: var(--ink-3); font-size: 12.5px; }
+  .kanal-ozet__kartlar { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+  .kanal-karti { display: grid; gap: 2px; padding: 11px 13px; border: 1px solid var(--y-border); border-left: 5px solid #b9ad99; border-radius: 9px; background: #fff; color: inherit; text-decoration: none; min-width: 0; }
+  .kanal-karti:hover { background: #fcfaf5; }
+  .kanal-karti:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+  .kanal-karti.is-secili { box-shadow: 0 0 0 2px #aa812e inset; }
+  .kanal-karti__ad { font-size: 12.5px; font-weight: 700; color: #51483d; }
+  .kanal-karti strong { font-size: clamp(16px, 1.8vw, 21px); letter-spacing: -.02em; overflow-wrap: anywhere; }
+  .kanal-karti small { color: var(--ink-3); font-size: 12px; }
+  .kanal-karti--web { border-left-color: #aa812e; }
+  .kanal-karti--trendyol { border-left-color: #f27a1a; }
+  .kanal-karti--hepsiburada { border-left-color: #6b4fbb; }
+  .kanal-karti--toplam { background: #30291f; border-color: #30291f; border-left-color: #e0be6a; color: #fff9ea; }
+  .kanal-karti--toplam:hover { background: #3a3226; }
+  .kanal-karti--toplam .kanal-karti__ad, .kanal-karti--toplam small { color: #e9dcc0; }
+  @media (max-width: 760px) { .kanal-ozet__kartlar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+  /* Kanal etiketi (listelerde) — renk tek başına anlam taşımaz, ad her zaman yazılı */
+  .kanal-etiket { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: #51483d; white-space: nowrap; }
+  .kanal-etiket::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #aa812e; }
+  .kanal-etiket--trendyol::before { background: #f27a1a; }
+  .kanal-etiket--hepsiburada::before { background: #6b4fbb; }
+</style>

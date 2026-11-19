@@ -53,6 +53,16 @@ export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ 
       s.yoneticiNotu = girdi.yoneticiNotu?.slice(0, 1000) || undefined;
       return stok;
     }
+    if (girdi.eylem === 'stok-tamamla') {
+      if (!s.paytr?.stokEksik || s.paytr.test || s.paytr.sonuc !== 'odendi' || s.stokDusuldu || onceki !== 'odendi') {
+        throw new Error('Bu sipariş için tamamlanacak bir stok ayrımı yok.');
+      }
+      s.paytr.stokEksik = undefined;
+      s.stokDusuldu = true;
+      s.gecmis.push({ tarih, durum: onceki, not: 'Ödemesi alınan siparişin stoğu ayrıldı.' });
+      mesaj = 'Siparişin stoğu ayrıldı. Siparişi hazırlamaya alabilirsiniz.';
+      return -1;
+    }
     if (girdi.eylem === 'iade') {
       if (!gonderildi(s) || iadeEdildi(s) || s.paytr?.test) throw new Error('Sipariş iade kaydına uygun değil.');
       if (!girdi.iadeOnay) throw new Error('Teslim alınan ürünleri ve geri ödemeyi doğrulayın.');

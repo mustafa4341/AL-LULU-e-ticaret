@@ -10,6 +10,7 @@ import type { IkonAdi, Urun } from '../../../lib/sema';
 import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri, yayinEksikleri } from '../../../lib/yonetimUrun';
 import Onizleme from '../../../components/yonetim/Onizleme.astro';
 import Sekmeler from '../../../components/yonetim/Sekmeler.astro';
+import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 
 const IKON_SECENEK: [IkonAdi, string][] = [
   ['tencere', 'Tencere'], ['duduklu', 'Düdüklü'], ['tava', 'Tava'], ['ates', 'Ocak / ateş'],
@@ -93,7 +94,7 @@ if (Astro.request.method === 'POST') {
             const eksik = yayinEksikleri(u);
             if (eksik.length) throw new DogrulamaHatasi([`Yayına almak için eksik: ${eksik.join(', ')}. Tamamlayıp tekrar "Kaydet ve yayınla"ya basın (ya da önce taslak olarak kaydedin).`]);
           }
-        });
+        }, yeni ? 'Yeni ürün' : 'Panel: ürün düzenleme');
         for (const s of silinecek) await gorselSil(s);
         const mesaj = aday.durum === 'yayinda'
           ? (yeni ? 'Ürün oluşturuldu ve yayında.' : 'Kaydedildi. Ürün yayında, müşteriler görebilir.')
@@ -152,6 +153,15 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
     <form method="post" enctype="multipart/form-data" id="urun-form" class="y-editor-form" data-editor data-onizleme-form="urun" data-kayit={u.id} data-kayit-durum={kayitli?.durum ?? "taslak"}>
       <input type="hidden" name="eskiStok" value={kayitli?.stok ?? 0} />
       <input type="hidden" name="eskiFiyat" value={kayitli?.fiyat ?? 0} />
+      <BilgiKutusu baslik={yeni ? 'Yeni ürün 3 adımda eklenir' : 'Bu sayfada ne var?'} anahtar={yeni ? 'urun-yeni' : 'urun-duzenle'} ton="ipucu" acik={yeni}>
+        <ol>
+          <li><strong>Genel Bilgiler:</strong> marka, ürün adı ve kategori.</li>
+          <li><strong>Fiyat &amp; Stok:</strong> satış fiyatı ve depodaki adet. Stok 0 ise sitede “stokta yok” yazar.</li>
+          <li><strong>Fotoğraflar:</strong> en az bir fotoğraf. Sonra sağ üstten <em>Kaydet ve yayınla</em>.</li>
+        </ol>
+        <p><strong>Barkod:</strong> kutunun üzerindeki çizgili kodun altındaki 13 haneli sayı. <em>Detaylar → Teknik özellikler</em> bölümüne “Barkod (EAN)” satırı olarak yazın. Google'da ve Trendyol eşleştirmesinde bu numara kullanılır; tahmin edip yazmayın, kutudan okuyun.</p>
+        <p>Emin olmadığınız bir şey varsa <em>Taslak kaydet</em> deyin: müşteri görmez, sonra tamamlarsınız.</p>
+      </BilgiKutusu>
       <Sekmeler secenekler={[["genel", "Genel Bilgiler"], ["fiyat", "Fiyat & Stok"], ["fotograf", "Fotoğraflar"], ["satis", "Satış İçeriği"], ["detay", "Detaylar"], ["gelismis", "Gelişmiş"]]} />
       <!-- 1. TEMEL BİLGİLER -->
       <section class="y-kart" id="bolum-temel" data-bolum="genel">

@@ -98,7 +98,7 @@ const belgeRenk = hataliBelge ? 'kirmizi' : gecerliBelgeler.length ? 'yesil' : o
 
 /* Çelişkili durum uyarıları */
 const uyarilar: string[] = [];
-if (s.paytr?.stokEksik) uyarilar.push('Ödeme alındı ama stok ayrılamadı. PayTR ve stok kayıtlarını kontrol edin.');
+if (s.paytr?.stokEksik && !iptal) uyarilar.push('Ödeme alındı. Gönderime geçmek için stoğu ayırın veya geri ödemeyi doğrulayıp siparişi iptal edin.');
 if (iptal && s.kargoTakip) uyarilar.push('Bu sipariş iptal edildi ancak kayıtlı bir kargo takip numarası var (' + s.kargoTakip + '). Gönderiyi kargo firmasından durdurun.');
 if (iptal && gecerliBelgeler.some((b) => b.tur !== 'iade')) uyarilar.push('İptal edilen siparişin geçerli belgeleri var. Muhasebe kaydında iptal olarak dikkate alın.');
 if (s.paytr && s.paytr.sonuc === 'bekliyor' && Date.now() - Date.parse(s.tarih) > 60 * 60_000) uyarilar.push('Bir saattir ödeme sonucu gelmedi. PayTR Mağaza Paneli’nden işlemi kontrol edin.');
@@ -131,6 +131,11 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
   </div>
 
   {uyarilar.map((u) => <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} />{u}</p>)}
+  {s.paytr?.stokEksik && !s.paytr.test && s.durum === 'odendi' && (
+    <form method="post" class="y-ust-aksiyonlar">
+      <button type="submit" name="eylem" value="stok-tamamla" class="btn btn--sepet">Stoğu ayır</button>
+    </form>
+  )}
 
   <section class="y-kart y-durum-kart" id="kargo">
     {iptal ? (

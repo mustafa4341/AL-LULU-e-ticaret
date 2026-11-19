@@ -109,8 +109,10 @@ function sirala<T>(is: () => Promise<T>): Promise<T> {
   kuyruk = p.catch(() => undefined);
   return p;
 }
+/** Mağaza/stok yazan diğer modüller (pazaryeri) aynı sıradan geçer: aynı sunucuda iki yazma iç içe girmez */
+export { sirala as depoSirasi };
 
-async function atomikYaz(dosya: string, veri: string): Promise<void> {
+export async function atomikYaz(dosya: string, veri: string): Promise<void> {
   await fs.mkdir(path.dirname(dosya), { recursive: true });
   const gecici = `${dosya}.${process.pid}.${Date.now()}.tmp`;
   await fs.writeFile(gecici, veri, 'utf8');
@@ -126,7 +128,7 @@ export const supabaseDurumu = () => !supabaseBagliMi() ? 'yerel' : bulutOkumaHat
 export async function magazaOku(kayitIcin = false): Promise<Magaza> {
   const sb = supabaseIstemci();
   if (sb) {
-    if (magazaOnbellek && (!kayitIcin || magazaOnbellek.mtime === 0) && Date.now() - magazaOnbellek.zaman < ONBELLEK_SURE_MS) {
+    if (!kayitIcin && magazaOnbellek && Date.now() - magazaOnbellek.zaman < ONBELLEK_SURE_MS) {
       return magazaOnbellek.veri;
     }
     const { data, error } = await sb.rpc('magaza_oku');
@@ -163,9 +165,12 @@ export class DogrulamaHatasi extends Error {
   constructor(readonly hatalar: string[]) { super(hatalar.join('\n')); }
 }
 
-/** Mağazayı güncelle: değişiklik fonksiyonu kopya üzerinde çalışır; geçersizse hiçbir şey yazılmaz. */
-export function magazaGuncelle(degistir: (m: Magaza) => void): Promise<Magaza> {
-  return sirala(() => magazaYaz(degistir));
+/**
+ * Mağazayı güncelle: değişiklik fonksiyonu kopya üzerinde çalışır; geçersizse hiçbir şey yazılmaz.
+ * `sebep`: stok değişirse stok hareket defterinde görünecek açıklama (ör. "Panel: hızlı stok düzeltme").
+ */
+export function magazaGuncelle(degistir: (m: Magaza) => void, sebep?: string): Promise<Magaza> {
+  return sirala(() => magazaYaz(degistir, sebep));
 }
 
 /**
@@ -173,32 +178,72 @@ export function magazaGuncelle(degistir: (m: Magaza) => void): Promise<Magaza> {
  * 40001 KULLANILMAZ: PostgREST bu kodu otomatik ve sonsuz tekrar dener, istek asılı kalır.
  * (40001 yalnızca eski fonksiyon sürümü için tanınır.)
  */
-const cakismaHatasi = (e: { code?: string } | null | undefined) => e?.code === 'PT409' || e?.code === '40001';
+export const cakismaHatasi = (e: { code?: string } | null | undefined) => e?.code === 'PT409' || e?.code === '40001';
 
-async function magazaYaz(degistir: (m: Magaza) => void): Promise<Magaza> {
+async function magazaYaz(degistir: (m: Magaza) => void, sebep?: string): Promise<Magaza> {
   magazaOnbellek = undefined;
   const mevcut = await magazaOku(true);
   const yeni = magazaAdayi(mevcut, degistir);
   const sb = supabaseIstemci();
   if (sb) {
-    let kayit = await sb.rpc('panel_magaza_kaydet', { yeni_magaza: yeni, beklenen_surum: mevcut.surum });
-    if (kayit.error?.code === 'PGRST202') kayit = await sb.rpc('magaza_kaydet', { yeni_magaza: yeni });
+    // Sebepli kayıt (stok defteri için); veritabanında yoksa eski fonksiyonlara düşer
+    let kayit = sebep
+      ? await sb.rpc('panel_magaza_kaydet_sebep', { yeni_magaza: yeni, beklenen_surum: mevcut.surum, sebep: sebep.slice(0, 200) })
+      : await sb.rpc('panel_magaza_kaydet', { yeni_magaza: yeni, beklenen_surum: mevcut.surum });
+    if (sebep && kayit.error?.code === 'PGRST202') kayit = await sb.rpc('panel_magaza_kaydet', { yeni_magaza: yeni, beklenen_surum: mevcut.surum });
     if (cakismaHatasi(kayit.error)) throw new DogrulamaHatasi(['Mağaza bu sırada güncellendi. Sayfayı yenileyip tekrar deneyin.']);
     if (kayit.error) throw new Error('Mağaza veritabanına kaydedilemedi.');
     const kaydedilen = kayit.data ? MagazaSema.parse(kayit.data) : yeni;
     await magazaYansit(kaydedilen);
     // Değişen ürün sayfalarını Bing/Yandex'e bildir (yalnız canlıda; hata kaydı etkilemez, en fazla 3 sn)
     await magazaDegisikliginiBildir(mevcut, kaydedilen);
+    await stokSonrasi(mevcut, kaydedilen);
     return kaydedilen;
   }
 
   await yedekAl();
   await atomikYaz(MAGAZA, JSON.stringify(yeni, null, 2));
   magazaOnbellek = undefined;
+  await yerelStokDefteri(mevcut, yeni, sebep).catch((e) => console.error('[stok] Yerel hareket kaydedilemedi:', e));
+  await stokSonrasi(mevcut, yeni);
   return yeni;
 }
 
-function magazaAdayi(mevcut: Magaza, degistir: (m: Magaza) => void): Magaza {
+/* ---------------- Stok hareketleri ve stok uyarıları ---------------- */
+export interface StokHareketi { tarih: string; urunId: string; onceki: number; sonraki: number; sebep: string }
+export const YEREL_STOK_DEFTERI = path.join(KOK, 'stok-hareketleri.json');
+
+/**
+ * Yerel (Supabase'siz) çalışmada stok defteri. Supabase'te bu işi veritabanı tetikleyicisi yapar
+ * (urunler.stok her değiştiğinde; bkz. migration 20261119150000_pazaryeri_ve_stok.sql).
+ */
+export async function yerelStokDefteri(eski: Magaza, yeni: Magaza, sebep?: string): Promise<void> {
+  if (supabaseIstemci()) return;
+  const tarih = new Date().toISOString();
+  const eskiStok = new Map(eski.urunler.map((u) => [u.id, u.stok]));
+  const satirlar: StokHareketi[] = yeni.urunler
+    .filter((u) => (eskiStok.get(u.id) ?? 0) !== u.stok)
+    .map((u) => ({ tarih, urunId: u.id, onceki: eskiStok.get(u.id) ?? 0, sonraki: u.stok, sebep: (sebep || (eskiStok.has(u.id) ? 'Panel' : 'Yeni ürün')).slice(0, 200) }));
+  if (!satirlar.length) return;
+  let liste: StokHareketi[] = [];
+  try { liste = JSON.parse(await fs.readFile(YEREL_STOK_DEFTERI, 'utf8')) as StokHareketi[]; } catch { /* ilk kayıt */ }
+  await atomikYaz(YEREL_STOK_DEFTERI, JSON.stringify([...satirlar, ...liste].slice(0, 5000)));
+}
+
+/**
+ * Stok azaldıysa (kritik eşiğin altına indiyse / tükendiyse) mağazaya e-posta uyarısı.
+ * Döngüsel içe aktarmayı önlemek için modül çalışma anında yüklenir. En fazla 8 sn bekler; hata kaydı etkilemez.
+ */
+export async function stokSonrasi(eski: Magaza, yeni: Magaza): Promise<void> {
+  const eskiStok = new Map(eski.urunler.map((u) => [u.id, u.stok]));
+  if (!yeni.urunler.some((u) => (eskiStok.get(u.id) ?? u.stok) > u.stok)) return;
+  await Promise.race([
+    import('./stokUyari').then((m) => m.stokUyarilariniGonder(eski, yeni)).catch((e) => console.error('[stok] Uyarı gönderilemedi:', e)),
+    new Promise((r) => setTimeout(r, 8000)),
+  ]);
+}
+
+export function magazaAdayi(mevcut: Magaza, degistir: (m: Magaza) => void): Magaza {
   const kopya: Magaza = structuredClone(mevcut);
   degistir(kopya);
   const sonuc = MagazaSema.safeParse(kopya);
@@ -210,7 +255,7 @@ function magazaAdayi(mevcut: Magaza, degistir: (m: Magaza) => void): Magaza {
   return { ...sonuc.data, surum: mevcut.surum + 1, guncelleme: new Date().toISOString() };
 }
 
-async function magazaYansit(m: Magaza): Promise<void> {
+export async function magazaYansit(m: Magaza): Promise<void> {
   await yedekAl().catch(() => undefined);
   await atomikYaz(MAGAZA, JSON.stringify(m, null, 2)).catch(() => undefined);
   magazaOnbellek = { mtime: 0, zaman: Date.now(), veri: m };
@@ -230,7 +275,7 @@ let siparisOnbellek: { mtime: number; zaman: number; veri: Siparis[] } | undefin
 export async function siparisleriOku(kayitIcin = false): Promise<Siparis[]> {
   const sb = supabaseIstemci();
   if (sb) {
-    if (siparisOnbellek && (!kayitIcin || siparisOnbellek.mtime === 0) && Date.now() - siparisOnbellek.zaman < ONBELLEK_SURE_MS) {
+    if (!kayitIcin && siparisOnbellek && Date.now() - siparisOnbellek.zaman < ONBELLEK_SURE_MS) {
       return siparisOnbellek.veri;
     }
     const { data, error } = await sb.rpc('siparisleri_oku');
@@ -270,6 +315,21 @@ function urunAdetleri(s: Siparis): Map<string, number> {
 export class StokYetersiz extends Error {}
 export class SiparisNumarasiDolu extends Error {}
 
+export function webAyrilanAdetleri(
+  liste: Siparis[], simdi = Date.now(), paytrStokIslemleri: string[] = [],
+  haricNo?: string, testDahil = false,
+): Map<string, number> {
+  const ayrilan = new Map<string, number>();
+  const islenenler = new Set(paytrStokIslemleri);
+  for (const s of liste) {
+    const p = s.paytr;
+    if (!p || s.no === haricNo || s.durum !== 'odeme-bekliyor' || (p.test && !testDahil) ||
+        p.sonuc !== 'bekliyor' || p.beklemeBitis <= simdi || islenenler.has(p.ref)) continue;
+    for (const [id, adet] of urunAdetleri(s)) ayrilan.set(id, (ayrilan.get(id) ?? 0) + adet);
+  }
+  return ayrilan;
+}
+
 export function siparisVeSozlesmeEkle(s: Siparis, belge?: SozlesmeKaydi): Promise<Siparis> {
   return sirala(async () => {
     siparisOnbellek = undefined;
@@ -277,55 +337,71 @@ export function siparisVeSozlesmeEkle(s: Siparis, belge?: SozlesmeKaydi): Promis
     const liste = await siparisleriOku(true);
     if (liste.some((x) => x.no === s.no || (s.paytr && x.paytr?.ref === s.paytr.ref))) throw new SiparisNumarasiDolu();
     const yeni = SiparisSema.parse(s);
-    if (yeni.paytr) {
-      magazaOnbellek = undefined;
-      const m = await magazaOku(true);
-      const ayrilan = new Map<string, number>();
-      const simdi = Date.now();
-      const islenenler = new Set(m.paytrStokIslemleri);
-      for (const x of liste) {
-        if (!x.paytr || x.paytr.test !== yeni.paytr.test || x.paytr.sonuc !== 'bekliyor' ||
-          x.paytr.beklemeBitis <= simdi || islenenler.has(x.paytr.ref)) continue;
-        for (const [id, adet] of urunAdetleri(x)) ayrilan.set(id, (ayrilan.get(id) ?? 0) + adet);
-      }
-      for (const [id, adet] of urunAdetleri(yeni)) {
-        const u = m.urunler.find((x) => x.id === id);
-        if (!u || u.durum !== 'yayinda' || u.stok - (ayrilan.get(id) ?? 0) < adet) throw new StokYetersiz();
-      }
+    if (yeni.kalemler.some((k) => k.tip === 'set' && !k.parcalar.length)) {
+      throw new Error('Siparişin set içeriği eksik.');
     }
 
     const sb = supabaseIstemci();
     if (sb) {
-      const { error: sErr } = await sb.rpc('siparis_kaydet', { s: yeni });
-      if (sErr) throw new Error(`Supabase sipariş kayıt hatası: ${sErr.message}`);
-      if (belge) {
-        const { error: bErr } = await sb.from('sozlesmeler').upsert({
-          no: belge.no,
-          surum: belge.surum,
-          onay_tarihi: belge.onayTarihi,
-          ip: belge.ip,
-          tarayici: belge.tarayici ?? null,
-          on_bilgilendirme: belge.onBilgilendirme,
-          mesafeli_satis: belge.mesafeliSatis,
-        });
-        if (bErr) {
-          // Sözleşmesiz sipariş bırakılmaz: müşteri tekrar denediğinde ikinci kayıt ve boşuna stok ayrımı oluşmaz
-          const { error: silHata } = await sb.from('siparisler').delete().eq('no', yeni.no);
-          if (silHata) console.error('[Supabase] Sözleşmesi kaydedilemeyen sipariş geri alınamadı:', yeni.no);
-          siparisOnbellek = undefined;
-          throw new Error(`Supabase sözleşme kayıt hatası: ${bErr.message}`);
-        }
-      }
+      const { error } = await sb.rpc('web_siparis_olustur', { yeni_siparis: yeni, belge: belge ? { ...belge } : null });
+      // Veritabanı güncellemesi (20261119151000) henüz uygulanmadıysa sipariş almayı durdurma: eski yol
+      if (error?.code === 'PGRST202') return eskiSiparisKaydi(sb, yeni, liste, belge);
+      if (error?.code === 'PT422') throw new StokYetersiz();
+      if (error?.code === '23505') throw new SiparisNumarasiDolu();
+      if (error) throw new Error(`Supabase sipariş kayıt hatası (${error.code}): ${error.message}`);
+      magazaOnbellek = undefined;
       siparisOnbellek = undefined;
       if (belge) await atomikYaz(sozlesmeDosyasi(s.no), JSON.stringify(belge)).catch(() => undefined);
       await siparisListesiYaz([yeni, ...liste]).catch(() => undefined);
       return yeni;
     }
 
+    if (process.env.VERCEL) throw new Error('Sipariş veritabanı yapılandırılmadı.');
+    const m = await magazaOku(true);
+    const ayrilan = webAyrilanAdetleri(liste, Date.now(), m.paytrStokIslemleri, undefined, yeni.paytr?.test);
+    for (const [id, adet] of urunAdetleri(yeni)) {
+      const u = m.urunler.find((x) => x.id === id);
+      if (!u || u.durum !== 'yayinda' || u.stok - (ayrilan.get(id) ?? 0) < adet) throw new StokYetersiz();
+    }
     if (belge) await atomikYaz(sozlesmeDosyasi(s.no), JSON.stringify(belge));
     await siparisListesiYaz([yeni, ...liste]);
     return yeni;
   });
+}
+
+/**
+ * Eski kayıt yolu (web_siparis_olustur fonksiyonu veritabanında yoksa): stok uygulamada denetlenir,
+ * sipariş ve sözleşme ayrı yazılır; sözleşme yazılamazsa sipariş geri silinir.
+ */
+async function eskiSiparisKaydi(sb: SupabaseClient<Database>, yeni: Siparis, liste: Siparis[], belge?: SozlesmeKaydi): Promise<Siparis> {
+  console.warn('[sipariş] web_siparis_olustur bulunamadı; eski kayıt yolu kullanılıyor. Migration 20261119151000 uygulanmalı.');
+  if (yeni.paytr) {
+    const m = await magazaOku(true);
+    const ayrilan = webAyrilanAdetleri(liste, Date.now(), m.paytrStokIslemleri, undefined, yeni.paytr.test);
+    for (const [id, adet] of urunAdetleri(yeni)) {
+      const u = m.urunler.find((x) => x.id === id);
+      if (!u || u.durum !== 'yayinda' || u.stok - (ayrilan.get(id) ?? 0) < adet) throw new StokYetersiz();
+    }
+  }
+  const { error: sErr } = await sb.rpc('siparis_kaydet', { s: yeni });
+  if (sErr) throw new Error(`Supabase sipariş kayıt hatası: ${sErr.message}`);
+  if (belge) {
+    const { error: bErr } = await sb.from('sozlesmeler').upsert({
+      no: belge.no, surum: belge.surum, onay_tarihi: belge.onayTarihi, ip: belge.ip, tarayici: belge.tarayici ?? null,
+      on_bilgilendirme: belge.onBilgilendirme, mesafeli_satis: belge.mesafeliSatis,
+    });
+    if (bErr) {
+      // Sözleşmesiz sipariş bırakılmaz: müşteri tekrar denediğinde ikinci kayıt ve boşuna stok ayrımı oluşmaz
+      const { error: silHata } = await sb.from('siparisler').delete().eq('no', yeni.no);
+      if (silHata) console.error('[Supabase] Sözleşmesi kaydedilemeyen sipariş geri alınamadı:', yeni.no);
+      siparisOnbellek = undefined;
+      throw new Error(`Supabase sözleşme kayıt hatası: ${bErr.message}`);
+    }
+    await atomikYaz(sozlesmeDosyasi(yeni.no), JSON.stringify(belge)).catch(() => undefined);
+  }
+  siparisOnbellek = undefined;
+  await siparisListesiYaz([yeni, ...liste]).catch(() => undefined);
+  return yeni;
 }
 
 async function siparisListesiYaz(liste: Siparis[]): Promise<void> {
@@ -353,20 +429,21 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
     const ref = p.ref;
     const adetler = urunAdetleri(s);
     const stokDusulecek = bildirim.basarili && !p.test;
+    let ayrilan = new Map<string, number>();
     // Stok ve işlem işareti aynı mağaza kaydında yazılır; tekrar gelen bildirim stoğu ikinci kez düşmez.
     // Kontrol, yazılacak güncel kopyanın içinde yapılır (eski önbellek/yerel kopyaya güvenilmez).
     const stokDus = (magaza: Magaza) => {
       if (magaza.paytrStokIslemleri?.includes(ref)) return;
       for (const [id, adet] of adetler) {
         const u = magaza.urunler.find((x) => x.id === id);
-        if (!u || u.stok < adet) throw new StokYetersiz();
+        if (!u || u.stok - (ayrilan.get(id) ?? 0) < adet) throw new StokYetersiz();
         u.stok -= adet;
       }
       (magaza.paytrStokIslemleri ??= []).push(ref);
     };
     // Ödeme alınmış ama stok yetmiyorsa sipariş yine "ödendi" olur, panelde "stok ayrılamadı" uyarısı çıkar
     const stokuAyriYaz = async () => {
-      try { await magazaYaz(stokDus); } catch (e) {
+      try { await magazaYaz(stokDus, 'Web siparişi ' + s.no + ' · odendi'); } catch (e) {
         if (!(e instanceof StokYetersiz)) throw e;
         p.stokEksik = true;
       }
@@ -377,6 +454,7 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
     if (stokDusulecek) {
       magazaOnbellek = undefined;
       m = await magazaOku(true);
+      ayrilan = webAyrilanAdetleri(await siparisleriOku(true), Date.now(), m.paytrStokIslemleri, s.no);
       if (!m.paytrStokIslemleri?.includes(ref)) {
         try { aday = magazaAdayi(m, stokDus); } catch (e) {
           if (!(e instanceof StokYetersiz)) throw e;
@@ -398,22 +476,20 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
       const atomik = await sb.rpc('panel_siparis_kaydet', {
         yeni_siparis: sonucuYaz(), eski_siparis: onceki, yeni_magaza: aday ?? null, beklenen_surum: m?.surum ?? 0,
       });
-      if (atomik.error?.code === 'PGRST202') {
-        // Atomik fonksiyon veritabanına henüz eklenmemiş: önce stok (işlem işaretiyle), sonra sipariş
-        if (aday) await stokuAyriYaz();
-        const { error } = await sb.rpc('siparis_kaydet', { s: sonucuYaz() });
-        if (error) throw new Error(`Supabase sipariş güncelleme hatası: ${error.message}`);
-      } else if (atomik.error) {
+      if (atomik.error) {
         // PT409: sipariş/stok bu sırada değişti. PayTR bildirimi tekrar gönderir, o zaman güncel veriyle işlenir.
         throw new Error(`PayTR sonucu kaydedilemedi (${atomik.error.code}): ${atomik.error.message}`);
       } else if (aday) {
-        await magazaYansit(atomik.data ? MagazaSema.parse(atomik.data) : aday);
+        const kaydedilen = atomik.data ? MagazaSema.parse(atomik.data) : aday;
+        await magazaYansit(kaydedilen);
+        if (m) await stokSonrasi(m, kaydedilen);
       }
       siparisOnbellek = undefined;
       await siparisListesiYaz(liste).catch(() => undefined);
       return { durum: 'kaydedildi', siparis: s } as const;
     }
 
+    if (process.env.VERCEL) throw new Error('Sipariş veritabanı yapılandırılmadı.');
     if (aday) await stokuAyriYaz();
     sonucuYaz();
     await siparisListesiYaz(liste);
@@ -440,6 +516,9 @@ export function siparisGuncelle(
     const dogrulanmis = SiparisSema.parse(s);
     const islem = 'panel:' + no + ':' + stokIsareti;
     const stokDegisti = Boolean(stokIsareti && !m?.paytrStokIslemleri?.includes(islem));
+    const ayrilan = stokIsareti === -1
+      ? webAyrilanAdetleri(await siparisleriOku(true), Date.now(), m?.paytrStokIslemleri, no)
+      : undefined;
     const stokUygula = (magaza: Magaza) => {
       if (!stokIsareti || magaza.paytrStokIslemleri?.includes(islem)) return;
       if (dogrulanmis.kalemler.some((k) => k.tip === 'set' && !k.parcalar.length)) {
@@ -448,35 +527,33 @@ export function siparisGuncelle(
       for (const [id, adet] of urunAdetleri(dogrulanmis)) {
         const u = magaza.urunler.find((u) => u.id === id);
         if (!u) throw new Error('Siparişteki bir ürün katalogda bulunamadı.');
-        if (u.stok + stokIsareti * adet < 0) throw new Error(u.kisaAd + ' için stok yetersiz.');
+        if (stokIsareti < 0 && u.stok - (ayrilan?.get(id) ?? 0) < adet) throw new Error(u.kisaAd + ' için stok yetersiz.');
         u.stok += stokIsareti * adet;
       }
       (magaza.paytrStokIslemleri ??= []).push(islem);
     };
-    if (sb && m) {
-      const aday = stokDegisti ? magazaAdayi(m, stokUygula) : undefined;
+    if (sb) {
+      if (stokDegisti && !m) throw new Error('Supabase stok işlemi için mağaza okunamadı.');
+      const aday = stokDegisti && m ? magazaAdayi(m, stokUygula) : undefined;
       const { data, error } = await sb.rpc('panel_siparis_kaydet', {
         yeni_siparis: dogrulanmis, eski_siparis: onceki,
-        yeni_magaza: aday ?? null, beklenen_surum: m.surum,
+        yeni_magaza: aday ?? null, beklenen_surum: m?.surum ?? 0,
       });
       if (!error) {
-        if (aday) await magazaYansit(data ? MagazaSema.parse(data) : aday);
+        if (aday) {
+          const kaydedilen = data ? MagazaSema.parse(data) : aday;
+          await magazaYansit(kaydedilen);
+          if (m) await stokSonrasi(m, kaydedilen);
+        }
         await siparisListesiYaz(liste).catch(() => undefined);
         return dogrulanmis;
       }
       if (cakismaHatasi(error)) throw new Error('Sipariş veya stok bu sırada güncellendi. Sayfayı yenileyin.');
-      if (error.code !== 'PGRST202') throw new Error('Supabase sipariş kaydı tamamlanamadı.');
+      throw new Error('Supabase sipariş kaydı tamamlanamadı.');
     }
 
-    if (stokDegisti) await magazaYaz(stokUygula);
-    if (sb) {
-      const { error } = await sb.rpc('siparis_kaydet', { s: dogrulanmis });
-      if (error) throw new Error(`Supabase sipariş güncelleme hatası: ${error.message}`);
-      siparisOnbellek = undefined;
-      await siparisListesiYaz(liste).catch(() => undefined);
-      return dogrulanmis;
-    }
-
+    if (process.env.VERCEL) throw new Error('Sipariş veritabanı yapılandırılmadı.');
+    if (stokDegisti) await magazaYaz(stokUygula, 'Web siparişi ' + no + ' · ' + (stokIsareti === 1 && dogrulanmis.durum !== 'iptal' ? 'iade' : dogrulanmis.durum));
     await siparisListesiYaz(liste);
     return dogrulanmis;
   });

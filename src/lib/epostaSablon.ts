@@ -337,6 +337,30 @@ ${s.iptalNotu ? kutu(`<span style="font-size:11px;letter-spacing:1.5px;text-tran
   return undefined;
 }
 
+/* ───────────────────────── Mağaza: Stok uyarısı ───────────────────────── */
+export interface StokUyariSatiri { ad: string; stok: number; esik: number; tur: 'tukendi' | 'kritik' | 'fazla'; eksik?: number }
+export function stokUyariEpostasi(site: SiteAyarlari, satirlar: StokUyariSatiri[], kanallar: string[]): Eposta {
+  const panel = `${kok(site)}/yonetim/siparisler/kanallar`;
+  const tukenen = satirlar.filter((x) => x.tur === 'tukendi').length;
+  const fazla = satirlar.filter((x) => x.tur === 'fazla').length;
+  const etiket = (x: StokUyariSatiri) => x.tur === 'fazla' ? `Fazla satış: ${x.eksik} adet stokta yoktu` : x.tur === 'tukendi' ? 'Tükendi' : `Kritik (eşik ${x.esik})`;
+  const renk = (x: StokUyariSatiri) => x.tur === 'kritik' ? '#9A5B00' : R.kirmizi;
+  const satir = satirlar.map((x) => `<tr><td style="padding:10px 0;border-bottom:1px solid ${R.cizgi};font-size:14px">${kacis(x.ad)}<br><span style="font-size:12px;color:${renk(x)};font-weight:bold">${kacis(etiket(x))}</span></td>
+<td align="right" style="padding:10px 0;border-bottom:1px solid ${R.cizgi};${SERIF};font-size:20px;font-weight:bold;color:${renk(x)};white-space:nowrap">${x.stok} adet</td></tr>`).join('');
+  const kanalNotu = kanallar.length
+    ? kutu(`<strong>Unutmayın:</strong> Bu ürünler ${kacis(kanallar.join(' ve '))} mağazanızda da satılıyor. Otomatik stok gönderimi açık değilse oradaki stok adedini de güncelleyin; panelde “Siparişler → Satış kanalları → Ürün eşleştirmeleri” hangi ürüne kaç yazılacağını gösterir.`, R.kirmiziAcik, '#F2C9C4')
+    : '';
+  const baslik = fazla ? 'Fazla satış var, stoğu kontrol edin' : tukenen ? 'Ürün tükendi' : 'Stok azalıyor';
+  return {
+    konu: `Stok uyarısı: ${satirlar.map((x) => `${x.ad} (${x.tur === 'fazla' ? 'fazla satış' : x.stok + ' adet'})`).join(', ')}`.slice(0, 180),
+    html: cerceve(site, {
+      onYazi: satirlar.map((x) => `${x.ad}: ${x.stok} adet`).join(' · '), ust: 'Stok bildirimi', baslik, guven: false,
+      icerik: `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:6px">${satir}</table>${kanalNotu}${buton('Stok takibini aç', panel, R.altinKoyu)}`,
+    }),
+    metin: `${baslik}\n\n${satirlar.map((x) => `• ${x.ad}: ${x.stok} adet — ${etiket(x)}`).join('\n')}${kanallar.length ? `\n\n${kanallar.join(' ve ')} stoğunu da güncellemeyi unutmayın.` : ''}\n\nPanel: ${panel}`,
+  };
+}
+
 /* ───────────────────────── Mağaza: Yeni sipariş ───────────────────────── */
 export function yeniSiparisEpostasi(s: Siparis, site: SiteAyarlari, gorsel?: GorselBul): Eposta {
   const panel = `${kok(site)}/yonetim/siparisler/${encodeURIComponent(s.no)}`;

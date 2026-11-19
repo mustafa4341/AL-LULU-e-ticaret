@@ -6,6 +6,7 @@ import Ikonlar from '../components/Ikonlar.astro';
 import Ikon from '../components/Ikon.astro';
 import { siparisleriOku, supabaseDurumu } from '../lib/depo';
 import { gonderilecek } from '../lib/yonetimRapor';
+import { pazaryeriBekleyenSayisi } from '../lib/pazaryeriDepo';
 import type { IkonAdi } from '../lib/sema';
 
 interface Props {
@@ -20,7 +21,11 @@ const { baslik, altBaslik, aktif, basari, hatalar = [] } = Astro.props;
 const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 const baglanti = supabaseDurumu();
 /* Yan menüde Siparişler'in yanında hazırlanacak/kargolanacak sipariş sayısı */
-const bekleyen = await siparisleriOku().then((l) => l.filter((x) => !x.paytr?.test && gonderilecek(x)).length).catch(() => 0);
+const [bekleyenWeb, bekleyenPazar] = await Promise.all([
+  siparisleriOku().then((l) => l.filter((x) => !x.paytr?.test && gonderilecek(x)).length).catch(() => 0),
+  pazaryeriBekleyenSayisi().catch(() => 0),
+]);
+const bekleyen = bekleyenWeb + bekleyenPazar;
 const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
   ['ozet', 'Genel Bakış', '/yonetim', 'ev'],
   ['siparisler', 'Siparişler', '/yonetim/siparisler', 'kargo'],
@@ -67,8 +72,9 @@ const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'S
       {menu.map(([id, ad, href, ikon]) => <>
         <a href={href} aria-current={aktif === id ? "page" : undefined} class:list={{ 'is-grup': (id === "urunler" && urunAlt) || (id === "site" && aktif === "ayarlar") }} title={ad}>
           <Ikon ad={ikon} boyut={19} /><span>{ad}</span>
-          {id === "siparisler" && bekleyen > 0 && <b class="y-rozet" title={bekleyen + ' sipariş hazırlanacak veya kargolanacak'}>{bekleyen}</b>}
+          {id === "siparisler" && bekleyen > 0 && <b class="y-rozet" title={`${bekleyen} sipariş hazırlanacak veya kargolanacak (web ${bekleyenWeb}, pazaryeri ${bekleyenPazar})`}>{bekleyen}</b>}
         </a>
+        {id === "siparisler" && <div class="y-sidebar-sub"><a href="/yonetim/siparisler/kanallar" aria-current={Astro.url.pathname.startsWith('/yonetim/siparisler/kanallar') ? "page" : undefined}>Trendyol · Hepsiburada</a></div>}
         {id === "urunler" && <div class="y-sidebar-sub">
           <a href="/yonetim/setler" aria-current={aktif === "setler" ? "page" : undefined}>Setler</a>
           <a href="/yonetim/kategoriler" aria-current={aktif === "kategoriler" ? "page" : undefined}>Kategoriler</a>

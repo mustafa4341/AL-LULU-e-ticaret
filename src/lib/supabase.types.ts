@@ -12,6 +12,24 @@ export type Database = {
   };
   public: {
     Tables: {
+      envanter_ayarlari: {
+        Row: { id: number; surum: number; veri: Json; guncelleme: string };
+        Insert: { id?: number; surum?: number; veri?: Json; guncelleme?: string };
+        Update: { surum?: number; veri?: Json; guncelleme?: string };
+        Relationships: [];
+      };
+      pazaryeri_siparisleri: {
+        Row: { id: string; kanal: string; tarih: string; durum: string; surum: number; veri: Json; guncelleme: string; siparis_no: string };
+        Insert: { id: string; kanal: string; tarih: string; durum: string; surum?: number; veri: Json; guncelleme?: string };
+        Update: { tarih?: string; durum?: string; surum?: number; veri?: Json; guncelleme?: string };
+        Relationships: [];
+      };
+      stok_hareketleri: {
+        Row: { id: number; tarih: string; urun_id: string; onceki: number; sonraki: number; sebep: string };
+        Insert: { id?: never; tarih?: string; urun_id: string; onceki: number; sonraki: number; sebep?: string };
+        Update: never;
+        Relationships: [];
+      };
       eposta_kayitlari: {
         Row: {
           anahtar: string; siparis_no: string; tur: string; alici: string; durum: string; deneme: number;
@@ -475,9 +493,22 @@ export type Database = {
     Functions: {
       magaza_kaydet: { Args: { yeni_magaza: Json }; Returns: Json };
       panel_magaza_kaydet: { Args: { yeni_magaza: Json; beklenen_surum: number }; Returns: Json };
+      panel_magaza_kaydet_sebep: { Args: { yeni_magaza: Json; beklenen_surum: number; sebep: string }; Returns: Json };
       panel_siparis_kaydet: { Args: { yeni_siparis: Json; eski_siparis: Json; yeni_magaza: Json; beklenen_surum: number }; Returns: Json };
+      pazaryeri_kaydet: {
+        Args: { kayitlar: Json; beklenen: Json; yeni_magaza: Json; beklenen_surum: number; ayarlar: Json; ayar_surum: number; sebep: string };
+        Returns: Json;
+      };
+      pazaryeri_aktarim_kayitlari_oku: {
+        Args: { p_kanal: string; p_siparis_nolari: string[]; p_son_id: string };
+        Returns: { id: string; surum: number; veri: Json }[];
+      };
+      envanter_ayar_kaydet: { Args: { ayarlar: Json; ayar_surum: number }; Returns: number };
+      pazaryeri_senkron_kilitle: { Args: { sahip: string }; Returns: boolean };
+      pazaryeri_senkron_kilidi_birak: { Args: { sahip: string }; Returns: undefined };
       magaza_oku: { Args: Record<string, never>; Returns: Json };
       siparis_kaydet: { Args: { s: Json }; Returns: undefined };
+      web_siparis_olustur: { Args: { yeni_siparis: Json; belge: Json | null }; Returns: undefined };
       siparisleri_oku: { Args: Record<string, never>; Returns: Json };
       sunucu_yetkili_mi: { Args: Record<string, never>; Returns: boolean };
       /** p_artir: 0 = oku, 1 = say, null = sıfırla → penceredeki deneme sayısı */

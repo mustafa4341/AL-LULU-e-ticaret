@@ -152,6 +152,11 @@ const gorselGetir = (): Promise<GorselBul | undefined> => magazaOku().then(gorse
 /** Yeni sipariş bildiriminin gideceği mağaza adres(ler)i */
 const magazaAdresi = (site: SiteAyarlari) => ortam('SIPARIS_BILDIRIM_EPOSTA') || site.eposta;
 
+/** Mağaza sahibine iç bildirim (stok uyarısı vb.). E-posta ayarı yoksa gönderilmez. */
+export function magazayaBildir(site: SiteAyarlari, e: Eposta): Promise<GonderimSonucu> {
+  return epostaGonder(magazaAdresi(site), e);
+}
+
 export async function siparisAlindi(
   s: Siparis, site: SiteAyarlari, takipUrl: string,
   belgeler?: { onBilgilendirme: string; mesafeliSatis: string; baglanti: string },

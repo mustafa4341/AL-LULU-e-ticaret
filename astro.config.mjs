@@ -11,7 +11,7 @@ export default defineConfig({
   site: SITE,
   output: 'server',              // sayfalar her istekte güncel veriyle üretilir (panel değişiklikleri anında yansır)
   adapter: vercelOrtam
-    ? vercel({ includeFiles: ['./public/img/logo/yazi.png'] })
+    ? vercel({ includeFiles: ['./public/img/logo/yazi.png'], maxDuration: 60 }) // 60 sn her Vercel planında geçerli (Hobby dahil)
     : node({ mode: 'standalone' }),
   trailingSlash: 'never',
   prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
