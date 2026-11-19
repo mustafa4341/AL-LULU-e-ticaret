@@ -76,6 +76,7 @@ async function epostaGonder(kime: string, e: Eposta, kayit?: Kayit, yanit?: stri
       to: kime,
       replyTo: yanit || ortam('EPOSTA_YANIT') || undefined,
       subject: e.konu, text: e.metin, html: e.html,
+      attachments: e.ekler?.map((x) => ({ filename: x.dosyaAdi, content: x.icerik, contentType: `${x.tur}; charset=utf-8` })),
     });
     mesajId = bilgi.messageId ?? null;
   } catch (h) {
@@ -158,11 +159,9 @@ export async function siparisAlindi(
   const gorsel = await gorselGetir();
   const alici = s.musteri.eposta;
   await Promise.all([
-    // Önce kısa sipariş onayı, hemen ardından sözleşmeler (gelen kutusunda bu sırayla görünsün diye arka arkaya)
-    alici ? (async () => {
-      await epostaGonder(alici, siparisAlindiEpostasi(s, site, takipUrl, belgeler, gorsel), { no: s.no, tur: 'alindi' });
-      if (belgeler) await epostaGonder(alici, sozlesmelerEpostasi(s, site, belgeler), { no: s.no, tur: 'sozlesmeler' });
-    })() : Promise.resolve(),
+    // Tek e-posta: kısa sipariş onayı + "Sözleşmeleriniz" bağlantısı ve ek dosya.
+    // Ayrı "Sözleşmeleriniz" e-postası artık kendiliğinden gitmez; panelden elle gönderilebilir.
+    alici ? epostaGonder(alici, siparisAlindiEpostasi(s, site, takipUrl, belgeler, gorsel), { no: s.no, tur: 'alindi' }) : Promise.resolve(),
     smsGonder(s.musteri.tel, `${site.ad}: ${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}. Takip: ${takipUrl}`),
     // Mağazaya gelen bildirimde "Yanıtla" doğrudan müşteriye yazar
     epostaGonder(magazaAdresi(site), yeniSiparisEpostasi(s, site, gorsel), { no: s.no, tur: 'magaza' }, s.musteri.eposta),

@@ -10,7 +10,7 @@ import type { Siparis, SiteAyarlari } from './sema';
 import { formatTL } from './fiyat';
 import { siparisKargoBaglantisi } from './kargoTakip';
 
-export interface Eposta { konu: string; html: string; metin: string }
+export interface Eposta { konu: string; html: string; metin: string; ekler?: { dosyaAdi: string; icerik: string; tur: string }[] }
 /** Ürün/set kimliğinden fotoğraf yolu (ör. "/medya/..."); yoksa satır fotoğrafsız çizilir */
 export type GorselBul = (id: string) => string | undefined;
 
@@ -182,24 +182,21 @@ ${baslikSatiri('Teslimat adresi')}<p style="margin:10px 0 0;font-size:14px;line-
 ${buton('Siparişimi Takip Et', takipUrl)}
 ${belgeler ? sozlesmeKutusu(belgeler.baglanti) : ''}`;
   return {
+    // Sözleşmeler ayrı e-postayla gitmez: sitedeki sayfaya bağlantı + kayıt için küçük bir ek dosya
+    // (e-posta eki "kalıcı veri saklayıcısı"dır; site bağlantısı tek başına sayılmaz)
+    ...(belgeler ? { ekler: [{ dosyaAdi: `Sozlesmeler-${s.no}.html`, icerik: sozlesmelerEpostasi(s, site, belgeler).html, tur: 'text/html' }] } : {}),
     konu: `Siparişiniz alındı — ${s.no}`,
     html: cerceve(site, {
       onYazi: `${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}.`,
       ust: 'Sipariş onayı', baslik: 'Teşekkürler, siparişiniz alındı', icerik, altNot: altNot(s),
     }),
-    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz alındı. ${durumNotu}\n\n${satirlarMetin(s)}\n\nTeslimat: ${s.teslimat.adres}, ${s.teslimat.ilce} / ${s.teslimat.il}\n\nSiparişinizi takip edin: ${takipUrl}${belgeler ? `\n\nOnayladığınız Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi ayrı bir e-postayla gönderildi. Buradan da görüntüleyebilirsiniz: ${belgeler.baglanti}` : ''}${imza(site)}`,
+    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz alındı. ${durumNotu}\n\n${satirlarMetin(s)}\n\nTeslimat: ${s.teslimat.adres}, ${s.teslimat.ilce} / ${s.teslimat.il}\n\nSiparişinizi takip edin: ${takipUrl}${belgeler ? `\n\nSözleşmeleriniz (Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi): ${belgeler.baglanti}` : ''}${imza(site)}`,
   };
 }
 
-/** Sipariş e-postasının altında küçük, sakin bir "Sözleşmeleriniz" kutusu (tam metinler ayrı e-postada) */
+/** Sipariş e-postasının altında tek satırlık, küçük "Sözleşmeleriniz" bağlantısı (sitedeki sayfayı açar) */
 function sozlesmeKutusu(baglanti: string): string {
-  const madde = (ad: string) => `<tr><td width="18" valign="top" style="${SERIF};font-size:11px;line-height:20px;color:${R.altin}">&#9670;</td><td style="${YAZI};font-size:13px;line-height:20px;color:${R.yazi}">${ad}</td></tr>`;
-  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:30px 0 0"><tr>
-<td style="padding:18px 20px;border-radius:12px;border:1px solid ${R.cizgi};background:#FCFBF8">
-<p style="margin:0 0 8px;${YAZI};font-size:11px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;color:${R.altinKoyu}">Sözleşmeleriniz</p>
-<table role="presentation" cellpadding="0" cellspacing="0" border="0">${madde('Ön Bilgilendirme Formu')}${madde('Mesafeli Satış Sözleşmesi')}</table>
-<p style="margin:10px 0 0;${YAZI};font-size:12.5px;line-height:1.6;color:${R.soluk}">Onayladığınız metinler ayrı bir e-postayla size gönderildi. İstediğiniz zaman <a href="${kacis(baglanti)}" target="_blank" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none">buradan görüntüleyebilirsiniz&nbsp;&rarr;</a></p>
-</td></tr></table>`;
+  return `<p style="margin:26px 0 0;${YAZI};font-size:12.5px;line-height:1.6;color:${R.soluk};text-align:center"><a href="${kacis(baglanti)}" target="_blank" style="color:${R.altinKoyu};font-weight:bold;text-decoration:none">Sözleşmeleriniz&nbsp;&rarr;</a></p>`;
 }
 
 /* ───────────────────────── Müşteri: Sözleşmeler ───────────────────────── */
@@ -219,7 +216,7 @@ export function sozlesmelerEpostasi(
 <div style="${YAZI};font-size:13px;line-height:1.7;color:#3A352D">${belgeyiBicimle(govde)}</div>`;
   const icindekiler = (sira: string, ad: string) => `<tr><td width="28" valign="top" style="${SERIF};font-size:15px;line-height:24px;color:${R.altin}">${sira}</td><td style="${YAZI};font-size:14px;line-height:24px;color:${R.yazi}">${ad}</td></tr>`;
   const icerik = `<p style="margin:0 0 8px">Merhaba ${kacis(s.musteri.ad)},</p>
-<p style="margin:0">Siparişinizi verirken onayladığınız sözleşmeler aşağıdadır. Herhangi bir işlem yapmanız gerekmiyor; bu e-postayı kayıtlarınız için saklamanızı öneririz.</p>
+<p style="margin:0">Siparişinizi verirken onayladığınız sözleşmeler aşağıdadır. Herhangi bir işlem yapmanız gerekmiyor; bu belgeyi kayıtlarınız için saklamanızı öneririz.</p>
 ${kutu(`<table role="presentation" cellpadding="0" cellspacing="0" border="0">${icindekiler('1', 'Ön Bilgilendirme Formu')}${icindekiler('2', 'Mesafeli Satış Sözleşmesi')}</table>
 <p style="margin:10px 0 0;font-size:12.5px;color:${R.soluk}">Sipariş no <strong style="color:${R.yazi}">${kacis(s.no)}</strong> · ${kacis(tarihYaz(s.tarih))}</p>`)}
 ${buton('Sözleşmeleri Web\'de Aç', belgeler.baglanti, R.altinAcik, R.altinKoyu)}

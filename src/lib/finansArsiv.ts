@@ -1,4 +1,4 @@
-import { inflateRawSync } from 'node:zlib';
+import { deflateRawSync, inflateRawSync } from 'node:zlib';
 
 const tablo = Uint32Array.from({ length: 256 }, (_, i) => {
   let c = i;
@@ -11,18 +11,20 @@ const crc32 = (v: Buffer) => {
   return (c ^ 0xffffffff) >>> 0;
 };
 
-export function zipOlustur(dosyalar: { ad: string; veri: Buffer }[]) {
+export function zipOlustur(dosyalar: { ad: string; veri: Buffer }[], sikistir = false) {
   const govde: Buffer[] = [];
   const dizin: Buffer[] = [];
   let adres = 0;
   for (const dosya of dosyalar) {
     const ad = Buffer.from(dosya.ad, 'utf8');
+    const icerik = sikistir ? deflateRawSync(dosya.veri) : dosya.veri;
     const bas = Buffer.alloc(30);
     bas.writeUInt32LE(0x04034b50);
     bas.writeUInt16LE(20, 4);
     bas.writeUInt16LE(0x800, 6);
+    bas.writeUInt16LE(sikistir ? 8 : 0, 8);
     bas.writeUInt32LE(crc32(dosya.veri), 14);
-    bas.writeUInt32LE(dosya.veri.length, 18);
+    bas.writeUInt32LE(icerik.length, 18);
     bas.writeUInt32LE(dosya.veri.length, 22);
     bas.writeUInt16LE(ad.length, 26);
     const ozet = Buffer.alloc(46);
@@ -30,9 +32,9 @@ export function zipOlustur(dosyalar: { ad: string; veri: Buffer }[]) {
     ozet.writeUInt16LE(20, 4);
     bas.subarray(4, 30).copy(ozet, 6);
     ozet.writeUInt32LE(adres, 42);
-    govde.push(bas, ad, dosya.veri);
+    govde.push(bas, ad, icerik);
     dizin.push(ozet, ad);
-    adres += bas.length + ad.length + dosya.veri.length;
+    adres += bas.length + ad.length + icerik.length;
   }
   const son = Buffer.alloc(22);
   son.writeUInt32LE(0x06054b50);

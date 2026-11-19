@@ -8,8 +8,11 @@ import { onayliSatis, yTarih } from '../../lib/yonetimRapor';
 import { bosYasalBilgi } from '../../lib/yonetimSite';
 import { finansOku } from '../../lib/finansDepo';
 import { belgeGecerli, finansGunu, finansPara, hakEdis, raporla } from '../../lib/finans';
+import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from '../../lib/yedek';
 
-const [m, tum, finans] = await Promise.all([magazaOku(), siparisleriOku(), finansOku()]);
+const [m, tum, finans, sonYedek] = await Promise.all([magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined)]);
+const yedekGun = sonYedek ? Math.floor((Date.now() - Date.parse(sonYedek)) / 86_400_000) : undefined;
+const yedekGerekli = yedekGun === undefined || yedekGun >= YEDEK_ARALIGI_GUN;
 const siparisler = tum.filter((s) => !s.paytr?.test).sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih));
 const bugun = finansGunu();
 const bugunRapor = raporla(finans, siparisler, bugun, bugun);
@@ -46,6 +49,7 @@ const isler = ([
   { ad: 'Yayındaki üründe fotoğraf eksik', sayi: fotosuz.length, url: fotosuz.length === 1 ? '/yonetim/urunler/' + fotosuz[0]!.id + '?bolum=fotograf' : '/yonetim/urunler', ton: 'gri' },
   { ad: 'Yayına hazır taslak set', sayi: taslakSetler.length, url: '/yonetim/setler', ton: 'gri' },
   { ad: 'Eksik yasal bilgi: ' + eksik.join(', '), sayi: eksik.length, url: '/yonetim/ayarlar', ton: 'gri' },
+  { ad: yedekGun === undefined ? 'Veri yedeği hiç alınmadı (indir)' : `Aylık veri yedeği zamanı (son: ${yedekGun} gün önce)`, sayi: yedekGerekli ? '!' : 0, url: '/yonetim/yedek', ton: 'turuncu' },
 ] satisfies Is[]).filter((x) => x.sayi !== 0);
 const tarihBaslik = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Istanbul' }).format(new Date());
 const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade edildi', 'gri'] : s.durum === 'iptal' ? ['İptal', 'gri']
@@ -69,6 +73,10 @@ const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade ed
         <b class:list={['y-chip', 'y-chip--' + x.ton]}>{x.sayi}</b>
       </a></li>)}
     </ul>}
+    <p class="muted" style="margin-top:12px;font-size:13px">
+      Veri yedeği: {yedekGun === undefined ? 'henüz alınmadı' : yedekGun === 0 ? 'bugün alındı' : yedekGun + ' gün önce alındı'} ·
+      <a class="y-link" href="/yonetim/yedek">Yedek indir (ZIP)</a>
+    </p>
   </section>
 
   <section class="y-kart">
