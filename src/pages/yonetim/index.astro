@@ -5,7 +5,6 @@ import { formatTL } from '../../lib/fiyat';
 import { Katalog } from '../../lib/katalog';
 import { iadeEdildi } from '../../lib/siparisAkisi';
 import { onayliSatis, yTarih } from '../../lib/yonetimRapor';
-import { bosYasalBilgi } from '../../lib/yonetimSite';
 import { finansOku } from '../../lib/finansDepo';
 import { belgeGecerli, finansGunu, finansPara, hakEdis, raporla } from '../../lib/finans';
 import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from '../../lib/yedek';
@@ -57,9 +56,6 @@ const bugunOzeti = kanalToplamlari(siparisler, pazar, bugun, bugun);
 const fotosuz = m.urunler.filter((u) => !u.gorseller.length && u.durum === 'yayinda');
 const k = new Katalog(m);
 const taslakSetler = m.setler.filter((s) => s.durum === 'taslak' && k.setEngelleri(s).length === 0);
-const st = m.site.satici;
-const eksik = [['Ticari unvan', st.unvan], ['Adres', st.adres], ['MERSİS no', st.mersis], ['Vergi dairesi / no', st.vergiDairesiNo]]
-  .filter(([, v]) => bosYasalBilgi(v!)).map(([ad]) => ad);
 
 type Is = { ad: string; sayi: number | string; url: string; ton: 'turuncu' | 'kirmizi' | 'gri' };
 const isler = ([
@@ -80,7 +76,6 @@ const isler = ([
   { ad: `Azalan stok (${envanter.kritikVarsayilan} adet ve altı)`, sayi: kritikStok.length, url: '/yonetim/urunler?filtre=kritik', ton: 'turuncu' },
   { ad: 'Yayındaki üründe fotoğraf eksik', sayi: fotosuz.length, url: fotosuz.length === 1 ? '/yonetim/urunler/' + fotosuz[0]!.id + '?bolum=fotograf' : '/yonetim/urunler', ton: 'gri' },
   { ad: 'Yayına hazır taslak set', sayi: taslakSetler.length, url: '/yonetim/setler', ton: 'gri' },
-  { ad: 'Eksik yasal bilgi: ' + eksik.join(', '), sayi: eksik.length, url: '/yonetim/ayarlar', ton: 'gri' },
   { ad: yedekGun === undefined ? 'Veri yedeği hiç alınmadı (indir)' : `Aylık veri yedeği zamanı (son: ${yedekGun} gün önce)`, sayi: yedekGerekli ? '!' : 0, url: '/yonetim/yedek', ton: 'turuncu' },
 ] satisfies Is[]).filter((x) => x.sayi !== 0);
 const tarihBaslik = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Istanbul' }).format(new Date());

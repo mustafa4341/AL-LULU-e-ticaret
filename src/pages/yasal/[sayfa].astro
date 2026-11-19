@@ -5,15 +5,11 @@ const k = Astro.locals.katalog;
 const sayfa = YASAL_SAYFALAR.find((s) => s.yol === Astro.params.sayfa);
 if (!sayfa) return Astro.rewrite('/404');
 const icerik = sayfa.uret(k.site);
-const eksik = icerik.includes('class="eksik"');
 ---
 <Base baslik={`${sayfa.baslik} | ${k.site.ad}`} aciklama={`${k.site.ad} ${sayfa.baslik.toLocaleLowerCase('tr')}.`}>
   <div class="container belge">
     <p class="eyebrow"><a href="/bilgi">Yasal bilgiler</a></p>
     <h1>{sayfa.baslik}</h1>
-    {eksik && Astro.locals.yonetici && (
-      <p class="taslak-not"><strong>Yalnızca yönetici görür:</strong> sarı işaretli satıcı bilgileri eksik. <a href="/yonetim/ayarlar">Ayarlar → Satıcı bilgileri</a> bölümünden doldurun; yayından önce metinleri bir avukata kontrol ettirmeniz önerilir.</p>
-    )}
     <article class="belge-metin" set:html={icerik} />
     <nav class="belge-diger" aria-label="Diğer yasal metinler">
       {YASAL_SAYFALAR.filter((s) => s.yol !== sayfa.yol).map((s) => <a href={`/yasal/${s.yol}`}>{s.baslik}</a>)}

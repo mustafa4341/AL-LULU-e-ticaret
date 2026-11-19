@@ -51,7 +51,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     return ctx.redirect(`/yonetim/giris?d=${encodeURIComponent(yol)}`);
   }
 
-  if (!yol.startsWith('/medya/') && !yol.startsWith('/_')) {
+  if (!yol.startsWith('/medya/') && !yol.startsWith('/jpg/') && !yol.startsWith('/_')) {
     // Taslak ürünler: yalnızca yönetici giriş yapmışken görünür (canlıda önizleme)
     // "Müşteri gibi gör" açıkken örnek (taslak) ürünler yönetici için de gizlenir
     const musteriGorunumu = ctx.cookies.get('musteri_gorunumu')?.value === '1';

@@ -41,8 +41,9 @@ Raporlar: <https://search.google.com/u/1/search-console?resource_id=sc-domain:al
 
 ### Ürün akışı (Merchant Center, Akakçe, Cimri) ✅
 Adres: **<https://alluluhome.com/urun-akisi.xml>** — Google Alışveriş biçiminde, panelden otomatik, fiyat/stok/kargo hep güncel.
-- **Akakçe:** <https://www.akakce.com/magaza-basvuru/> → Hemen Başvur. Tıklama başına ücretlidir. Başvuruda XML adresi olarak yukarıdakini verin; kendi biçimlerini isterlerse gönderdikleri şablonu bana iletin, ikinci bir akış eklerim.
-- **Cimri:** cimri.com → sayfanın altındaki "Mağaza Başvurusu / İş Ortaklığı" → aynı XML adresi.
+**Cimri ve Akakçe için:** **<https://alluluhome.com/urun-akisi-jpg.xml>** — aynı akış, görseller JPEG (Cimri'nin resmî akış belgesi .jpg/.png istiyor; sitedeki görseller WebP). Google akışı WebP ile kalır.
+- **Cimri:** <https://www.cimri.com/magaza-kayit> → formda istenenler (19.11.2026'da sayfadan okundu): ad soyad, e-posta, cep telefonu, şirket web sitesi, **ünvan**, **vergi kimlik no** (şahıs şirketiyse TCKN), **şirket adresi**, isteğe bağlı "Google Feed Bağlantısı" (yukarıdaki JPG akışı) ve belge yüklemeleri: **vergi levhası, imza sirküleri, ticaret sicili gazetesi, faaliyet belgesi**. Satış başına komisyon.
+- **Akakçe:** <https://www.akakce.com/magaza-basvuru/> → Hemen Başvur (önce Akakçe'de kullanıcı hesabı açmak gerekiyor). Tıklama başına ücretlidir. Akakçe sayfasında "tüm firma bilgileriniz (ünvan, adres) açık olarak verilir" yazıyor, yani firma bilgileri Akakçe'de herkese görünür. XML olarak JPG akışını verin; kendi biçimlerini isterlerse gönderdikleri şablonu bana iletin, ikinci bir akış eklerim.
 - İkisi de ödeme alınabilen bir site ister: **PayTR canlıya alınmadan başvuru reddedilebilir.**
 
 ### (eski adımlar, bilgi için) Search Console
@@ -76,8 +77,8 @@ ChatGPT'nin web araması ve Copilot büyük ölçüde **Bing dizinini** kullanı
 `GTM_KIMLIGI`'ni bana yazmanız yeterli.
 
 ### 6. Satıcı bilgileri (yasal zorunluluk ve güven sinyali)
-Panelde **ticari unvan, adres, vergi no, MERSİS, ETBİS** hâlâ boş; sitede "[Ticari Unvan] [Açık adres]" görünüyor.
-Hem 6563 sayılı Kanun gereği zorunlu hem de Google'ın "güvenilir satıcı" değerlendirmesini etkiler. **Önce bunu doldurun.**
+Panelde **ticari unvan, adres, vergi no, MERSİS, ETBİS** boş. 19.11.2026'dan beri boş alanlar sitede ve sözleşmelerde hiç gösterilmiyor (eskiden "[… girilmedi]" yazıyordu); satıcı adı yerine "Al Lulu Home" yazılıyor.
+Panel > Ayarlar'dan doldurulursa kendiliğinden yeniden görünür. Not: 6563 sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği satıcının adını/unvanını ve adresini istiyor; Cimri ve Akakçe başvuruları da bu bilgiler olmadan yapılamıyor.
 
 ## Sonraki aşamalar (kodda, onayınızla)
 

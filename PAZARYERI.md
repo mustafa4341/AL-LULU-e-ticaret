@@ -1,6 +1,35 @@
 # Web, Trendyol ve Hepsiburada satış akışı
 
-Yönetim panelindeki **Siparişler** ekranında kanal ve durum filtreleri, sipariş numarası araması ve **İşlem gerekli** görünümü bulunur. **Satış kanalları** ekranı son çekimi, ilan eşleştirmelerini, stok onaylarını ve son stok hareketlerini gösterir.
+Yönetim panelindeki **Siparişler** ekranında kanal ve durum filtreleri, sipariş numarası araması ve **İşlem gerekli** görünümü bulunur. **Satış kanalları** ekranı (`/yonetim/siparisler/kanallar`) son çekimi, ilan eşleştirmelerini, stok onaylarını ve son stok hareketlerini gösterir.
+
+---
+
+## 19.11.2026 Canlı Kurulum ve Otomatik Stok Özeti (Tamamlanan İşlemler)
+
+1. **Trendyol Canlı API Bağlantısı (Vercel Production):**
+   - Trendyol satıcı hesabı canlı ortam (`TRENDYOL_ORTAM=canli`) olarak `al-lulu-e-ticaret` Vercel projesine bağlandı. Satıcı ID ve entegrasyon bilgileri yalnız Vercel ortam değişkenlerinde ve Trendyol Satıcı Paneli > Hesap Bilgilerim > Entegrasyon Bilgileri'nde durur (bu depo herkese açık; buraya yazılmaz).
+   - `TRENDYOL_SATICI_ID`, `TRENDYOL_API_KEY` (Sensitive), `TRENDYOL_API_SECRET` (Sensitive) ve 48 karakterlik `CRON_SECRET` (Sensitive) ortam değişkenleri Vercel Production ortamına eklendi ve canlıya (`https://alluluhome.com`) dağıtıldı.
+   - Trendyol Canlı Sipariş Akışı (`/integration/order/sellers/{saticiId}/orders/stream`) ve Ürün/Envanter Servisi üzerinden `200 OK` yanıtı doğrulandı (son başarılı çekim 19.11.2026 19:04, "0 yeni" — henüz ilan/sipariş yok).
+   - **Eksik (19.11.2026 kontrolü):** Otomatik zamanlayıcı **kurulmadı**. `CRON_SECRET` Vercel'de var ama `/api/pazaryeri-senkron`'u düzenli çağıran bir iş yok; Trendyol siparişleri ve stok eşitlemesi şu an yalnız **Satış kanalları > Şimdi eşitle** düğmesine basınca çalışır. Aşağıdaki "Otomatik çalıştırma" bölümüne bakın.
+
+2. **Supabase Veritabanı Tabloları ve Atomik Stok Fonksiyonları:**
+   - Canlı Supabase projesine (`yrbvywobqnrqqvkndvqj`) şu 3 migration sırasıyla uygulandı:
+     - `20261119150000_pazaryeri_ve_stok.sql` (`pazaryeri_siparisleri`, `stok_hareketleri`, `envanter_ayarlari` tabloları, RLS politikaları, `trg_stok_hareketi` stok hareket tetikleyicisi, `pazaryeri_kaydet` ve `envanter_ayar_kaydet` RPC fonksiyonları)
+     - `20261119151000_web_siparis_olusturma.sql` (`web_siparis_olustur` atomik web siparişi ve PayTR rezervasyon fonksiyonu)
+     - `20261119152000_pazaryeri_senkron_kilidi.sql` (`pazaryeri_senkron_kilidi` tablosu ve dağıtık kilit RPC fonksiyonları)
+
+3. **Çift Yönlü Otomatik Stok Senkronizasyonu (`PAZARYERI_STOK_YAZ=1` & `PAZARYERI_STOK_ARTIR=1`):**
+   - Vercel Production ortamında `PAZARYERI_STOK_YAZ=1` ve `PAZARYERI_STOK_ARTIR=1` aktif edildi.
+   - **Başlangıç Sayımı ve Güvenlik Payı:** Trendyol kanalı için başlangıç sayımı `19.11.2026 18:00` ve güvenlik payı `1 adet` olarak kaydedildi.
+   - **Nasıl Çalışır?**
+     - **Trendyol'dan sipariş geldiğinde:** Sipariş yönetim panelindeki **Siparişler** ekranına düşer ve ilgili ürünün stoğu merkezi depodan otomatik olarak **1 kez** düşülür. Sipariş iptal edilirse stok otomatik geri eklenir.
+     - **Web sitesinden satış olduğunda veya panelden stok değiştiğinde:** Eşleştirilmiş ürünlerin yeni stok adedi (`Depodaki Satılabilir Stok − 1 Güvenlik Payı`) Trendyol'a otomatik olarak gönderilir ve Trendyol ilan stoğu güncellenir.
+     - **Ürünleri (Tencere, Tava vb.) Otomatik Tanıma:**
+       1. Trendyol'da açtığınız ilanın **Barkod** (veya stok kodu) değeri sitedeki ürünün barkodu/model kodu (`sku`) ile aynıysa sistem ürünü kendiliğinden tanır.
+       2. Barkodu daha önce girilmemiş bir ürün satılırsa sipariş ekranında kırmızı **"Eşleşme bekliyor"** uyarısı çıkar. Sipariş detayından ürünü **1 kere** seçip eşleştirdiğinizde hem o siparişin stoğu düşer hem de barkod hafızaya alınır; sonraki tüm siparişlerde ve stok güncellemelerinde otomatik çalışır.
+       3. Dilerseniz Trendyol'da ilanlarınız onaylandıkça `/yonetim/siparisler/kanallar` sayfasındaki **Adım 3 · Ürün eşleştirmeleri** bölümünden barkodları önceden de kaydedebilirsiniz.
+
+---
 
 ## Canlıya geçiş sırası
 

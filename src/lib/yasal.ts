@@ -63,8 +63,9 @@ const esc = (v: unknown) =>
 
 const bos = (v?: string) => !v || !v.trim() || /^\[.*\]$/.test(v.trim()) || /^[—-]+$/.test(v.trim());
 
-/** Doldurulmamış satıcı bilgisi sarı işaretle görünür (yayından önce panelden doldurulmalı) */
-const alan = (v: string | undefined, etiket: string) => (bos(v) ? `<mark class="eksik">[${esc(etiket)} girilmedi]</mark>` : esc(v));
+/** Satıcı bilgisi panelde boşsa metinde hiç görünmez (yer tutucu yazılmaz); unvan yerine mağaza adı kullanılır */
+const saticiAdi = (s: YasalSite) => (bos(s.satici.unvan) ? esc(s.ad) : esc(s.satici.unvan));
+const satir = (etiket: string, v?: string) => (bos(v) ? '' : `<dt>${etiket}</dt><dd>${esc(v)}</dd>`);
 
 const tarihMetni = (iso?: string) =>
   iso ? new Date(iso).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'long', timeStyle: 'short' }) : '';
@@ -74,10 +75,10 @@ const yer = (metin: string) => `<mark class="yer">${esc(metin)}</mark>`;
 function saticiBlok(s: YasalSite): string {
   const st = s.satici;
   return `<dl class="belge-dl">
-    <dt>Ticari unvan</dt><dd>${alan(st.unvan, 'Ticari unvan')}</dd>
-    <dt>Adres</dt><dd>${alan(st.adres, 'Açık adres')}</dd>
-    <dt>MERSİS no</dt><dd>${alan(st.mersis, 'MERSİS no')}</dd>
-    <dt>Vergi dairesi / no</dt><dd>${alan(st.vergiDairesiNo, 'Vergi dairesi ve no')}</dd>
+    ${bos(st.unvan) ? `<dt>Satıcı</dt><dd>${esc(s.ad)}</dd>` : satir('Ticari unvan', st.unvan)}
+    ${satir('Adres', st.adres)}
+    ${satir('MERSİS no', st.mersis)}
+    ${satir('Vergi dairesi / no', st.vergiDairesiNo)}
     <dt>Telefon</dt><dd>${esc(s.telefonGorunen)}${s.calismaSaatleri ? ` (${esc(s.calismaSaatleri)})` : ''}</dd>
     <dt>E-posta</dt><dd>${esc(s.eposta)}</dd>
     ${bos(st.kep) ? '' : `<dt>KEP adresi</dt><dd>${esc(st.kep)}</dd>`}
@@ -329,7 +330,7 @@ export function iptalIadeKosullari(s: YasalSite): string {
 
   <h2>9. Örnek cayma formu</h2>
   <div class="belge-form">
-    <p><strong>Kime:</strong> ${alan(s.satici.unvan, 'Ticari unvan')} · ${alan(s.satici.adres, 'Açık adres')} · ${esc(s.eposta)}</p>
+    <p><strong>Kime:</strong> ${[saticiAdi(s), bos(s.satici.adres) ? '' : esc(s.satici.adres), esc(s.eposta)].filter(Boolean).join(' · ')}</p>
     <p>Bu formla aşağıdaki ürünlerin satışına ilişkin sözleşmeden cayma hakkımı kullandığımı bildiririm.</p>
     <p>Sipariş numarası: ……………………… &nbsp; Sipariş tarihi: ……………… &nbsp; Teslim tarihi: ………………</p>
     <p>İade edilen ürün(ler): ………………………………………………………………</p>
@@ -389,7 +390,7 @@ export function garantiKosullari(s: YasalSite): string {
 export function kvkkAydinlatma(s: YasalSite): string {
   return `
   <p class="belge-ust">Sürüm ${SOZLESME_SURUMU}</p>
-  <p>6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu sıfatıyla ${alan(s.satici.unvan, 'Ticari unvan')} ("${esc(s.ad)}") olarak kişisel verilerinizi aşağıda açıklanan şekilde işlediğimizi bildiririz.</p>
+  <p>6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") 10. maddesi uyarınca, veri sorumlusu sıfatıyla ${bos(s.satici.unvan) ? esc(s.ad) : `${esc(s.satici.unvan)} ("${esc(s.ad)}")`} olarak kişisel verilerinizi aşağıda açıklanan şekilde işlediğimizi bildiririz.</p>
   <h2>1. Veri sorumlusu</h2>
   ${saticiBlok(s)}
   <h2>2. İşlenen kişisel veriler</h2>
@@ -412,7 +413,7 @@ export function kvkkAydinlatma(s: YasalSite): string {
   <p>Sipariş, bilgilendirme ve sözleşme kayıtları mesafeli sözleşmeler mevzuatı gereği en az 3 yıl; fatura ve muhasebe kayıtları vergi ve ticaret mevzuatı gereği 10 yıl saklanır. Süre sonunda veriler silinir, yok edilir veya anonim hâle getirilir.</p>
   <h2>8. Haklarınız</h2>
   <p>KVKK m.11 uyarınca; kişisel verilerinizin işlenip işlenmediğini öğrenme, işlenmişse bilgi talep etme, işlenme amacını ve amacına uygun kullanılıp kullanılmadığını öğrenme, aktarıldığı üçüncü kişileri bilme, eksik veya yanlış işlenmişse düzeltilmesini, şartları oluşmuşsa silinmesini veya yok edilmesini ve bu işlemlerin aktarılan üçüncü kişilere bildirilmesini isteme, otomatik sistemlerle analiz edilmesi sonucu aleyhinize bir sonuca itiraz etme ve kanuna aykırı işleme nedeniyle zarara uğramanız hâlinde zararın giderilmesini talep etme haklarına sahipsiniz.</p>
-  <p>Başvurularınızı kimliğinizi doğrulayan bilgilerle birlikte yazılı olarak ${alan(s.satici.adres, 'Açık adres')} adresine, ${bos(s.satici.kep) ? '' : `${esc(s.satici.kep)} KEP adresine veya `}sistemimizde kayıtlı e-posta adresinizden ${esc(s.eposta)} adresine iletebilirsiniz. Başvurular en geç 30 gün içinde ücretsiz olarak sonuçlandırılır.</p>`;
+  <p>Başvurularınızı kimliğinizi doğrulayan bilgilerle birlikte yazılı olarak ${bos(s.satici.adres) ? '' : `${esc(s.satici.adres)} adresine, `}${bos(s.satici.kep) ? '' : `${esc(s.satici.kep)} KEP adresine veya `}sistemimizde kayıtlı e-posta adresinizden ${esc(s.eposta)} adresine iletebilirsiniz. Başvurular en geç 30 gün içinde ücretsiz olarak sonuçlandırılır.</p>`;
 }
 
 /* ================================================================
@@ -443,7 +444,7 @@ export function kullanimKosullari(s: YasalSite): string {
   return `
   <p class="belge-ust">Sürüm ${SOZLESME_SURUMU}</p>
   <ol class="belge-liste">
-    <li>${esc(s.url.replace(/^https?:\/\//, ''))} ("Site") ${alan(s.satici.unvan, 'Ticari unvan')} tarafından işletilir. Site'yi kullanan herkes bu koşulları kabul etmiş sayılır.</li>
+    <li>${esc(s.url.replace(/^https?:\/\//, ''))} ("Site") ${saticiAdi(s)} tarafından işletilir. Site'yi kullanan herkes bu koşulları kabul etmiş sayılır.</li>
     <li>Site'deki ürün açıklamaları, fotoğraflar ve teknik bilgiler mümkün olan en doğru şekilde hazırlanır; fotoğraflardaki renk ve görünüm ekran ayarlarına göre farklılık gösterebilir. Ürünlerin temel nitelikleri ürün sayfasında ve sipariş anında onaylanan Ön Bilgilendirme Formu'nda yer alır.</li>
     <li>Fiyatlar, kampanyalar ve stok bilgileri önceden haber verilmeksizin değiştirilebilir; siparişinizi onayladığınız andaki fiyat ve koşullar sizin için geçerlidir. İndirimli fiyatlarda gösterilen önceki fiyat, mevzuata uygun olarak kampanyadan önceki 30 günlük dönemdeki en düşük satış fiyatıdır.</li>
     <li>Site'deki logo, metin, tasarım, fotoğraf ve diğer içerikler ${esc(s.ad)}'a veya ilgili hak sahiplerine aittir; izinsiz kopyalanamaz, çoğaltılamaz ve ticari amaçla kullanılamaz. Ürünlerdeki marka ve logolar ilgili üreticilere aittir.</li>
