@@ -8,8 +8,12 @@ interface Props {
   maddeler: { ikon: IkonAdi; metin: string }[];
   kucuk?: boolean;
   dipnot?: string;
+  marka?: string;
 }
-const { maddeler, kucuk = false, dipnot = '* Fissler verisi; yemeğe ve miktara göre değişir.' } = Astro.props;
+const { maddeler, kucuk = false, marka, dipnot } = Astro.props;
+const gosterilenDipnot = dipnot ?? (marka?.toLocaleLowerCase('tr') === 'fissler'
+  ? '* Fissler verisi; yemeğe ve miktara göre değişir.'
+  : marka ? `* ${marka} resmî ürün verisi.` : '* Üretici resmî ürün verisi.');
 /* "Ana cümle | küçük açıklama" yazılırsa: müşterinin hayatına dokunan cümle kalın, teknik bilgi altında küçük.
    "Başlık: açıklama" yazılırsa başlık kalın olur. */
 const parcala = (m: string) => {
@@ -36,6 +40,6 @@ const parcala = (m: string) => {
         );
       })}
     </ul>
-    {dipnot && maddeler.some((b) => b.metin.includes('*')) && <p class="ozellik-dipnot">{dipnot}</p>}
+    {gosterilenDipnot && maddeler.some((b) => b.metin.includes('*')) && <p class="ozellik-dipnot">{gosterilenDipnot}</p>}
   </>
 )}
