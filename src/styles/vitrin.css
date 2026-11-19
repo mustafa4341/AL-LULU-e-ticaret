@@ -92,18 +92,17 @@
   pointer-events: none;
 }
 .urun-rozeti > span {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-  overflow-wrap: anywhere;
+  display: block;
+  max-width: 100%;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  hyphens: none;
   -webkit-text-stroke: 1.2px #5a2400;
   paint-order: stroke fill;
   text-shadow: 0 1px 0 #7a3300, 0 2px 3px #5a24006b;
   text-wrap: balance;
 }
-.urun-rozeti > svg { color: #fff8ec; filter: drop-shadow(0 1px 1px #692800); }
-.urun-rozeti--cok-satan { font-size: .9375rem; line-height: .98; }
+.urun-rozeti--cok-satan { font-size: .875rem; line-height: 1.02; }
 
 /* Kırmızı: az kalan stok aciliyeti (Son 1 Adet / Son 2 Paket) */
 .urun-rozeti--kirmizi {
@@ -112,16 +111,14 @@
   box-shadow: 0 6px 16px rgba(176, 13, 36, .38), inset 0 0 0 2px #ffffff59;
 }
 .urun-rozeti--kirmizi > span { -webkit-text-stroke: 1.1px #5c0610; text-shadow: 0 1px 0 #700814, 0 2px 3px rgba(60, 0, 10, .45); }
-.urun-rozeti--kirmizi > svg { color: #fff5f6; filter: drop-shadow(0 1px 1px #5c0610); }
 
-/* Altın: ömürlük çelik / monoblok işçilik gibi çeyizlik kalite özellikleri */
+/* Altın: ömürlük çelik / çeyizlik kalite özellikleri */
 .urun-rozeti--altin {
   border-color: #8f681c;
   background: radial-gradient(circle at 50% 42%, #cfa246 0%, #a67822 58%, #7d5712 65%, #ebca7e 68%, #ba8b2f 82%, #8c6318 100%);
   box-shadow: 0 6px 16px rgba(125, 87, 18, .36), inset 0 0 0 2px #fff7df66;
 }
 .urun-rozeti--altin > span { -webkit-text-stroke: 1.1px #472f05; text-shadow: 0 1px 0 #593b08, 0 2px 3px rgba(56, 36, 4, .45); }
-.urun-rozeti--altin > svg { color: #fffaf0; filter: drop-shadow(0 1px 1px #472f05); }
 
 /* Lacivert: akıllı mühendislik ve fırın/depolama avantajı */
 .urun-rozeti--lacivert {
@@ -130,7 +127,6 @@
   box-shadow: 0 6px 16px rgba(17, 41, 71, .38), inset 0 0 0 2px #e0eeff59;
 }
 .urun-rozeti--lacivert > span { -webkit-text-stroke: 1.1px #0a1a2e; text-shadow: 0 1px 0 #0d213a, 0 2px 3px rgba(8, 20, 38, .5); }
-.urun-rozeti--lacivert > svg { color: #f0f7ff; filter: drop-shadow(0 1px 1px #0a1a2e); }
 
 /* Zümrüt yeşili: hız, kolay temizlik ve pratiklik */
 .urun-rozeti--yesil {
@@ -139,15 +135,14 @@
   box-shadow: 0 6px 16px rgba(12, 84, 50, .36), inset 0 0 0 2px #e3ffef59;
 }
 .urun-rozeti--yesil > span { -webkit-text-stroke: 1.1px #06301b; text-shadow: 0 1px 0 #083d23, 0 2px 3px rgba(4, 38, 20, .48); }
-.urun-rozeti--yesil > svg { color: #f2fff8; filter: drop-shadow(0 1px 1px #06301b); }
 
 .firsat-cip svg { flex: none; }
-.kart > .urun-rozeti { --rozet-cap: 64px; inset: 8px auto auto 8px; padding: 7px; font-size: .6875rem; }
-.kart > .urun-rozeti > svg { width: 12px; }
+.kart > .urun-rozeti { --rozet-cap: 68px; inset: 8px auto auto 8px; padding: 6px; font-size: .65rem; line-height: 1.06; }
+.kart > .urun-rozeti--cok-satan { font-size: .6875rem; line-height: 1.05; }
 @media (min-width: 900px) {
   .hero__vitrin > .urun-rozeti { --rozet-cap: 108px; inset: 18px auto auto 18px; font-size: 1rem; }
   .hero__vitrin > .urun-rozeti--cok-satan { font-size: 1.1875rem; }
-  .urun-rozeti--galeri { --rozet-cap: 104px; top: 16px; left: 104px; font-size: 1.125rem; }
+  .urun-rozeti--galeri { --rozet-cap: 104px; top: 16px; left: 104px; font-size: .95rem; }
 }
 
 .hero__vitrin img { animation: none; }

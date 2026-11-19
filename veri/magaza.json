@@ -29,7 +29,7 @@
     },
     "iadeGun": 14,
     "tadilat": {
-      "aktif": true,
+      "aktif": false,
       "baslik": "Sitemiz kısa süreliğine bakımda",
       "aciklama": "Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.",
       "tahminiSure": "",
@@ -51,7 +51,7 @@
     "calismaSaatleri": "Hafta içi 09:00–18:00",
     "indirimReferansGun": 30
   },
-  "surum": 61,
+  "surum": 63,
   "setler": [
     {
       "ad": "Vitaquick + Buhar Aparatı Seti",
@@ -752,7 +752,7 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:lacivert:250°C Fırına Girer",
+        "damga:lacivert:Fırına Girer",
         "Paslanmaz Çelik · Titanium 2X",
         "Thermo-Signal™ Gösterge",
         "Orijinal Ürün"
@@ -1062,7 +1062,7 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:altin:Ömürlük Çelik",
+        "damga:altin:18/10 Çelik",
         "9 Parça · İndüksiyon Uyumlu",
         "18/10 Paslanmaz Çelik",
         "Orijinal Ürün"
@@ -1537,7 +1537,7 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:lacivert:Dolapta Yer Açar",
+        "damga:lacivert:İç İçe Geçer",
         "Tek Sap · 10 kg Taşır",
         "Fransa Üretimi",
         "Orijinal Ürün"
@@ -1879,7 +1879,7 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:yesil:5 Saniyede Doğrar",
+        "damga:yesil:5 Saniye",
         "Elektriksiz · Çift Çelik Bıçak",
         "500 ml Şeffaf Hazne",
         "Orijinal Ürün"
@@ -2190,8 +2190,8 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:yesil:Kolay Temizlik",
-        "24 + 28 cm · 2’li Tava Seti",
+        "damga:yesil:2’li Tava",
+        "24 + 28 cm · Kolay Temizlik",
         "İç-Dış Yapışmaz Yüzey",
         "Orijinal Ürün"
       ],
@@ -2513,7 +2513,7 @@
       "kampanya": null,
       "oneCikan": true,
       "rozetler": [
-        "damga:altin:Monoblok Bıçak",
+        "damga:altin:Çeyiz Seti",
         "6 Kişilik · 18/10 Çelik",
         "Bulaşık Makinesine Uygun",
         "Orijinal Ürün"
@@ -2627,7 +2627,7 @@
     "setlerBaslik": "Setler & fırsatlar",
     "oneCikanlarBaslik": "Öne çıkan ürünler"
   },
-  "guncelleme": "2026-11-19T15:35:51.672Z",
+  "guncelleme": "2026-11-19T15:44:25.206Z",
   "kategoriler": [
     {
       "ad": "Düdüklü Tencereler",

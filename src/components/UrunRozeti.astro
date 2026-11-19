@@ -1,6 +1,5 @@
 ---
 import type { RozetTonu } from '../lib/katalog';
-import Ikon from './Ikon.astro';
 
 interface Props {
   etiket: string;
@@ -11,9 +10,7 @@ interface Props {
 
 const { etiket, tur, ton = 'turuncu', konum } = Astro.props;
 const cokSatan = tur === 'cok-satan';
-const ikon = tur === 'firsat' ? 'etiket' : ton === 'kirmizi' ? 'ates' : ton === 'yesil' ? 'saat' : ton === 'altin' ? 'yildiz' : ton === 'lacivert' ? 'kalkan' : 'kutu';
 ---
 <span class:list={['urun-rozeti', `urun-rozeti--${ton}`, konum && `urun-rozeti--${konum}`, { 'urun-rozeti--cok-satan': cokSatan }]}>
-  {!cokSatan && <Ikon ad={ikon} boyut={13} />}
   <span>{etiket}</span>
 </span>
