@@ -142,6 +142,8 @@ const simdi = Date.now();
     const otomatikGecikti = k.sonOtomatikApi && simdi - Date.parse(k.sonOtomatikApi) > 30 * 60_000;
     const otomatikDurum = !apiHazir || !k.stokBaslangic ? 'Kurulum bekliyor' : !zamanlayiciAnahtariVar ? 'Kapalı'
       : !k.sonOtomatikApi ? 'İlk çalışma bekleniyor' : otomatikGecikti ? 'Gecikiyor' : 'Çalışıyor';
+    const stokDurumu = !apiHazir || !k.stokBaslangic ? 'Kurulum bekliyor' : !otomatikYazma ? 'Elle'
+      : k.bekleyenStok ? 'Kanal onayı bekleniyor' : eslesen === 0 ? 'İlan eşleştirmesi bekliyor' : 'Otomatik';
     return <section class:list={['y-kart', 'kanal', 'kanal--' + kanal]} id={kanal}>
       <div class="y-kart__bas">
         <h2>{KANALLAR[kanal]}</h2>
@@ -152,7 +154,7 @@ const simdi = Date.now();
         <div><dt>Otomatik eşitleme</dt><dd class:list={{ 'y-uyari-kucuk': otomatikGecikti }}>{otomatikDurum}</dd></div>
         <div><dt>Son otomatik çekim</dt><dd>{zaman(k.sonOtomatikApi)}</dd></div>
         <div><dt>Son başarılı çekim</dt><dd>{zaman(k.sonApi)}</dd></div>
-        <div><dt>Stok gönderimi</dt><dd>{!apiHazir || !k.stokBaslangic ? 'Kurulum bekliyor' : !otomatikYazma ? 'Elle' : k.bekleyenStok ? 'Kanal onayı bekleniyor' : 'Otomatik'}</dd></div>
+        <div><dt>Stok gönderimi</dt><dd>{stokDurumu}</dd></div>
       </dl>
 
       {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}

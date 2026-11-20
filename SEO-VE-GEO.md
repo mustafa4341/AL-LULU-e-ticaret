@@ -8,6 +8,8 @@ Son güncelleme 20.11.2026.
 - [x] Yedi kategoriye görünür seçim rehberi ve `CollectionPage` ile `ItemList` verisi eklendi. Site haritası ürün görsellerini içerir. Site haritası ve `llms.txt` yayındaki ürünlerle sınırlıdır. [Google site haritası belgeleri](https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps)
 - [x] Ürün meta açıklamaları kısaltıldı ve başlıklarda marka tekrarları temizlendi. Üretici model kodu için panelde **Detaylar → Teknik özellikler → MPN** satırını kullanın. [Google MPN kuralları](https://support.google.com/merchants/answer/6324482)
 - [x] Google Merchant Center müşteri hizmetlerine mağazadaki destek e-postası ve [iletişim sayfası](https://alluluhome.com/bilgi) kaydedildi.
+- [x] Güncellenen site haritası Search Console’a yeniden gönderildi. Google gönderimi kabul etti. [Search Console site haritaları](https://search.google.com/u/1/search-console/sitemaps?resource_id=sc-domain%3Aalluluhome.com)
+- [x] 14 ürün ve 7 kategori adresi IndexNow’a iletildi. Hizmet HTTP 200 ile kabul etti. [IndexNow belgeleri](https://www.indexnow.org/documentation)
 - [ ] Merchant Center’da 14 ürün incelemede, onaylanan ürün sayısı 0. İnceleme sonrasında **Ürünler → Dikkat gerekiyor** bölümünü kontrol edin.
 - [ ] Akakçe ve Cimri onayı doğrulanmadı. Her iki platform için mağaza adına herkese açık eşleşme ve kurumsal posta kutusunda başvuru bildirimi bulunamadı. Başvuru hesabı veya referans numarası varsa durum oradan doğrulanmalı. [Akakçe mağaza başvurusu](https://www.akakce.com/magaza-basvuru/) · [Cimri mağaza kaydı](https://www.cimri.com/magaza-kayit)
 - [ ] 12 ürünün kutudan doğrulanacak barkodu var. Panelde **Ürünler & Stok → Barkodu eksik** filtresinden takip edin. [Google GTIN kuralları](https://support.google.com/merchants/answer/6324461)
@@ -62,28 +64,21 @@ Adres: **<https://alluluhome.com/urun-akisi.xml>** — Google Alışveriş biçi
 4. **URL denetimi** → `https://alluluhome.com/urun/fissler-vitaquick-premium-6l` → **Dizine eklenmesini iste**. Aynısını ana sayfa için.
 5. **Performans** raporu: Google'da hangi aramada kaç kez göründüğünüzü ve tıklandığınızı gösterir (2–3 gün sonra dolmaya başlar). Çerez gerektirmez.
 
-### 2. Google İşletme Profili — "satış yeri", çalışma saatleri, Haritalar (~20 dk)
-<https://business.google.com> → **İşletme ekle**:
-- Ad: **Al Lulu Home** · Kategori: **Mutfak gereçleri mağazası** (Google'daki İngilizce adı "Kitchen supply store"; ek kategori: "Ev eşyası mağazası")
-- "Müşterilerin ziyaret edebileceği bir konum ekleyin mi?" → **Hayır** (yalnız çevrim içi satış; ev adresiniz görünmez)
-- Hizmet bölgesi: **Türkiye**
-- Telefon `0552 577 85 78`, web sitesi `https://alluluhome.com`
-- Çalışma saatleri: **Pazartesi–Cuma 09:00–18:00** (sitedeki ile aynı olmalı; değişirse ikisini birden güncelleyin)
-- Logo: `public/img/logo/icon-512.png`, kapak: ürün fotoğrafı
-- Doğrulama (video/posta) Google'ın istediği yöntemle sizde.
-- Ürünler sekmesine Vitaquick'i ekleyin. Gerçek müşterilerden **yorum isteyin** (yorum satın almayın, kendiniz yazmayın — Google siler ve ceza verir).
+### 2. Google İşletme Profili
 
-### 3. Google Merchant Center — ücretsiz "Alışveriş" listesi (~20 dk)
-<https://merchants.google.com> → işletme bilgileri → **Ürünler → Ürün kaynağı ekle → Dosya → Planlanmış getirme (URL)** → `https://alluluhome.com/urun-akisi.xml` (günlük).
-Sitedeki ürün verisi (fiyat, stok, kargo, iade) hazır. Kargo ayarı: 1.000 TL üzeri ücretsiz, altı 99 TL, 1–3 iş günü.
-Not: Kartlı ödeme (PayTR) kapalıyken Google "satın alınamıyor" uyarısı verebilir; PayTR canlıya alınınca sorun kalmaz.
+Mağaza yalnız çevrim içi satış yaptığı sürece Google İşletme Profili uygunluk koşullarını karşılamıyor. [Google uygunluk koşulları](https://support.google.com/business/answer/13763036)
 
-### 4. Bing Webmaster Tools — ChatGPT ve Copilot aramaları için (~5 dk)
-ChatGPT'nin web araması ve Copilot büyük ölçüde **Bing dizinini** kullanır.
-<https://www.bing.com/webmasters> → **Google Search Console'dan içe aktar** → site haritası otomatik gelir.
+### 3. Google Merchant Center
+
+Ürün kaynağı `https://alluluhome.com/urun-akisi.xml` tanımlı. Ödeme ve mağaza incelemesiyle ilgili uyarılar için 14 ürünün değerlendirme sonucunu takip edin. [Merchant Center](https://merchants.google.com/)
+
+### 4. Bing Webmaster Tools
+
+20.11.2026 kontrolünde oturum açma ekranı görüldü. Alan mülkü doğrulanamadı. Yetkili hesapla **Google Search Console’dan içe aktar** seçeneği kullanılabilir. [Bing Webmaster Tools](https://www.bing.com/webmasters/)
 
 ### 5. GA4 + Tag Manager — site içi davranış (EPOSTA-VE-GOOGLE.md → Adım 6)
-`GTM_KIMLIGI`'ni bana yazmanız yeterli.
+
+GA4 kurulumu ve Production etiketi kayıtlı. Canlı ödeme açılınca `purchase` olayını bir onaylı siparişle doğrulayın.
 
 ### 6. Satıcı bilgileri (yasal zorunluluk ve güven sinyali)
 Panelde **ticari unvan, adres, vergi no, MERSİS, ETBİS** boş. 19.11.2026'dan beri boş alanlar sitede ve sözleşmelerde hiç gösterilmiyor (eskiden "[… girilmedi]" yazıyordu); satıcı adı yerine "Al Lulu Home" yazılıyor.

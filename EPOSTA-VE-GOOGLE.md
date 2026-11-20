@@ -2,7 +2,7 @@
 
 Sıra önem derecesine göredir. ✅ = hazır, 👤 = sizin yapmanız gereken (giriş/parola gerektiği için).
 
-## Durum özeti (18.11.2026)
+## Durum özeti (20.11.2026)
 
 | Konu | Durum |
 |---|---|
@@ -12,9 +12,9 @@ Sıra önem derecesine göredir. ✅ = hazır, 👤 = sizin yapmanız gereken (g
 | **DKIM imzası** | ✅ yayında ve Google'da başlatıldı |
 | **DMARC kaydı** | ✅ yayında (`p=none`); 2–4 hafta sonra `p=quarantine` |
 | Sipariş e-posta şablonları + gönderim kodu | ✅ canlıda |
-| Vercel SMTP ayarları | ✅ 6/7 girildi — 👤 yalnızca `SMTP_PAROLA` (uygulama şifresi) eksik |
+| Vercel SMTP ayarları | ✅ `SMTP_PAROLA` dahil Production ayarları mevcut. Sipariş e-postasının teslimi henüz uçtan uca doğrulanmadı. |
 | E-posta kaydı, tekrar gönderim engeli, panelden yeniden gönder | ✅ Supabase `eposta_kayitlari` |
-| Çerez onayı + Google Tag Manager (Consent Mode, temel) | ✅ kod hazır — 👤 `GTM_KIMLIGI` girilince açılır (Adım 6) |
+| Çerez onayı + Google Tag Manager (Consent Mode, temel) | ✅ `GTM_KIMLIGI` Production ayarında kayıtlı (Adım 6) |
 | GA4 e-ticaret olayları | ✅ view_item_list, select_item, view_item, add_to_cart, remove_from_cart, view_cart, begin_checkout, add_shipping_info, add_payment_info, purchase |
 | Google arama ikonu, webmanifest | ✅ 32/48/192 px, `/favicon.ico`, `/site.webmanifest` |
 | Ürün yapısal verisi (Merchant Center) | ✅ fiyat, stok, marka, SKU + kargo ve iade bilgisi |
