@@ -107,8 +107,11 @@ if (Astro.request.method === 'POST') {
         aday.gorseller = aday.gorseller.filter((g) => !yuklenen.some((y) => y.src === g.src));
       }
     }
-    urun = { ...aday, fiyat, id: yeni ? '' : urun.id };
     m = await magazaOku();
+    /* Kayıt başarısızsa "Yayın durumu" seçimi gerçek (kayıtlı) durumu göstersin; yoksa taslak ürün "Yayında" görünür */
+    const oncekiId = urun.id;
+    const kayitliDurum = yeni ? 'taslak' : m.urunler.find((x) => x.id === oncekiId)?.durum ?? aday.durum;
+    urun = { ...aday, durum: kayitliDurum, fiyat, id: yeni ? '' : oncekiId };
   }
 }
 
@@ -143,7 +146,10 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
           <button type="submit" form="urun-form" class="btn btn--sepet" name="eylem" value="kaydet" data-yayin-kaydet>Kaydet</button>
         </>
       : <>
-          <button type="submit" form="urun-form" class="btn btn--cizgi" name="yayin" value={kayitli?.durum === 'gizli' ? 'gizli' : 'taslak'}>{yeni ? 'Taslak kaydet' : 'Kaydet'}</button>
+          {/* Yeni üründe taslak olarak kaydeder; kayıtlı taslak/gizli üründe formdaki "Yayın durumu" seçimine uyar */}
+          {yeni
+            ? <button type="submit" form="urun-form" class="btn btn--cizgi" name="yayin" value="taslak">Taslak kaydet</button>
+            : <button type="submit" form="urun-form" class="btn btn--cizgi" name="eylem" value="kaydet">Kaydet</button>}
           <button type="submit" form="urun-form" class="btn y-yayinla-btn" name="yayin" value="yayinda">Kaydet ve yayınla</button>
         </>}
     {!yeni && <button type="submit" form="urun-form" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.">Sil</button>}

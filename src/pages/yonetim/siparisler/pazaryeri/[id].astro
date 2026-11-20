@@ -107,7 +107,7 @@ const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniy
         {kent && <div><dt>Teslimat ili / ilçesi</dt><dd>{kent}</dd></div>}
         {s.kargoFirma && <div><dt>Kargo firması</dt><dd>{s.kargoFirma}</dd></div>}
         {s.kargoTakip && <div><dt>Kargo takip no</dt><dd>{s.kargoTakip} <button type="button" class="y-icon-button" data-kopyala={s.kargoTakip}>Kopyala</button></dd></div>}
-        {tarihYaz(s.sonKargoTarihi) && <div><dt>Son kargolama</dt><dd>{tarihYaz(s.sonKargoTarihi)}</dd></div>}
+        {(adimSirasi ?? 9) <= 1 && tarihYaz(s.sonKargoTarihi) && <div><dt>Son kargolama</dt><dd>{tarihYaz(s.sonKargoTarihi)}</dd></div>}
         {tarihYaz(s.sonAktarim) && <div><dt>Son kayıt güncellemesi</dt><dd>{tarihYaz(s.sonAktarim)} · {s.kaynak === 'api' ? 'API' : 'Dosya'}</dd></div>}
       </dl>
       <p class="y-help">Gönderi, fatura, iptal ve ödeme iadesi işlemlerini {KANALLAR[s.kanal]} satıcı panelinde yapın.</p>
@@ -148,7 +148,7 @@ const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniy
               <label class="y-alan">Mağaza ürünü
                 <select name="urun" required>
                   <option value="">Ürün seçin</option>
-                  {urunSecenekleri.map((u) => <option value={u.id}>{[u.kisaAd, u.sku, urunGtin(u), `Stok ${kullanilabilir(u)}`].filter(Boolean).join(' · ')}</option>)}
+                  {urunSecenekleri.map((u) => <option value={u.id}>{[...new Set([u.kisaAd, u.sku, urunGtin(u), `Stok ${kullanilabilir(u)}`].filter(Boolean))].join(' · ')}</option>)}
                 </select>
               </label>
               <button type="submit" class="btn btn--cizgi">Eşleştir ve stok ayır</button>

@@ -78,7 +78,7 @@ const odemeTamam = ['odendi', 'hazirlaniyor', 'kargoda', 'teslim-edildi'].includ
 const adimlar = [
   { ad: 'Sipariş alındı', tamam: true, tarih: s.tarih },
   { ad: 'Ödeme onaylandı', tamam: odemeTamam, tarih: s.gecmis.find((g) => g.durum === 'odendi')?.tarih },
-  { ad: 'Hazırlanıyor', tamam: ['hazirlaniyor', 'kargoda', 'teslim-edildi'].includes(s.durum), tarih: s.gecmis.find((g) => g.durum === 'hazirlaniyor')?.tarih },
+  { ad: 'Hazırlık', tamam: ['hazirlaniyor', 'kargoda', 'teslim-edildi'].includes(s.durum), tarih: s.gecmis.find((g) => g.durum === 'hazirlaniyor')?.tarih },
   { ad: 'Kargoda', tamam: ['kargoda', 'teslim-edildi'].includes(s.durum), tarih: s.gecmis.find((g) => g.durum === 'kargoda')?.tarih },
   { ad: 'Teslim edildi', tamam: s.durum === 'teslim-edildi', tarih: s.gecmis.find((g) => g.durum === 'teslim-edildi')?.tarih },
 ];

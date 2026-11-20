@@ -71,13 +71,13 @@ const ikonlar = [['duduklu','Düdüklü tencere'],['tencere','Tencere'],['tava',
     {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><button class="btn btn--tehlike" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu kategori silinsin mi?">Kategoriyi sil</button></details>}
   </form> : listeK.length ? <form method="post" class="y-kategori-siralama" data-editor>
     <input type="hidden" name="eylem" value="sirala" />
-    <div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Sıra</th><th>Kategori</th><th>Ürün</th><th>Menü</th><th>Ana sayfa</th><th>Boşsa</th><th>İşlem</th></tr></thead>
+    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Sıra</th><th>Kategori</th><th>Ürün</th><th>Menü</th><th>Ana sayfa</th><th>Ürün yokken</th><th>İşlem</th></tr></thead>
       <tbody data-sirala>{listeK.map((k, i) => (
         <tr data-sira-satir>
-          <td><input type="hidden" name="siraId" value={k.id} /><span data-sira-no>{i + 1}</span> <button type="button" class="y-icon-button" data-sira="yukari" aria-label={k.ad + ' yukarı'}><Ikon ad="yukari" boyut={14} /></button><button type="button" class="y-icon-button" data-sira="asagi" aria-label={k.ad + ' aşağı'}><Ikon ad="asagi" boyut={14} /></button></td>
-          <td><strong>{k.ad}</strong></td><td>{m.urunler.filter((u) => u.kategoriler.includes(k.id)).length}</td>
-          <td>{k.menudeGoster ? 'Açık' : 'Kapalı'}</td><td>{k.anaSayfadaGoster ? 'Açık' : 'Kapalı'}</td>
-          <td>{k.yakindaGoster ? 'Yakında' : 'Gizli'}</td><td><a class="y-link" href={'?duzenle=' + k.id}>Düzenle</a></td>
+          <td data-etiket="Sıra"><input type="hidden" name="siraId" value={k.id} /><span data-sira-no>{i + 1}</span> <button type="button" class="y-icon-button" data-sira="yukari" aria-label={k.ad + ' yukarı'}><Ikon ad="yukari" boyut={14} /></button><button type="button" class="y-icon-button" data-sira="asagi" aria-label={k.ad + ' aşağı'}><Ikon ad="asagi" boyut={14} /></button></td>
+          <td data-etiket="Kategori"><strong>{k.ad}</strong></td><td data-etiket="Ürün">{m.urunler.filter((u) => u.kategoriler.includes(k.id)).length}</td>
+          <td data-etiket="Menü">{k.menudeGoster ? 'Açık' : 'Kapalı'}</td><td data-etiket="Ana sayfa">{k.anaSayfadaGoster ? 'Açık' : 'Kapalı'}</td>
+          <td data-etiket="Ürün yokken">{k.yakindaGoster ? 'Yakında' : 'Gizli'}</td><td class="y-islem"><a class="y-link" href={'?duzenle=' + k.id}>Düzenle</a></td>
         </tr>
       ))}</tbody></table></div>
     <div class="y-ust-aksiyonlar y-block-gap"><button type="submit" class="btn btn--cizgi" data-sira-kaydet hidden>Sırayı kaydet</button><span data-kayit-durum class="y-form-state" role="status"></span></div>

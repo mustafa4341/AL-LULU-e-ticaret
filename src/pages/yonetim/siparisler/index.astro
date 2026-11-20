@@ -59,7 +59,7 @@ if (tarama && q) {
 const belgesiVar = (no: string) => finans.belgeler.some((b) => b.siparisNo === no && belgeGecerli(b));
 type Durum = ReturnType<typeof pazaryeriDurumu>;
 const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi, d: Durum) => boolean][] = [
-  ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr) || !!s.paytr?.stokEksik,
+  ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr) || !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip),
     (_, d) => d.hazirlanacak || d.hazirlaniyor || d.uyari.length > 0],
   ['kontrol', 'Kontrol gerekli', (s) => !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip), (_, d) => d.uyari.length > 0],
   ['odendi', 'Hazırlanacak', (s) => s.durum === 'odendi', (_, d) => d.hazirlanacak],
@@ -321,6 +321,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
     </div>}
   </> : <div class="y-kart y-bos">
     <p><strong>{!pazaryeri && kanal !== 'web' ? 'Pazaryeri sipariş listesi kullanılamıyor.' : q ? '“' + q + '” için sipariş bulunamadı.' : filtre === 'islem' ? 'Bekleyen iş yok.' : 'Bu görünümde sipariş yok.'}</strong></p>
+    {filtre === 'islem' && !q && (sayilar.belgesiz ?? 0) > 0 && <p class="muted">Belgesi hazırlanmamış {sayilar.belgesiz} web siparişi var. <a class="y-link" href={filtreAdresi('belgesiz')}>Belgesi eksik siparişleri aç</a></p>}
     {q && filtre !== 'tumu' && <a class="y-link" href={filtreAdresi('tumu')}>Tüm durumlarda ara</a>}
     {(filtre !== 'tumu' || kanal !== 'tumu' || q || tarihAcik) && <a class="y-link" href="?durum=tumu">Tüm siparişleri göster</a>}
   </div>}

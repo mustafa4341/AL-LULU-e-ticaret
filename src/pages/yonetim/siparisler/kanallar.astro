@@ -6,7 +6,7 @@ import { otomatikStokYazmaAcik, pazaryeriApiDurumu, pazaryeriOrtam } from '../..
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
 import { pazaryeriSenkron } from '../../../lib/pazaryeriSenkron';
 import { urunGtin } from '../../../lib/urunKimlik';
-import { yTarih } from '../../../lib/yonetimRapor';
+import { stokSebebi, yTarih } from '../../../lib/yonetimRapor';
 
 const yol = '/yonetim/siparisler/kanallar';
 const hatalar: string[] = [];
@@ -231,7 +231,7 @@ const simdi = Date.now();
   <details class="y-kart kanal-bolum" id="hareketler">
     <summary>Son stok hareketleri</summary>
     {hareketler.length > 0 ? <ul class="kanal-hareketler">
-      {hareketler.map((h) => <li><time datetime={h.tarih}>{zaman(h.tarih)}</time><strong>{urunAdlari.get(h.urunId) ?? h.urunId}</strong><span>{h.onceki} → {h.sonraki}</span><span>{h.sebep}</span></li>)}
+      {hareketler.map((h) => <li><time datetime={h.tarih}>{zaman(h.tarih)}</time><strong>{urunAdlari.get(h.urunId) ?? h.urunId}</strong><span>{h.onceki} → {h.sonraki}</span><span>{stokSebebi(h.sebep)}</span></li>)}
     </ul> : <p>Henüz stok hareketi yok.</p>}
   </details>
 </Yonetim>

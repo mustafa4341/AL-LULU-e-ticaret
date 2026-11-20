@@ -113,10 +113,10 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
 
   {sekme === 'ozet' && <>
     <div class="y-metrics y-metrics--finans">
-      <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü onaylı satış</span><strong>{finansPara(bugunSatis.webSatis - bugunSatis.webIade)}</strong></a>
+      <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü web satışı (onaylı)</span><strong>{finansPara(bugunSatis.webSatis - bugunSatis.webIade)}</strong></a>
       <a class="y-metric" href="/yonetim/siparisler?durum=belgesiz"><span>Belgesi hazırlanmamış</span><strong>{belgeGerekenler.length}</strong></a>
       <a class="y-metric" href={'?sekme=giderler&ay=' + bugun.slice(0, 7)}><span>Bu ayki giderler</span><strong>{finansPara(buAy.gider)}</strong></a>
-      <a class="y-metric" href={'?sekme=ozet&ay=' + bugun.slice(0, 7) + '#ay-hesabi'}><span>Tahmini net · bu ay</span><strong>{finansPara(kalan(buAy))}</strong>
+      <a class="y-metric" href={'?sekme=ozet&ay=' + bugun.slice(0, 7) + '#ay-hesabi'}><span>Tahmini kalan · bu ay</span><strong>{finansPara(kalan(buAy))}</strong>
         {buAy.tahmini === undefined && <small class="y-uyari-kucuk">Ürün maliyeti girilmedi</small>}</a>
     </div>
 
@@ -130,8 +130,8 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
         <a class="y-link" href={disari('pdf', ayDonemi.bas, ayDonemi.son)}>Bu ayın özetini PDF indir</a>
       </div>
       <dl class="y-hesap">
-        <div><dt>Onaylı satışlar <small>{ayRaporu.satislar.length} sipariş · ödeme tarihine göre</small></dt><dd>{finansPara(ayRaporu.webSatis)}</dd></div>
-        <div class="eksi"><dt>İade ve iptal geri ödemeleri <small>{ayRaporu.iadeler.length} kayıt</small></dt><dd>−{finansPara(ayRaporu.webIade)}</dd></div>
+        <div><dt>Onaylı web satışları <small>{ayRaporu.satislar.length} sipariş · ödeme tarihine göre</small></dt><dd>{finansPara(ayRaporu.webSatis)}</dd></div>
+        <div class="eksi"><dt>İade ve iptal geri ödemeleri <small>{ayRaporu.iadeler.filter((x) => x.tutar > 0).length} kayıt</small></dt><dd>−{finansPara(ayRaporu.webIade)}</dd></div>
         {ayRaporu.trendyolBeklenen !== 0 && <div><dt>Trendyol beklenen hakediş <small>kesintiler düşülmüş</small></dt><dd>{finansPara(ayRaporu.trendyolBeklenen)}</dd></div>}
         <div class="eksi"><dt>Giderler <small><a class="y-link" href={'?sekme=giderler&ay=' + ay}>{ayRaporu.giderler.length} kayıt · gör</a></small></dt><dd>−{finansPara(ayRaporu.gider)}</dd></div>
         {Object.entries(ayRaporu.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
@@ -144,12 +144,12 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
 
     <section class="y-kart">
       <h2>Son 6 ay</h2>
-      <div class="y-tablo-kap"><table class="y-tablo">
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
         <thead><tr><th>Ay</th><th class="y-sayi">Satış</th><th class="y-sayi">İade</th><th class="y-sayi">Gider</th><th class="y-sayi">Kalan</th></tr></thead>
         <tbody>{son6.map((a) => <tr class:list={{ 'is-secili': a.bas.slice(0, 7) === ay }}>
-          <td><a class="y-link" href={'?sekme=ozet&ay=' + a.bas.slice(0, 7)}>{a.ad}</a></td>
-          <td class="y-sayi">{finansPara(a.r.webSatis)}</td><td class="y-sayi">{finansPara(a.r.webIade)}</td><td class="y-sayi">{finansPara(a.r.gider)}</td>
-          <td class="y-sayi"><strong>{finansPara(kalan(a.r))}</strong>{a.r.tahmini === undefined && <span class="y-uyari-kucuk" title="Ürün maliyeti girilmedi"> *</span>}</td>
+          <td data-etiket="Ay"><a class="y-link" href={'?sekme=ozet&ay=' + a.bas.slice(0, 7)}>{a.ad}</a></td>
+          <td data-etiket="Satış" class="y-sayi">{finansPara(a.r.webSatis)}</td><td data-etiket="İade" class="y-sayi">{finansPara(a.r.webIade)}</td><td data-etiket="Gider" class="y-sayi">{finansPara(a.r.gider)}</td>
+          <td data-etiket="Kalan" class="y-sayi"><strong>{finansPara(kalan(a.r))}</strong>{a.r.tahmini === undefined && <span class="y-uyari-kucuk" title="Ürün maliyeti girilmedi"> *</span>}</td>
         </tr>)}</tbody>
       </table></div>
       {son6.some((a) => a.r.tahmini === undefined) && <p class="y-help">* Ürün alış maliyeti girilmemiş ay; kalan kesin değildir.</p>}
@@ -291,7 +291,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
   {sekme === 'trendyol' && <>
     <section class="y-kart">
       <div class="y-kart__bas"><h2>Hakediş raporu yükle</h2><a class="y-link" href={disari('sablon')}>Boş şablonu indir (CSV)</a></div>
-      <p class="y-help">Trendyol mağaza bağlantısı (API) henüz kurulmadı. Satıcı panelinden indirdiğiniz hakediş/ödeme raporunu şablondaki başlıklarla CSV veya XLSX olarak yükleyin. Aynı kayıt numarası tekrar yüklenirse güncellenir, iki kez sayılmaz.</p>
+      <p class="y-help">Trendyol siparişleri panele kendiliğinden gelir, ama komisyon ve ödeme (hakediş) bilgisi henüz otomatik gelmiyor. Trendyol satıcı panelinden indirdiğiniz hakediş/ödeme raporunu şablondaki başlıklarla CSV veya XLSX olarak yükleyin. Aynı kayıt numarası tekrar yüklenirse güncellenir, iki kez sayılmaz.</p>
       <form class="y-sonraki" method="post" enctype="multipart/form-data">
         <input type="hidden" name="eylem" value="trendyol-al" />
         <label class="y-alan">Rapor dosyası<input type="file" accept=".csv,.xlsx" name="rapor" required /></label>

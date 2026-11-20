@@ -4,6 +4,12 @@ import { iadeEdildi } from './siparisAkisi';
 export const YAYIN_ADLARI = { yayinda: 'Yayında', taslak: 'Taslak', gizli: 'Gizli' } as const;
 export const yTarih = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Istanbul' });
 export const yGun = new Intl.DateTimeFormat('tr-TR', { dateStyle: 'short', timeZone: 'Europe/Istanbul' });
+/* Stok defterindeki sebep, veritabanında durum koduyla yazılır ("Web siparişi AL… · odendi"); panelde sade Türkçe gösterilir. */
+const STOK_SEBEP_ADLARI: Record<string, string> = {
+  'odeme-bekliyor': 'sipariş alındı', odendi: 'ödeme onaylandı', hazirlaniyor: 'hazırlanıyor', kargoda: 'kargoya verildi',
+  'teslim-edildi': 'teslim edildi', iptal: 'iptal edildi', iade: 'iade alındı',
+};
+export const stokSebebi = (sebep: string) => sebep.replace(/^(Web siparişi \S+ · )([a-z-]+)$/, (tam, bas: string, kod: string) => STOK_SEBEP_ADLARI[kod] ? bas + STOK_SEBEP_ADLARI[kod] : tam);
 export const gonderilecek = (s: Siparis) => s.durum === 'odendi' || s.durum === 'hazirlaniyor';
 export const onayliSatis = (s: Siparis) =>
   !s.paytr?.test && !iadeEdildi(s) && s.durum !== 'iptal' && s.durum !== 'odeme-bekliyor' && (!s.paytr || s.paytr.sonuc === 'odendi');

@@ -16,6 +16,8 @@ if (Astro.request.method === 'POST') {
   };
   iade = sayi(f, 'iadeGun', mevcut.iadeGun);
   try {
+    /* Mesafeli Sözleşmeler Yönetmeliği m.9: cayma süresi en az 14 gün */
+    if (!Number.isInteger(iade) || iade < 14 || iade > 365) throw new DogrulamaHatasi(['Cayma ve iade süresi yasal olarak en az 14 gün olmalı (en fazla 365).']);
     await magazaGuncelle((m) => { m.site.satici = satici; m.site.iadeGun = iade; });
     return Astro.redirect('/yonetim/ayarlar?ok=' + encodeURIComponent('Yasal bilgiler kaydedildi.'), 303);
   } catch (e) {
@@ -32,10 +34,10 @@ const eksik = alanlar.slice(0, 4).filter(([id]) => bosYasalBilgi(satici[id])).ma
   <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet">Kaydet</button>
   <form method="post" id="yasal-form" class="y-kart" data-editor>
     <h2>Yasal Bilgiler</h2>
-    {eksik.length > 0 && <p class="y-uyari">Tamamlanacak alanlar · {eksik.join(', ')}</p>}
+    {eksik.length > 0 && <p class="y-help">Boş bıraktığınız alanlar ({eksik.join(', ')}) sitede, sözleşmelerde ve belgelerde hiç gösterilmez.</p>}
     <div class="y-izgara y-izgara--2">
       {alanlar.map(([id, ad]) => <label class="y-alan">{ad}<input name={id} value={satici[id]} /></label>)}
-      <label class="y-alan">Cayma ve iade süresi (gün)<input name="iadeGun" type="number" min="1" value={iade} /></label>
+      <label class="y-alan">Cayma ve iade süresi (gün)<input name="iadeGun" type="number" min="14" max="365" required value={iade} /><small class="muted">Yasal en az süre 14 gündür.</small></label>
     </div>
     <p class="y-form-state" data-kayit-durum role="status"></p>
   </form>
