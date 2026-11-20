@@ -7,11 +7,11 @@ import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi, stokHa
 import { pazaryeriSenkron } from '../../../lib/pazaryeriSenkron';
 import { urunGtin } from '../../../lib/urunKimlik';
 import { yTarih } from '../../../lib/yonetimRapor';
-import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 
 const yol = '/yonetim/siparisler/kanallar';
 const hatalar: string[] = [];
 const ok = Astro.url.searchParams.get('ok');
+const duzenlenenKanal = Astro.url.searchParams.get('eslestirme');
 const bagli = supabaseBagliMi();
 let ayar = bosAyarlar();
 let depoHazir = bagli && await pazaryeriHazirMi();
@@ -25,7 +25,10 @@ const magaza = await magazaOku();
 const urunler = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
 const baglantiAdi = { kapali: 'Bağlı değil', eksik: 'API ayarları eksik', test: 'Test bağlantısı', canli: 'Canlı bağlantı' };
 const panel = { trendyol: 'https://partner.trendyol.com/', hepsiburada: 'https://merchant.hepsiburada.com/' };
-const ayarliKanal = KANAL_LISTESI.some((kanal) => ayar.kanallar[kanal].stokBaslangic && pazaryeriApiDurumu(kanal) !== 'kapali');
+const ayarliKanal = KANAL_LISTESI.some((kanal) => {
+  const api = pazaryeriApiDurumu(kanal);
+  return ayar.kanallar[kanal].stokBaslangic && (api === 'canli' || api === 'test');
+});
 const senkronZamani = (p?: { id: string; tarih: string }) => p &&
   Date.now() - Date.parse(p.tarih) > (p.id === 'gonderim-bekleniyor' ? 15 * 60_000 : 5 * 3600_000);
 if (Astro.request.method === 'POST' && depoHazir) {
@@ -33,7 +36,7 @@ if (Astro.request.method === 'POST' && depoHazir) {
     const f = await Astro.request.formData();
     const eylem = f.get('eylem');
     if (eylem === 'senkron') {
-      const r = await pazaryeriSenkron();
+      const r = await pazaryeriSenkron('panel');
       if (r.durum === 'hata') throw new DogrulamaHatasi(Object.entries(r.kanallar).map(([id, s]) =>
         `${kanalMi(id) ? KANALLAR[id] : id} · ${[s.hata, s.stokHata].filter(Boolean).join(' ')}`).filter((s) => !s.endsWith(' · ')));
       if (r.durum === 'kapali') throw new DogrulamaHatasi(['Senkron için kanalın API ayarları ve stok başlangıcı gerekli.']);
@@ -86,6 +89,7 @@ if (Astro.request.method === 'POST' && depoHazir) {
         }
         k.urunler[urunId] = onceki?.kod === kod ? { ...onceki, kod, satista } : { kod, satista };
       });
+      return Astro.redirect(`${yol}?ok=ayar&eslestirme=${kanal}#${kanal}-${encodeURIComponent(urunId)}`, 303);
     } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
     return Astro.redirect(`${yol}?ok=ayar#${kanal}`, 303);
   } catch (e) {
@@ -109,78 +113,56 @@ const yerelSaat = (t?: string) => t ? new Date(Date.parse(t) + 3 * 3600e3).toISO
 const zaman = (t?: string) => t ? yTarih.format(new Date(t)) : 'Henüz yok';
 const basari = ok === 'senkron' ? 'Siparişler güncellendi.' : ok === 'bekliyor' ? 'Güncelleme zaten çalışıyor, birazdan tekrar bakın.' : ok === 'ayar' ? 'Kaydedildi.' : undefined;
 
-/* Kurulum adımları: annenin de takip edebileceği sırayla, her adım tamam mı değil mi */
 const API_YARDIM = {
-  trendyol: 'Trendyol satıcı paneli → sağ üstte adınız → Hesap Bilgilerim → Entegrasyon Bilgileri. Orada “Satıcı ID”, “API Key” ve “API Secret” yazar. Bu üç bilgiyi güvenlik için panele değil, site sunucusuna (Vercel ayarları) girmek gerekir; bana iletirseniz ben eklerim. Trendyol API ücretsizdir.',
-  hepsiburada: 'Hepsiburada satıcı panelinden Destek → “Entegrasyon (API) talebi” açın ve kendi yazılımınız için bağlantı isteyin. Hepsiburada önce test, sonra canlı bilgileri (Merchant ID, kullanıcı adı, şifre, User-Agent) e-postayla gönderir. Ücretsizdir, onay birkaç gün sürebilir.',
+  trendyol: 'Trendyol satıcı panelinde Hesap Bilgilerim → Entegrasyon Bilgileri bölümüne gidin. Satıcı ID, API Key ve API Secret değerlerini Vercel ortam ayarlarına girin.',
+  hepsiburada: 'Hepsiburada satıcı panelinden kendi yazılımınız için entegrasyon erişimi isteyin. Canlı Merchant ID, kullanıcı adı, parola ve User-Agent değerlerini Vercel ortam ayarlarına girin.',
 };
 const KOD_YARDIM = {
   trendyol: 'Trendyol’da ürünü eklerken yazdığınız “Barkod”. Çoğu üründe kutunun üzerindeki çizgili kodun altındaki 13 haneli sayıdır (EAN). Trendyol satıcı panelinde Ürünler listesinde de görünür.',
   hepsiburada: 'Hepsiburada’ya ürünü yüklerken verdiğiniz “Satıcı stok kodu” (merchantSku). Kendi belirlediğiniz koddur; çoğu satıcı model kodunu kullanır.',
 };
-function kurulumAdimlari(kanal: (typeof KANAL_LISTESI)[number]) {
-  const k = ayar.kanallar[kanal];
-  const api = pazaryeriApiDurumu(kanal);
-  const eslesen = Object.values(k.urunler).filter((u) => u.kod).length;
-  return [
-    { tamam: api === 'canli' || api === 'test', baslik: 'Mağaza bağlantısı (API bilgileri)', durum: baglantiAdi[api], yardim: API_YARDIM[kanal] },
-    { tamam: Boolean(k.stokBaslangic), baslik: 'Başlangıç sayımı', durum: k.stokBaslangic ? zaman(k.stokBaslangic) : 'Girilmedi',
-      yardim: 'Depodaki ürünleri sayıp panelde stokları düzelttiğiniz anı girin. Bu andan sonraki siparişler stoktan düşer; daha eskiler yalnız listede görünür (iki kez düşmesin diye).' },
-    { tamam: eslesen > 0, baslik: 'Ürünleri eşleştirme', durum: eslesen ? `${eslesen} ürün bağlı` : 'Hiç ürün bağlanmadı', yardim: KOD_YARDIM[kanal] },
-    { tamam: Boolean(k.sonApi), baslik: 'İlk sipariş çekimi', durum: k.sonApi ? zaman(k.sonApi) : 'Henüz yapılmadı',
-      yardim: '“Siparişleri şimdi güncelle” düğmesine basın. Bundan sonra siparişler kendiliğinden gelir; düğme yalnız acele ettiğinizde gerekir.' },
-  ];
-}
+const zamanlayiciAnahtariVar = (pazaryeriOrtam('CRON_SECRET')?.length ?? 0) >= 32;
+const otomatikYazma = otomatikStokYazmaAcik();
+const simdi = Date.now();
 ---
-<Yonetim baslik="Satış kanalları" altBaslik="Trendyol ve Hepsiburada mağazanızı panele bağlayın" aktif="siparisler" genis {basari} {hatalar}>
+<Yonetim baslik="Satış kanalları" altBaslik="Trendyol ve Hepsiburada siparişlerini ve ortak stoğu yönetin." aktif="siparisler" {basari} {hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/siparisler">Siparişlere dön</a>
-    {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit">Siparişleri şimdi güncelle</button></form>}
+    {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit">Şimdi eşitle</button></form>}
   </div>
 
-  <BilgiKutusu baslik="Bu sayfa ne işe yarar?" anahtar="kanallar-giris">
-    <p>Trendyol ve Hepsiburada mağazanızı bir kere buraya bağlarsınız. Sonra:</p>
-    <ul>
-      <li>Oradaki siparişler <strong>Siparişler</strong> sayfasında web siparişlerinin yanında, kanal adıyla görünür.</li>
-      <li>Satılan ürün <strong>tek stoktan</strong> düşer; aynı ürün iki yerde birden satılmaz.</li>
-      <li>Toplam satış Genel Bakış'ta kanal kanal ve hepsi birlikte görünür.</li>
-    </ul>
-    <p>Her kanal için aşağıdaki 4 adımı sırayla tamamlayın. Yeşil tik = adım tamam.</p>
-  </BilgiKutusu>
-
-  {!bagli && <p class="y-uyari-satir" role="status">Bu bilgisayarda veritabanı bağlı değil; kanal ayarları yalnız canlı panelde değiştirilebilir.</p>}
-  {bagli && !depoHazir && <p class="y-uyari-satir" role="status">Pazaryeri bölümü için veritabanı güncellemesi henüz yapılmadı. Bu yapılana kadar ayarlar kaydedilemez; sitenin geri kalanı normal çalışır.</p>}
+  {!depoHazir && <p class="y-uyari-satir" role="status">Kanal ayarları kullanılamıyor. Veritabanı bağlantısını ve pazaryeri tablolarını kontrol edin.</p>}
 
   <div class="kanal-izgara">
   {KANAL_LISTESI.map((kanal) => {
     const k = ayar.kanallar[kanal];
-    const adimlar = kurulumAdimlari(kanal);
-    const tamam = adimlar.filter((a) => a.tamam).length;
-    const eski = k.sonApi && Date.now() - Date.parse(k.sonApi) > 15 * 60_000;
+    const api = pazaryeriApiDurumu(kanal);
+    const apiHazir = api === 'canli' || api === 'test';
+    const eslesen = Object.values(k.urunler).filter((u) => u.kod).length;
+    const otomatikGecikti = k.sonOtomatikApi && simdi - Date.parse(k.sonOtomatikApi) > 30 * 60_000;
+    const otomatikDurum = !apiHazir || !k.stokBaslangic ? 'Kurulum bekliyor' : !zamanlayiciAnahtariVar ? 'Kapalı'
+      : !k.sonOtomatikApi ? 'İlk çalışma bekleniyor' : otomatikGecikti ? 'Gecikiyor' : 'Çalışıyor';
     return <section class:list={['y-kart', 'kanal', 'kanal--' + kanal]} id={kanal}>
       <div class="y-kart__bas">
-        <h2><span class:list={['kanal-etiket', 'kanal-etiket--' + kanal]}>{KANALLAR[kanal]}</span></h2>
-        <a class="y-link" href={panel[kanal]} target="_blank" rel="noopener noreferrer">Satıcı paneline git ↗</a>
+        <h2>{KANALLAR[kanal]}</h2>
+        <a class="y-link" href={panel[kanal]} target="_blank" rel="noopener noreferrer">Satıcı paneli ↗</a>
       </div>
-      <p class="kanal-ilerleme" aria-label={`${tamam} / 4 adım tamam`}>
-        <span class="kanal-ilerleme__cubuk"><span style={`width:${tamam * 25}%`}></span></span>
-        <strong>{tamam === 4 ? 'Kurulum tamam' : `${tamam} / 4 adım tamam`}</strong>
-      </p>
-
-      <ol class="kanal-adimlar">
-        {adimlar.map((a, i) => <li class:list={{ 'is-tamam': a.tamam }}>
-          <span class="kanal-adim__no" aria-hidden="true">{a.tamam ? '✓' : i + 1}</span>
-          <div>
-            <strong>{a.baslik}</strong> <span class="kanal-adim__durum">· {a.durum}</span>
-            <details class="kanal-adim__yardim"><summary>Nasıl yapılır?</summary><p>{a.yardim}</p></details>
-          </div>
-        </li>)}
-      </ol>
+      <dl class="kanal-durum">
+        <div><dt>Mağaza bağlantısı</dt><dd>{baglantiAdi[api]}</dd></div>
+        <div><dt>Otomatik eşitleme</dt><dd class:list={{ 'y-uyari-kucuk': otomatikGecikti }}>{otomatikDurum}</dd></div>
+        <div><dt>Son otomatik çekim</dt><dd>{zaman(k.sonOtomatikApi)}</dd></div>
+        <div><dt>Son başarılı çekim</dt><dd>{zaman(k.sonApi)}</dd></div>
+        <div><dt>Stok gönderimi</dt><dd>{!apiHazir || !k.stokBaslangic ? 'Kurulum bekliyor' : !otomatikYazma ? 'Elle' : k.bekleyenStok ? 'Kanal onayı bekleniyor' : 'Otomatik'}</dd></div>
+      </dl>
 
       {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}
       {k.sonStokHata && <p class="y-uyari-satir" role="alert">Stok gönderilemedi: {k.sonStokHata}</p>}
-      {eski && !k.sonApiHata && <p class="y-uyari-satir" role="status">Son güncelleme {zaman(k.sonApi)}. Otomatik güncelleme gecikti; “Siparişleri şimdi güncelle”ye basabilirsiniz.</p>}
-      {k.sonAktarimOzet && <p class="y-help">Son güncelleme: {k.sonAktarimOzet}</p>}
+      {otomatikGecikti && apiHazir && zamanlayiciAnahtariVar && !k.sonApiHata && <p class="y-uyari-satir" role="status">30 dakikadır başarılı otomatik çekim yok. Gerekirse “Şimdi eşitle”yi kullanın.</p>}
+      {k.sonAktarimOzet && <p class="y-help">Son aktarım · {k.sonAktarimOzet}</p>}
+      {!apiHazir && <details class="kanal-bolum" open>
+        <summary>Mağazayı bağlama</summary>
+        <p>{API_YARDIM[kanal]}</p>
+      </details>}
 
       {depoHazir && k.bekleyenStok && senkronZamani(k.bekleyenStok) && <details class="kanal-bolum">
         <summary>Bekleyen stok işlemini çöz</summary>
@@ -194,102 +176,101 @@ function kurulumAdimlari(kanal: (typeof KANAL_LISTESI)[number]) {
         </form>
       </details>}
 
-      <details class="kanal-bolum" open={!k.stokBaslangic && depoHazir}>
-        <summary>Adım 2 · Başlangıç sayımı ve güvenlik payı</summary>
+      <details class="kanal-bolum" open={!k.stokBaslangic && apiHazir && depoHazir}>
+        <summary>Başlangıç sayımı ve güvenlik payı</summary>
         <form method="post" class="kanal-form">
           <input type="hidden" name="kanal" value={kanal} />
           <label class="y-alan">Sayımı bitirdiğiniz gün ve saat
             <input type="datetime-local" name="stokBaslangic" value={yerelSaat(k.stokBaslangic)} disabled={!depoHazir || Boolean(k.sonAktarim)} />
-            <small>Bu andan önceki siparişler stoğu düşürmez. İlk siparişler geldikten sonra değiştirilemez.</small>
+            <small>Türkiye saati. İlk aktarımdan sonra kilitlenir. Yalnız bu andan sonraki siparişler stoğu etkiler.</small>
           </label>
           <label class="y-alan">Güvenlik payı (adet)
             <input type="number" name="guvenlikPayi" min="0" max="1000" value={k.guvenlikPayi} required disabled={!depoHazir} inputmode="numeric" />
-            <small>{KANALLAR[kanal]}'da stoğunuzdan bu kadar eksik gösterilir; son ürün aynı anda iki yerde satılmasın diye. 1 önerilir.</small>
+            <small>Kanalda satışa açılan stoktan ayrılan adet.</small>
           </label>
           <button class="btn btn--cizgi" type="submit" name="eylem" value="kanal-ayari" disabled={!depoHazir}>Kaydet</button>
         </form>
       </details>
 
-      <details class="kanal-bolum">
-        <summary>Adım 3 · Ürün eşleştirmeleri ({Object.values(k.urunler).filter((u) => u.kod).length} / {urunler.length})</summary>
-        <BilgiKutusu baslik={kanal === 'trendyol' ? 'Barkod nedir, nereden bulunur?' : 'Satıcı stok kodu nedir?'} anahtar={'kod-' + kanal} ton="ipucu">
-          <p>{KOD_YARDIM[kanal]}</p>
-          <p>Bu kod {KANALLAR[kanal]}'daki ilanınızı buradaki ürünle bağlar; sipariş gelince doğru ürünün stoğu düşer. Kod yanlışsa sipariş “ürün eşleşmedi” uyarısıyla gelir, stok düşmez.</p>
-        </BilgiKutusu>
-        <div class="kanal-urunler">
+      <details class="kanal-bolum" open={duzenlenenKanal === kanal} data-eslestirmeler>
+        <summary>Ürün eşleştirmeleri ({eslesen} bağlı)</summary>
+        <p class="y-help">{KOD_YARDIM[kanal]}</p>
+        {urunler.length > 0 && <label class="y-alan kanal-ara" hidden>Ürün veya ilan kodu ara
+          <input type="search" data-eslestirme-ara />
+        </label>}
+        <p class="y-help" role="status" data-eslestirme-bos hidden>Aramanıza uyan ürün yok.</p>
+        <div>
           {urunler.map((u) => {
             const eslesme = k.urunler[u.id];
             const hedef = ayrilan && kanalHedefStok(Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0)), k);
             const oneri = kanal === 'trendyol' ? urunGtin(u) : u.sku || undefined;
-            return <form method="post" class:list={['kanal-urun', { 'is-bagli': eslesme?.kod }]}>
+            return <form method="post" id={`${kanal}-${u.id}`} class:list={['kanal-urun', { 'is-bagli': eslesme?.kod }]} data-eslestirme-urun={`${u.marka} ${u.ad} ${u.sku} ${oneri ?? ''} ${eslesme?.kod ?? ''}`}>
               <input type="hidden" name="kanal" value={kanal} />
               <input type="hidden" name="urunId" value={u.id} />
               <div class="kanal-urun__ad">
                 <strong>{u.marka} {u.kisaAd}</strong>
-                <small>{eslesme?.kod ? '✓ Bağlı' : 'Bağlı değil'} · Depoda {u.stok}{eslesme?.kod && hedef !== undefined ? ` · ${KANALLAR[kanal]}'da gösterilecek ${eslesme.satista ? hedef : 0}` : ''}{eslesme?.bildirilen !== undefined ? ` · Şu an orada ${eslesme.bildirilen}` : ''}</small>
-                {kanal === 'trendyol' && !urunGtin(u) && <small class="kanal-urun__not">Bu üründe barkod girilmemiş. Kutudaki 13 haneli sayıyı ürünün “Teknik özellikler” bölümüne “Barkod (EAN)” olarak da ekleyebilirsiniz.</small>}
+                <small>{eslesme?.kod ? 'Bağlı' : 'Bağlı değil'} · Depo {u.stok}{eslesme?.kod && hedef !== undefined ? ` · Hedef ${eslesme.satista ? hedef : 0}` : ''}{eslesme?.bildirilen !== undefined ? ` · Kanalda ${eslesme.bildirilen}` : ''}</small>
               </div>
               <label class="y-alan">{kanal === 'trendyol' ? 'Barkod' : 'Satıcı stok kodu'}
-                <input name="kod" value={eslesme?.kod ?? ''} placeholder={oneri ? 'Öneri: ' + oneri : (kanal === 'trendyol' ? '13 haneli barkod' : 'Stok kodu')} maxlength="120" required disabled={!depoHazir} autocomplete="off" />
+                <input name="kod" value={eslesme?.kod ?? ''} placeholder={oneri} maxlength="120" required disabled={!depoHazir || Boolean(k.bekleyenStok)} autocomplete="off" />
               </label>
-              <label class="kanal-onay"><input type="checkbox" name="satista" checked={eslesme?.satista ?? true} disabled={!depoHazir} /> Satışta</label>
-              <button class="btn btn--cizgi" type="submit" name="eylem" value="urun-ayari" disabled={!depoHazir}>Kaydet</button>
+              <label class="kanal-onay"><input type="checkbox" name="satista" checked={eslesme?.satista ?? true} disabled={!depoHazir || Boolean(k.bekleyenStok)} /> Satışa açık</label>
+              <button class="btn btn--cizgi" type="submit" name="eylem" value="urun-ayari" disabled={!depoHazir || Boolean(k.bekleyenStok)}>Kaydet</button>
             </form>;
           })}
           {!urunler.length && <p>Katalogda ürün yok.</p>}
         </div>
       </details>
 
-      <details class="kanal-bolum">
-        <summary>Teknik durum</summary>
-        <dl class="kanal-durum">
-          <div><dt>Bağlantı</dt><dd>{baglantiAdi[pazaryeriApiDurumu(kanal)]}</dd></div>
-          <div><dt>Son sipariş çekimi</dt><dd>{zaman(k.sonApi)}</dd></div>
-          <div><dt>Stok gönderimi</dt><dd>{otomatikStokYazmaAcik() ? (k.bekleyenStok ? 'Kanal onayı bekleniyor' : 'Otomatik (açık)') : 'Kapalı · stoğu satıcı panelinden elle güncelleyin'}</dd></div>
-          <div><dt>Zamanlayıcı</dt><dd>{(pazaryeriOrtam('CRON_SECRET')?.length ?? 0) >= 32 ? 'Ayarlı' : 'Ayarlı değil · güncelleme panel açılınca/düğmeyle'}</dd></div>
-        </dl>
-      </details>
     </section>;
   })}
   </div>
 
   <details class="y-kart kanal-bolum" id="hareketler">
-    <summary>Son stok hareketleri (neden azaldı / arttı?)</summary>
+    <summary>Son stok hareketleri</summary>
     {hareketler.length > 0 ? <ul class="kanal-hareketler">
       {hareketler.map((h) => <li><time datetime={h.tarih}>{zaman(h.tarih)}</time><strong>{urunAdlari.get(h.urunId) ?? h.urunId}</strong><span>{h.onceki} → {h.sonraki}</span><span>{h.sebep}</span></li>)}
     </ul> : <p>Henüz stok hareketi yok.</p>}
   </details>
 </Yonetim>
 
+<script>
+  for (const bolum of document.querySelectorAll('[data-eslestirmeler]')) {
+    const ara = bolum.querySelector<HTMLInputElement>('[data-eslestirme-ara]');
+    const bos = bolum.querySelector<HTMLElement>('[data-eslestirme-bos]');
+    if (!ara || !bos) continue;
+    ara.closest('label')!.hidden = false;
+    const satirlar = [...bolum.querySelectorAll<HTMLElement>('[data-eslestirme-urun]')];
+    ara.addEventListener('input', () => {
+      const sorgu = ara.value.trim().toLocaleLowerCase('tr');
+      for (const satir of satirlar) {
+        satir.hidden = !satir.dataset.eslestirmeUrun!.toLocaleLowerCase('tr').includes(sorgu);
+      }
+      bos.hidden = satirlar.some((satir) => !satir.hidden);
+    });
+  }
+</script>
+
 <style>
-  .kanal-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 430px), 1fr)); gap: 14px; align-items: start; }
+  .kanal-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 14px; align-items: start; margin-bottom: 14px; }
   .kanal { margin: 0; scroll-margin: 5rem; border-top: 4px solid #f27a1a; }
   .kanal--hepsiburada { border-top-color: #6b4fbb; }
   .kanal h2 { font-size: 18px; }
-  .kanal-ilerleme { display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 13px; }
-  .kanal-ilerleme__cubuk { flex: 1; height: 8px; border-radius: 999px; background: #eee7da; overflow: hidden; }
-  .kanal-ilerleme__cubuk span { display: block; height: 100%; background: linear-gradient(90deg, #aa812e, #0a7f3f); border-radius: inherit; }
-  .kanal-adimlar { list-style: none; margin: 0 0 10px; padding: 0; display: grid; gap: 8px; }
-  .kanal-adimlar li { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border: 1px solid var(--y-border); border-radius: 9px; background: #fff; }
-  .kanal-adimlar li.is-tamam { background: #f3faf5; border-color: #cfe8d7; }
-  .kanal-adim__no { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #efe6d2; color: #6b4c14; font-weight: 800; font-size: 13px; }
-  .is-tamam .kanal-adim__no { background: #0a7f3f; color: #fff; }
-  .kanal-adim__durum { color: var(--ink-3); font-size: 13px; }
-  .kanal-adim__yardim summary { cursor: pointer; color: #3b6fa8; font-size: 12.5px; font-weight: 600; padding: 3px 0; min-height: 28px; }
-  .kanal-adim__yardim p { margin: 2px 0 4px; font-size: 13px; line-height: 1.55; color: #3d3428; }
   .kanal-bolum { border-top: 1px solid var(--y-border); }
   .kanal-bolum > summary { cursor: pointer; padding-block: .8rem; font-weight: 700; min-height: 44px; }
+  .kanal-bolum > p { margin-bottom: .8rem; }
   .kanal-durum, .kanal-form, .kanal-urun, .kanal-hareketler li { display: grid; gap: .8rem; }
-  .kanal-durum { grid-template-columns: repeat(auto-fit, minmax(min(100%, 11rem), 1fr)); margin-block: 0 1rem; }
+  .kanal-durum { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-block: 0 1rem; padding: 12px; background: var(--y-bg); border-radius: 8px; }
   .kanal-durum dt, .kanal-form small, .kanal-urun small, .kanal-hareketler time { color: var(--ink-3); font-size: .85rem; }
   .kanal-durum dd { margin: .25rem 0 0; font-weight: 650; }
   .kanal-form { grid-template-columns: minmax(0, 1fr); align-items: start; padding-bottom: 1rem; }
   .kanal-form .btn { justify-self: start; }
-  .kanal-urun { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; padding-block: .75rem; border-bottom: 1px solid var(--y-border); }
+  .kanal-urun { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; padding-block: .75rem; border-bottom: 1px solid var(--y-border); scroll-margin-top: 5rem; }
+  .kanal-urun:target { outline: 2px solid var(--y-gold); outline-offset: 4px; }
+  .kanal-ara[hidden], .kanal-urun[hidden], [data-eslestirme-bos][hidden] { display: none; }
   .kanal-urun__ad { grid-column: 1 / -1; }
   .kanal-urun.is-bagli .kanal-urun__ad small:first-of-type { color: #0a7f3f; }
   .kanal-urun small { display: block; margin-top: .25rem; }
-  .kanal-urun__not { color: #8a5a00 !important; }
   .kanal-onay { white-space: nowrap; padding-block: .55rem; display: inline-flex; gap: 6px; align-items: center; min-height: 44px; }
   .kanal-hareketler { list-style: none; padding: 0; margin: 0; }
   .kanal-hareketler li { grid-template-columns: minmax(0, 9rem) minmax(0, 1.5fr) 4rem minmax(0, 1.5fr); padding-block: .6rem; border-top: 1px solid var(--y-border); }

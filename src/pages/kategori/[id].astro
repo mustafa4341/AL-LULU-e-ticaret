@@ -1,17 +1,52 @@
 ---
 import Base from '../../layouts/Base.astro';
 import UrunListesi from '../../components/UrunListesi.astro';
+import { KATEGORI_REHBERI } from '../../lib/kategoriRehberi';
+import { metaAciklama } from '../../lib/seo';
+import { markaliUrunAdi } from '../../lib/urunKimlik';
 const k = Astro.locals.katalog;
 const kategori = k.gorunurKategoriler().find((x) => x.id === Astro.params.id);
 if (!kategori) return Astro.rewrite('/404');
 const urunler = k.kategoriUrunleri(kategori.id);
+const rehber = KATEGORI_REHBERI[kategori.id];
+const kok = Astro.site ?? new URL(k.site.url);
+const url = new URL(`/kategori/${kategori.id}`, kok).href;
+const yapisalVeri = urunler.length ? {
+  '@context': 'https://schema.org',
+  '@type': 'CollectionPage',
+  '@id': `${url}#kategori`,
+  url,
+  name: kategori.ad,
+  description: kategori.aciklama || undefined,
+  inLanguage: 'tr-TR',
+  mainEntity: {
+    '@type': 'ItemList',
+    itemListElement: urunler.map((u, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: markaliUrunAdi(u),
+      url: new URL(`/urun/${u.id}`, kok).href,
+    })),
+  },
+} : undefined;
 ---
-<Base baslik={`${kategori.ad} | ${k.site.ad}`} aciklama={kategori.aciklama} aktif={kategori.id}
+<Base baslik={`${kategori.ad} | ${k.site.ad}`} aciklama={metaAciklama(kategori.aciklama || rehber?.metin || kategori.ad)} aktif={kategori.id}
+  gorsel={urunler.find((u) => u.gorseller.length)?.gorseller[0]?.src} {yapisalVeri}
   indekslenmesin={urunler.length === 0}
   kirinti={[['Ürünler', '/urunler'], [kategori.ad, `/kategori/${kategori.id}`]]}>
   <div class="container">
     <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li><a href="/urunler">Ürünler</a></li><li aria-current="page">{kategori.ad}</li></ol></nav>
     <header class="liste-bas"><h1>{kategori.ad}</h1><p>{kategori.aciklama}</p></header>
     <UrunListesi urunler={urunler} aktif={kategori.id} />
+    {urunler.length > 0 && rehber && <section class="kategori-rehber" aria-labelledby="kategori-rehber">
+      <h2 id="kategori-rehber">{rehber.baslik}</h2>
+      <p>{rehber.metin}</p>
+    </section>}
   </div>
 </Base>
+
+<style>
+  .kategori-rehber { max-width: 62ch; margin-block: 2.5rem 3rem; padding-top: 1.5rem; border-top: 1px solid var(--line, #e7e1d8); }
+  .kategori-rehber h2 { font-size: clamp(1.4rem, 3vw, 2rem); margin: 0 0 .6rem; }
+  .kategori-rehber p { margin: 0; line-height: 1.7; }
+</style>

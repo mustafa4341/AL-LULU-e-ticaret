@@ -236,6 +236,7 @@ const KanalAyarSema = z.object({
   sonAktarim: z.string().optional(),
   sonAktarimOzet: z.string().optional(),
   sonApi: z.string().optional(),
+  sonOtomatikApi: z.string().optional(),
   sonApiHata: z.string().optional(),
   sonStokHata: z.string().optional(),
   bekleyenStok: z.object({

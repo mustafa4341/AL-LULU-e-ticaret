@@ -1,6 +1,16 @@
 # SEO ve GEO (Yapay Zekâ Aramaları) Planı — Al Lulu Home
 
-Güncelleme: 18.11.2026. ✅ = sitede yapıldı, 👤 = Google/Bing panellerinde sizin yapmanız gereken.
+Son güncelleme 20.11.2026.
+
+## 20.11.2026 kontrolü
+
+- [x] Sitede 14 ürün ve ürün bulunan 7 kategori doğrulandı. Her iki XML akışında 14 ürün ve 2 geçerli GTIN var.
+- [x] Yedi kategoriye görünür seçim rehberi ve `CollectionPage` ile `ItemList` verisi eklendi. Site haritası ürün görsellerini içerir. Site haritası ve `llms.txt` yayındaki ürünlerle sınırlıdır. [Google site haritası belgeleri](https://developers.google.com/search/docs/crawling-indexing/sitemaps/image-sitemaps)
+- [x] Ürün meta açıklamaları kısaltıldı ve başlıklarda marka tekrarları temizlendi. Üretici model kodu için panelde **Detaylar → Teknik özellikler → MPN** satırını kullanın. [Google MPN kuralları](https://support.google.com/merchants/answer/6324482)
+- [x] Google Merchant Center müşteri hizmetlerine mağazadaki destek e-postası ve [iletişim sayfası](https://alluluhome.com/bilgi) kaydedildi.
+- [ ] Merchant Center’da 14 ürün incelemede, onaylanan ürün sayısı 0. İnceleme sonrasında **Ürünler → Dikkat gerekiyor** bölümünü kontrol edin.
+- [ ] Akakçe ve Cimri onayı doğrulanmadı. Her iki platform için mağaza adına herkese açık eşleşme ve kurumsal posta kutusunda başvuru bildirimi bulunamadı. Başvuru hesabı veya referans numarası varsa durum oradan doğrulanmalı. [Akakçe mağaza başvurusu](https://www.akakce.com/magaza-basvuru/) · [Cimri mağaza kaydı](https://www.cimri.com/magaza-kayit)
+- [ ] 12 ürünün kutudan doğrulanacak barkodu var. Panelde **Ürünler & Stok → Barkodu eksik** filtresinden takip edin. [Google GTIN kuralları](https://support.google.com/merchants/answer/6324461)
 
 ## Gerçekçi beklenti
 
@@ -12,8 +22,7 @@ organik sıra satın alınamaz. Kazanılabilir yol şudur:
    "Fissler Vitaquick Premium orijinal", "indüksiyon düdüklü tencere 6 litre". Bunlarda birkaç hafta–birkaç ayda üst sıralar mümkün.
 2. **Sonra rehber içerikler:** "düdüklü tencere nasıl seçilir", "Fissler conta ne zaman değişir", "düdüklü tencerede
    nohut kaç dakika" gibi sorulara uzman cevaplar → hem Google'da hem ChatGPT/Gemini/Perplexity cevaplarında kaynak olarak görünme.
-3. **Ürün yelpazesi:** "tencere" kategorisi şu an boş (bu yüzden Google'a gösterilmiyor). Tencere ürünleri eklendikçe
-   kategori sayfası otomatik olarak site haritasına girer.
+3. **Ürün yelpazesi.** Tencereler kategorisi yayında. Ürün eklenen kategoriler site haritasına otomatik girer.
 4. **Hemen trafik isterseniz:** Google Ads (Alışveriş reklamları) — ölçüm altyapısı hazır; "purchase" olayı dönüşüm olarak kullanılır.
 
 ## Sitede yapılanlar ✅
@@ -41,7 +50,7 @@ Raporlar: <https://search.google.com/u/1/search-console?resource_id=sc-domain:al
 
 ### Ürün akışı (Merchant Center, Akakçe, Cimri) ✅
 Adres: **<https://alluluhome.com/urun-akisi.xml>** — Google Alışveriş biçiminde, panelden otomatik, fiyat/stok/kargo hep güncel.
-**Cimri ve Akakçe için:** **<https://alluluhome.com/urun-akisi-jpg.xml>** — aynı akış, görseller JPEG (Cimri'nin resmî akış belgesi .jpg/.png istiyor; sitedeki görseller WebP). Google akışı WebP ile kalır.
+**JPEG ürün akışı** <https://alluluhome.com/urun-akisi-jpg.xml>. Cimri Google RSS biçimini ve JPEG görselleri destekliyor. Akakçe’nin mağazaya özel XML talebi başvuru sırasında doğrulanmalı. [Cimri akış belgesi](https://www.cimri.com/google-feed-doc.pdf)
 - **Cimri:** <https://www.cimri.com/magaza-kayit> → formda istenenler (19.11.2026'da sayfadan okundu): ad soyad, e-posta, cep telefonu, şirket web sitesi, **ünvan**, **vergi kimlik no** (şahıs şirketiyse TCKN), **şirket adresi**, isteğe bağlı "Google Feed Bağlantısı" (yukarıdaki JPG akışı) ve belge yüklemeleri: **vergi levhası, imza sirküleri, ticaret sicili gazetesi, faaliyet belgesi**. Satış başına komisyon.
 - **Akakçe:** <https://www.akakce.com/magaza-basvuru/> → Hemen Başvur (önce Akakçe'de kullanıcı hesabı açmak gerekiyor). Tıklama başına ücretlidir. Akakçe sayfasında "tüm firma bilgileriniz (ünvan, adres) açık olarak verilir" yazıyor, yani firma bilgileri Akakçe'de herkese görünür. XML olarak JPG akışını verin; kendi biçimlerini isterlerse gönderdikleri şablonu bana iletin, ikinci bir akış eklerim.
 - İkisi de ödeme alınabilen bir site ister: **PayTR canlıya alınmadan başvuru reddedilebilir.**
@@ -85,7 +94,7 @@ Panel > Ayarlar'dan doldurulursa kendiliğinden yeniden görünür. Not: 6563 sa
 1. **Blog / rehber sistemi** (Supabase + panel): başlık, adres (slug), kapak görseli, içerik, SEO başlığı/açıklaması,
    yayın tarihi, taslak/yayında, ilgili ürünler; yazıdan ürün sayfasına bağlantı; Article verisi; site haritasına otomatik ekleme.
    GEO için en büyük kaldıraç budur.
-2. **Kategori sayfası içerikleri:** her dolu kategoriye 150–300 kelimelik özgün "nasıl seçilir" metni.
+2. **Kategori sayfası içerikleri.** İlk seçim rehberleri eklendi. Arama sorguları ve müşteri soruları arttıkça bu metinleri ürün grubu bazında genişletin.
 3. **Meta Pixel + Conversions API:** çerez penceresine "Pazarlama" seçeneği eklenir; tarayıcı ve sunucu olayı aynı `event_id` ile
    gönderilir (tekrar sayılmaz). Meta işletme hesabı ve Pixel kimliği sizde açılmalı.
 4. **Google Ads dönüşümü:** GTM'de "purchase" olayına bağlanır; kod değişikliği gerekmez.

@@ -15,7 +15,8 @@ import SonCagri from './SonCagri.astro';
 import OzellikListesi from './OzellikListesi.astro';
 import { formatTL } from '../lib/fiyat';
 import { ODEME_BAGLI, SMS_BAGLI, hizmeteUygunSSS } from '../lib/altyapi';
-import { gtinAlani, urunGtin } from '../lib/urunKimlik';
+import { gtinAlani, markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
+import { metaAciklama } from '../lib/seo';
 import { ozet, urunYorumlari } from '../lib/yorum';
 
 const k = Astro.locals.katalog;
@@ -42,8 +43,10 @@ const teknikIlk = urun.teknik.slice(0, TEKNIK_ACIK);
 const teknikKalan = urun.teknik.slice(TEKNIK_ACIK);
 /* Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa kullanılır (lib/urunKimlik.ts) */
 const gtin = urunGtin(urun);
+const seoAd = markaliUrunAdi(urun);
 const urunSSS = hizmeteUygunSSS(urun.sss);
-const kok = site.url.replace(/\/$/, '');
+const kok = (Astro.site ?? new URL(site.url)).origin;
+const urunUrl = new URL(`/urun/${urun.id}`, kok).href;
 /* Yalnız doğrulanmış alıcıların panelde onaylanan yorumları (lib/yorum.ts); yoksa yapısal veriye puan yazılmaz */
 const yorumlar = await urunYorumlari(urun.id).catch(() => []);
 const puanOzet = ozet(yorumlar);
@@ -53,15 +56,16 @@ const yorumTarih = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'lo
 const yapisalVeri = {
   '@context': 'https://schema.org',
   '@type': 'Product',
-  name: `${urun.marka} ${urun.ad}`,
+  '@id': `${urunUrl}#urun`,
+  name: seoAd,
   brand: { '@type': 'Brand', name: urun.marka },
   sku: urun.sku || undefined,
-  mpn: urun.sku || undefined,
+  mpn: urunMpn(urun),
   ...(gtin ? { [gtinAlani(gtin)]: gtin } : {}),
   description: urun.ozet,
-  url: new URL(`/urun/${urun.id}`, site.url).href,
+  url: urunUrl,
   ...(kat ? { category: kat.ad } : {}),
-  image: urun.gorseller.map((g) => new URL(g.src, site.url).href),
+  image: urun.gorseller.map((g) => new URL(g.src, kok).href),
   // Teknik bilgiler: Google ve yapay zekâ aramaları ürünü bu özelliklerle eşleştirir (yalnız paneldeki gerçek veri)
   ...(urun.teknik.length ? { additionalProperty: urun.teknik.map(([ad, deger]) => ({ '@type': 'PropertyValue', name: ad, value: deger })) } : {}),
   offers: {
@@ -69,7 +73,7 @@ const yapisalVeri = {
     '@type': 'Offer', priceCurrency: 'TRY', price: String(gosterilenFiyat),
     ...(bilgi.sepette && urun.firsat?.bitis ? { priceValidUntil: urun.firsat.bitis.slice(0, 10) } : {}),
     availability: stokta ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
-    itemCondition: 'https://schema.org/NewCondition', url: new URL(`/urun/${urun.id}`, site.url).href,
+    itemCondition: 'https://schema.org/NewCondition', url: urunUrl,
     // Satıcı = ana sayfadaki çevrim içi mağaza kaydı (aynı @id: Google ikisini tek işletme olarak birleştirir)
     seller: { '@type': 'OnlineStore', '@id': `${kok}/#magaza`, name: site.ad },
     // Google Merchant Center / ücretsiz ürün listelemeleri için kargo ve iade bilgisi (ürün akışıyla aynı hesap)
@@ -104,7 +108,7 @@ const sssVerisi = urunSSS.length ? {
   mainEntity: urunSSS.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
 } : undefined;
 ---
-<Base baslik={`${urun.marka} ${urun.ad} | ${site.ad}`} aciklama={`${urun.marka} ${urun.ad}: ${urun.ozet} ${formatTL(gosterilenFiyat)}, vergiler dahil.`} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [`${urun.marka} ${urun.kisaAd}`, `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
+<Base baslik={`${seoAd} | ${site.ad}`} aciklama={metaAciklama(urun.ozet || seoAd)} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd }), `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
   <div class="container">
     <nav aria-label="Konum" class="kirinti-kap--urun">
       <ol class="kirinti">

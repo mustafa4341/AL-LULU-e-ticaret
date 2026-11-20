@@ -5,6 +5,16 @@
 import type { SiteAyarlari } from './sema';
 import { bosYasalBilgi } from './yonetimSite';
 
+export function xmlMetni(deger: string): string {
+  return deger.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+export function metaAciklama(metin: string): string {
+  const duz = metin.replace(/\s+/g, ' ').trim();
+  if (duz.length <= 160) return duz;
+  return duz.slice(0, 159).replace(/\s+\S*$/, '') + '…';
+}
+
 const GUNLER: [RegExp, string[]][] = [
   [/her\s*gün/i, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']],
   [/hafta\s*içi/i, ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']],

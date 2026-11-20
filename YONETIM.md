@@ -4,6 +4,13 @@ Bu doküman, **Al Lulu Home** yönetim panelinde (`/yonetim`) yapılan tüm geli
 
 ---
 
+## 20.11.2026 panel güncellemesi
+
+- [x] **Siparişler → Satış kanalları** ekranında Trendyol ve Hepsiburada için bağlantı, son başarılı çekim, son otomatik çekim ve stok gönderimi ilk bakışta görünür.
+- [x] **Şimdi eşitle** bağlı kanalları elle günceller. **Ürün eşleştirmeleri** içinde marka, ürün, SKU veya kanal koduyla arama yapılabilir.
+- [x] **Genel Bakış → Bugün yapılacaklar** kanal özeti üstünde yer alır. Geciken otomatik çekim, ilgili kanal kartına bağlantı verir.
+- [x] **Ürünler & Stok → Barkodu eksik** filtresi yayındaki ürünleri gösterir. Kutudan doğrulanan kodlar **Detaylar → Teknik özellikler** bölümüne **Barkod (EAN)** ve **MPN** olarak girilebilir.
+
 ## 1. Genel Bakış: Yönetim Panelinde Neler Değişti?
 
 1. **Sol Menü ve Üst Bar Yenilendi (`src/layouts/Yonetim.astro`):**

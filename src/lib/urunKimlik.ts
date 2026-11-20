@@ -33,3 +33,15 @@ export function urunGtin(u: Pick<Urun, 'teknik'>): string | undefined {
 export function gtinAlani(kod: string): 'gtin8' | 'gtin12' | 'gtin13' | 'gtin14' {
   return `gtin${kod.length}` as 'gtin8' | 'gtin12' | 'gtin13' | 'gtin14';
 }
+
+/** Teknik özelliklerde açıkça belirtilen üretici parça numarası. */
+export function urunMpn(u: Pick<Urun, 'teknik'>): string | undefined {
+  const kod = u.teknik.find(([etiket]) => /^(?:MPN|Üretici model kodu|Üretici parça numarası)$/iu.test(etiket))?.[1];
+  return kod && kod.length <= 70 && !gtinGecerli(kod) ? kod : undefined;
+}
+
+export function markaliUrunAdi(u: Pick<Urun, 'marka' | 'ad'>): string {
+  const ad = u.ad.toLocaleLowerCase('tr');
+  const marka = u.marka.toLocaleLowerCase('tr');
+  return ad === marka || ad.startsWith(marka + ' ') ? u.ad : `${u.marka} ${u.ad}`;
+}

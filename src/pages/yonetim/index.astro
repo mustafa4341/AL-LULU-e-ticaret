@@ -48,8 +48,8 @@ const pazarKontrol = pazarDurum.filter(({ d }) => d.uyari.some((u) => u.renk ===
 const kanalHatasi = KANAL_LISTESI.filter((k) => envanter.kanallar[k].sonApiHata || envanter.kanallar[k].sonStokHata);
 const kanalGecikti = KANAL_LISTESI.filter((k) => {
   const a = envanter.kanallar[k];
-  return pazaryeriApiDurumu(k) !== 'kapali' && a.stokBaslangic && !kanalHatasi.includes(k)
-    && (!a.sonApi || simdi - Date.parse(a.sonApi) > 30 * 60_000);
+  return pazaryeriApiDurumu(k) === 'canli' && a.stokBaslangic && !kanalHatasi.includes(k)
+    && (!a.sonOtomatikApi || simdi - Date.parse(a.sonOtomatikApi) > 30 * 60_000);
 });
 const ayOzeti = kanalToplamlari(siparisler, pazar, bugun.slice(0, 7) + '-01', bugun);
 const bugunOzeti = kanalToplamlari(siparisler, pazar, bugun, bugun);
@@ -70,7 +70,10 @@ const isler = ([
   ...kanalHatasi.map((k) => ({ ad: `${KANALLAR[k]} bağlantısında sorun var (ayrıntıyı görmek için dokunun)`, sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'kirmizi' as const })),
   { ad: 'Pazaryeri siparişinde stok açığı / eşleşmeyen ürün', sayi: pazarKontrol, url: '/yonetim/siparisler?durum=kontrol', ton: 'kirmizi' },
   ...KANAL_LISTESI.map((k) => ({ ad: `${KANALLAR[k]} siparişi hazırlanacak (kargo ${KANALLAR[k]} panelinden)`, sayi: pazarHazirlanacak(k), url: `/yonetim/siparisler?kanal=${k}&durum=islem`, ton: 'turuncu' as const })),
-  ...kanalGecikti.map((k) => ({ ad: `${KANALLAR[k]} siparişleri 30 dakikadır güncellenmedi`, sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'turuncu' as const })),
+  ...kanalGecikti.map((k) => ({
+    ad: envanter.kanallar[k].sonOtomatikApi ? `${KANALLAR[k]} otomatik eşitlemesi gecikiyor` : `${KANALLAR[k]} için ilk otomatik çekim bekleniyor`,
+    sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'turuncu' as const,
+  })),
   { ad: 'Onay bekleyen müşteri değerlendirmesi', sayi: bekleyenYorum, url: '/yonetim/yorumlar', ton: 'turuncu' },
   { ad: 'Tükenen ürün (sitede “stokta yok” görünüyor)', sayi: tukenen.length, url: '/yonetim/urunler?filtre=kritik', ton: 'kirmizi' },
   { ad: `Azalan stok (${envanter.kritikVarsayilan} adet ve altı)`, sayi: kritikStok.length, url: '/yonetim/urunler?filtre=kritik', ton: 'turuncu' },
@@ -105,11 +108,8 @@ const pazaryeriKurulu = KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) !== 'kap
       <small class:list={{ 'y-uyari-kucuk': ayRapor.tahmini === undefined }}>{ayRapor.tahmini === undefined ? 'Ürün maliyeti girilmedi' : 'Giderler düşüldü'}</small></a>
   </div>
 
-  <KanalOzeti ozet={ayOzeti} donem="Bu ay" adres={kanalAdresi} />
-
   {!pazaryeriKurulu && <BilgiKutusu baslik="Trendyol ve Hepsiburada siparişleri buraya nasıl gelecek?" anahtar="genel-pazaryeri" ton="ipucu">
-    <p>Mağazalar açılınca siparişler bu panele <strong>kendiliğinden</strong> gelir; ayrı bir yere bakmanıza gerek kalmaz. Kurulum bir kere yapılır.</p>
-    <p><a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanalları → adım adım kurulum</a></p>
+    <p>Mağaza bağlantısı, stok başlangıcı ve otomatik eşitleme durumunu <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanalları</a> ekranından yönetin.</p>
   </BilgiKutusu>}
 
   <section class="y-kart">
@@ -125,6 +125,8 @@ const pazaryeriKurulu = KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) !== 'kap
       <a class="y-link" href="/yonetim/yedek">Yedek indir (ZIP)</a>
     </p>
   </section>
+
+  <KanalOzeti ozet={ayOzeti} donem="Bu ay" adres={kanalAdresi} />
 
   <section class="y-kart">
     <div class="y-kart__bas"><h2>Son siparişler</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu">Tümü</a></div>

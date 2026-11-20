@@ -1,8 +1,8 @@
 /**
  * /urun-akisi.xml — ürün akışı (Google Merchant Center RSS 2.0 biçimi).
- * Google Alışveriş, Akakçe, Cimri ve diğer fiyat karşılaştırma siteleri bu biçimi kabul eder.
+ * Google Alışveriş ve Cimri bu biçimi destekler.
  * Panel verisinden her istekte üretilir: fiyat (müşterinin ödediği), stok, görseller, kargo hep güncel.
- * Yalnız yayındaki ürünler; uydurma barkod (GTIN) yazılmaz — panelde yoksa marka + model kodu (MPN) kullanılır.
+ * Kimlik alanları, yayındaki ürünlerin teknik özelliklerinde kayıtlı GTIN ve MPN ile doldurulur.
  *
  * Bilerek <g:sale_price> YOK: (1) Akakçe/Cimri gibi siteler <g:price>'ı müşterinin ödeyeceği fiyat olarak okur,
  * eski fiyatı oraya yazmak bizi pahalı gösterir; (2) indirimli satış reklamında önceki fiyat yalnız AYNI kanalda
@@ -10,7 +10,7 @@
  * Google fiyat düşüşünü kendi fiyat geçmişinden zaten hesaplar.
  */
 import type { APIRoute } from 'astro';
-import { urunGtin } from '../lib/urunKimlik';
+import { markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
 
 const x = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 const tl = (n: number) => `${n.toFixed(2)} TRY`;
@@ -39,9 +39,10 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     const aciklama = [u.ozet, ...u.oneCikanBilgiler.map((o) => o.metin)].filter(Boolean).map(cumle).join(' ');
     // Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa (lib/urunKimlik.ts)
     const gtin = urunGtin(u);
+    const mpn = urunMpn(u);
     return `    <item>
       <g:id>${x(u.id)}</g:id>
-      <g:title>${x(`${u.marka} ${u.ad}`)}</g:title>
+      <g:title>${x(markaliUrunAdi(u))}</g:title>
       <g:description>${x(aciklama)}</g:description>
       <g:link>${x(`${kok}/urun/${u.id}`)}</g:link>
       <g:image_link>${x(gorseller[0])}</g:image_link>
@@ -49,7 +50,8 @@ ${gorseller.slice(1, 10).map((g) => `      <g:additional_image_link>${x(g)}</g:a
       <g:availability>${k.stoktaMi(u) ? 'in_stock' : 'out_of_stock'}</g:availability>
       <g:price>${tl(odenecek)}</g:price>
       <g:brand>${x(u.marka)}</g:brand>
-${gtin ? `      <g:gtin>${gtin}</g:gtin>\n` : ''}${u.sku ? `      <g:mpn>${x(u.sku)}</g:mpn>\n` : ''}      <g:identifier_exists>${gtin || u.sku ? 'yes' : 'no'}</g:identifier_exists>
+      ${gtin ? `<g:gtin>${gtin}</g:gtin>` : ''}
+      ${mpn ? `<g:mpn>${x(mpn)}</g:mpn>` : ''}
       <g:condition>new</g:condition>
 ${kat ? `      <g:product_type>${x(`Ev ve Mutfak > ${kat.ad}`)}</g:product_type>\n` : ''}      <g:google_product_category>${gKat}</g:google_product_category>
       <g:quantity>${Math.max(0, u.stok)}</g:quantity>

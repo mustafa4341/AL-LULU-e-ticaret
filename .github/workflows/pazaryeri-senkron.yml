@@ -1,0 +1,42 @@
+name: Pazaryeri eşitleme
+
+on:
+  schedule:
+    - cron: '3-58/5 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pazaryeri-senkron
+  cancel-in-progress: false
+
+jobs:
+  esitle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    env:
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+    steps:
+      - name: Canlı sipariş ve stok eşitlemesini çalıştır
+        shell: bash
+        run: |
+          if [[ -z "$CRON_SECRET" ]]; then
+            echo "::error::CRON_SECRET tanımlı değil."
+            exit 1
+          fi
+
+          http=$(curl --silent --show-error --max-time 75 \
+            --header "Authorization: Bearer $CRON_SECRET" \
+            --output "$RUNNER_TEMP/pazaryeri.json" --write-out '%{http_code}' \
+            'https://alluluhome.com/api/pazaryeri-senkron')
+          if [[ "$http" != '200' ]]; then
+            echo "::error::Eşitleme HTTP $http döndürdü. Ayrıntılar için Satış kanalları ekranını kontrol edin."
+            exit 1
+          fi
+
+          case "$(jq --raw-output '.durum' "$RUNNER_TEMP/pazaryeri.json")" in
+            tamam) echo 'Eşitleme tamamlandı.' ;;
+            bekliyor) echo 'Başka bir eşitleme zaten çalışıyor.' ;;
+            *) echo '::error::Eşitleme tamamlanamadı.'; exit 1 ;;
+          esac

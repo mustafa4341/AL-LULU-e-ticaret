@@ -10,7 +10,7 @@ Yönetim panelindeki **Siparişler** ekranında kanal ve durum filtreleri, sipar
    - Trendyol satıcı hesabı canlı ortam (`TRENDYOL_ORTAM=canli`) olarak `al-lulu-e-ticaret` Vercel projesine bağlandı. Satıcı ID ve entegrasyon bilgileri yalnız Vercel ortam değişkenlerinde ve Trendyol Satıcı Paneli > Hesap Bilgilerim > Entegrasyon Bilgileri'nde durur (bu depo herkese açık; buraya yazılmaz).
    - `TRENDYOL_SATICI_ID`, `TRENDYOL_API_KEY` (Sensitive), `TRENDYOL_API_SECRET` (Sensitive) ve 48 karakterlik `CRON_SECRET` (Sensitive) ortam değişkenleri Vercel Production ortamına eklendi ve canlıya (`https://alluluhome.com`) dağıtıldı.
    - Trendyol Canlı Sipariş Akışı (`/integration/order/sellers/{saticiId}/orders/stream`) ve Ürün/Envanter Servisi üzerinden `200 OK` yanıtı doğrulandı (son başarılı çekim 19.11.2026 19:04, "0 yeni" — henüz ilan/sipariş yok).
-   - **Eksik (19.11.2026 kontrolü):** Otomatik zamanlayıcı **kurulmadı**. `CRON_SECRET` Vercel'de var ama `/api/pazaryeri-senkron`'u düzenli çağıran bir iş yok; Trendyol siparişleri ve stok eşitlemesi şu an yalnız **Satış kanalları > Şimdi eşitle** düğmesine basınca çalışır. Aşağıdaki "Otomatik çalıştırma" bölümüne bakın.
+   - 20.11.2026 itibarıyla zamanlayıcının kurulumu ve izlenmesi aşağıdaki **Otomatik çalıştırma** bölümünde.
 
 2. **Supabase Veritabanı Tabloları ve Atomik Stok Fonksiyonları:**
    - Canlı Supabase projesine (`yrbvywobqnrqqvkndvqj`) şu 3 migration sırasıyla uygulandı:
@@ -43,9 +43,12 @@ Yönetim panelindeki **Siparişler** ekranında kanal ve durum filtreleri, sipar
 
 ## Otomatik çalıştırma
 
-Her 2 dakikada bir `GET https://alluluhome.com/api/pazaryeri-senkron` isteği gönderin. `Authorization` başlığının değeri `Bearer <CRON_SECRET>` olmalı. En az 32 karakterlik `CRON_SECRET` oluşturun ve yalnızca sunucuda ve zamanlayıcıda saklayın. Elle çalıştırma ve zamanlayıcı aynı veritabanı kilidini kullanır. Eşzamanlı istek bir önceki işi tamamlanmaya bırakır. Zamanlayıcıda HTTP 503 uyarısını izleyin ve ayrıntılar için **Satış kanalları** ekranına bakın.
+- [x] GitHub Actions için beş dakikalık eşitleme tanımı eklendi. Vercel Production ve GitHub Actions için ortak `CRON_SECRET` tanımlandı. İş, canlı sitedeki `GET /api/pazaryeri-senkron` adresini bu anahtarla çağırır.
+- [x] **Satış kanalları** ekranında son başarılı çekim ve son otomatik çekim ayrı alanlarda görünür. Elle eşitleme otomatik çekimin saatini değiştirmez. İki çalışma aynı veritabanı kilidini kullanır.
+- [ ] Hepsiburada canlı bağlantısı. Vercel Production’a `HEPSIBURADA_MERCHANT_ID`, `HEPSIBURADA_KULLANICI`, `HEPSIBURADA_PAROLA`, `HEPSIBURADA_USER_AGENT` ve `HEPSIBURADA_ORTAM=canli` eklenince panelden başlangıç sayımını kaydedin. Ardından sipariş ve stok mutabakatını yapın. Aynı zamanlayıcı iki kanalı çalıştırır.
+- [ ] İlk gerçek Trendyol ve Hepsiburada siparişlerinde eşleşme, merkezi stok düşümü, kanal stok onayı ve iptal akışını satıcı panelleriyle karşılaştırın.
 
-Vercel Cron kullanılıyorsa iki dakikalık zamanlama için Pro veya uygun bir ticari plan gerekir. Hobby’de yüksek frekanslı tanım dağıtımı engelleyebildiği için repoda varsayılan cron tanımı yoktur. Uygun plan doğrulanınca `vercel.json` içine `{"crons":[{"path":"/api/pazaryeri-senkron","schedule":"*/2 * * * *"}]}` eklenebilir. Yetkili HTTPS zamanlayıcı da aynı uç noktayı kullanabilir. [Vercel Cron sınırları](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing)
+GitHub **Actions → Pazaryeri eşitleme** çalıştırma geçmişini gösterir. Başarısız çalışmada kanal hataları panelde görünür. GitHub zamanlanmış işleri yoğunlukta geciktirebilir ve herkese açık depoda 60 gün etkinlik olmazsa zamanlamayı kapatabilir. Panel 30 dakika boyunca başarılı otomatik çekim gelmezse uyarır. Vercel Hobby zamanlaması günde bir kezle sınırlı. [GitHub zamanlama belgeleri](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule) · [Vercel Cron sınırları](https://vercel.com/docs/schedules/cron-jobs/usage-and-pricing)
 
 ## Operasyon ve hata durumları
 

@@ -693,7 +693,8 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
 
         </details>
-        <h2>Teknik Özellikler & Kutu İçeriği </h2>
+        <h2>Teknik özellikler ve kutu içeriği</h2>
+        <p class="y-help">Ürün kutusundaki barkodu “Barkod (EAN)”, doğrulanmış üretici model kodunu “MPN” satırı olarak ekleyin. Bu alanlar ürün akışında kullanılır.</p>
         <div class="y-tekrar">
           {u.teknik.map(([e, d]) => (
             <div class="y-tekrar__satir">

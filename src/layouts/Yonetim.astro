@@ -34,7 +34,8 @@ const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
   ['site', 'Site Düzeni', '/yonetim/site-duzeni', 'ayar'],
 ];
 const urunAlt = aktif === 'setler' || aktif === 'kategoriler' || aktif === 'yorumlar';
-const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : aktif === 'yorumlar' ? 'Değerlendirmeler' : 'Ayarlar');
+const satisKanallari = Astro.url.pathname === '/yonetim/siparisler/kanallar';
+const sayfa = satisKanallari ? 'Satış kanalları' : menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : aktif === 'yorumlar' ? 'Değerlendirmeler' : 'Ayarlar');
 ---
 <!doctype html>
 <html lang="tr">
@@ -51,12 +52,13 @@ const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'S
   </head>
   <body class="yonetim y-panel">
     <Ikonlar />
+    <a class="skip-link" href="#y-icerik">İçeriğe geç</a>
     <header class="y-top">
       <button type="button" class="y-icon-button" aria-label="Menüyü aç veya kapat" aria-controls="y-menu" aria-expanded="true" data-menu-ac><Ikon ad="menu" boyut={20} /></button>
       <a href="/yonetim" class="y-brand" aria-label="Al Lulu Home yönetimi"><img src="/img/logo/amblem.webp" alt="" width="30" height="24" /><span>AL LULU HOME</span></a>
       <span class="y-top-title">{sayfa}</span>
       <div class="y-top-end">
-        <button type="button" class="y-icon-button" data-panel-ara title="Ara · Ctrl/K"><Ikon ad="buyutec" boyut={18} /><span>Ara</span></button>
+        <button type="button" class="y-icon-button" data-panel-ara aria-label="Panelde ara" title="Ara · Ctrl/K"><Ikon ad="buyutec" boyut={18} /><span>Ara</span></button>
         {baglanti === 'hata'
           ? <span class="y-service-error" role="status" title="Supabase okunamadı. Yerel yedek gösteriliyor.">Bağlantı hatası</span>
           : <span class:list={['y-service', { 'y-service--warning': baglanti === 'yerel' }]} title={baglanti === 'bagli' ? 'Supabase bağlı' : 'Yerel veri deposu kullanılıyor'}></span>}
@@ -70,11 +72,11 @@ const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'S
     <button type="button" class="y-mobile-scrim" aria-label="Menüyü kapat" data-menu-kapat hidden></button>
     <nav id="y-menu" class="y-sidebar" aria-label="Yönetim menüsü">
       {menu.map(([id, ad, href, ikon]) => <>
-        <a href={href} aria-current={aktif === id ? "page" : undefined} class:list={{ 'is-grup': (id === "urunler" && urunAlt) || (id === "site" && aktif === "ayarlar") }} title={ad}>
+        <a href={href} aria-current={aktif === id && !satisKanallari ? "page" : undefined} class:list={{ 'is-grup': (id === "urunler" && urunAlt) || (id === "site" && aktif === "ayarlar") || (id === "siparisler" && satisKanallari) }} title={ad}>
           <Ikon ad={ikon} boyut={19} /><span>{ad}</span>
           {id === "siparisler" && bekleyen > 0 && <b class="y-rozet" title={`${bekleyen} sipariş hazırlanacak veya kargolanacak (web ${bekleyenWeb}, pazaryeri ${bekleyenPazar})`}>{bekleyen}</b>}
         </a>
-        {id === "siparisler" && <div class="y-sidebar-sub"><a href="/yonetim/siparisler/kanallar" aria-current={Astro.url.pathname.startsWith('/yonetim/siparisler/kanallar') ? "page" : undefined}>Trendyol · Hepsiburada</a></div>}
+        {id === "siparisler" && <div class="y-sidebar-sub"><a href="/yonetim/siparisler/kanallar" aria-current={satisKanallari ? "page" : undefined}>Satış kanalları</a></div>}
         {id === "urunler" && <div class="y-sidebar-sub">
           <a href="/yonetim/setler" aria-current={aktif === "setler" ? "page" : undefined}>Setler</a>
           <a href="/yonetim/kategoriler" aria-current={aktif === "kategoriler" ? "page" : undefined}>Kategoriler</a>
@@ -83,7 +85,7 @@ const sayfa = menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'S
         {id === "site" && <div class="y-sidebar-sub"><a href="/yonetim/ayarlar" aria-current={aktif === "ayarlar" ? "page" : undefined}>Ayarlar ve yasal bilgiler</a></div>}
       </>)}
     </nav>
-    <main class="y-workspace" id="y-icerik">
+    <main class="y-workspace" id="y-icerik" tabindex="-1">
       <div class="y-sayfa-ust">
         <div><h1 class="y-baslik">{baslik}</h1>{altBaslik && <p class="y-alt-baslik">{altBaslik}</p>}</div>
         <slot name="ust-sag" />

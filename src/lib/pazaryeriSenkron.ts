@@ -176,7 +176,7 @@ async function stokYayimla(
   return undefined;
 }
 
-export async function pazaryeriSenkron(): Promise<SenkronSonucu> {
+export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici'): Promise<SenkronSonucu> {
   const kanallar: SenkronSonucu['kanallar'] = {};
   const bagli = KANAL_LISTESI.filter((k) => pazaryeriApiDurumu(k) !== 'kapali');
   if (!bagli.length) return { durum: 'kapali', kanallar };
@@ -202,7 +202,10 @@ export async function pazaryeriSenkron(): Promise<SenkronSonucu> {
       try {
         const baslangic = cekimBaslangici(kanal, ilkAyar.kanallar[kanal], bitis);
         const gelen = await kanalSiparisAl(kanal, baslangic, bitis, sinyal);
-        const sonuc = await pazaryeriAktar(kanal, gelen, 'api', (a) => { a.sonApi = new Date(bitis).toISOString(); });
+        const sonuc = await pazaryeriAktar(kanal, gelen, 'api', (a) => {
+          a.sonApi = new Date(bitis).toISOString();
+          if (tetikleyen === 'zamanlayici') a.sonOtomatikApi = a.sonApi;
+        });
         kanallar[kanal] = { siparis: sonuc.yeni + sonuc.guncellenen };
       } catch (e) {
         const hata = hataMesaji(e);

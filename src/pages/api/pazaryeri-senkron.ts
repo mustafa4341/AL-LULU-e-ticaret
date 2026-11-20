@@ -15,7 +15,7 @@ export const GET: APIRoute = async ({ request }) => {
     return new Response(null, { status: 401, headers });
   }
   try {
-    const sonuc = await pazaryeriSenkron();
+    const sonuc = await pazaryeriSenkron('zamanlayici');
     return Response.json(sonuc, { status: sonuc.durum === 'hata' ? 503 : 200, headers });
   } catch (e) {
     const hata = e instanceof Error ? e.name : 'Bilinmeyen hata';

@@ -143,7 +143,7 @@ Sahte yorum, sayaç ya da stok oyunu yok. Stereotip yok. Doğrulanmamış iddia 
 
 - [x] Logo dosyası (alındı; SVG versiyonu varsa daha keskin olur)
 - [ ] Yüksek çözünürlüklü ürün fotoğrafları (eldekiler 360×480; tedarikçiden resmi görsel paketi istenmeli)
-- [ ] Satılacak diğer ürünlerin listesi, fiyatı ve görselleri
+- [x] İlk 13 yeni ürün fiyat ve görselleriyle yayımlandı. Barkod, garanti ve ek görseller yerel kontrol listesinde izleniyor.
 - [ ] Tam model kodu (fatura üzerindeki)
 - [ ] Tedarik kaynağı, garanti belgesini veren firma, Türkiye servis durumu
 - [ ] Ticari unvan, açık adres, MERSİS/vergi no, telefon, e-posta, KEP (varsa)

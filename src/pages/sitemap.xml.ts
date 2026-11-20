@@ -1,43 +1,29 @@
 import type { APIRoute } from 'astro';
+import { Katalog } from '../lib/katalog';
+import { xmlMetni } from '../lib/seo';
 import { YASAL_SAYFALAR } from '../lib/yasal';
 
 export const GET: APIRoute = async ({ locals, site }) => {
-  const k = locals.katalog;
-  const kok = (site ?? new URL(k.site.url)).origin.replace(/\/$/, '');
-  const tarih = k.magaza.guncelleme ? k.magaza.guncelleme.slice(0, 10) : new Date().toISOString().slice(0, 10);
+  const k = new Katalog(locals.katalog.magaza);
+  const kok = (site ?? new URL(k.site.url)).origin;
 
-  const yollar: { loc: string; priority: string }[] = [
-    { loc: '/', priority: '1.0' },
-    { loc: '/urunler', priority: '0.9' },
-    // Boş sayfalar (ürünsüz kategori, setsiz setler sayfası) Google'a bildirilmez; o sayfalar "noindex" döner
-    ...(k.tumSetler().length ? [{ loc: '/setler', priority: '0.8' }] : []),
-    { loc: '/bilgi', priority: '0.6' },
-    // /siparis-takip "noindex" döndüğü için burada yok (site haritası yalnız dizine eklenebilir adresleri içerir)
+  const kayitlar = [
+    ...['/', '/urunler', '/bilgi', ...(k.tumSetler().length ? ['/setler'] : [])].map((yol) => ({ yol, gorseller: [] })),
+    ...k.gorunurKategoriler().filter((kat) => k.kategoriUrunleri(kat.id).length).map((kat) => ({ yol: `/kategori/${kat.id}`, gorseller: [] })),
+    ...k.tumUrunler().map((u) => ({ yol: `/urun/${u.id}`, gorseller: [...new Set(u.gorseller.map((g) => new URL(g.src, kok).href))].slice(0, 1000) })),
+    ...YASAL_SAYFALAR.map((y) => ({ yol: `/yasal/${y.yol}`, gorseller: [] })),
   ];
 
-  for (const kat of k.magaza.kategoriler) {
-    if (k.kategoriUrunleri(kat.id).length) yollar.push({ loc: `/kategori/${kat.id}`, priority: '0.8' });
-  }
-  for (const u of k.magaza.urunler.filter((x) => x.durum === 'yayinda')) {
-    yollar.push({ loc: `/urun/${u.id}`, priority: '0.9' });
-  }
-  // İade, kargo, garanti ve sözleşme sayfaları: Merchant Center ve arama motorları politikaları buradan okur
-  for (const y of YASAL_SAYFALAR) yollar.push({ loc: `/yasal/${y.yol}`, priority: '0.3' });
-
-  const xml =
-    `<?xml version="1.0" encoding="UTF-8"?>\n` +
-    `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
-    yollar
-      .map(
-        (y) =>
-          `  <url>\n` +
-          `    <loc>${kok}${y.loc}</loc>\n` +
-          `    <lastmod>${tarih}</lastmod>\n` +
-          `    <priority>${y.priority}</priority>\n` +
-          `  </url>`,
-      )
-      .join('\n') +
-    `\n</urlset>\n`;
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${kayitlar.map(({ yol, gorseller }) => [
+    '  <url>',
+    `    <loc>${xmlMetni(new URL(yol, kok).href)}</loc>`,
+    ...gorseller.map((src) => `    <image:image><image:loc>${xmlMetni(src)}</image:loc></image:image>`),
+    '  </url>',
+  ].join('\n')).join('\n')}
+</urlset>
+`;
 
   return new Response(xml, {
     headers: {

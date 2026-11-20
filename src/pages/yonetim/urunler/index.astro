@@ -10,6 +10,7 @@ import { YAYIN_ADLARI, yTarih } from '../../../lib/yonetimRapor';
 import { bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
+import { urunGtin } from '../../../lib/urunKimlik';
 
 const basari = Astro.url.searchParams.get('ok');
 const filtre = Astro.url.searchParams.get('filtre') ?? 'tumu';
@@ -96,14 +97,18 @@ const aranan = soru.toLocaleLowerCase('tr').trim();
 const esik = (id: string) => kritikEsik(envanter, id);
 const urunAdi = new Map(m.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`]));
 const azalan = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= esik(u.id)).length;
+const barkodsuz = m.urunler.filter((u) => u.durum === 'yayinda' && !urunGtin(u)).length;
 /* 1 TL = taslak ürünün fiyatı henüz girilmedi (yayinEksikleri ile aynı kural) */
 const fiyatGirilmedi = (u: (typeof m.urunler)[number]) => u.fiyat <= 1;
 /* Şablonda "<=" yazılırsa Astro derleyicisi etiket sanıyor; rozet metni burada hesaplanır */
 const stokYazisi = (u: (typeof m.urunler)[number]) => u.durum !== 'yayinda' ? undefined
   : u.stok === 0 ? 'Tükendi' : u.stok <= esik(u.id) ? `${u.stok} · Azalıyor` : undefined;
 const liste = m.urunler.filter((u) => {
-  const uygun = filtre === 'tumu' || u.durum === filtre || (filtre === 'kritik' && u.durum === 'yayinda' && u.stok <= esik(u.id));
-  return uygun && (!aranan || [u.ad, u.kisaAd, u.sku, u.marka].some((x) => x.toLocaleLowerCase('tr').includes(aranan)));
+  const gtin = urunGtin(u);
+  const uygun = filtre === 'tumu' || u.durum === filtre
+    || (filtre === 'kritik' && u.durum === 'yayinda' && u.stok <= esik(u.id))
+    || (filtre === 'barkod' && u.durum === 'yayinda' && !gtin);
+  return uygun && (!aranan || [u.ad, u.kisaAd, u.sku, u.marka, gtin ?? ''].some((x) => x.toLocaleLowerCase('tr').includes(aranan)));
 }).sort((a, b) => sira === 'stok' ? a.stok - b.stok : sira === 'fiyat' ? a.fiyat - b.fiyat : sira === 'ad' ? a.kisaAd.localeCompare(b.kisaAd, 'tr') : b.oncelik - a.oncelik);
 const url = (id?: string) => '?' + new URLSearchParams({ filtre, q: soru, sira, ...(id ? { duzenle: id } : {}) }) + (id ? '#u-' + id : '');
 // Etikete basılabilecek SKU (yalnız yazdırılabilir ASCII, en fazla 55 karakter).
@@ -122,13 +127,14 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
     <p>Her değişiklik sebebiyle birlikte aşağıdaki <a class="y-link" href="#stok-gecmisi">Stok hareketleri</a> listesine yazılır.</p>
   </BilgiKutusu>
   <form method="get" class="y-toolbar" data-filtre-form="urun">
-    <input class="y-girdi" name="q" type="search" value={soru} placeholder="Ürün adı, marka veya SKU" aria-label="Ürün ara" />
+    <input class="y-girdi" name="q" type="search" value={soru} placeholder="Ürün, marka, SKU veya barkod" aria-label="Ürün ara" />
     <select class="y-girdi" name="filtre" aria-label="Ürün filtresi">
-      {Object.entries({ tumu: 'Tümü', ...YAYIN_ADLARI, kritik: `Azalan / tükenen stok (${azalan})` }).map(([id, ad]) => <option value={id} selected={filtre === id}>{ad}</option>)}
+      {Object.entries({ tumu: 'Tümü', ...YAYIN_ADLARI, kritik: `Azalan / tükenen stok (${azalan})`, barkod: `Barkodu eksik (${barkodsuz})` }).map(([id, ad]) => <option value={id} selected={filtre === id}>{ad}</option>)}
     </select>
     <select class="y-girdi" name="sira" aria-label="Ürün sıralaması">{Object.entries({ katalog: 'Katalog sırası', stok: 'En az stok', fiyat: 'En düşük fiyat', ad: 'Ürün adı' }).map(([id, ad]) => <option value={id} selected={sira === id}>{ad}</option>)}</select>
     <button class="btn btn--cizgi" type="submit">Uygula</button>
   </form>
+  {filtre === 'barkod' && <p class="y-help">Yayındaki ürünlerin barkodunu Detaylar → Teknik özellikler bölümüne “Barkod (EAN)” olarak girin.</p>}
   {liste.length ? <div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Fiyat</th><th>İndirim</th><th>Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
     {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return <>
       <tr id={'u-' + u.id}>

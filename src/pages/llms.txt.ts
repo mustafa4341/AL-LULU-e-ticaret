@@ -4,12 +4,13 @@
  */
 import type { APIRoute } from 'astro';
 import { formatTL } from '../lib/fiyat';
+import { Katalog } from '../lib/katalog';
 import { ODEME_BAGLI } from '../lib/altyapi';
 import { YASAL_SAYFALAR } from '../lib/yasal';
-import { urunGtin } from '../lib/urunKimlik';
+import { markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
 
 export const GET: APIRoute = async ({ locals, site: astroSite }) => {
-  const k = locals.katalog;
+  const k = new Katalog(locals.katalog.magaza);
   const s = k.site;
   const kok = (astroSite ?? new URL(s.url)).origin;
   const tek = (v: string) => v.replace(/\s+/g, ' ').trim();
@@ -19,11 +20,12 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     const fiyat = b.sepette?.fiyat ?? b.fiyat;
     const kargoUcretsiz = fiyat >= s.kargo.ucretsizEsik;
     const gtin = urunGtin(u);
+    const mpn = urunMpn(u);
     const ozellik = u.teknik.filter(([a]) => !/barkod|ean|gtin/i.test(a)).slice(0, 8).map(([a, d]) => `${a}: ${d}`).join('; ');
     const pisirme = u.pisirme.slice(0, 8).map((p) => `${p.yemek} ${p.sure}${p.kademe ? ` (${/^\d$/.test(p.kademe.trim()) ? `${p.kademe.trim()}. kademe` : p.kademe})` : ''}`).join('; ');
     return [
-      `- [${u.marka} ${u.ad}](${kok}/urun/${u.id}): ${tek(u.ozet)}`,
-      `  Fiyat: ${formatTL(fiyat)} (KDV dahil)${kargoUcretsiz ? ', kargo ücretsiz' : ''}. ${k.stoktaMi(u) ? 'Stokta.' : 'Şu an stokta yok.'}${u.garanti ? ` Garanti: ${u.garanti}.` : ''}${u.sku ? ` Model kodu (MPN): ${u.sku}.` : ''}${gtin ? ` Barkod (EAN/GTIN): ${gtin}.` : ''}`,
+      `- [${markaliUrunAdi(u)}](${kok}/urun/${u.id}): ${tek(u.ozet)}`,
+      `  Fiyat: ${formatTL(fiyat)} (KDV dahil)${kargoUcretsiz ? ', kargo ücretsiz' : ''}. ${k.stoktaMi(u) ? 'Stokta.' : 'Şu an stokta yok.'}${u.garanti ? ` Garanti: ${u.garanti}.` : ''}${mpn ? ` Üretici model kodu (MPN): ${mpn}.` : ''}${gtin ? ` Barkod (EAN/GTIN): ${gtin}.` : ''}`,
       ...(ozellik ? [`  Özellikler: ${ozellik}`] : []),
       ...(u.kutuIcerigi.length ? [`  Kutu içeriği: ${u.kutuIcerigi.map(tek).join('; ')}`] : []),
       ...(pisirme ? [`  Pişirme süreleri: ${pisirme}${u.pisirmeNotu ? ` — ${tek(u.pisirmeNotu)}` : ''}`] : []),
