@@ -6,14 +6,20 @@ import { pazaryeriSenkron } from '../../lib/pazaryeriSenkron';
 export const prerender = false;
 const headers = { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex' };
 
+/**
+ * Zamanlayıcı ucu. İki anahtar kabul edilir:
+ *  - CRON_SECRET: GitHub Actions (yedek; GitHub zamanlaması saatlerce gecikebiliyor)
+ *  - ZAMANLAYICI_ANAHTARI: Supabase pg_cron + pg_net (asıl, 5 dakikada bir; anahtar Supabase Vault'ta)
+ */
 export const GET: APIRoute = async ({ request }) => {
-  const gizli = pazaryeriOrtam('CRON_SECRET');
-  if (!gizli || gizli.length < 32) return new Response(null, { status: 404, headers });
-  const beklenen = Buffer.from(`Bearer ${gizli}`);
+  const anahtarlar = [pazaryeriOrtam('CRON_SECRET'), pazaryeriOrtam('ZAMANLAYICI_ANAHTARI')].filter((x): x is string => !!x && x.length >= 32);
+  if (!anahtarlar.length) return new Response(null, { status: 404, headers });
   const gelen = Buffer.from(request.headers.get('authorization') ?? '');
-  if (gelen.length !== beklenen.length || !timingSafeEqual(gelen, beklenen)) {
-    return new Response(null, { status: 401, headers });
-  }
+  const gecerli = anahtarlar.some((a) => {
+    const beklenen = Buffer.from(`Bearer ${a}`);
+    return gelen.length === beklenen.length && timingSafeEqual(gelen, beklenen);
+  });
+  if (!gecerli) return new Response(null, { status: 401, headers });
   try {
     const sonuc = await pazaryeriSenkron('zamanlayici');
     return Response.json(sonuc, { status: sonuc.durum === 'hata' ? 503 : 200, headers });
