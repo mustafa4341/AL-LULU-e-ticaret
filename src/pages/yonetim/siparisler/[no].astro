@@ -55,7 +55,9 @@ const parcaAdi = (id: string) => { const u = urunBilgi(id); return u ? `${u.mark
    "Ürünler" satırı gösterilmezse indirim iki kez düşülmüş gibi görünür. */
 const listeToplami = s.urunlerToplami + s.kampanyaIndirimi;
 const indirimVar = s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
-const belgeler = s.paytr?.test ? [] : (await finansOku()).belgeler.filter((b) => b.siparisNo === no);
+const finansKaydi = s.paytr?.test ? undefined : await finansOku();
+const belgeler = finansKaydi ? finansKaydi.belgeler.filter((b) => b.siparisNo === no) : [];
+const kesilenFatura = finansKaydi?.faturalar.find((x) => x.kanal === 'web' && x.kayit === no && !x.iptal);
 const sonraki = siradakiDurum(s);
 const iade = iadeEdildi(s);
 const iptal = s.durum === 'iptal';
@@ -222,6 +224,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
       <p><a class="y-link" href={'tel:' + s.musteri.tel}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a class="y-link" href={'mailto:' + s.musteri.eposta}>{s.musteri.eposta}</a></>}</p>
       <p>{s.teslimat.adres}<br />{s.teslimat.ilce} / {s.teslimat.il}</p>
       {s.teslimat.not && <p class="muted">Kargo notu: {s.teslimat.not}</p>}
+      <p class="muted">e-Arşiv fatura: {kesilenFatura ? <strong>{kesilenFatura.no}</strong> : 'Kesilmedi'} · <a class="y-link" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + s.no) + '#secili'}>{kesilenFatura ? 'Faturayı görüntüle' : 'Fatura bilgileri'}</a></p>
       <p class="muted">Fatura: {s.fatura.tip === 'kurumsal' ? [s.fatura.firma, s.fatura.vd, s.fatura.vno].filter(Boolean).join(' · ') : 'Bireysel'}{s.fatura.adres && <> · {s.fatura.adres}</>}</p>
     </section>
     <section class="y-kart">

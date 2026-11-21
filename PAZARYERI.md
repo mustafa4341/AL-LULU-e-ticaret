@@ -64,3 +64,43 @@ GitHub **Actions → Pazaryeri eşitleme** çalıştırma geçmişini gösterir.
 | Fatura, kargo ve geri ödeme | Web siparişleri mevcut panelde ilerler. Pazaryeri işlemleri ilgili satıcı panelinde tamamlanır. Hakediş mutabakatında sipariş tutarı ve bankaya yatan tutar ayrı kayıtlardır. |
 
 Merkezi stok hareketi aktarım sırasında tek işlemde yazılır. Üç satış kanalının birbirinden bağımsız ödeme ve sipariş kabul sistemleri vardır. Kanal API’sinde ve zamanlayıcıda gecikme olabileceği için düşük stokta varsayılan güvenlik payı kanal başına bir adettir. Son birkaç adedi tek kanalda açmak çakışma riskini azaltır. Senkron hatasında satıcı panelindeki ilan adedi son bilinen değerde kalabilir.
+
+## Hepsiburada finans ve kâr hesabı
+
+Yönetim panelinde **Finans › Hepsiburada** (`/yonetim/finans/hepsiburada`) iki bölümden oluşur.
+
+- **Hesap makinesi:** Satış fiyatı, kategori komisyonu, desi, kargo firması, işlem ve hizmet bedeli ile stopajdan "hesaba yatacak" tutarı, net kârı ve başa baş fiyatı hesaplar. Komisyon oranları Hepsiburada EK-4 (V13) tablosundan alındı. Kargo ücretleri 05.10.2026 tarihli desi tablosundan alındı ve `src/lib/hepsiburadaKargoTablosu.ts` dosyasına PDF'ten otomatik üretildi. Tablonun 4501 satırı ve 11 firması ile karşılaştırıldı, fark 0 kuruş. İşlem ve hizmet bedeli belgelerde yok, ayarlardan girilir. Yeni tablo gelince dosya aynı yöntemle yeniden üretilmeli.
+- **Hepsiburada hesabım:** Muhasebe servisinden (`mpfinance-external`, kayıt bazlı ve performans servisi) son 30, 60 veya 90 günün kayıtlarını çeker. Ödenen ve ödenecek tutarları ve vade günlerini gösterir. Sipariş bazında kayıt toplamını Hepsiburada'nın hakediş tutarıyla karşılaştırır. Bunun için Hepsiburada'dan **Muhasebe entegrasyonu** yetkisi istenmeli.
+- İlk gerçek bağlantıda test ortamında doğrulanacak noktalar:
+  - `amount`, `taxAmount` ve `netAmount` alanlarının anlamı.
+  - `TotalPayment` kaydının hakedişe eklenmemesi.
+  - Mutabakatta fark çıkmaması.
+
+## Trendyol: ürün gönderme, fiyat, fatura ve hakediş (21.11.2026)
+
+Servis yolları developers.trendyol.com belgelerinden (Ürün Entegrasyonu V2, Sipariş, Fatura, Yurtiçi Cari Hesap Ekstresi) 21.11.2026'da doğrulandı. Kod: `src/lib/trendyolApi.ts`, `trendyolIlan.ts`, `trendyolIlanIslem.ts`, `trendyolFinans.ts`.
+
+- **Trendyol'a ürün gönder** (`/yonetim/siparisler/trendyol-urunler`, Satış kanalları › Trendyol kartındaki düğme): ürünü seç → Trendyol kategorisi ara/seç → marka ara/seç → zorunlu özellikler (sitedeki teknik özelliklerden bulunanlar otomatik dolar) → barkod, desi, KDV, fiyat → **Kaydet ve Trendyol'a gönder**. Açıklama ürünün sitedeki özet, öne çıkanlar, teknik tablo, kutu içeriği ve garantisinden; görseller `/jpg/...` dönüştürücüsünden JPG olarak gider. Stok = satılabilir stok − güvenlik payı.
+- **Onay takibi:** sayfa her açıldığında (2 dakikada bir) ve “Durumları yenile” ile kuyruk sonucu, red sebepleri ve onay okunur. Onaylanan ilan aynı barkodla **Ürün eşleştirmeleri**ne kendiliğinden bağlanır; stok eşitlemesi oradan devam eder.
+- **Fiyat kuralı:** site fiyatı + % + sabit TL, isteğe bağlı ,90 yuvarlama; ürüne özel fiyat yazılabilir. “Fiyatları Trendyol'a gönder” eşleştirilmiş ilanlara fiyatı yollar (adet göndermez). Liste fiyatı = satış fiyatı: üstü çizili fiyat gönderilmez (Yönetmelik m.14); Trendyol'da indirim Trendyol'un kampanya araçlarıyla yapılmalı.
+- **Sipariş detayında Trendyol işlemleri:** “Toplamaya başla” (Picking), fatura numarasıyla “Faturalandı” (Invoiced), e-Arşiv/e-Fatura PDF'ini yükleme (`seller-invoice-file`, Vercel istek sınırı nedeniyle pratikte en fazla ~4 MB) veya fatura bağlantısı gönderme (`seller-invoice-links`, 10 yıl erişilebilir olmalı). Mağazanın kendi “sipariş fişi” fatura yerine geçmez.
+- **Finans › Trendyol › Şimdi çek:** settlements (Sale, Return, Discount, Coupon, DeliveryFee, Provision, ManualRefund) + otherfinancials (DeductionInvoices, Stoppage, PaymentOrder) 15 günlük parçalarla çekilir, sipariş başına mevcut Trendyol tablosuna yazılır. CommissionAgreementInvoice (komisyon mutabakat faturası) tekrar sayılmaz; TyDiscount/TyCoupon (Trendyol bütçeli) çekilmez. Elle dosya yükleme yedek olarak duruyor.
+- **Muhasebeci Excel'i:** yeni “Pazaryeri satışları” sayfası (Trendyol + Hepsiburada siparişleri, durum, adet, tutar).
+- İlk gerçek siparişte doğrulanacaklar: cari hesap alanlarının (debt/credit/commissionAmount/sellerRevenue) satıcı panelindeki ekstreyle aynı çıkması; DeductionInvoices açıklamalarının kargo/hizmet ayrımı; Picking/Invoiced sonrası durumun eşitlemede gelmesi.
+- Henüz yok: e-Arşiv/e-Fatura **kesme** (GİB özel entegratörü hesabı gerekir: Trendyol E-Faturam, Paraşüt vb.), iade (claims) onay/red, müşteri soruları, ortak kargo etiketi, Hepsiburada ürün yükleme (HB entegrasyon erişimi bekleniyor).
+
+## Tek çatı: Faturalar, iadeler, sorular, kargo etiketi (21.11.2026)
+
+- **Finans › Faturalar** (`/yonetim/finans/faturalar`): web + Trendyol + Hepsiburada siparişleri tek listede. Faturayı mağaza **GİB e-Arşiv Portalı'nda elle** keser (1.1.2026'dan beri e-Fatura'ya geçmemiş mükellefler tüm faturaları portaldan e-Arşiv keser; basit usul / işletme hesabı için 1.1.2027 — muhasebeciye doğrulatın). Ekran her sipariş için alıcıyı (TCKN yoksa 11111111111; kurumsalda VKN, unvan, vergi dairesi), satırları (KDV hariç birim fiyat, KDV oranı ve tutarı, toplam) ve not metnini “Kopyala” düğmeleriyle verir. Fatura no + tarih + PDF kaydedilince: Trendyol'a otomatik yüklenir (`seller-invoice-file`), web müşterisine e-postayla gider (tür `fatura`, eposta_kayitlari'nda), Hepsiburada'da satıcı panelinden yüklenip “Yükledim” işaretlenir (HB fatura servisi belgeden doğrulanamadı). Aynı siparişe ikinci geçerli fatura ve aynı fatura numarası engellenir; iptal yalnız kaydı kapatır, portalda ayrıca iptal edilmeli.
+- KDV oranı: ürünün Trendyol ilanındaki / Hepsiburada ayarındaki oran, yoksa %20. Web siparişinde set/sepet indirimi satırlara orantılı dağıtılır, kargo ayrı %20 satır; toplam müşterinin ödediğiyle kuruşu kuruşuna aynı.
+- Pazaryeri siparişlerine fatura alıcısı kaydediliyor (`fatura` alanı): Trendyol `invoiceAddress`, `tcIdentityNumber`, `customerEmail` (siparişe özel kriptolu adres); Hepsiburada `invoice` / `invoiceAddress` (HB alan adları ilk gerçek bağlantıda doğrulanacak). Eski siparişlerde alan yok; bir sonraki eşitlemede dolar.
+- **Trendyol iadeleri ve soruları** (`/yonetim/siparisler/trendyol-iade-soru`): son 30 günün iadeleri, depoya ulaşan (WaitingInAction) kalemleri onaylama (`claims/{id}/items/approve`); ret talebi fotoğraf istediği için Trendyol panelinde. Cevap bekleyen sorular ve cevaplama (`qna/.../questions/{id}/answers`, 10–2000 karakter).
+- **Kargo etiketi:** Trendyol sipariş sayfasında “Kargo etiketini indir (ZPL)” — ortak etiket (TEX / Aras, Trendyol öder), termal yazıcı içindir.
+- Ana sayfada “Faturası kesilecek” ve “Faturası müşteriye iletilmedi” iş kalemleri; muhasebeci Excel'inde “Faturalar” sayfası. Para biçimi panelin her yerinde “12.999 TL / 12.999,50 TL”.
+
+## Otomatik işler ve tek tuş (21.11.2026)
+
+- **Bugünkü işler** (`/yonetim/isler`, ana sayfada “Tek tuşla işleri yap”): “Hepsini şimdi yap” = eşitleme + aşağıdaki otomatik işler hemen. Altında yalnız elle yapılacaklar (fatura kesmek, HB'ye fatura yüklemek, paketlemek, eşleşmeyen ürün) sayılarıyla listelenir.
+- Zamanlayıcı (GitHub Actions, 5 dk) her eşitlemeden sonra `lib/otomasyon.ts` `otomatikIsler()`'i çalıştırır (süre kalırsa; fonksiyon 60 sn sınırı): yeni Trendyol/HB siparişi → mağazaya e-posta (`pazaryeri-yeni`, siparişte bir kez); isteğe bağlı yeni Trendyol paketi → Picking; iletilemeyen faturalar 30 dk'da bir yeniden denenir (en fazla 3, 14 gün); isteğe bağlı değişen fiyatlar Trendyol'a; günde bir ilan onayları + Trendyol hakedişi (son 15 gün). Ayarlar `envanter_ayarlari.otomasyon` (otoToplama ve otoFiyat varsayılan kapalı), son 20 işlem özeti panelde.
+- Müşteri soruları arayüzden kaldırıldı (kullanıcı isteği); servis fonksiyonları `trendyolApi.ts`'de duruyor.
+- Faturanın kendisi otomatik **kesilmez**: GİB e-Arşiv Portalı'nın resmî bir programlama arayüzü yok. Tam otomatik kesim için ücretli özel entegratör (e-Arşiv API'si olan bir firma) gerekir; seçilirse `faturaIlet` öncesine “kes” adımı eklenir.

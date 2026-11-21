@@ -6,7 +6,7 @@ import { Katalog } from '../../lib/katalog';
 import { iadeEdildi } from '../../lib/siparisAkisi';
 import { onayliSatis, yTarih } from '../../lib/yonetimRapor';
 import { finansOku } from '../../lib/finansDepo';
-import { belgeGecerli, finansGunu, finansPara, hakEdis, raporla } from '../../lib/finans';
+import { belgeGecerli, finansGunu, finansPara, hakEdis, kalanTutar, raporla } from '../../lib/finans';
 import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from '../../lib/yedek';
 import { tumYorumlar } from '../../lib/yorum';
 import { KANALLAR, KANAL_LISTESI, PY_DURUM_ADLARI, PY_DURUM_RENK, bosAyarlar, kritikEsik, kurusTL } from '../../lib/pazaryeri';
@@ -16,6 +16,7 @@ import { pazaryeriDurumu } from '../../components/yonetim/pazaryeriGorunumu';
 import { kanalToplamlari } from '../../lib/kanalOzeti';
 import KanalOzeti from '../../components/yonetim/KanalOzeti.astro';
 import BilgiKutusu from '../../components/yonetim/BilgiKutusu.astro';
+import { faturaAdaylari } from '../../lib/faturaMerkezi';
 
 const [m, tum, finans, sonYedek, yorumlar, pazar, envanter] = await Promise.all([
   magazaOku(), siparisleriOku(), finansOku(), sonYedekTarihi().catch(() => undefined), tumYorumlar().catch(() => []),
@@ -28,11 +29,14 @@ const siparisler = tum.filter((s) => !s.paytr?.test).sort((a, b) => Date.parse(b
 const bugun = finansGunu();
 const bugunRapor = raporla(finans, siparisler, bugun, bugun);
 const ayRapor = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
-const ayKalan = ayRapor.webSatis - ayRapor.webIade + ayRapor.trendyolBeklenen - ayRapor.gider;
+const ayKalan = kalanTutar(ayRapor);
 
 const hazirlanacak = siparisler.filter((s) => s.durum === 'odendi' && !s.paytr?.stokEksik);
 const kargolanacak = siparisler.filter((s) => s.durum === 'hazirlaniyor');
 const belgesiz = siparisler.filter((s) => onayliSatis(s) && !finans.belgeler.some((b) => b.siparisNo === s.no && belgeGecerli(b)));
+const faturaListesi = faturaAdaylari(finans, siparisler, pazar, envanter);
+const faturasiz = faturaListesi.filter((x) => !x.fatura);
+const faturaIletilmedi = faturaListesi.filter((x) => x.fatura && ['bekliyor', 'hata'].includes(x.fatura.iletim.durum));
 const odemeKontrol = siparisler.filter((s) => s.durum === 'odeme-bekliyor' && !s.paytr);
 const stokUyusmazligi = siparisler.filter((s) => s.paytr?.stokEksik && s.durum !== 'iptal' && !iadeEdildi(s));
 const iptalKargo = siparisler.filter((s) => s.durum === 'iptal' && s.kargoTakip);
@@ -64,6 +68,8 @@ const isler = ([
   { ad: 'Hazırlanacak siparişler', sayi: hazirlanacak.length, url: '/yonetim/siparisler?durum=odendi', ton: 'turuncu' },
   { ad: 'Kargoya verilecek siparişler', sayi: kargolanacak.length, url: '/yonetim/siparisler?durum=hazirlaniyor', ton: 'turuncu' },
   { ad: 'Belgesi hazırlanmamış siparişler', sayi: belgesiz.length, url: '/yonetim/siparisler?durum=belgesiz', ton: 'turuncu' },
+  { ad: 'Faturası kesilecek siparişler (web + pazaryeri)', sayi: faturasiz.length, url: '/yonetim/finans/faturalar', ton: 'turuncu' },
+  { ad: 'Faturası müşteriye iletilmedi', sayi: faturaIletilmedi.length, url: '/yonetim/finans/faturalar?durum=kesildi', ton: 'turuncu' },
   { ad: 'Hata veren belgeler (yeniden dene)', sayi: belgeHatasi.length, url: '/yonetim/finans?sekme=belgeler', ton: 'kirmizi' },
   { ad: 'Ödemesi kontrol edilecek (havale/EFT)', sayi: odemeKontrol.length, url: '/yonetim/siparisler?durum=odeme-bekliyor', ton: 'turuncu' },
   { ad: 'Ödemesi beklenen Trendyol hakedişi', sayi: trendyolBekleyen.length ? finansPara(trendyolBekleyen.reduce((t, x) => t + hakEdis(x), 0)) : 0, url: '/yonetim/finans?sekme=trendyol', ton: 'gri' },
@@ -113,7 +119,7 @@ const pazaryeriKurulu = KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) !== 'kap
   </BilgiKutusu>}
 
   <section class="y-kart">
-    <h2>Bugün yapılacaklar</h2>
+    <div class="y-kart__bas"><h2>Bugün yapılacaklar</h2><a class="btn btn--sepet" href="/yonetim/isler">Tek tuşla işleri yap</a></div>
     {isler.length === 0 ? <p class="muted">Bekleyen iş yok. Her şey yolunda.</p> : <ul class="y-is-listesi">
       {isler.map((x) => <li><a href={x.url}>
         <span>{x.ad}</span>

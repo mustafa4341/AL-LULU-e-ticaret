@@ -1,4 +1,6 @@
-import { belgeGecerli, hakEdis, raporla, type Finans, type Gider } from './finans';
+import { aralikta, belgeGecerli, finansGunu, hakEdis, hbIsaretli, hbKayitGunu, kalanTutar, raporla, type Finans, type Gider } from './finans';
+import { KANALLAR, PY_DURUM_ADLARI, satisMi, satisTutari, type PazaryeriSiparisi } from './pazaryeri';
+import { HB_GRUPLAR, hbGrubu, odendi } from './hepsiburadaFinans';
 import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI } from './finans';
 import { SIPARIS_DURUM_ADLARI } from './sema';
 import { csvOlustur, zipOlustur } from './finansArsiv';
@@ -31,19 +33,25 @@ export function aylar(bas: string, son: string) {
  * Muhasebeci tabloları. Satışlar ÖDEME tarihine, iade/iptaller GERİ ÖDEME tarihine göre listelenir;
  * böylece "Satışlar − İadeler" panelde görünen net satışla aynı çıkar.
  */
-export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string, son: string) => {
+export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string, son: string, pazaryeri: PazaryeriSiparisi[] = []) => {
   const r = raporla(f, siparisler, bas, son);
+  const pySatirlari = pazaryeri
+    .filter((s) => !Number.isNaN(Date.parse(s.tarih)) && aralikta(finansGunu(Date.parse(s.tarih)), bas, son))
+    .sort((a, b) => a.tarih.localeCompare(b.tarih))
+    .map((s) => [KANALLAR[s.kanal], s.siparisNo, s.paketNo ?? '', saat.format(new Date(s.tarih)), PY_DURUM_ADLARI[s.durum],
+      s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join('; '), s.kalemler.reduce((t, k) => t + k.adet, 0),
+      tl(s.toplam), tl(satisMi(s) ? satisTutari(s) : 0), satisMi(s) ? '' : 'Satış sayılmaz (iptal/iade/bekleyen)']);
   const belgeNo = (no: string) => f.belgeler.filter((b) => b.siparisNo === no && belgeGecerli(b)).map((b) => b.belgeNo ?? '').filter(Boolean).join(' ');
   const durum = (s: Siparis) => iadeEdildi(s) ? 'İade tamamlandı' : SIPARIS_DURUM_ADLARI[s.durum];
   const odemeTarihi = (s: Siparis) => s.gecmis.find((e) => e.durum === 'odendi')?.tarih;
   const aylik = aylar(bas, son).map((a) => {
     const x = raporla(f, siparisler, a.bas, a.son);
-    return [a.ad, a.bas, a.son, x.satislar.length, tl(x.webSatis), tl(x.webIade), tl(x.webSatis - x.webIade), tl(x.trendyolBeklenen), tl(x.gider),
-      tl(x.webSatis - x.webIade + x.trendyolBeklenen - x.gider), x.tahmini === undefined ? 'Ürün alış maliyeti girilmedi; kalan kesin değil' : ''];
+    return [a.ad, a.bas, a.son, x.satislar.length, tl(x.webSatis), tl(x.webIade), tl(x.webSatis - x.webIade), tl(x.trendyolBeklenen), tl(x.hepsiburadaBeklenen), tl(x.gider),
+      tl(kalanTutar(x)), x.tahmini === undefined ? 'Ürün alış maliyeti girilmedi; kalan kesin değil' : ''];
   });
   return [
     { ad: 'Aylık özet', kod: 'aylik', satirlar: [
-      ['Ay', 'Başlangıç', 'Bitiş', 'Satış adedi', 'Onaylı satış (TL)', 'İade/iptal (TL)', 'Net satış (TL)', 'Trendyol beklenen hakediş (TL)', 'Giderler (TL)', 'Tahmini kalan (TL)', 'Not'],
+      ['Ay', 'Başlangıç', 'Bitiş', 'Satış adedi', 'Onaylı satış (TL)', 'İade/iptal (TL)', 'Net satış (TL)', 'Trendyol beklenen hakediş (TL)', 'Hepsiburada hakediş (TL)', 'Giderler (TL)', 'Tahmini kalan (TL)', 'Not'],
       ...aylik,
     ] },
     { ad: 'Satışlar', kod: 'satislar', satirlar: [
@@ -58,6 +66,16 @@ export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string,
       ['Sipariş no', 'Kanal', 'İşlem günü', 'Durum', 'Sipariş toplamı (TL)', 'Geri ödeme (TL)', 'Not'],
       ...r.iadeler.map(({ siparis: s, gun, tutar }) => [s.no, 'Web', gun, durum(s), s.toplam, tl(tutar), tutar ? '' : 'Ödeme alınmamıştı']),
     ] },
+    { ad: 'Faturalar', kod: 'faturalar', satirlar: [
+      ['Fatura no', 'Fatura tarihi', 'Kanal', 'Sipariş no', 'Alıcı', 'KDV hariç (TL)', 'KDV (TL)', 'Toplam (TL)', 'Durum', 'Müşteriye iletim'],
+      ...f.faturalar.filter((x) => aralikta(x.tarih, bas, son)).sort((a, b) => a.tarih.localeCompare(b.tarih) || a.no.localeCompare(b.no))
+        .map((x) => [x.no, x.tarih, x.kanal === 'web' ? 'Web' : KANALLAR[x.kanal], x.siparisNo, x.alici, tl(x.matrah), tl(x.kdv), tl(x.toplam),
+          x.iptal ? 'İptal' : 'Geçerli', ({ bekliyor: 'Bekliyor', hata: 'Hata', gonderildi: 'İletildi', elle: 'Elle iletildi', yok: '' })[x.iletim.durum]]),
+    ] },
+    { ad: 'Pazaryeri satışları', kod: 'pazaryeri', satirlar: [
+      ['Kanal', 'Sipariş no', 'Paket no', 'Sipariş tarihi', 'Güncel durum', 'Ürünler', 'Adet', 'Paket tutarı (TL, müşterinin ödediği)', 'Satış sayılan (TL)', 'Not'],
+      ...pySatirlari,
+    ] },
     { ad: 'Giderler', kod: 'giderler', satirlar: [
       ['Tarih', 'Kategori', 'Açıklama', 'Tutar (TL)', 'Fiş/fatura eki', 'Kayıt no'],
       ...r.giderler.slice().sort((a, b) => a.tarih.localeCompare(b.tarih)).map((x: Gider) => [x.tarih, GIDER_KATEGORILERI[x.kategori], x.not, tl(x.tutar), x.ek?.ad ?? 'Yok', x.id.slice(0, 8)]),
@@ -65,6 +83,11 @@ export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string,
     { ad: 'Trendyol kesintileri', kod: 'trendyol', satirlar: [
       [...TRENDYOL_BASLIK, 'Beklenen hakediş', 'Ödeme farkı'],
       ...r.trendyol.map((x) => [x.id, x.tarih, tl(x.brut), tl(x.indirim), tl(x.iade), tl(x.komisyon), tl(x.hizmet), tl(x.kargo), tl(x.diger), x.banka === undefined ? '' : tl(x.banka), tl(hakEdis(x)), x.banka === undefined ? '' : tl(x.banka - hakEdis(x))]),
+    ] },
+    { ad: 'Hepsiburada kayıtları', kod: 'hepsiburada', satirlar: [
+      ['Kayıt no', 'Gün', 'Sipariş no', 'Paket no', 'Ürün', 'Kayıt türü', 'Grup', 'Tutar (TL, KDV dahil)', 'KDV (TL)', 'KDV hariç (TL)', 'Hakedişe etkisi (TL)', 'Durum', 'Vade', 'Ödeme tarihi', 'Fatura no'],
+      ...r.hepsiburada.map((x) => [x.id, hbKayitGunu(x), x.siparisNo ?? '', x.paketNo ?? '', x.urun ?? '', x.tur, HB_GRUPLAR[hbGrubu(x.tur)], tl(x.tutar), tl(x.kdv), tl(x.net),
+        tl(hbIsaretli(x)), odendi(x) ? 'Ödendi' : 'Ödenecek', x.vade?.slice(0, 10) ?? '', x.odeme?.slice(0, 10) ?? '', x.fatura ?? '']),
     ] },
     { ad: 'Belge listesi', kod: 'belgeler', satirlar: [
       ['Belge no', 'Sipariş no', 'Kanal', 'Belge tarihi', 'Tür', 'Durum', 'Belge niteliği'],

@@ -10,7 +10,7 @@ import type { Siparis, SiteAyarlari } from './sema';
 import { formatTL } from './fiyat';
 import { siparisKargoBaglantisi } from './kargoTakip';
 
-export interface Eposta { konu: string; html: string; metin: string; ekler?: { dosyaAdi: string; icerik: string; tur: string }[] }
+export interface Eposta { konu: string; html: string; metin: string; ekler?: { dosyaAdi: string; icerik: string | Buffer; tur: string }[] }
 /** Ürün/set kimliğinden fotoğraf yolu (ör. "/medya/..."); yoksa satır fotoğrafsız çizilir */
 export type GorselBul = (id: string) => string | undefined;
 
@@ -381,5 +381,41 @@ ${buton('Panelde Aç', panel, R.altinKoyu)}
     konu: `Yeni sipariş: ${s.no} — ${formatTL(s.toplam)} (${s.musteri.ad} ${s.musteri.soyad})`,
     html: cerceve(site, { onYazi: `${s.musteri.ad} ${s.musteri.soyad} · ${s.teslimat.il} · ${formatTL(s.toplam)}`, ust: 'Mağaza bildirimi', baslik: 'Yeni sipariş geldi', icerik, guven: false }),
     metin: `Yeni sipariş: ${s.no}\n${odeme}\n\n${s.musteri.ad} ${s.musteri.soyad} · ${s.musteri.tel}${s.musteri.eposta ? ' · ' + s.musteri.eposta : ''}\n${s.teslimat.adres} ${s.teslimat.ilce} / ${s.teslimat.il}${s.teslimat.not ? `\nNot: ${s.teslimat.not}` : ''}\n\n${satirlarMetin(s)}\n\nPanel: ${panel}`,
+  };
+}
+
+/** Müşteriye fatura e-postası: kesilen e-Arşiv faturası ekte (PDF/JPG/PNG). */
+export function faturaEpostasi(s: Siparis, site: SiteAyarlari, faturaNo: string, takipUrl: string, ek: { dosyaAdi: string; icerik: Buffer; tur: string }): Eposta {
+  const icerik = `<p style="margin:0 0 8px">Merhaba ${kacis(s.musteri.ad)},</p>
+<p style="margin:0"><strong>${kacis(s.no)}</strong> numaralı siparişinizin faturası ekte yer alıyor.</p>
+${kutu(`<p style="margin:0;${YAZI};font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${R.soluk}">Fatura numarası</p><p style="margin:4px 0 0;${SERIF};font-size:18px;font-weight:bold;color:${R.yazi}">${kacis(faturaNo)}</p>`)}
+<p style="margin:0">Faturanızı saklamanızı öneririz; garanti ve iade işlemlerinde gerekebilir.</p>
+${buton('Siparişimi Görüntüle', takipUrl)}`;
+  return {
+    konu: `Faturanız — ${s.no}`,
+    html: cerceve(site, { onYazi: `Fatura no ${faturaNo}`, ust: 'Fatura', baslik: 'Faturanız hazır', icerik, altNot: altNot(s) }),
+    metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişinizin faturası ektedir.\nFatura numarası: ${faturaNo}\nSipariş detayı: ${takipUrl}${imza(site)}`,
+    ekler: [ek],
+  };
+}
+
+/** Mağazaya: yeni Trendyol / Hepsiburada siparişi geldi (pazaryeri kaydından). */
+export function pazaryeriSiparisEpostasi(site: SiteAyarlari, o: {
+  kanal: string; siparisNo: string; paketNo?: string; musteri?: string; il?: string; toplamTL: string; panelYolu: string;
+  kalemler: { ad: string; adet: number; eslesmedi: boolean }[]; sonKargo?: string; uyarilar: string[];
+}): Eposta {
+  const panel = `${kok(site)}${o.panelYolu}`;
+  const satirlar = o.kalemler.map((k) => `<li style="margin:0 0 6px">${k.adet} × ${kacis(k.ad)}${k.eslesmedi ? ` <strong style="color:#8a2d22">(ürün eşleşmedi)</strong>` : ''}</li>`).join('');
+  const icerik = `${kutu(`<p style="margin:0;${YAZI};font-size:12px;color:${R.soluk}">${kacis(o.kanal)} · Sipariş ${kacis(o.siparisNo)}${o.paketNo && o.paketNo !== o.siparisNo ? ` · Paket ${kacis(o.paketNo)}` : ''}</p>
+<p style="margin:6px 0 0;${SERIF};font-size:22px;font-weight:bold;color:${R.yazi}">${kacis(o.toplamTL)}</p>`)}
+<p style="margin:0 0 6px">${kacis(o.musteri ?? '')}${o.il ? ' · ' + kacis(o.il) : ''}</p>
+<ul style="margin:0 0 10px;padding-left:18px">${satirlar}</ul>
+${o.sonKargo ? `<p style="margin:0 0 8px"><strong>Son kargolama:</strong> ${kacis(o.sonKargo)}</p>` : ''}
+${o.uyarilar.map((u) => kutu(kacis(u), '#FDECEA', '#F5C6C0')).join('')}
+${buton('Panelde Aç', panel, R.altinKoyu)}`;
+  return {
+    konu: `Yeni ${o.kanal} siparişi: ${o.siparisNo} — ${o.toplamTL}`,
+    html: cerceve(site, { onYazi: `${o.kalemler.map((k) => k.adet + ' × ' + k.ad).join(', ')}`, ust: 'Mağaza bildirimi', baslik: `${o.kanal}'dan sipariş geldi`, icerik, guven: false }),
+    metin: `Yeni ${o.kanal} siparişi: ${o.siparisNo}\n${o.toplamTL}\n${o.kalemler.map((k) => `${k.adet} × ${k.ad}${k.eslesmedi ? ' (eşleşmedi)' : ''}`).join('\n')}\n${o.uyarilar.join('\n')}\nPanel: ${panel}`,
   };
 }

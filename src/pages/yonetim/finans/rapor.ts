@@ -1,12 +1,13 @@
 import type { APIRoute } from 'astro';
 import { siparisleriOku } from '../../../lib/depo';
-import { GIDER_KATEGORILERI, donem, finansPara, raporla, type Gider } from '../../../lib/finans';
+import { GIDER_KATEGORILERI, donem, finansPara, kalanTutar, raporla, type Gider } from '../../../lib/finans';
 import { belgeOku, finansOku, giderEki, saticiBilgisi } from '../../../lib/finansDepo';
 import { aylar, csvYaniti, dosyaYaniti, muhasebeTablolari, xlsxOlustur } from '../../../lib/finansDisari';
 import { zipOlustur } from '../../../lib/finansArsiv';
 import { A4, donemOzetiSvg, type OzetSatiri } from '../../../lib/belgeSablon';
 import { logoDataUri, svgdenPdf } from '../../../lib/finansPdf';
 import { TRENDYOL_BASLIK } from '../../../lib/trendyolDosya';
+import { pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
 
 const gun = (s: string) => s.split('-').reverse().join('.');
 
@@ -18,7 +19,7 @@ export const GET: APIRoute = async ({ url }) => {
   const r = raporla(f, siparisler, bas, son);
   const ad = bas + '_' + son;
   if (tur === 'pdf') {
-    const kalan = r.webSatis - r.webIade + r.trendyolBeklenen - r.gider;
+    const kalan = kalanTutar(r);
     const satirlar: OzetSatiri[] = [
       { ad: 'Satışlar', tur: 'baslik' },
       { ad: 'Onaylı web satışları (' + r.satislar.length + ' sipariş)', tutar: finansPara(r.webSatis) },
@@ -27,6 +28,7 @@ export const GET: APIRoute = async ({ url }) => {
       { ad: 'Satışa dahil kargo tahsilatı', tutar: finansPara(r.kargo), tur: 'alt' },
       { ad: 'Fiyatlara yansıyan indirimler', tutar: finansPara(r.webIndirim), tur: 'alt' },
       ...(r.trendyol.length ? [{ ad: 'Trendyol beklenen hakediş (' + r.trendyol.length + ' kayıt)', tutar: finansPara(r.trendyolBeklenen) } as OzetSatiri] : []),
+      ...(r.hepsiburada.length ? [{ ad: 'Hepsiburada hakediş (' + r.hepsiburada.length + ' kayıt)', tutar: finansPara(r.hepsiburadaBeklenen) } as OzetSatiri] : []),
       { ad: 'Giderler', tur: 'baslik' },
       ...Object.entries(r.kategori).filter(([, n]) => n > 0).map(([id, n]) => ({ ad: GIDER_KATEGORILERI[id as Gider['kategori']], tutar: '−' + finansPara(n), tur: 'alt' }) as OzetSatiri),
       { ad: 'Toplam gider (' + r.giderler.length + ' kayıt)', tutar: '−' + finansPara(r.gider), tur: 'ara' },
@@ -40,7 +42,7 @@ export const GET: APIRoute = async ({ url }) => {
         baslik: 'Aylara göre', kolonlar: ['Ay', 'Satış', 'İade', 'Gider', 'Kalan'],
         satirlar: ayTablosu.map((a) => {
           const x = raporla(f, siparisler, a.bas, a.son);
-          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.gider), finansPara(x.webSatis - x.webIade + x.trendyolBeklenen - x.gider)];
+          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.gider), finansPara(kalanTutar(x))];
         }),
       } : undefined,
       notlar: [
@@ -51,7 +53,8 @@ export const GET: APIRoute = async ({ url }) => {
     });
     return dosyaYaniti(await svgdenPdf(svgler, A4.w, A4.h, 150), 'application/pdf', 'finans-ozeti-' + ad + '.pdf');
   }
-  const tablolar = muhasebeTablolari(f, siparisler, bas, son);
+  const pazaryeri = await pazaryeriSiparisleriOku().catch(() => []);
+  const tablolar = muhasebeTablolari(f, siparisler, bas, son, pazaryeri);
   if (tur === 'excel') return dosyaYaniti(xlsxOlustur(tablolar), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'muhasebe-' + ad + '.xlsx');
   if (tur === 'zip') {
     const dosyalar = [];

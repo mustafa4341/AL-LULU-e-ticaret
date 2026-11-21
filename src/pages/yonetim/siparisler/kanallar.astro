@@ -157,6 +157,12 @@ const simdi = Date.now();
         <div><dt>Stok gönderimi</dt><dd>{stokDurumu}</dd></div>
       </dl>
 
+      {kanal === 'trendyol' && apiHazir && <p class="kanal-kisayol">
+        <a class="btn btn--sepet" href="/yonetim/siparisler/trendyol-urunler">Trendyol’a ürün gönder</a>
+        <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru">İadeler</a>
+        <a class="btn btn--cizgi" href="/yonetim/finans/faturalar?kanal=trendyol">Faturalar</a>
+        <span class="y-help">{Object.values(k.ilanlar).filter((x) => x.durum === 'onaylandi').length} ilan API ile açıldı · fiyat kuralı {k.fiyatKurali.yuzde ? '%' + k.fiyatKurali.yuzde.toLocaleString('tr-TR') : 'site fiyatı'}</span>
+      </p>}
       {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}
       {k.sonStokHata && <p class="y-uyari-satir" role="alert">Stok gönderilemedi: {k.sonStokHata}</p>}
       {otomatikGecikti && apiHazir && zamanlayiciAnahtariVar && !k.sonApiHata && <p class="y-uyari-satir" role="status">30 dakikadır başarılı otomatik çekim yok. Gerekirse “Şimdi eşitle”yi kullanın.</p>}
@@ -276,6 +282,7 @@ const simdi = Date.now();
   .kanal-onay { white-space: nowrap; padding-block: .55rem; display: inline-flex; gap: 6px; align-items: center; min-height: 44px; }
   .kanal-hareketler { list-style: none; padding: 0; margin: 0; }
   .kanal-hareketler li { grid-template-columns: minmax(0, 9rem) minmax(0, 1.5fr) 4rem minmax(0, 1.5fr); padding-block: .6rem; border-top: 1px solid var(--y-border); }
+  .kanal-kisayol { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 1rem; }
   .kanal-kurtarma { display: grid; justify-items: start; gap: .7rem; padding-bottom: 1rem; }
   @media (max-width: 700px) {
     .kanal-urun { grid-template-columns: minmax(0, 1fr) auto; }

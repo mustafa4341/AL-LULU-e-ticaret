@@ -14,8 +14,9 @@
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { Siparis, SiteAyarlari } from './sema';
 import { SIPARIS_DURUM_ADLARI } from './sema';
+import { KANALLAR, kurusTL, type PazaryeriSiparisi } from './pazaryeri';
 import { formatTL } from './fiyat';
-import { EPOSTA_GIDEN_DURUMLAR, durumEpostasi, siparisAlindiEpostasi, sozlesmelerEpostasi, yeniSiparisEpostasi, type Eposta, type GorselBul } from './epostaSablon';
+import { EPOSTA_GIDEN_DURUMLAR, durumEpostasi, faturaEpostasi, pazaryeriSiparisEpostasi, siparisAlindiEpostasi, sozlesmelerEpostasi, yeniSiparisEpostasi, type Eposta, type GorselBul } from './epostaSablon';
 import { magazaOku, siparisleriOku, sozlesmeOku, supabaseIstemci } from './depo';
 
 const ortam = (ad: string): string | undefined => process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
@@ -45,7 +46,33 @@ export const EPOSTA_TUR_ADLARI: Record<string, string> = {
   'durum-kargoda': 'Kargoya verildi',
   'durum-teslim-edildi': 'Teslim edildi',
   'durum-iptal': 'Sipariş iptal edildi',
+  fatura: 'Fatura (müşteri)',
+  'pazaryeri-yeni': 'Yeni pazaryeri siparişi (mağaza)',
 };
+
+/** Yeni Trendyol / Hepsiburada siparişini mağazaya bildirir (aynı sipariş için bir kez). */
+export async function pazaryeriSiparisBildir(s: PazaryeriSiparisi): Promise<GonderimSonucu> {
+  const { site } = await magazaOku();
+  const uyarilar: string[] = [];
+  if (s.kalemler.some((k) => !k.urunId)) uyarilar.push('Ürün eşleşmedi: siparişi açıp doğru ürünü seçin, stok o zaman düşer.');
+  if (s.kalemler.some((k) => k.eksik > 0)) uyarilar.push('Stok yetmedi: depodaki adedi kontrol edin.');
+  const e = pazaryeriSiparisEpostasi(site, {
+    kanal: KANALLAR[s.kanal], siparisNo: s.siparisNo, paketNo: s.paketNo, musteri: s.musteri, il: s.il, toplamTL: kurusTL(s.toplam),
+    panelYolu: `/yonetim/siparisler/pazaryeri/${encodeURIComponent(s.id)}`,
+    kalemler: s.kalemler.map((k) => ({ ad: k.ad, adet: k.adet, eslesmedi: !k.urunId })),
+    sonKargo: s.sonKargoTarihi ? new Date(s.sonKargoTarihi).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' }) : undefined,
+    uyarilar,
+  });
+  return epostaGonder(magazaAdresi(site), e, { no: s.id.slice(0, 60), tur: 'pazaryeri-yeni' });
+}
+
+/** Fatura merkezi: kesilen faturayı web müşterisine e-postayla gönderir (tekrar gönderimde zorla). */
+export async function faturaGonder(s: Siparis, faturaNo: string, ek: { dosyaAdi: string; icerik: Buffer; tur: string }, origin: string, zorla = false): Promise<GonderimSonucu> {
+  if (!s.musteri.eposta) return 'kapali';
+  const { site } = await magazaOku();
+  const takipUrl = new URL(`/siparis/${s.no}?t=${s.token}`, origin).href;
+  return epostaGonder(s.musteri.eposta, faturaEpostasi(s, site, faturaNo, takipUrl, ek), { no: s.no, tur: 'fatura', zorla });
+}
 
 export type GonderimSonucu = 'gonderildi' | 'zaten-gonderildi' | 'hata' | 'kapali';
 
@@ -76,7 +103,7 @@ async function epostaGonder(kime: string, e: Eposta, kayit?: Kayit, yanit?: stri
       to: kime,
       replyTo: yanit || ortam('EPOSTA_YANIT') || undefined,
       subject: e.konu, text: e.metin, html: e.html,
-      attachments: e.ekler?.map((x) => ({ filename: x.dosyaAdi, content: x.icerik, contentType: `${x.tur}; charset=utf-8` })),
+      attachments: e.ekler?.map((x) => ({ filename: x.dosyaAdi, content: x.icerik, contentType: x.tur.startsWith('text/') ? `${x.tur}; charset=utf-8` : x.tur })),
     });
     mesajId = bilgi.messageId ?? null;
   } catch (h) {

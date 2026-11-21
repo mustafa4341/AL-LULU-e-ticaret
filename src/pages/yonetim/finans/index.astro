@@ -2,11 +2,14 @@
 import Yonetim from '../../../layouts/Yonetim.astro';
 import Ikon from '../../../components/Ikon.astro';
 import { siparisleriOku } from '../../../lib/depo';
-import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
+import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, kalanTutar, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
 import { finansOku, giderEkle, giderGuncelle, giderSil, trendyolKaydet } from '../../../lib/finansDepo';
 import { aylar } from '../../../lib/finansDisari';
 import { metin } from '../../../lib/form';
 import { trendyolDosyasi } from '../../../lib/trendyolDosya';
+import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+import { trendyolEkstreCek } from '../../../lib/trendyolApi';
+import { trendyolEkstreSatirlari } from '../../../lib/trendyolFinans';
 import { gonderilecek, onayliSatis, yTarih } from '../../../lib/yonetimRapor';
 
 const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
@@ -53,6 +56,21 @@ if (Astro.request.method === 'POST') {
       await trendyolKaydet(satirlar);
       return Astro.redirect('/yonetim/finans?sekme=trendyol&ok=' + encodeURIComponent(satirlar.length + ' hakediş satırı işlendi.'), 303);
     }
+    if (eylem === 'trendyol-cek') {
+      sekme = 'trendyol';
+      const gun = Number(metin(f, 'gun'));
+      if (![15, 30, 60, 90].includes(gun)) throw new Error('Geçersiz dönem.');
+      const sonT = Date.now();
+      const basT = sonT - gun * 86_400_000;
+      const ham = await trendyolEkstreCek(basT, sonT, AbortSignal.timeout(50_000));
+      const ozet = trendyolEkstreSatirlari(ham.satislar, ham.diger);
+      if (ozet.satirlar.length) await trendyolKaydet(ozet.satirlar);
+      const mesaj = ozet.kayit
+        ? `Trendyol'dan ${ozet.kayit} kayıt alındı, ${ozet.satirlar.length} satır güncellendi.` + (ozet.odenen ? ` Bu dönemde bankaya ödenen: ${finansPara(ozet.odenen)}.` : '')
+          + (ozet.atlanan ? ` ${ozet.atlanan} kayıt okunamadı; satıcı panelindeki ekstreyle karşılaştırın.` : '')
+        : `Son ${gun} günde Trendyol cari hesabında kayıt yok. Kayıtlar sipariş teslim edildikten sonra oluşur.`;
+      return Astro.redirect('/yonetim/finans?sekme=trendyol&ok=' + encodeURIComponent(mesaj), 303);
+    }
     throw new Error('Geçersiz finans işlemi.');
   } catch (e) {
     hatalar = [e instanceof Error && e.name !== 'ZodError' ? e.message : 'Girilen değerleri kontrol edin.'];
@@ -68,7 +86,7 @@ const ay = /^\d{4}-\d{2}$/.test(q0.get('ay') ?? '') && q0.get('ay')! <= bugun.sl
 const ayDonemi = aylar(ay + '-01', ay === bugun.slice(0, 7) ? bugun : new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7), 0)).toISOString().slice(0, 10))[0]!;
 const ayKaydir = (n: number) => { const d = new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
 const ayRaporu = raporla(finans, siparisler, ayDonemi.bas, ayDonemi.son);
-const kalan = (r: ReturnType<typeof raporla>) => r.webSatis - r.webIade + r.trendyolBeklenen - r.gider;
+const kalan = (r: ReturnType<typeof raporla>) => kalanTutar(r);
 const bugunSatis = raporla(finans, siparisler, bugun, bugun);
 const buAy = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
 const son6 = aylar(ayKaydir(-5) + '-01', ayDonemi.son).map((a) => ({ ...a, r: raporla(finans, siparisler, a.bas, a.son) })).reverse();
@@ -109,6 +127,8 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
 <Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'?sekme=' + id + (id === 'ozet' || id === 'giderler' ? '&ay=' + ay : '')} aria-current={sekme === id ? 'page' : undefined}>{ad}</a>)}
+    <a href="/yonetim/finans/faturalar">Faturalar</a>
+    <a href="/yonetim/finans/hepsiburada">Hepsiburada</a>
   </nav>
 
   {sekme === 'ozet' && <>
@@ -133,6 +153,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
         <div><dt>Onaylı web satışları <small>{ayRaporu.satislar.length} sipariş · ödeme tarihine göre</small></dt><dd>{finansPara(ayRaporu.webSatis)}</dd></div>
         <div class="eksi"><dt>İade ve iptal geri ödemeleri <small>{ayRaporu.iadeler.filter((x) => x.tutar > 0).length} kayıt</small></dt><dd>−{finansPara(ayRaporu.webIade)}</dd></div>
         {ayRaporu.trendyolBeklenen !== 0 && <div><dt>Trendyol beklenen hakediş <small>kesintiler düşülmüş</small></dt><dd>{finansPara(ayRaporu.trendyolBeklenen)}</dd></div>}
+        {ayRaporu.hepsiburada.length > 0 && <div><dt>Hepsiburada hakediş <small><a class="y-link" href="/yonetim/finans/hepsiburada#hesabim">kesintiler düşülmüş · gör</a></small></dt><dd>{finansPara(ayRaporu.hepsiburadaBeklenen)}</dd></div>}
         <div class="eksi"><dt>Giderler <small><a class="y-link" href={'?sekme=giderler&ay=' + ay}>{ayRaporu.giderler.length} kayıt · gör</a></small></dt><dd>−{finansPara(ayRaporu.gider)}</dd></div>
         {Object.entries(ayRaporu.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
         <div class="sonuc"><dt>Kalan (tahmini)</dt><dd>{finansPara(kalan(ayRaporu))}</dd></div>
@@ -289,15 +310,24 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
   </>}
 
   {sekme === 'trendyol' && <>
-    <section class="y-kart">
-      <div class="y-kart__bas"><h2>Hakediş raporu yükle</h2><a class="y-link" href={disari('sablon')}>Boş şablonu indir (CSV)</a></div>
-      <p class="y-help">Trendyol siparişleri panele kendiliğinden gelir, ama komisyon ve ödeme (hakediş) bilgisi henüz otomatik gelmiyor. Trendyol satıcı panelinden indirdiğiniz hakediş/ödeme raporunu şablondaki başlıklarla CSV veya XLSX olarak yükleyin. Aynı kayıt numarası tekrar yüklenirse güncellenir, iki kez sayılmaz.</p>
+    {(pazaryeriApiDurumu('trendyol') === 'canli' || pazaryeriApiDurumu('trendyol') === 'test') && <section class="y-kart">
+      <h2>Trendyol hesabımı çek</h2>
+      <p class="y-help">Satış, iade, komisyon, satıcı indirimi, kargo ve hizmet kesintilerini ve ödemeleri doğrudan Trendyol cari hesabından alır. Seçilen dönem her çekimde baştan hesaplanır, aynı sipariş iki kez sayılmaz. Kayıtlar sipariş teslim edildikten sonra oluşur.</p>
+      <form class="y-toolbar" method="post">
+        <input type="hidden" name="eylem" value="trendyol-cek" />
+        <label class="y-alan">Dönem<select name="gun"><option value="15">Son 15 gün</option><option value="30" selected>Son 30 gün</option><option value="60">Son 60 gün</option><option value="90">Son 90 gün</option></select></label>
+        <button class="btn btn--sepet" type="submit">Şimdi çek</button>
+      </form>
+    </section>}
+    <details class="y-kart" open={pazaryeriApiDurumu('trendyol') !== 'canli' && pazaryeriApiDurumu('trendyol') !== 'test'}>
+      <summary><strong>Hakediş raporunu dosyadan yükle</strong> <small class="muted">(bağlantı yoksa)</small></summary>
+      <p class="y-help">Trendyol satıcı panelinden indirdiğiniz hakediş/ödeme raporunu şablondaki başlıklarla CSV veya XLSX olarak yükleyin. Aynı kayıt numarası tekrar yüklenirse güncellenir, iki kez sayılmaz. <a class="y-link" href={disari('sablon')}>Boş şablonu indir (CSV)</a></p>
       <form class="y-sonraki" method="post" enctype="multipart/form-data">
         <input type="hidden" name="eylem" value="trendyol-al" />
         <label class="y-alan">Rapor dosyası<input type="file" accept=".csv,.xlsx" name="rapor" required /></label>
         <button class="btn btn--sepet" type="submit">İçe aktar</button>
       </form>
-    </section>
+    </details>
     <form class="y-toolbar" method="get">
       <input type="hidden" name="sekme" value="trendyol" />
       <label class="y-alan">Başlangıç<input type="date" name="baslangic" value={bas} required /></label>
@@ -339,6 +369,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
         <div class="alt"><dt>Satışa dahil kargo tahsilatı</dt><dd>{finansPara(rapor.kargo)}</dd></div>
         <div class="alt"><dt>Fiyatlara yansıyan indirimler</dt><dd>{finansPara(rapor.webIndirim)}</dd></div>
         <div><dt>Trendyol beklenen hakediş</dt><dd>{finansPara(rapor.trendyolBeklenen)}</dd></div>
+        {rapor.hepsiburada.length > 0 && <div><dt>Hepsiburada hakediş</dt><dd>{finansPara(rapor.hepsiburadaBeklenen)}</dd></div>}
         <div class="eksi"><dt>Giderler</dt><dd>−{finansPara(rapor.gider)}</dd></div>
         {Object.entries(rapor.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
         <div class="sonuc"><dt>Kalan (tahmini)</dt><dd>{finansPara(kalan(rapor))}</dd></div>
@@ -348,13 +379,13 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
     </section>
     <section class="y-kart">
       <h2>Muhasebeci için dışa aktar</h2>
-      <p class="y-help">Tek Excel dosyasında: aylık özet, satışlar (belge numaralarıyla), iade ve iptaller, giderler, Trendyol kesintileri ve belge listesi.</p>
+      <p class="y-help">Tek Excel dosyasında: aylık özet, satışlar (belge numaralarıyla), iade ve iptaller, giderler, Trendyol kesintileri, Hepsiburada kayıtları ve belge listesi.</p>
       <div class="y-ust-aksiyonlar">
         <a class="btn btn--sepet" href={disari('excel')}>Excel indir</a>
         <a class="btn btn--cizgi" href={disari('zip')}>Belgeler ve fişler (ZIP)</a>
       </div>
       <details class="y-block-gap"><summary>Ayrı CSV dosyaları</summary>
-        <ul class="y-task-list">{[['aylik', 'Aylık özet'], ['satislar', 'Satış raporu'], ['iade-iptal', 'İade ve iptal raporu'], ['giderler', 'Gider listesi'], ['trendyol', 'Komisyon ve pazaryeri kesintileri'], ['belgeler', 'Belge (fatura) listesi']].map(([id, ad]) => <li><a href={disari(id!)}><span>{ad}</span><span>CSV indir ›</span></a></li>)}</ul>
+        <ul class="y-task-list">{[['aylik', 'Aylık özet'], ['satislar', 'Satış raporu'], ['iade-iptal', 'İade ve iptal raporu'], ['faturalar', 'Kesilen faturalar (e-Arşiv)'], ['pazaryeri', 'Trendyol ve Hepsiburada satışları'], ['giderler', 'Gider listesi'], ['trendyol', 'Trendyol kesintileri'], ['hepsiburada', 'Hepsiburada kayıtları'], ['belgeler', 'Belge (fatura) listesi']].map(([id, ad]) => <li><a href={disari(id!)}><span>{ad}</span><span>CSV indir ›</span></a></li>)}</ul>
       </details>
     </section>
   </>}

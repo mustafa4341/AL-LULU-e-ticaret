@@ -65,8 +65,73 @@ const trendyol = z.object({
   id: z.string().min(1).max(100), tarih, brut: k, indirim: k, iade: k, komisyon: k,
   hizmet: k, kargo: k, diger: k, banka: k.optional(),
 });
+/** Hepsiburada muhasebe servisinden gelen tek kayıt. tutar/kdv/net kuruş ve işaretsiz; yönü `gelir` belirler. */
+const opsMetin = (n: number) => z.string().max(n).optional();
+const hbKayit = z.object({
+  id: z.string().min(1).max(100), tur: z.string().min(1).max(80), durum: z.string().max(30), gelir: z.boolean(),
+  tutar: k, kdv: k, net: k,
+  siparisNo: opsMetin(60), paketNo: opsMetin(60), sku: opsMetin(80), urun: opsMetin(300), adet: z.number().int().nonnegative().optional(),
+  fatura: opsMetin(80), siparisTarihi: opsMetin(40), faturaTarihi: opsMetin(40), vade: opsMetin(40), odeme: opsMetin(40), aciklama: opsMetin(500),
+});
+/** Hepsiburada performans servisi: sipariş + ürün bazında hakediş. hakedis işaretli kuruş. */
+const hbPerformans = z.object({
+  anahtar: z.string().min(1).max(160), siparisNo: z.string().max(60), sku: z.string().max(80), urun: opsMetin(300),
+  adet: z.number().int().nonnegative().optional(), birim: k.optional(), hakedis: z.number().int().min(-1e12).max(1e12),
+  gelir: k, gider: k, siparisTarihi: opsMetin(40), vade: opsMetin(40),
+  kalemler: z.array(z.object({ tur: z.string().max(80), tutar: z.number().int().min(-1e12).max(1e12) })).max(60),
+});
+/** Kesilen (elle, GİB e-Arşiv Portalı'nda) satış faturası kaydı. Tutarlar kuruş. */
+const faturaKaydi = z.object({
+  id: z.string().uuid(),
+  kanal: z.enum(['web', 'trendyol', 'hepsiburada']),
+  /** Web: sipariş no · pazaryeri: kayıt kimliği (trendyol-<paket>) */
+  kayit: z.string().min(1).max(120),
+  siparisNo: z.string().max(60),
+  no: z.string().trim().min(1).max(40),
+  tarih,
+  alici: z.string().max(200),
+  matrah: k, kdv: k, toplam: k,
+  ek: dosya.optional(),
+  iletim: z.object({
+    durum: z.enum(['bekliyor', 'gonderildi', 'elle', 'hata', 'yok']),
+    mesaj: z.string().max(500).optional(),
+    tarih: z.string().optional(),
+  }).default({ durum: 'bekliyor' }),
+  iptal: z.boolean().default(false),
+  olusturma: z.string(),
+});
+export type FaturaKaydi = z.infer<typeof faturaKaydi>;
+export const faturaKaydiSema = faturaKaydi;
+
+export const HbAyarSema = z.object({
+  kargoFirmasi: z.string().max(30).default(''),
+  islemBedeli: k.default(0),
+  hizmetBedeli: k.default(0),
+  stopajBp: z.number().int().min(0).max(1000).default(100),
+});
+export const HbUrunAyarSema = z.object({
+  kategori: z.string().max(40),
+  /** Kategori "elle" ise ya da panelde farklı oran görünüyorsa */
+  oranBp: z.number().int().min(0).max(5000).optional(),
+  desi: z.number().min(0).max(4500),
+  maliyet: k.optional(),
+  kdv: z.number().int().min(0).max(20),
+});
+export type HbKayit = z.infer<typeof hbKayit>;
+export type HbPerformans = z.infer<typeof hbPerformans>;
+export type HbAyar = z.infer<typeof HbAyarSema>;
+export type HbUrunAyar = z.infer<typeof HbUrunAyarSema>;
+export const hbKayitSema = hbKayit;
+export const hbPerformansSema = hbPerformans;
+
 export const FinansSema = z.object({
   belgeler: z.array(belge), giderler: z.array(gider), trendyol: z.array(trendyol), olaylar: z.array(olay),
+  hepsiburada: z.array(hbKayit).default([]),
+  hbPerformans: z.array(hbPerformans).default([]),
+  hbSonCekim: z.object({ tarih: z.string(), bas: z.string(), son: z.string(), kayit: z.number().int(), performans: z.number().int() }).optional(),
+  hbAyar: HbAyarSema.default({}),
+  hbUrunler: z.record(z.string(), HbUrunAyarSema).default({}),
+  faturalar: z.array(faturaKaydi).default([]),
   ayarlar: BelgeAyarSema.default({}),
   /** Belge türü ve yıla göre son verilen sıra numarası, ör. { "ozet-2026": 12 } */
   sayaclar: z.record(z.string(), z.number().int().nonnegative()).default({}),
@@ -83,7 +148,11 @@ export const finansGunu = (d: number | Date = Date.now()) => trGun.format(d);
 export function gecerliGun(s: string) {
   return ISO_GUN.test(s) && !Number.isNaN(Date.parse(s)) && new Date(s).toISOString().slice(0, 10) === s;
 }
-export const finansPara = (kurus: number) => new Intl.NumberFormat('tr-TR', { style: 'currency', currency: 'TRY' }).format(kurus / 100);
+/** Panelin her yerinde aynı biçim: "12.999 TL", kuruşlu ise "12.999,50 TL" */
+export const finansPara = (kurus: number) => {
+  const tam = Math.round(kurus) % 100 === 0;
+  return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: tam ? 0 : 2, maximumFractionDigits: 2 }).format(kurus / 100) + ' TL';
+};
 export function paraOku(v: string) {
   const s = v.trim().replace(/\s/g, '');
   const duz = s.includes(',') ? s.replace(/\./g, '').replace(',', '.') : /^\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '') : s;
@@ -95,6 +164,15 @@ export function paraOku(v: string) {
 export function hakEdis(s: TrendyolSatiri) {
   return s.brut - s.indirim - s.iade - s.komisyon - s.hizmet - s.kargo - s.diger;
 }
+/** Hepsiburada kaydının hakedişe etkisi (kuruş, işaretli). "TotalPayment" bankaya aktarım özetidir, hakedişe eklenmez. */
+export const hbIsaretli = (x: HbKayit) => x.tur === 'TotalPayment' ? 0 : (x.gelir ? x.tutar : -x.tutar);
+export const hbKayitGunu = (x: HbKayit) => {
+  const t = x.siparisTarihi ?? x.faturaTarihi ?? x.vade ?? x.odeme;
+  return t && !Number.isNaN(Date.parse(t)) ? finansGunu(Date.parse(t)) : '';
+};
+/** Özet ve raporlardaki "kalan (tahmini)" */
+export const kalanTutar = (r: { webSatis: number; webIade: number; trendyolBeklenen: number; hepsiburadaBeklenen: number; gider: number }) =>
+  r.webSatis - r.webIade + r.trendyolBeklenen + r.hepsiburadaBeklenen - r.gider;
 export function donem(q: URLSearchParams) {
   const bugun = finansGunu();
   const bas = q.get('baslangic') ?? bugun.slice(0, 7) + '-01';
@@ -125,12 +203,16 @@ export function raporla(f: Finans, siparisler: Siparis[], bas: string, son: stri
   const webSatis = 100 * satislar.reduce((t, x) => t + x.siparis.toplam, 0);
   const webIade = iadeler.reduce((t, x) => t + x.tutar, 0);
   const trendyolBeklenen = trendyol.reduce((t, x) => t + hakEdis(x), 0);
+  const hepsiburada = f.hepsiburada.filter((x) => aralikta(hbKayitGunu(x), bas, son));
+  const hepsiburadaBeklenen = hepsiburada.reduce((t, x) => t + hbIsaretli(x), 0);
   const kategori = Object.fromEntries(Object.keys(GIDER_KATEGORILERI).map((ad) => [ad, 0])) as Record<Gider['kategori'], number>;
   giderler.forEach((x) => { kategori[x.kategori] += x.tutar; });
   const gider = giderler.reduce((t, x) => t + x.tutar, 0);
   const belge = f.belgeler.filter((x) => aralikta(gunu(x.olusturma), bas, son));
   return {
     satislar, iadeler, giderler, kategori, gider, belge, trendyol, webSatis, webIade, webIndirim, kargo, trendyolBeklenen,
-    tahmini: kategori.urun > 0 || (!satislar.length && !trendyol.length) ? webSatis - webIade + trendyolBeklenen - gider : undefined,
+    hepsiburada, hepsiburadaBeklenen,
+    tahmini: kategori.urun > 0 || (!satislar.length && !trendyol.length && !hepsiburada.length)
+      ? webSatis - webIade + trendyolBeklenen + hepsiburadaBeklenen - gider : undefined,
   };
 }

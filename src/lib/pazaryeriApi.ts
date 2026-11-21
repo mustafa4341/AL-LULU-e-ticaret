@@ -41,7 +41,7 @@ function baglanti(kanal: Kanal): Baglanti {
 }
 
 const trendyolAdres = (a: Baglanti) => a.canli ? 'https://apigw.trendyol.com' : 'https://stageapigw.trendyol.com';
-const hbAdres = (a: Baglanti, servis: 'oms' | 'listing') =>
+const hbAdres = (a: Baglanti, servis: 'oms' | 'listing' | 'mpfinance') =>
   `https://${servis}-external${a.canli ? '' : '-sit'}.hepsiburada.com`;
 const nesne = (v: unknown): Ham => v && typeof v === 'object' && !Array.isArray(v) ? v as Ham : {};
 const alan = (o: Ham, ad: string) => o[ad] ?? o[Object.keys(o).find((k) => k.toLowerCase() === ad.toLowerCase()) ?? ''];
@@ -158,6 +158,9 @@ function hbAcikSatir(satir: Ham, durum: string): Ham {
     cargoCompanyModel: { name: alan(kargo, 'name'), shortName: alan(kargo, 'shortName') }, cargoCompany: alan(satir, 'cargoCompany'),
     packageNumber: alan(satir, 'packageNumber'), barcode: alan(satir, 'barcode'),
     trackingNumber: alan(satir, 'trackingNumber'), status: metin(alan(satir, 'status')) ?? durum,
+    // Fatura kesmek için alıcı bilgisi (alan adları ilk gerçek bağlantıda doğrulanacak)
+    invoice: alan(satir, 'invoice'), invoiceAddress: alan(satir, 'invoiceAddress') ?? alan(satir, 'billingAddress'),
+    customer: alan(satir, 'customer'),
   };
 }
 
@@ -217,6 +220,9 @@ async function hbSiparisleri(a: Baglanti, baslangic: number, sinyal: AbortSignal
           orderDate: alan(k, 'orderDate') ?? alan(detay, 'orderDate'),
           customerName: alan(k, 'customerName') ?? alan(nesne(alan(detay, 'customer')), 'name'),
           shippingAddress: alan(k, 'shippingAddress') ?? alan(detay, 'shippingAddress'),
+          invoice: alan(k, 'invoice') ?? alan(detay, 'invoice'),
+          invoiceAddress: alan(k, 'invoiceAddress') ?? alan(detay, 'invoiceAddress') ?? alan(detay, 'billingAddress'),
+          customer: alan(k, 'customer') ?? alan(detay, 'customer'),
         }, durum);
       });
     }));
@@ -327,4 +333,92 @@ export async function kanalStokSonucu(
     bekliyor: false,
     basarili: new Set(kalemler.filter((k) => ilanlar.get(k.kod)?.stok === k.stok).map((k) => k.kod)),
   };
+}
+
+/**
+ * Trendyol'a tek bir istek (ürün, fiyat, paket, fatura, finans servisleri için; bkz. trendyolApi.ts).
+ * `yol` /integration sonrasını içerir. Hata gövdesindeki Trendyol mesajı (errors[].message) okunur.
+ * Yazma istekleri (POST/PUT) otomatik tekrar edilmez.
+ */
+export async function trendyolCagir(
+  yol: (saticiId: string) => string, islem: string, sinyal: AbortSignal,
+  secenek: { yontem?: 'GET' | 'POST' | 'PUT' | 'DELETE'; json?: unknown; form?: FormData; sorgu?: Record<string, string | number | undefined> | ((saticiId: string) => Record<string, string | number | undefined>) } = {},
+): Promise<unknown> {
+  const a = baglanti('trendyol');
+  const url = new URL('/integration' + yol(a.kimlik), trendyolAdres(a));
+  const sorgu = typeof secenek.sorgu === 'function' ? secenek.sorgu(a.kimlik) : secenek.sorgu;
+  for (const [k, v] of Object.entries(sorgu ?? {})) if (v !== undefined && v !== '') url.searchParams.set(k, String(v));
+  const yontem = secenek.yontem ?? (secenek.json !== undefined || secenek.form ? 'POST' : 'GET');
+  const headers: Record<string, string> = {
+    Accept: 'application/json', 'User-Agent': a.temsilci,
+    Authorization: `Basic ${Buffer.from(`${a.kullanici}:${a.sifre}`).toString('base64')}`,
+  };
+  if (secenek.json !== undefined) headers['Content-Type'] = 'application/json';
+  for (let deneme = 0; ; deneme++) {
+    if (sinyal.aborted) throw new PazaryeriApiHatasi(`${islem} zaman sınırını aştı.`);
+    let yanit: Response;
+    try {
+      yanit = await fetch(url, {
+        method: yontem, headers, redirect: 'error', cache: 'no-store',
+        body: secenek.form ?? (secenek.json === undefined ? undefined : JSON.stringify(secenek.json)),
+        signal: AbortSignal.any([sinyal, AbortSignal.timeout(15_000)]),
+      });
+    } catch {
+      if (yontem === 'GET' && deneme === 0 && !sinyal.aborted) { await bekle(800); continue; }
+      throw new PazaryeriApiHatasi(`${islem} tamamlanamadı. Bağlantıyı kontrol edin.`);
+    }
+    const govde = await yanit.text().catch(() => '');
+    if (!yanit.ok) {
+      if (yontem === 'GET' && deneme === 0 && (yanit.status >= 500 || yanit.status === 429)) { await bekle(1500); continue; }
+      let ayrinti = '';
+      try {
+        const h = nesne(JSON.parse(govde));
+        const hatalar = Array.isArray(h.errors) ? h.errors.map((x) => metin(nesne(x).message)).filter(Boolean) : [];
+        ayrinti = (hatalar.length ? hatalar.join(' ') : metin(h.message) ?? metin(h.error) ?? '').slice(0, 400);
+      } catch { /* gövde JSON değil */ }
+      const genel = yanit.status === 401 || yanit.status === 403 ? ' API bilgilerini ve yetkisini kontrol edin.'
+        : yanit.status === 429 ? ' Trendyol istek sınırına ulaşıldı, biraz sonra tekrar deneyin.' : '';
+      throw new PazaryeriApiHatasi(`${islem} HTTP ${yanit.status} döndürdü.${ayrinti ? ' Trendyol: ' + ayrinti : ''}${genel}`, yanit.status);
+    }
+    if (!govde.trim()) return {};
+    try { return JSON.parse(govde); } catch { return { metin: govde.slice(0, 2000) }; }
+  }
+}
+
+/** Hepsiburada muhasebe servisi (mpfinance): sayfalı GET. Limit en fazla 100 (resmi belge). */
+async function hbFinansSayfalari(a: Baglanti, yol: string, parametre: Record<string, string>, islem: string, sinyal: AbortSignal) {
+  const url = new URL(yol, hbAdres(a, 'mpfinance'));
+  for (const [k, v] of Object.entries(parametre)) url.searchParams.set(k, v);
+  const limit = 100;
+  const tumu: Ham[] = [];
+  for (let offset = 0; offset < 20_000; offset += limit) {
+    url.searchParams.set('Offset', String(offset));
+    url.searchParams.set('Limit', String(limit));
+    const yanit = await istek(a, url, islem, sinyal);
+    const sayfa = liste(yanit, islem, 'items');
+    const govde = nesne(yanit);
+    const toplam = tamsayi(alan(govde, 'count') ?? alan(govde, 'totalCount'));
+    tumu.push(...sayfa);
+    if (toplam !== undefined ? tumu.length >= toplam : sayfa.length < limit) return tumu;
+    if (!sayfa.length) break;
+  }
+  throw new PazaryeriApiHatasi(`${islem} tamamlanamadı. Daha kısa bir tarih aralığı seçin.`);
+}
+
+/** Hepsiburada finans kayıtları (kayıt tarihine göre) ve sipariş bazlı performans (sipariş tarihine göre).
+ *  Aralık 31 günlük parçalara bölünür; her parça ayrı sorgulanır. */
+export async function hepsiburadaFinansCek(baslangic: number, bitis: number, sinyal: AbortSignal) {
+  const a = baglanti('hepsiburada');
+  const kayitlar: Ham[] = [];
+  const performans: Ham[] = [];
+  const parca = 31 * 86_400_000;
+  for (let bas = baslangic; bas < bitis; bas += parca) {
+    const son = Math.min(bitis, bas + parca);
+    const iso = (t: number) => new Date(t).toISOString();
+    kayitlar.push(...await hbFinansSayfalari(a, `/transactions/merchantid/${encodeURIComponent(a.kimlik)}`,
+      { RecordDateStart: iso(bas), RecordDateEnd: iso(son) }, 'Hepsiburada muhasebe kayıtları', sinyal));
+    performans.push(...await hbFinansSayfalari(a, `/orders/merchantid/${encodeURIComponent(a.kimlik)}`,
+      { OrderDateStart: iso(bas), OrderDateEnd: iso(son) }, 'Hepsiburada sipariş performansı', sinyal));
+  }
+  return { kayitlar, performans };
 }

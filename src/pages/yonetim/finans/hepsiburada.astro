@@ -1,0 +1,262 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import { magazaOku } from '../../../lib/depo';
+import { finansGunu, finansPara, paraOku, type HbUrunAyar } from '../../../lib/finans';
+import { finansOku, hbAyarKaydet, hbFinansKaydet, hbUrunKaydet } from '../../../lib/finansDepo';
+import { metin } from '../../../lib/form';
+import {
+  HB_KATEGORILER, KARGO_FIRMALARI, KARGO_TABLO_TARIHI, ODEME_VADESI_IS_GUNU, hbKategori, hedefFiyat,
+  isGunuEkle, kargoUstSiniri, kategoriOnerisi, satisHesabi,
+} from '../../../lib/hepsiburadaTarife';
+import { HB_GRUPLAR, hbGercekOrtalamalar, hbKayitOku, hbOzet, hbPerformansOku, hbSiparisMutabakati, type HbGrup } from '../../../lib/hepsiburadaFinans';
+import { PazaryeriApiHatasi, hepsiburadaFinansCek, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+
+const q = { get: (k: string) => Astro.url.searchParams.get(k) || null };
+let hatalar: string[] = [];
+/** "3,5" → 3.5 ; boşsa undefined */
+const ondalik = (v: string | null) => {
+  const s = (v ?? '').trim().replace(/\s/g, '').replace(',', '.');
+  if (!s) return undefined;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : NaN;
+};
+const yuzdeBp = (v: string | null) => { const n = ondalik(v); return n === undefined || Number.isNaN(n) ? undefined : Math.round(n * 100); };
+const tlKurus = (v: string | null) => { const s = (v ?? '').trim(); return s ? paraOku(s) : undefined; };
+const geri = (ek: Record<string, string>) => Astro.redirect('/yonetim/finans/hepsiburada?' + new URLSearchParams(ek), 303);
+const hesapParametreleri = (f: FormData) => Object.fromEntries(['urun', 'fiyat', 'kategori', 'oran', 'desi', 'kdv', 'maliyet', 'hedef'].map((k) => [k, metin(f, k)]).filter(([, v]) => v));
+
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const eylem = metin(f, 'eylem');
+  try {
+    if (eylem === 'ayar-kaydet') {
+      const stopaj = yuzdeBp(metin(f, 'stopaj'));
+      if (stopaj === undefined || Number.isNaN(stopaj) || stopaj < 0 || stopaj > 1000) throw new Error('Stopaj oranını % olarak girin (ör. 1).');
+      const firma = metin(f, 'kargoFirmasi');
+      if (firma && !KARGO_FIRMALARI.some((k) => k.kod === firma)) throw new Error('Kargo firmasını listeden seçin.');
+      await hbAyarKaydet({ kargoFirmasi: firma, islemBedeli: tlKurus(metin(f, 'islemBedeli')) ?? 0, hizmetBedeli: tlKurus(metin(f, 'hizmetBedeli')) ?? 0, stopajBp: stopaj });
+      return geri({ ...hesapParametreleri(f), ok: 'Hepsiburada ayarları kaydedildi.' });
+    }
+    if (eylem === 'urun-kaydet') {
+      const urunId = metin(f, 'urun');
+      const m = await magazaOku();
+      if (!m.urunler.some((u) => u.id === urunId)) throw new Error('Kaydetmek için listeden bir ürün seçin.');
+      const desi = ondalik(metin(f, 'desi'));
+      if (desi === undefined || Number.isNaN(desi) || desi < 0 || desi > 4500) throw new Error('Desi 0 ile 4500 arasında olmalı.');
+      const kategori = metin(f, 'kategori');
+      const oran = yuzdeBp(metin(f, 'oran'));
+      if (kategori !== 'elle' && !hbKategori(kategori)) throw new Error('Hepsiburada kategorisini seçin.');
+      if (kategori === 'elle' && (oran === undefined || Number.isNaN(oran) || oran <= 0 || oran > 5000)) throw new Error('Komisyon oranını % olarak girin.');
+      const kdv = Number(metin(f, 'kdv'));
+      if (![0, 1, 10, 20].includes(kdv)) throw new Error('Ürün KDV oranını seçin.');
+      const ayar: HbUrunAyar = { kategori, desi, kdv, maliyet: tlKurus(metin(f, 'maliyet')), oranBp: kategori === 'elle' ? oran : undefined };
+      await hbUrunKaydet(urunId, ayar);
+      return geri({ ...hesapParametreleri(f), ok: 'Ürünün Hepsiburada bilgileri kaydedildi.' });
+    }
+    if (eylem === 'cek') {
+      const gun = Number(metin(f, 'gun'));
+      if (![30, 60, 90].includes(gun)) throw new Error('Geçersiz dönem.');
+      const son = Date.now();
+      const bas = son - gun * 86_400_000;
+      const ham = await hepsiburadaFinansCek(bas, son, AbortSignal.timeout(50_000));
+      const kayitlar = ham.kayitlar.map(hbKayitOku);
+      const performans = ham.performans.map(hbPerformansOku);
+      const okunamayan = kayitlar.filter((x) => !x).length + performans.filter((x) => !x).length;
+      await hbFinansKaydet(kayitlar.filter((x) => !!x), performans.filter((x) => !!x), { bas: new Date(bas).toISOString(), son: new Date(son).toISOString() });
+      const mesaj = `${kayitlar.length} muhasebe kaydı ve ${performans.length} sipariş satırı alındı.`
+        + (okunamayan ? ` ${okunamayan} satır okunamadı; bu satırlar toplamlara girmedi, Hepsiburada ekstresiyle karşılaştırın.` : '');
+      return geri(okunamayan ? { hata: mesaj } : { ok: mesaj });
+    }
+    throw new Error('Geçersiz işlem.');
+  } catch (e) {
+    hatalar = [e instanceof PazaryeriApiHatasi ? e.message + ' Hepsiburada bağlantı bilgilerini ve servis yetkisini kontrol edin.'
+      : e instanceof Error && e.name !== 'ZodError' ? e.message : 'Girilen değerleri kontrol edin.'];
+  }
+}
+
+const [finans, magaza] = await Promise.all([finansOku(), magazaOku()]);
+const urunler = [...magaza.urunler].sort((a, b) => a.ad.localeCompare(b.ad, 'tr'));
+const ayar = finans.hbAyar;
+const apiDurumu = pazaryeriApiDurumu('hepsiburada');
+const gercek = hbGercekOrtalamalar(finans.hepsiburada);
+
+/* ---- Hesap makinesi girdileri: URL > ürünün kayıtlı bilgisi > ürün/kategori varsayılanı ---- */
+const secili = urunler.find((u) => u.id === q.get('urun'));
+const kayitli = secili ? finans.hbUrunler[secili.id] : undefined;
+const kategori = q.get('kategori') ?? kayitli?.kategori ?? (secili ? kategoriOnerisi(secili.kategoriler) : 'zuccaciye');
+const oranGirdi = q.get('oran') ?? (kayitli?.oranBp !== undefined ? String(kayitli.oranBp / 100).replace('.', ',') : '');
+const oranBp = kategori === 'elle' ? yuzdeBp(oranGirdi) : hbKategori(kategori)?.oranBp;
+const fiyatGirdi = q.get('fiyat') ?? (secili ? String(secili.fiyat).replace('.', ',') : '');
+const desiGirdi = q.get('desi') ?? (kayitli ? String(kayitli.desi).replace('.', ',') : '');
+const kdv = Number(q.get('kdv') ?? kayitli?.kdv ?? 20);
+const maliyetGirdi = q.get('maliyet') ?? (kayitli?.maliyet !== undefined ? (kayitli.maliyet / 100).toFixed(2).replace('.', ',') : '');
+const hedefGirdi = q.get('hedef') ?? '';
+let hesap: ReturnType<typeof satisHesabi> | undefined;
+let hedef: number | undefined;
+let basaBas: number | undefined;
+const eksikler: string[] = [];
+try {
+  const fiyat = tlKurus(fiyatGirdi);
+  const desi = ondalik(desiGirdi);
+  const maliyet = tlKurus(maliyetGirdi);
+  if (fiyat === undefined) eksikler.push('satış fiyatı');
+  if (desi === undefined || Number.isNaN(desi)) eksikler.push('desi');
+  if (oranBp === undefined || Number.isNaN(oranBp)) eksikler.push('komisyon oranı');
+  if (!ayar.kargoFirmasi) eksikler.push('kargo firması (Ayarlar)');
+  if (!eksikler.length && fiyat !== undefined && desi !== undefined && oranBp !== undefined) {
+    const girdi = { oranBp, urunKdv: [0, 1, 10, 20].includes(kdv) ? kdv : 20, desi, kargoFirmasi: ayar.kargoFirmasi, islemBedeli: ayar.islemBedeli, hizmetBedeli: ayar.hizmetBedeli, stopajBp: ayar.stopajBp, maliyet };
+    hesap = satisHesabi({ ...girdi, fiyat });
+    const hedefKurus = tlKurus(hedefGirdi);
+    if (hedefKurus !== undefined) hedef = hedefFiyat(girdi, hedefKurus);
+    basaBas = hedefFiyat(girdi, 0);
+  }
+} catch (e) {
+  hatalar.push((e as Error).message);
+}
+const vadeOrnegi = isGunuEkle(new Date(), ODEME_VADESI_IS_GUNU);
+
+/* ---- Hepsiburada hesabı (muhasebe servisi) ---- */
+const ozet = hbOzet(finans.hepsiburada);
+const mutabakat = hbSiparisMutabakati(finans.hepsiburada, finans.hbPerformans);
+const farkli = mutabakat.filter((s) => s.fark !== undefined && s.fark !== 0);
+const tarihTr = (t?: string) => t ? new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'Europe/Istanbul' }).format(new Date(t)) : '—';
+const gunTr = (g: string) => g === 'vadesiz' ? 'Vade bilgisi yok' : new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(g));
+const yuzde = (bp: number) => '%' + (bp / 100).toLocaleString('tr-TR', { maximumFractionDigits: 2 });
+const isaretli = (k: number) => (k < 0 ? '−' : '') + finansPara(Math.abs(k));
+const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
+const grupSirasi: HbGrup[] = ['satis', 'iade', 'komisyon', 'kampanya', 'kargo', 'islem', 'hizmet', 'odemeServisi', 'ceza', 'reklam', 'kdv', 'stopaj', 'diger'];
+const bugun = finansGunu();
+---
+<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+  <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
+    {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
+    <a href="/yonetim/finans/faturalar">Faturalar</a>
+    <a href="/yonetim/finans/hepsiburada" aria-current="page">Hepsiburada</a>
+  </nav>
+
+  <section class="y-kart" id="hesap">
+    <h2>Bu fiyattan satarsam elime ne kalır?</h2>
+    <p class="y-help">Komisyon oranları Hepsiburada EK-4 tablosundan, kargo ücretleri {KARGO_TABLO_TARIHI.split('-').reverse().join('.')} tarihli desi tablosundan alındı. Ürünün kesin komisyon oranı Hepsiburada satıcı panelinde ürünün sayfasında yazar; farklıysa kategoriyi "Elle oran" yapın.</p>
+    <form method="get" class="y-izgara" action="#hesap">
+      <label class="y-alan">Ürün
+        <select name="urun" onchange="this.form.querySelectorAll('[data-urun-bagli]').forEach((e) => { e.disabled = true; }); this.form.submit()">
+          <option value="">— Ürün seçmeden hesapla —</option>
+          {urunler.map((u) => <option value={u.id} selected={u.id === secili?.id}>{u.ad}{finans.hbUrunler[u.id] ? ' ✓' : ''}</option>)}
+        </select>
+      </label>
+      <div class="y-izgara y-izgara--2">
+        <label class="y-alan">Hepsiburada satış fiyatı (KDV dahil, TL)<input name="fiyat" inputmode="decimal" value={fiyatGirdi} placeholder="1.499,90" data-urun-bagli /></label>
+        <label class="y-alan">Desi<input name="desi" inputmode="decimal" value={desiGirdi} placeholder="ör. 4" data-urun-bagli /><small class="muted">En × boy × yükseklik (cm) ÷ 3000 ile kilogramdan büyük olanı. Küsurat yukarı yuvarlanır.</small></label>
+      </div>
+      <div class="y-izgara y-izgara--2">
+        <label class="y-alan">Hepsiburada kategorisi
+          <select name="kategori" data-urun-bagli>
+            {HB_KATEGORILER.map((k) => <option value={k.kod} selected={k.kod === kategori}>{k.ad} — {yuzde(k.oranBp)}</option>)}
+            <option value="elle" selected={kategori === 'elle'}>Elle oran gir</option>
+          </select>
+          <small class="muted">{hbKategori(kategori)?.kapsam ?? 'Satıcı panelinde yazan oranı girin.'}</small>
+        </label>
+        <label class="y-alan">Elle komisyon oranı (%, KDV hariç)<input name="oran" inputmode="decimal" value={oranGirdi} placeholder="Yalnızca &quot;Elle oran&quot; seçiliyse" data-urun-bagli /></label>
+      </div>
+      <div class="y-izgara y-izgara--2">
+        <label class="y-alan">Ürünün KDV oranı
+          <select name="kdv" data-urun-bagli>{[20, 10, 1, 0].map((o) => <option value={o} selected={o === kdv}>%{o}</option>)}</select>
+        </label>
+        <label class="y-alan">Ürünün alış maliyeti (KDV hariç, TL)<input name="maliyet" inputmode="decimal" value={maliyetGirdi} placeholder="Kâr için gerekli" data-urun-bagli /></label>
+      </div>
+      <label class="y-alan">Hedeflediğiniz net kâr (TL, isteğe bağlı)<input name="hedef" inputmode="decimal" value={hedefGirdi} placeholder="ör. 150" /></label>
+      <div class="y-modal__alt">
+        <button class="btn btn--sepet" type="submit">Hesapla</button>
+        {secili && <button class="btn btn--cizgi" type="submit" formmethod="post" name="eylem" value="urun-kaydet">Bu ürün için kaydet</button>}
+      </div>
+    </form>
+
+    {eksikler.length > 0 && <p class="y-uyari">Hesap için eksik: {eksikler.join(', ')}.</p>}
+    {hesap && <>
+      {hesap.kargoBulunamadi && <p class="y-uyari">Seçili kargo firmasının tablosunda bu desi yok (en fazla {kargoUstSiniri(ayar.kargoFirmasi)} desi). Kargo 0 sayıldı; sonucu kullanmayın.</p>}
+      <dl class="y-hesap">
+        <div><dt>Müşterinin ödediği <small>KDV dahil</small></dt><dd>{finansPara(hesap.kdvHaricSatis + hesap.satisKdv)}</dd></div>
+        {hesap.kalemler.map((k) => <div class="eksi"><dt>{k.ad} <small>{finansPara(k.net)} + %20 KDV</small></dt><dd>−{finansPara(k.net + k.kdv)}</dd></div>)}
+        <div class="eksi"><dt>E-ticaret stopajı <small>{yuzde(ayar.stopajBp)}, KDV hariç satış üzerinden; yıllık vergiden düşülür</small></dt><dd>−{finansPara(hesap.stopaj)}</dd></div>
+        <div class="sonuc"><dt>Hesabınıza yatacak <small>teslimattan sonra {ODEME_VADESI_IS_GUNU} iş günü (bugün teslim edilse ≈ {gunTr(vadeOrnegi.toISOString().slice(0, 10))})</small></dt><dd>{finansPara(hesap.hesabaYatan)}</dd></div>
+        <div class="alt"><dt>Devlete ödenecek KDV farkı <small>satış KDV'si − kesintilerin KDV'si; ürün alışındaki KDV ayrıca düşülür</small></dt><dd>{finansPara(hesap.kdvFarki)}</dd></div>
+        {hesap.netKar !== undefined
+          ? <div class="sonuc"><dt>Net kâr <small>KDV hariç satış − kesintiler − alış maliyeti{hesap.marj !== undefined ? ' · marj %' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : ''}</small></dt><dd class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</dd></div>
+          : <div class="alt"><dt>Net kâr</dt><dd>Alış maliyeti girilmedi</dd></div>}
+      </dl>
+      {basaBas !== undefined && <p class="y-help">Zarar etmemek için en düşük fiyat: <strong>{finansPara(basaBas)}</strong>{hedef !== undefined && <> · {finansPara(tlKurus(hedefGirdi)!)} net kâr için fiyat: <strong>{finansPara(hedef)}</strong></>}</p>}
+      <details class="y-block-gap"><summary>Bu satışta olası Hepsiburada cezaları</summary>
+        <ul class="y-task-list">{hesap.cezalar.map((c) => <li><span>{c.ad}</span><span>{finansPara(c.tutar)}</span></li>)}</ul>
+        <p class="y-help">Platform kılavuzundaki tablolar. Ayrıca stok yokken iptal edilen ürünün satışı askıya alınabilir; geciken veya tedarik edilemeyen sipariş başka satıcıya kaydırılırsa fiyat farkı size yansıtılır.</p>
+      </details>
+    </>}
+    {gercek && <p class="y-help">Hepsiburada'nın gerçek kayıtlarına göre (son {gercek.siparis} sipariş): işlem bedeli ort. {finansPara(gercek.islem)}, hizmet bedeli ort. {finansPara(gercek.hizmet)}, komisyon oranı ort. {yuzde(gercek.komisyonBp)} (KDV hariç). Ayarlardaki tutarları bunlarla karşılaştırın.</p>}
+  </section>
+
+  <details class="y-kart" id="ayarlar" open={!ayar.kargoFirmasi}>
+    <summary><strong>Hepsiburada maliyet ayarları</strong></summary>
+    <form method="post" class="y-izgara">
+      <input type="hidden" name="eylem" value="ayar-kaydet" />
+      {Object.entries(Object.fromEntries(['urun', 'fiyat', 'kategori', 'oran', 'desi', 'kdv', 'maliyet', 'hedef'].map((k) => [k, q.get(k) ?? '']))).filter(([, v]) => v).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+      <label class="y-alan">Kullandığınız kargo firması
+        <select name="kargoFirmasi" required>
+          <option value="">Seçin</option>
+          {KARGO_FIRMALARI.map((k) => <option value={k.kod} selected={k.kod === ayar.kargoFirmasi}>{k.ad}</option>)}
+        </select>
+        <small class="muted">Hepsiburada'nın anlaşmalı tablo fiyatı. Kargo destek modelindeki indirimler bu tabloya dahil değildir.</small>
+      </label>
+      <div class="y-izgara y-izgara--2">
+        <label class="y-alan">İşlem bedeli (sipariş başına, KDV hariç, TL)<input name="islemBedeli" inputmode="decimal" value={(ayar.islemBedeli / 100).toFixed(2).replace('.', ',')} /></label>
+        <label class="y-alan">Hizmet bedeli (ürün başına, KDV hariç, TL)<input name="hizmetBedeli" inputmode="decimal" value={(ayar.hizmetBedeli / 100).toFixed(2).replace('.', ',')} /></label>
+      </div>
+      <p class="y-help">Bu iki tutar Hepsiburada'nın paylaştığı belgelerde yok. Sözleşmenizde ya da satıcı panelindeki ekstrede yazan tutarı girin. Muhasebe bağlantısı kurulunca gerçek ortalamalar hesap makinesinin altında görünür.</p>
+      <label class="y-alan">E-ticaret stopaj oranı (%)<input name="stopaj" inputmode="decimal" value={(ayar.stopajBp / 100).toLocaleString('tr-TR')} /></label>
+      <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Ayarları kaydet</button></div>
+    </form>
+  </details>
+
+  <section class="y-kart" id="hesabim">
+    <div class="y-kart__bas"><h2>Hepsiburada hesabım</h2>{finans.hbSonCekim && <small class="muted">Son çekim: {tarihTr(finans.hbSonCekim.tarih)}</small>}</div>
+    {apiDurumu === 'kapali' || apiDurumu === 'eksik'
+      ? <p class="y-help">Hepsiburada bağlantısı henüz kurulmadı. Hepsiburada'dan gelecek test bilgileri sunucuya girildiğinde, buradaki "Şimdi çek" düğmesi her siparişin satışını, komisyonunu, kargo ve diğer kesintilerini, ödenip ödenmediğini ve vade gününü getirir. Bunun için talebinizde "Muhasebe entegrasyonu" yetkisinin de istenmiş olması gerekir.</p>
+      : <form method="post" class="y-toolbar">
+          <input type="hidden" name="eylem" value="cek" />
+          <label class="y-alan">Dönem<select name="gun"><option value="30">Son 30 gün</option><option value="60">Son 60 gün</option><option value="90">Son 90 gün</option></select></label>
+          <button class="btn btn--sepet" type="submit">Şimdi çek</button>
+          {apiDurumu === 'test' && <span class="y-chip y-chip--turuncu">Test ortamı</span>}
+        </form>}
+
+    {finans.hepsiburada.length > 0 && <>
+      <dl class="y-hesap">
+        {grupSirasi.filter((g) => ozet.gruplar[g] !== 0).map((g) => <div class:list={{ eksi: ozet.gruplar[g] < 0 }}><dt>{HB_GRUPLAR[g]}</dt><dd>{isaretli(ozet.gruplar[g])}</dd></div>)}
+        <div class="sonuc"><dt>Toplam hakediş</dt><dd>{isaretli(ozet.hakedis)}</dd></div>
+        <div><dt>Ödenen</dt><dd>{isaretli(ozet.odenen)}</dd></div>
+        <div><dt>Ödenecek</dt><dd>{isaretli(ozet.odenecek)}</dd></div>
+        {ozet.gruplar.aktarim > 0 && <div class="alt"><dt>{HB_GRUPLAR.aktarim}</dt><dd>{finansPara(ozet.gruplar.aktarim)}</dd></div>}
+      </dl>
+      {ozet.vadeler.length > 0 && <>
+        <h3>Yaklaşan ödemeler</h3>
+        <ul class="y-task-list">{ozet.vadeler.map(([g, t]) => <li><span>{gunTr(g)}{g !== 'vadesiz' && g < bugun ? ' (vadesi geçti)' : ''}</span><span>{isaretli(t)}</span></li>)}</ul>
+      </>}
+      {farkli.length > 0
+        ? <p class="y-uyari">{farkli.length} siparişte muhasebe kayıtlarının toplamı Hepsiburada'nın hakediş tutarından farklı. Kayıtlar sipariş teslim edildikten sonra oluşur; fark birkaç gün içinde kapanmazsa Hepsiburada ekstresiyle karşılaştırın.</p>
+        : mutabakat.some((s) => s.fark === 0) && <p class="y-help">Muhasebe kayıtları Hepsiburada'nın hakediş hesabıyla kuruşu kuruşuna aynı.</p>}
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+        <thead><tr><th>Sipariş</th><th>Tarih</th><th class="y-sayi">Satış</th><th class="y-sayi">Kesintiler</th><th class="y-sayi">Net</th><th class="y-sayi">HB hakediş</th><th>Vade / durum</th></tr></thead>
+        <tbody>{mutabakat.slice(0, 200).map((s) => <tr>
+          <td data-etiket="Sipariş"><strong>{s.siparisNo}</strong>{s.urun && <small class="y-table-note">{s.urun}</small>}</td>
+          <td data-etiket="Tarih" class="y-nowrap">{tarihTr(s.tarih)}</td>
+          <td data-etiket="Satış" class="y-sayi">{isaretli(s.satis)}</td>
+          <td data-etiket="Kesintiler" class="y-sayi">{isaretli(s.kesinti)}</td>
+          <td data-etiket="Net" class="y-sayi"><strong>{isaretli(s.kayitToplami)}</strong></td>
+          <td data-etiket="HB hakediş" class="y-sayi">{s.hakedis === undefined ? '—' : <span class:list={['y-chip', s.fark === 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']} title={s.fark ? 'Fark: ' + isaretli(s.fark) : 'Aynı'}>{isaretli(s.hakedis)}</span>}</td>
+          <td data-etiket="Vade" class="y-nowrap">{s.odendi ? <span class="y-chip y-chip--yesil">Ödendi</span> : <span class="y-chip y-chip--turuncu">{tarihTr(s.vade)}</span>}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </>}
+  </section>
+</Yonetim>
+<style>
+  .y-negatif { color: #8a2d22; }
+  h3 { font-size: 15px; margin: 18px 0 6px; }
+</style>

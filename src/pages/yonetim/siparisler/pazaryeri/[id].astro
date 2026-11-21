@@ -9,6 +9,8 @@ import { pazaryeriKalemIsle, pazaryeriSiparisiOku } from '../../../../lib/pazary
 import { urunGtin } from '../../../../lib/urunKimlik';
 import { yTarih } from '../../../../lib/yonetimRapor';
 import BilgiKutusu from '../../../../components/yonetim/BilgiKutusu.astro';
+import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
+import { tyFaturaLinki, tyKargoEtiketi, tyPaketDurumu } from '../../../../lib/trendyolApi';
 
 const id = Astro.params.id ?? '';
 const siparisler = '/yonetim/siparisler';
@@ -28,6 +30,38 @@ if (kayit && Astro.request.method === 'POST') {
   try {
     const f = await Astro.request.formData();
     const tur = metin(f, 'eylem');
+    if (tur.startsWith('ty-')) {
+      if (kayit.kanal !== 'trendyol' || !kayit.paketNo) throw new DogrulamaHatasi(['Bu işlem yalnız Trendyol paketlerinde yapılabilir.']);
+      if (!['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) throw new DogrulamaHatasi(['Trendyol bağlantısı kurulmamış.']);
+      const satirlar = kayit.kalemler.filter((k) => k.satirId && /^\d+$/.test(k.satirId)).map((k) => ({ lineId: Number(k.satirId), quantity: k.adet }));
+      let mesaj: string;
+      try {
+        if (tur === 'ty-toplama') {
+          await tyPaketDurumu(kayit.paketNo, satirlar, 'Picking');
+          mesaj = 'Trendyol’a “toplanıyor” bildirildi. Müşteri artık siparişi iptal edemez; durum birkaç dakika içinde buraya gelir.';
+        } else if (tur === 'ty-fatura-no') {
+          const no = metin(f, 'faturaNo').toUpperCase();
+          if (!/^[A-Z0-9]{3}20\d{2}\d{9}$/.test(no)) throw new DogrulamaHatasi(['Fatura numarası 16 karakter olmalı: 3 harf/rakam + yıl + 9 rakam (ör. ABC2026000000123).']);
+          await tyPaketDurumu(kayit.paketNo, satirlar, 'Invoiced', no);
+          mesaj = 'Trendyol’a “faturalandı” bildirildi.';
+        } else if (tur === 'ty-etiket') {
+          if (!kayit.kargoTakip) throw new DogrulamaHatasi(['Kargo takip numarası henüz oluşmadı. Önce “Toplamaya başla”ya basın.']);
+          const etiketler = await tyKargoEtiketi(kayit.kargoTakip);
+          return new Response(etiketler.join(String.fromCharCode(10)), { headers: {
+            'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
+            'Content-Disposition': `attachment; filename="trendyol-etiket-${kayit.kargoTakip}.zpl"`,
+          } });
+        } else if (tur === 'ty-fatura-link') {
+          await tyFaturaLinki(kayit.paketNo, metin(f, 'link'), metin(f, 'faturaNo') || undefined);
+          mesaj = 'Fatura bağlantısı Trendyol’a gönderildi; müşteri siparişinde görür.';
+        } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
+      } catch (e) {
+        if (e instanceof PazaryeriApiHatasi) throw new DogrulamaHatasi([e.message]);
+        if (e instanceof TypeError) throw new DogrulamaHatasi(['Fatura bağlantısını tam adres olarak girin (https://...).']);
+        throw e;
+      }
+      return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#trendyol-islem', 303);
+    }
     const kalem = metin(f, 'kalem');
     const surum = Number(metin(f, 'surum'));
     let mesaj: string;
@@ -72,7 +106,9 @@ const uyari = s ? pazaryeriDurumu(s, Date.now(), new Set(urunler.keys())).uyari 
 const kent = [s?.ilce, s?.il].filter(Boolean).join(' / ');
 /* Sipariş yolculuğu: Alındı → Hazırlanıyor → Kargoda → Teslim (iptal/iade ayrı gösterilir) */
 const ADIMLAR = ['Alındı', 'Hazırlanıyor', 'Kargoda', 'Teslim edildi'] as const;
-const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
+const tyIslemAcik = !!s && s.kanal === 'trendyol' && !!s.paketNo && !s.stokDisi && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))
+  && !['Cancelled', 'UnSupplied', 'Returned'].includes(s.hamDurum);
+const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
 ---
 <Yonetim baslik={s ? 'Sipariş ' + s.siparisNo : 'Pazaryeri siparişi'} altBaslik={s ? `${KANALLAR[s.kanal]} · ${tarihYaz(s.tarih) ?? 'Tarih belirtilmemiş'}` : undefined} aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
@@ -87,7 +123,7 @@ const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniy
     </ol> : <p class="y-uyari-satir uyari--turuncu" role="status">Bu sipariş {PY_DURUM_ADLARI[s.durum].toLocaleLowerCase('tr')} durumunda.</p>}
     <BilgiKutusu baslik={`Bu sipariş ${KANALLAR[s.kanal]}'dan geldi — ne yapmalıyım?`} anahtar={'py-detay-' + s.kanal} acik={uyari.length > 0}>
       <ul>
-        <li><strong>Kargolama, fatura, iptal ve para iadesi</strong> {KANALLAR[s.kanal]} satıcı panelinde yapılır (sağ üstteki düğme). Durum buraya kendiliğinden gelir.</li>
+        <li><strong>{tyIslemAcik ? 'Kargo, iptal ve para iadesi' : 'Kargolama, fatura, iptal ve para iadesi'}</strong> {KANALLAR[s.kanal]} satıcı panelinde yapılır (sağ üstteki düğme). Durum buraya kendiliğinden gelir.{tyIslemAcik && ' Toplama ve fatura bildirimi bu sayfadan yapılabilir.'}</li>
         <li>Burada yalnız <strong>stok</strong> işlenir: sipariş gelince ürün stoktan düştü, iptal olursa geri eklenir.</li>
         <li>Kırmızı “eşleşme bekliyor” görürseniz aşağıdan doğru ürünü seçin; stok o zaman düşer.</li>
         <li>İade size ulaşınca ürünü kontrol edin ve aşağıda “satılabilir” ya da “satılamaz” deyin.</li>
@@ -110,8 +146,40 @@ const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniy
         {(adimSirasi ?? 9) <= 1 && tarihYaz(s.sonKargoTarihi) && <div><dt>Son kargolama</dt><dd>{tarihYaz(s.sonKargoTarihi)}</dd></div>}
         {tarihYaz(s.sonAktarim) && <div><dt>Son kayıt güncellemesi</dt><dd>{tarihYaz(s.sonAktarim)} · {s.kaynak === 'api' ? 'API' : 'Dosya'}</dd></div>}
       </dl>
-      <p class="y-help">Gönderi, fatura, iptal ve ödeme iadesi işlemlerini {KANALLAR[s.kanal]} satıcı panelinde yapın.</p>
+      {s.kanal === 'hepsiburada' && <p><a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('hepsiburada:' + s.id) + '#secili'}>Fatura bilgileri</a></p>}
+      <p class="y-help">{tyIslemAcik ?'Toplama ve fatura bildirimini aşağıdan yapabilirsiniz. Kargo, iptal ve ödeme iadesi Trendyol satıcı panelinde yapılır.' : `Gönderi, fatura, iptal ve ödeme iadesi işlemlerini ${KANALLAR[s.kanal]} satıcı panelinde yapın.`}</p>
     </section>
+
+    {tyIslemAcik && <section class="y-kart" id="trendyol-islem" aria-labelledby="ty-islem-baslik">
+      <h2 id="ty-islem-baslik">Trendyol işlemleri</h2>
+      <p class="y-help">Paket durumu: <strong>{s.hamDurum || '—'}</strong>. Sıra: önce “Toplamaya başla”, sonra fatura. Trendyol kargo etiketini paket “toplanıyor” olunca oluşturur.</p>
+      <div class="ty-islemler">
+        {(s.hamDurum === 'Created' || s.hamDurum === 'Awaiting') && <form method="post">
+          <button class="btn btn--sepet" type="submit" name="eylem" value="ty-toplama">Toplamaya başla</button>
+          <small class="muted">Trendyol’a “sipariş işleme alındı” bildirilir.</small>
+        </form>}
+        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && <form method="post">
+          <button class="btn btn--cizgi" type="submit" name="eylem" value="ty-etiket">Kargo etiketini indir (ZPL)</button>
+          <small class="muted">Termal etiket yazıcısı (Zebra vb.) içindir; Trendyol Express ve Aras “Trendyol öder” gönderilerinde çalışır. Normal yazıcıda etiketi Trendyol satıcı panelinden yazdırın.</small>
+        </form>}
+        <p><a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('trendyol:' + s.id) + '#secili'}>Fatura bilgileri ve faturayı yükle</a>
+          <small class="muted"> GİB portalına yazılacak bilgiler hazır; kestiğiniz PDF oradan Trendyol’a yüklenir.</small></p>
+        <details>
+          <summary>Fatura bağlantısı veya fatura numarası ile bildir</summary>
+          <form method="post" class="y-izgara">
+            <input type="hidden" name="eylem" value="ty-fatura-link" />
+            <label class="y-alan">e-Arşiv/e-Fatura bağlantısı<input type="url" name="link" placeholder="https://..." required /><small class="muted">10 yıl açık kalacak bir adres olmalı (yasal zorunluluk).</small></label>
+            <label class="y-alan">Fatura numarası (isteğe bağlı)<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" /></label>
+            <button class="btn btn--cizgi" type="submit">Bağlantıyı gönder</button>
+          </form>
+          {s.hamDurum === 'Picking' && <form method="post" class="y-izgara">
+            <input type="hidden" name="eylem" value="ty-fatura-no" />
+            <label class="y-alan">Yalnız fatura numarasını bildir<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" required /></label>
+            <button class="btn btn--cizgi" type="submit">“Faturalandı” olarak işaretle</button>
+          </form>}
+        </details>
+      </div>
+    </section>}
 
     <section class="y-kart" id="urunler" aria-labelledby="urunler-baslik">
       <h2 id="urunler-baslik">Ürünler ve stok</h2>
@@ -193,6 +261,9 @@ const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniy
   .siparis-bilgileri dt { font-size: .8rem; color: #6b6154; }
   .siparis-bilgileri dd { margin: 0; font-size: .94rem; font-weight: 600; overflow-wrap: anywhere; }
   .siparis-bilgileri .y-icon-button { height: auto; margin-left: 4px; padding: 3px 5px; font-size: .8rem; }
+  .ty-islemler { display: grid; gap: 14px; }
+  .ty-islemler form { display: grid; gap: 8px; justify-items: start; }
+  .ty-islemler details > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
   .kalem-durumlari { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
   .kalem-durumlari .y-chip { white-space: normal; }
   .kalem-islem { grid-column: 2 / -1; border-top: 1px solid var(--y-border); padding-top: 9px; }

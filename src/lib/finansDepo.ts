@@ -3,7 +3,7 @@ import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import sharp from 'sharp';
 import { magazaOku, supabaseIstemci, VERI_KOKU } from './depo';
-import { BelgeAyarSema, FinansSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type TrendyolSatiri } from './finans';
+import { BelgeAyarSema, FinansSema, faturaKaydiSema, type FaturaKaydi, HbAyarSema, HbUrunAyarSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type HbAyar, type HbKayit, type HbPerformans, type HbUrunAyar, type TrendyolSatiri } from './finans';
 import { logoDataUri, svgdenPdf, svgdenPng } from './finansPdf';
 import { A4, siparisBelgesiSvg, type SaticiBilgisi } from './belgeSablon';
 import type { Siparis } from './sema';
@@ -16,6 +16,8 @@ const giderDosyalari = path.join(kok, 'gider-ekleri');
 const BULUT_KAYIT = '_finans/kayitlar.json';
 const bulutBelge = (id: string) => `_finans/belgeler/${id}`;
 const bulutGiderEki = (id: string) => `_finans/gider-ekleri/${id}`;
+const bulutFatura = (id: string) => `_finans/faturalar/${id}`;
+const faturaDosyalari = path.join(kok, 'faturalar');
 let kuyruk: Promise<unknown> = Promise.resolve();
 
 async function yaz(dosya: string, veri: string | Buffer) {
@@ -293,5 +295,102 @@ export function trendyolKaydet(satirlar: TrendyolSatiri[]) {
     f.trendyol = [...tablo.values()].sort((a, b) => b.tarih.localeCompare(a.tarih));
     f.olaylar.push({ tarih: simdi(), islem: 'trendyol-ice-aktar:' + satirlar.length });
     await kaydet(f);
+  });
+}
+
+/** Hepsiburada muhasebe kayıtlarını kimliğe göre birleştirir (durum Paid'e dönünce güncellenir). */
+export function hbFinansKaydet(kayitlar: HbKayit[], performans: HbPerformans[], aralik: { bas: string; son: string }) {
+  return sirala(async () => {
+    const f = await finansOku();
+    const tablo = new Map(f.hepsiburada.map((x) => [x.id, x]));
+    for (const x of kayitlar) tablo.set(x.id, x);
+    f.hepsiburada = [...tablo.values()].sort((a, b) => (b.siparisTarihi ?? b.faturaTarihi ?? '').localeCompare(a.siparisTarihi ?? a.faturaTarihi ?? ''));
+    const perf = new Map(f.hbPerformans.map((x) => [x.anahtar, x]));
+    for (const x of performans) perf.set(x.anahtar, x);
+    f.hbPerformans = [...perf.values()];
+    f.hbSonCekim = { tarih: simdi(), bas: aralik.bas, son: aralik.son, kayit: kayitlar.length, performans: performans.length };
+    f.olaylar.push({ tarih: simdi(), islem: 'hepsiburada-finans:' + kayitlar.length + '/' + performans.length });
+    await kaydet(f);
+  });
+}
+export function hbAyarKaydet(ayar: HbAyar) {
+  return sirala(async () => {
+    const f = await finansOku();
+    f.hbAyar = HbAyarSema.parse(ayar);
+    f.olaylar.push({ tarih: simdi(), islem: 'hepsiburada-ayar' });
+    await kaydet(f);
+  });
+}
+export function hbUrunKaydet(urunId: string, ayar: HbUrunAyar) {
+  if (!/^[a-z0-9-]{1,80}$/.test(urunId)) throw new Error('Ürün bulunamadı.');
+  return sirala(async () => {
+    const f = await finansOku();
+    f.hbUrunler[urunId] = HbUrunAyarSema.parse(ayar);
+    await kaydet(f);
+  });
+}
+
+/** Yüklenen PDF/JPG/PNG'yi doğrular; görseller küçültülür. */
+async function ekHazirla(dosya: File, sinir = 10 * 1024 * 1024) {
+  if (dosya.size > sinir) throw new Error(`Dosya ${Math.round(sinir / 1048576)} MB veya daha küçük olmalı.`);
+  let veri = Buffer.from(await dosya.arrayBuffer());
+  if (dosya.type === 'application/pdf' || veri.subarray(0, 5).toString() === '%PDF-') {
+    if (veri.subarray(0, 5).toString() !== '%PDF-' || !veri.subarray(-1024).includes('%%EOF')) throw new Error('PDF dosyası bozuk görünüyor.');
+    return { veri, tur: 'application/pdf' as const };
+  }
+  try {
+    const gorsel = sharp(veri, { failOn: 'error', limitInputPixels: 28_000_000 });
+    const { format } = await gorsel.metadata();
+    if (format !== 'png' && format !== 'jpeg') throw new Error();
+    veri = Buffer.from(await gorsel.rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).toBuffer());
+    return { veri, tur: format === 'png' ? 'image/png' as const : 'image/jpeg' as const };
+  } catch {
+    throw new Error('Geçerli bir PDF, JPG veya PNG dosyası seçin.');
+  }
+}
+
+/** Fatura merkezi: kesilen faturayı (no, tarih, dosya) kaydeder. Aynı siparişte geçerli fatura varsa reddeder. */
+export function faturaKaydet(girdi: Omit<FaturaKaydi, 'id' | 'olusturma' | 'ek' | 'iletim' | 'iptal'>, dosya?: File) {
+  return sirala(async () => {
+    const f = await finansOku();
+    if (f.faturalar.some((x) => !x.iptal && x.kanal === girdi.kanal && x.kayit === girdi.kayit)) throw new Error('Bu siparişin faturası zaten kayıtlı. Yenisini kesecekseniz önce eskisini iptal edin.');
+    if (f.faturalar.some((x) => !x.iptal && x.no.toUpperCase() === girdi.no.toUpperCase())) throw new Error('Bu fatura numarası başka bir siparişte kayıtlı.');
+    const id = randomUUID();
+    const kayit = faturaKaydiSema.parse({ ...girdi, id, olusturma: simdi(), iletim: { durum: 'bekliyor' } });
+    let ek: { veri: Buffer; tur: 'application/pdf' | 'image/jpeg' | 'image/png' } | undefined;
+    if (dosya?.size) {
+      ek = await ekHazirla(dosya);
+      const uzanti = ek.tur === 'application/pdf' ? 'pdf' : ek.tur === 'image/png' ? 'png' : 'jpg';
+      kayit.ek = { ad: `Fatura-${kayit.no}.${uzanti}`.replace(/[^A-Za-z0-9._-]/g, '_'), boyut: ek.veri.length, tur: ek.tur };
+      await bulutYaz(bulutFatura(id), ek.veri, ek.tur);
+      await yaz(yol(faturaDosyalari, id), ek.veri).catch(() => undefined);
+    }
+    f.faturalar.unshift(kayit);
+    f.olaylar.push({ tarih: kayit.olusturma, islem: 'fatura-kaydedildi:' + kayit.kanal + ':' + kayit.siparisNo });
+    await kaydet(f);
+    return { kayit, ek };
+  });
+}
+export async function faturaEki(id: string) {
+  if (!idGecerli(id)) return undefined;
+  const k = (await finansOku()).faturalar.find((x) => x.id === id);
+  if (!k?.ek) return undefined;
+  let veri: Buffer | undefined = await fs.readFile(yol(faturaDosyalari, id)).catch(() => undefined);
+  if (!veri) {
+    veri = await bulutOku(bulutFatura(id));
+    if (veri) await yaz(yol(faturaDosyalari, id), veri).catch(() => undefined);
+  }
+  return veri ? { kayit: k, veri } : undefined;
+}
+export function faturaGuncelle(id: string, degistir: (k: FaturaKaydi) => void) {
+  if (!idGecerli(id)) throw new Error('Fatura bulunamadı.');
+  return sirala(async () => {
+    const f = await finansOku();
+    const k = f.faturalar.find((x) => x.id === id);
+    if (!k) throw new Error('Fatura bulunamadı.');
+    degistir(k);
+    f.olaylar.push({ tarih: simdi(), islem: 'fatura-guncellendi:' + id });
+    await kaydet(f);
+    return k;
   });
 }

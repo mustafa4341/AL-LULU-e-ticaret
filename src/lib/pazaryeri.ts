@@ -175,7 +175,24 @@ export interface GelenSiparis {
   /** Paket toplamı (kuruş). Yoksa kalemlerin toplamı. */
   toplam?: number;
   kalemler: GelenKalem[];
+  /** Fatura kesmek için alıcı bilgisi (kanalın verdiği kadarı) */
+  fatura?: FaturaAlicisi;
 }
+
+/** Faturadaki alıcı: bireyselde ad + TCKN (yoksa 11111111111), kurumsalda unvan + vergi dairesi/no */
+export const FaturaAlicisiSema = z.object({
+  ad: z.string().max(200).optional(),
+  firma: z.string().max(200).optional(),
+  vergiDairesi: z.string().max(120).optional(),
+  vergiNo: z.string().max(20).optional(),
+  tckn: z.string().max(11).optional(),
+  adres: z.string().max(600).optional(),
+  il: z.string().max(80).optional(),
+  ilce: z.string().max(80).optional(),
+  /** Trendyol'un siparişe özel (kriptolu) e-posta adresi: fatura PDF'i buraya da gönderilebilir */
+  eposta: z.string().max(200).optional(),
+});
+export type FaturaAlicisi = z.infer<typeof FaturaAlicisiSema>;
 
 const kalemStok = z.enum(['yok', 'dusuldu', 'geri-alindi', 'hasarli']);
 export const PazaryeriKalemSema = z.object({
@@ -223,6 +240,7 @@ export const PazaryeriSiparisSema = z.object({
   kanalGuncelleme: z.string().optional(),
   not: z.string().max(1000).optional(),
   gecmis: z.array(z.object({ tarih: z.string(), durum: z.enum(PY_DURUMLAR), not: z.string().optional() })).default([]),
+  fatura: FaturaAlicisiSema.optional(),
   /** Veritabanı sürümü (çakışma denetimi); kayıtta saklanmaz, okurken eklenir */
   surum: z.number().int().min(0).default(0),
 });
@@ -230,6 +248,38 @@ export type PazaryeriSiparisi = z.infer<typeof PazaryeriSiparisSema>;
 
 /* ---------------- Envanter / pazaryeri ayarları ---------------- */
 
+const IlanOzellikSema = z.object({
+  attributeId: z.number().int().positive(),
+  ad: z.string().max(120).optional(),
+  attributeValueIds: z.array(z.number().int().positive()).max(20).optional(),
+  attributeValue: z.string().max(400).optional(),
+  degerAdi: z.string().max(400).optional(),
+});
+const IlanSema = z.object({
+  /** taslak: kaydedildi · gonderildi: kuyrukta · onay-bekliyor · reddedildi · hata: kuyruk reddetti · onaylandi */
+  durum: z.enum(['taslak', 'gonderildi', 'onay-bekliyor', 'reddedildi', 'hata', 'onaylandi']).default('taslak'),
+  barkod: z.string().trim().max(40).default(''),
+  stokKodu: z.string().trim().max(100).default(''),
+  anaKod: z.string().trim().max(40).default(''),
+  baslik: z.string().trim().max(100).default(''),
+  kategoriId: z.number().int().positive().optional(),
+  kategoriAdi: z.string().max(300).optional(),
+  markaId: z.number().int().positive().optional(),
+  markaAdi: z.string().max(120).optional(),
+  ozellikler: z.array(IlanOzellikSema).max(80).default([]),
+  desi: z.number().min(0).max(10_000).optional(),
+  kdv: z.number().int().min(0).max(20).default(20),
+  /** Elle girilen kanal satış fiyatı (TL). Boşsa kanal fiyat kuralı uygulanır. */
+  fiyat: z.number().positive().max(10_000_000).optional(),
+  batchId: z.string().max(200).optional(),
+  gonderim: z.string().optional(),
+  kontrol: z.string().optional(),
+  mesajlar: z.array(z.string().max(600)).max(20).default([]),
+  /** Kanala en son gönderilen satış fiyatı ve zamanı */
+  sonFiyat: z.number().optional(),
+  sonFiyatTarih: z.string().optional(),
+  fiyatBatchId: z.string().max(200).optional(),
+});
 const KanalAyarSema = z.object({
   /** Kanalın siparişlerinin stoğu etkilemeye başladığı an (ISO). Boşsa ilk aktarımda "şimdi" yazılır. */
   stokBaslangic: z.string().optional(),
@@ -255,8 +305,28 @@ const KanalAyarSema = z.object({
     sonHedef: z.number().int().min(0).optional(),
     tarih: z.string().optional(),
   })).default({}),
+  /** Kanal fiyatı = site fiyatı × (1 + yuzde/100) + ekTL, sonra isteğe bağlı ,90'a yuvarlama */
+  fiyatKurali: z.object({
+    yuzde: z.number().min(-50).max(300).default(0),
+    ekTL: z.number().min(0).max(100_000).default(0),
+    yuvarla: z.boolean().default(false),
+  }).default({}),
+  /** API ile kanala gönderilen ilanlar (ürün kimliği → taslak ve onay durumu) */
+  ilanlar: z.record(IlanSema).default({}),
 });
 export type KanalAyari = z.infer<typeof KanalAyarSema>;
+export type KanalIlanTaslagi = z.infer<typeof IlanSema>;
+
+/** Kanal fiyat kuralını uygular (TL, 2 hane). Satış fiyatı hiçbir zaman sitedeki fiyatın altına inmez, kural negatif değilse. */
+export function kanalFiyati(siteFiyati: number, k: Pick<KanalAyari, 'fiyatKurali'>): number {
+  const r = k.fiyatKurali;
+  let f = siteFiyati * (1 + r.yuzde / 100) + r.ekTL;
+  if (r.yuvarla) {
+    const yuvarlak = Math.floor(f) + 0.9;
+    f = yuvarlak + 1e-9 < f ? yuvarlak + 1 : yuvarlak;
+  }
+  return Math.round(f * 100) / 100;
+}
 
 export const EnvanterAyarSema = z.object({
   /** Tüm ürünler için kritik stok eşiği (ürüne özel eşik yoksa) */
@@ -265,6 +335,23 @@ export const EnvanterAyarSema = z.object({
   /** Pazaryeri ürün kodu (kodNormal) → mağaza ürün kimliği */
   eslesmeler: z.record(z.string()).default({}),
   epostaBildirimi: z.boolean().default(true),
+  /** Zamanlayıcının (5 dk) kendiliğinden yaptığı işler. Panel › Bugünkü işler'den açılıp kapanır. */
+  otomasyon: z.object({
+    /** Yeni Trendyol/Hepsiburada siparişinde mağazaya e-posta */
+    yeniSiparisBildir: z.boolean().default(true),
+    /** Yeni Trendyol paketini hemen "toplanıyor" (Picking) yap: müşteri iptal edemez, kargo süreci başlar */
+    otoToplama: z.boolean().default(false),
+    /** Kaydedilmiş ama Trendyol'a yüklenememiş / müşteriye gidememiş faturaları tekrar dene */
+    faturaYenidenDene: z.boolean().default(true),
+    /** Günde bir: Trendyol hakedişini çek, ilan onaylarını yenile */
+    gunlukIsler: z.boolean().default(true),
+    /** Site fiyatı değişince Trendyol fiyatını kendiliğinden gönder */
+    otoFiyat: z.boolean().default(false),
+    sonGunluk: z.string().optional(),
+    sonCalisma: z.string().optional(),
+    /** Son çalışmanın kısa özeti (panelde gösterilir) */
+    sonOzet: z.array(z.string().max(300)).max(20).default([]),
+  }).default({}),
   kanallar: z.object({ trendyol: KanalAyarSema.default({}), hepsiburada: KanalAyarSema.default({}) }).default({}),
 });
 export type EnvanterAyarlari = z.infer<typeof EnvanterAyarSema>;
@@ -439,7 +526,29 @@ export function trendyolPaketi(p: Ham): GelenSiparis | undefined {
     sonKargoTarihi: tarihOku(sonKargo),
     toplam: paraKurus(p.packageTotalPrice, p.totalPrice),
     kalemler,
+    fatura: faturaAlicisi(nesne(p.invoiceAddress), {
+      tckn: p.tcIdentityNumber ?? nesne(p.invoiceAddress).identityNumber, eposta: p.customerEmail,
+      ad: [p.customerFirstName, p.customerLastName].filter(Boolean).join(' '),
+    }),
   };
+}
+
+/** Kanal adresi → fatura alıcısı. Boş alanlar atlanır; hiçbir bilgi yoksa undefined. */
+function faturaAlicisi(a: Ham, ek: { tckn?: unknown; eposta?: unknown; ad?: unknown } = {}): FaturaAlicisi | undefined {
+  const k = (v: unknown, n: number) => yazi(v)?.slice(0, n);
+  const rakam = (v: unknown, n: number) => { const x = yazi(v)?.replace(/\D/g, ''); return x && x.length <= n ? x : undefined; };
+  const f: FaturaAlicisi = {
+    ad: k(a.fullName ?? a.name ?? [a.firstName, a.lastName].filter(Boolean).join(' '), 200) ?? k(ek.ad, 200),
+    firma: k(a.company ?? a.companyName, 200),
+    vergiDairesi: k(a.taxOffice, 120),
+    vergiNo: rakam(a.taxNumber, 20),
+    tckn: rakam(ek.tckn ?? a.turkishIdentityNumber ?? a.identityNumber, 11),
+    adres: k(a.fullAddress ?? [a.address1, a.address2, a.address, a.neighborhood].filter(Boolean).join(' '), 600),
+    il: k(a.city, 80), ilce: k(a.district ?? a.town, 80),
+    eposta: k(ek.eposta ?? a.email, 200),
+  };
+  for (const key of Object.keys(f) as (keyof FaturaAlicisi)[]) if (!f[key]) delete f[key];
+  return Object.keys(f).length ? f : undefined;
 }
 
 /**
@@ -469,6 +578,8 @@ export function hepsiburadaSatirlari(satirlar: Ham[]): GelenSiparis[] {
         kargoFirma: yazi(kargo, nesne(l.cargoCompanyModel).name, nesne(l.cargoCompanyModel).shortName),
         kargoTakip: yazi(l.trackingInfoCode, l.trackingNumber, l.barcode),
         sonKargoTarihi: tarihOku(yazi(l.dueDate) ?? ''), kalemler: [],
+        fatura: faturaAlicisi({ ...nesne(nesne(l.invoice).address), ...nesne(l.invoiceAddress), ...nesne(l.invoice) },
+          { tckn: nesne(l.invoice).turkishIdentityNumber, eposta: nesne(l.customer).email, ad: l.customerName }),
       };
       gruplar.set(siparisNo, g);
     }
@@ -525,6 +636,8 @@ export interface BirlesimOzeti {
   eslesmeyen: Map<string, { kod: string; ad: string; adet: number; barkod?: string; stokKodu?: string }>;
   fazlaSatis: { id: string; urunId: string; adet: number }[];
   durumDegisen: { id: string; eski: PyDurum; yeni: PyDurum }[];
+  /** İlk kez görülen (stok başlangıcından sonraki) siparişlerin kayıt kimlikleri — bildirim ve otomatik işler için */
+  yeniIdler: string[];
 }
 export interface Birlesim { kayitlar: PazaryeriSiparisi[]; ozet: BirlesimOzeti }
 
@@ -604,7 +717,7 @@ export function birlestir(
   ayrilan: ReadonlyMap<string, number> = new Map(),
 ): Birlesim {
   const stok = new Map(magaza.urunler.map((u) => [u.id, u.stok]));
-  const ozet: BirlesimOzeti = { yeni: 0, guncellenen: 0, degismeyen: 0, stokDisi: 0, stok: new Map(), eslesmeyen: new Map(), fazlaSatis: [], durumDegisen: [] };
+  const ozet: BirlesimOzeti = { yeni: 0, guncellenen: 0, degismeyen: 0, stokDisi: 0, stok: new Map(), eslesmeyen: new Map(), fazlaSatis: [], durumDegisen: [], yeniIdler: [] };
   const kayitlar: PazaryeriSiparisi[] = [];
   const sonGelenler = new Map<string, GelenSiparis>();
   for (const g of gelenler) {
@@ -712,14 +825,14 @@ export function birlestir(
       kargoFirma: g.kargoFirma ?? eski?.kargoFirma, kargoTakip: g.kargoTakip ?? eski?.kargoTakip,
       sonKargoTarihi: g.sonKargoTarihi ?? eski?.sonKargoTarihi, toplam, kalemler, kaynak, stokDisi,
       ilkAktarim: eski?.ilkAktarim ?? simdi, sonAktarim: simdi, not: eski?.not, kanalGuncelleme: g.guncelleme ?? eski?.kanalGuncelleme,
-      gecmis: eski?.gecmis ?? [], surum: eski?.surum ?? 0,
+      gecmis: eski?.gecmis ?? [], surum: eski?.surum ?? 0, fatura: g.fatura ?? eski?.fatura,
     });
     if (!eski || eski.durum !== durum) {
       kayit.gecmis.push({ tarih: simdi, durum, not: eski ? `${PY_DURUM_ADLARI[eski.durum]} → ${PY_DURUM_ADLARI[durum]}` : (kaynak === 'api' ? 'API ile alındı' : 'Excel ile yüklendi') });
       if (eski) ozet.durumDegisen.push({ id, eski: eski.durum, yeni: durum });
     }
     if (stokDisi && !eski) ozet.stokDisi++;
-    if (!eski) { ozet.yeni++; kayitlar.push(kayit); }
+    if (!eski) { ozet.yeni++; kayitlar.push(kayit); if (!kayit.stokDisi) ozet.yeniIdler.push(kayit.id); }
     else if (karsilastir(kayit) !== karsilastir(eski)) { ozet.guncellenen++; kayitlar.push(kayit); }
     else ozet.degismeyen++;
   }

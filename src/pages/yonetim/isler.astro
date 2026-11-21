@@ -1,0 +1,118 @@
+---
+import Yonetim from '../../layouts/Yonetim.astro';
+import { pazaryeriDurumu } from '../../components/yonetim/pazaryeriGorunumu';
+import { DogrulamaHatasi, magazaOku, siparisleriOku } from '../../lib/depo';
+import { faturaAdaylari } from '../../lib/faturaMerkezi';
+import { finansOku } from '../../lib/finansDepo';
+import { evet, metin } from '../../lib/form';
+import { otomatikIsler } from '../../lib/otomasyon';
+import { KANALLAR, KANAL_LISTESI, bosAyarlar } from '../../lib/pazaryeri';
+import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
+import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../lib/pazaryeriDepo';
+import { pazaryeriSenkron } from '../../lib/pazaryeriSenkron';
+import { yTarih } from '../../lib/yonetimRapor';
+
+const yol = '/yonetim/isler';
+const q = Astro.url.searchParams;
+const hatalar: string[] = [];
+const bagliKanallar = KANAL_LISTESI.filter((k) => ['canli', 'test'].includes(pazaryeriApiDurumu(k)));
+const AYARLAR = [
+  ['yeniSiparisBildir', 'Yeni Trendyol / Hepsiburada siparişinde bana e-posta at', 'Web siparişleri zaten e-postayla geliyor.'],
+  ['otoToplama', 'Yeni Trendyol siparişini hemen “toplanıyor” yap', 'Müşteri artık iptal edemez ve kargo süreci başlar. Stokta olmayan ürün satıyorsanız kapalı tutun.'],
+  ['faturaYenidenDene', 'Gidemeyen faturaları tekrar dene', 'Trendyol’a yüklenemeyen ya da müşteriye e-postası gitmeyen faturalar 30 dakikada bir yeniden denenir.'],
+  ['gunlukIsler', 'Her gün Trendyol hakedişini çek, ilan onaylarını kontrol et', 'Finans › Trendyol ve “Trendyol’a ürün gönder” kendiliğinden güncel kalır.'],
+  ['otoFiyat', 'Sitede fiyat değişince Trendyol fiyatını da güncelle', 'Fiyat kuralınıza göre (Trendyol’a ürün gönder › Trendyol fiyatı).'],
+] as const;
+
+if (Astro.request.method === 'POST') {
+  try {
+    const f = await Astro.request.formData();
+    const eylem = metin(f, 'eylem');
+    if (eylem === 'ayarlar') {
+      await envanterAyarlariGuncelle((a) => { for (const [k] of AYARLAR) a.otomasyon[k] = evet(f, k); });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Otomatik işler kaydedildi.')}`, 303);
+    }
+    if (eylem === 'hepsi') {
+      const notlar: string[] = [];
+      if (bagliKanallar.length) {
+        const r = await pazaryeriSenkron('panel', true);
+        if (r.durum === 'bekliyor') notlar.push('Otomatik eşitleme şu an zaten çalışıyor; bir dakika sonra tekrar basın.');
+        for (const [k, s] of Object.entries(r.kanallar)) {
+          const ad = KANALLAR[k as keyof typeof KANALLAR];
+          if (s.hata || s.stokHata) notlar.push(`${ad}: ${[s.hata, s.stokHata].filter(Boolean).join(' ')}`);
+          else notlar.push(`${ad}: siparişler alındı${s.siparis ? ` (${s.siparis} yeni/güncel)` : ''}${s.stok !== undefined ? `, ${s.stok} ilanın stoğu güncellendi` : ''}.`);
+        }
+        notlar.push(...(r.otomasyon ?? []));
+      } else notlar.push(...await otomatikIsler({ gunlukZorla: true, sureMs: 40_000 }));
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(['Otomatik işler tamamlandı.', ...notlar].join(' · ').slice(0, 1500))}`, 303);
+    }
+    throw new DogrulamaHatasi(['Geçersiz işlem.']);
+  } catch (e) {
+    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : [e instanceof Error ? e.message : 'İşlem tamamlanamadı.']));
+  }
+}
+
+const [magaza, web, py, ayar, finans] = await Promise.all([
+  magazaOku(), siparisleriOku(), pazaryeriSiparisleriOku().catch(() => []), envanterAyarlariOku().catch(() => bosAyarlar()), finansOku(),
+]);
+const ot = ayar.otomasyon;
+const webler = web.filter((s) => !s.paytr?.test);
+const faturalar = faturaAdaylari(finans, webler, py, ayar);
+const urunIdleri = new Set(magaza.urunler.map((u) => u.id));
+const pyDurum = py.map((s) => ({ s, d: pazaryeriDurumu(s, Date.now(), urunIdleri) }));
+const elle = [
+  { ad: 'Faturası kesilecek siparişler', aciklama: 'GİB e-Arşiv Portalı’nda kesip PDF’i yükleyin; gerisi otomatik.', sayi: faturalar.filter((x) => !x.fatura).length, url: '/yonetim/finans/faturalar' },
+  { ad: 'Hepsiburada’ya yüklenecek faturalar', aciklama: 'PDF’i Hepsiburada satıcı panelinden yükleyip “Yükledim” deyin.', sayi: faturalar.filter((x) => x.fatura && x.kanal === 'hepsiburada' && x.fatura.iletim.durum === 'bekliyor').length, url: '/yonetim/finans/faturalar?durum=kesildi&kanal=hepsiburada' },
+  { ad: 'Hazırlanacak web siparişleri', aciklama: 'Paketleyin, kargo takip numarasını girin; müşteriye e-posta kendiliğinden gider.', sayi: webler.filter((s) => s.durum === 'odendi' || s.durum === 'hazirlaniyor').length, url: '/yonetim/siparisler?durum=odendi' },
+  ...KANAL_LISTESI.map((k) => ({ ad: `Kargoya verilecek ${KANALLAR[k]} siparişleri`, aciklama: 'Paketi hazırlayın, kargo etiketini yapıştırın; takip numarası kanaldan kendiliğinden gelir.', sayi: pyDurum.filter(({ s, d }) => s.kanal === k && (d.hazirlanacak || d.hazirlaniyor)).length, url: `/yonetim/siparisler?kanal=${k}&durum=islem` })),
+  { ad: 'Ürünü eşleşmeyen / stoğu yetmeyen pazaryeri siparişi', aciklama: 'Siparişi açıp doğru ürünü bir kez seçin; sonra kendiliğinden eşleşir.', sayi: pyDurum.filter(({ d }) => d.uyari.some((u) => u.renk === 'kirmizi')).length, url: '/yonetim/siparisler?durum=kontrol' },
+].filter((x) => x.sayi > 0);
+const OTOMATIK = [
+  'Trendyol / Hepsiburada siparişi 5 dakikada bir gelir: sipariş no, paket no, ürün barkodu, müşteri, fatura adresi.',
+  'Ürün barkoddan tanınır, stok tek depodan düşer; iptalde geri eklenir. Kalan stok kanallara gönderilir.',
+  'Kargo takip numarası: Trendyol ve Hepsiburada siparişlerinde kanal verir, eşitlemeyle gelir. Web siparişinde numarayı siz girersiniz.',
+  'Faturayı kaydettiğiniz an Trendyol’a yüklenir, web müşterisine e-postayla gider, muhasebeci listesine yazılır.',
+];
+---
+<Yonetim baslik="Bugünkü işler" altBaslik="Otomatik işler kendiliğinden çalışır; size kalanlar aşağıda." aktif="ozet" basari={q.get('ok')} {hatalar}>
+  <section class="y-kart is-hepsi">
+    <div>
+      <h2>Hepsini şimdi yap</h2>
+      <p class="y-help">Siparişleri ve stoğu eşitler, bildirimleri gönderir, bekleyen faturaları iletir, Trendyol hakedişini ve ilan onaylarını günceller. Bunlar zaten 5 dakikada bir kendiliğinden çalışıyor; düğme yalnız “hemen olsun” istediğinizde.</p>
+      {ot.sonCalisma && <p class="y-help">Son otomatik çalışma: {yTarih.format(new Date(ot.sonCalisma))}</p>}
+    </div>
+    <form method="post"><button class="btn btn--sepet is-buyuk" name="eylem" value="hepsi" type="submit">Hepsini şimdi yap</button></form>
+  </section>
+
+  <section class="y-kart">
+    <h2>Size kalan işler</h2>
+    {elle.length ? <ul class="y-is-listesi">{elle.map((x) => <li><a href={x.url}><span>{x.ad}<small class="is-aciklama">{x.aciklama}</small></span><b class="y-chip y-chip--turuncu">{x.sayi}</b></a></li>)}</ul>
+      : <p class="muted">Şu an sizin yapmanız gereken bir iş yok.</p>}
+  </section>
+
+  <section class="y-kart">
+    <h2>Kendiliğinden olanlar</h2>
+    <ul class="is-otomatik">{OTOMATIK.map((x) => <li>{x}</li>)}</ul>
+    <form method="post" class="is-ayarlar">
+      <input type="hidden" name="eylem" value="ayarlar" />
+      {AYARLAR.map(([k, ad, aciklama]) => <label class="y-secim is-ayar"><input type="checkbox" name={k} checked={ot[k]} /><span><strong>{ad}</strong><small>{aciklama}</small></span></label>)}
+      <button class="btn btn--cizgi" type="submit">Kaydet</button>
+    </form>
+    {!bagliKanallar.length && <p class="y-uyari">Hiçbir pazaryeri bağlı değil; bağlanınca bu işler kendiliğinden çalışmaya başlar.</p>}
+  </section>
+
+  {ot.sonOzet.length > 0 && <details class="y-kart">
+    <summary><strong>Son otomatik işlemler</strong></summary>
+    <ul class="y-task-list">{ot.sonOzet.map((x) => <li><span>{x}</span></li>)}</ul>
+  </details>}
+</Yonetim>
+<style>
+  .is-hepsi { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; border-top: 4px solid var(--y-gold, #aa812e); }
+  .is-hepsi > div { flex: 1 1 320px; }
+  .is-buyuk { min-height: 56px; padding-inline: 28px; font-size: 17px; }
+  .is-aciklama { display: block; color: var(--ink-3); font-size: 13px; font-weight: 400; margin-top: 2px; }
+  .is-otomatik { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 6px; }
+  .is-ayarlar { display: grid; gap: 10px; justify-items: start; }
+  .is-ayar { align-items: flex-start; }
+  .is-ayar small { display: block; color: var(--ink-3); font-size: 13px; }
+</style>

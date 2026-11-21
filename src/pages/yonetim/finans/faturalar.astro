@@ -1,0 +1,234 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import { siparisleriOku } from '../../../lib/depo';
+import { finansGunu, finansPara, gecerliGun, type FaturaKaydi } from '../../../lib/finans';
+import { faturaEki, faturaGuncelle, faturaKaydet, finansOku } from '../../../lib/finansDepo';
+import { FATURA_KANAL_ADLARI, GENEL_TCKN, GIB_PORTAL, faturaAdaylari, sayiYaz, tlYaz, type FaturaAdayi, type FaturaKanali } from '../../../lib/faturaMerkezi';
+import { evet, metin } from '../../../lib/form';
+import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import { faturaIlet } from '../../../lib/faturaIlet';
+import { yTarih } from '../../../lib/yonetimRapor';
+
+const yol = '/yonetim/finans/faturalar';
+const q = Astro.url.searchParams;
+const hatalar: string[] = [];
+const veriOku = async () => {
+  const [finans, web, py, ayar] = await Promise.all([
+    finansOku(), siparisleriOku(),
+    pazaryeriSiparisleriOku().catch(() => { hatalar.push('Pazaryeri siparişleri okunamadı; yalnız web siparişleri listelendi.'); return []; }),
+    envanterAyarlariOku().catch(() => undefined),
+  ]);
+  return { finans, adaylar: faturaAdaylari(finans, web, py, ayar) };
+};
+const tyBagli = ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+
+const ilet = (a: FaturaAdayi, k: FaturaKaydi, ek: { veri: Buffer; tur: string; ad: string } | undefined, zorla: boolean) => faturaIlet(a, k, ek, Astro.url.origin, zorla);
+
+if (Astro.request.method === 'POST') {
+  try {
+    const f = await Astro.request.formData();
+    const eylem = metin(f, 'eylem');
+    const { finans, adaylar } = await veriOku();
+    if (eylem === 'kaydet') {
+      const a = adaylar.find((x) => x.anahtar === metin(f, 'anahtar'));
+      if (!a) throw new Error('Sipariş bulunamadı. Listeyi yenileyin.');
+      const no = metin(f, 'no').toUpperCase().replace(/\s+/g, ' ');
+      if (!/^[A-Z0-9][A-Z0-9 ./-]{0,39}$/.test(no)) throw new Error('Fatura numarasını faturada yazdığı gibi girin (ör. GIB2026000000012).');
+      const tarih = metin(f, 'tarih');
+      if (!gecerliGun(tarih) || tarih > finansGunu()) throw new Error('Fatura tarihini girin (ileri tarih olamaz).');
+      const dosya = f.get('dosya');
+      const yuklenen = dosya instanceof File && dosya.size ? dosya : undefined;
+      if (yuklenen && yuklenen.size > 4 * 1024 * 1024) throw new Error('Dosya en fazla 4 MB olmalı. PDF’i “küçük boyutlu” kaydedin ya da fotoğrafı daha düşük çözünürlükte çekin.');
+      const { kayit, ek } = await faturaKaydet({
+        kanal: a.kanal, kayit: a.kayit, siparisNo: a.siparisNo, no, tarih, alici: (a.alici.firma || a.alici.ad).slice(0, 200),
+        matrah: a.toplam.matrah, kdv: a.toplam.kdv, toplam: a.toplam.genel,
+      }, yuklenen);
+      let mesaj = `Fatura ${no} kaydedildi.`;
+      if (evet(f, 'ilet')) {
+        const iletim = await ilet(a, kayit, ek && kayit.ek ? { ...ek, ad: kayit.ek.ad } : undefined, false);
+        mesaj += ' ' + (iletim.mesaj ?? '');
+        if (iletim.durum === 'hata') return Astro.redirect(`${yol}?sec=${encodeURIComponent(a.anahtar)}&hata=${encodeURIComponent(mesaj)}#secili`, 303);
+      }
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(mesaj)}`, 303);
+    }
+    const k = finans.faturalar.find((x) => x.id === metin(f, 'id'));
+    if (!k) throw new Error('Fatura kaydı bulunamadı.');
+    const a = adaylar.find((x) => x.kanal === k.kanal && x.kayit === k.kayit);
+    if (eylem === 'ilet') {
+      if (!a) throw new Error('Siparişi bulamadım; faturayı elle iletin.');
+      const ek = await faturaEki(k.id);
+      const iletim = await ilet(a, k, ek && ek.kayit.ek ? { veri: ek.veri, tur: ek.kayit.ek.tur, ad: ek.kayit.ek.ad } : undefined, true);
+      return Astro.redirect(`${yol}?${iletim.durum === 'hata' ? 'hata' : 'ok'}=${encodeURIComponent(iletim.mesaj ?? 'Tamam.')}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+    }
+    if (eylem === 'elle') {
+      await faturaGuncelle(k.id, (x) => { x.iletim = { durum: 'elle', mesaj: 'Elle iletildi olarak işaretlendi.', tarih: new Date().toISOString() }; });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Fatura iletildi olarak işaretlendi.')}`, 303);
+    }
+    if (eylem === 'iptal') {
+      if (!evet(f, 'onay')) throw new Error('İptal için kutucuğu işaretleyin.');
+      await faturaGuncelle(k.id, (x) => { x.iptal = true; });
+      return Astro.redirect(`${yol}?sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}&ok=${encodeURIComponent('Kayıt iptal edildi. GİB portalında da faturayı iptal etmeyi unutmayın.')}#secili`, 303);
+    }
+    throw new Error('Geçersiz işlem.');
+  } catch (e) {
+    hatalar.push(e instanceof Error && e.name !== 'ZodError' ? e.message : 'İşlem tamamlanamadı.');
+  }
+}
+
+const { adaylar } = await veriOku();
+const durum = ['kesilecek', 'kesildi', 'tumu'].includes(q.get('durum') ?? '') ? q.get('durum')! : 'kesilecek';
+const kanal = (['web', 'trendyol', 'hepsiburada'] as const).find((k) => k === q.get('kanal'));
+const kesilecek = adaylar.filter((a) => !a.fatura);
+const iletilecek = adaylar.filter((a) => a.fatura && (a.fatura.iletim.durum === 'bekliyor' || a.fatura.iletim.durum === 'hata'));
+const liste = adaylar
+  .filter((a) => (durum === 'kesilecek' ? !a.fatura : durum === 'kesildi' ? !!a.fatura : true) && (!kanal || a.kanal === kanal))
+  .slice(0, 300);
+const secili = adaylar.find((a) => a.anahtar === q.get('sec'));
+const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
+const tarih = (t: string) => yTarih.format(new Date(t));
+const filtre = (ek: Record<string, string | undefined>) => yol + '?' + new URLSearchParams(Object.entries({ durum, kanal, ...ek }).filter(([, v]) => v) as [string, string][]);
+const ILETIM: Record<FaturaKaydi['iletim']['durum'], [string, string]> = {
+  bekliyor: ['Müşteriye iletilmedi', 'turuncu'], hata: ['İletim hatası', 'kirmizi'], gonderildi: ['İletildi', 'yesil'], elle: ['Elle iletildi', 'yesil'], yok: ['—', 'gri'],
+};
+const kanalRengi: Record<FaturaKanali, string> = { web: 'gri', trendyol: 'turuncu', hepsiburada: 'gri' };
+const iletimAciklamasi = (k: FaturaKanali) => k === 'trendyol' ? (tyBagli ? 'Trendyol’a otomatik yükle' : 'Trendyol bağlantısı yok; satıcı panelinden yükleyin')
+  : k === 'web' ? 'Müşteriye e-postayla gönder' : 'Hepsiburada’ya satıcı panelinden siz yükleyeceksiniz';
+const bugun = finansGunu();
+---
+<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+  <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
+    {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
+    <a href={yol} aria-current="page">Faturalar{kesilecek.length > 0 && ` (${kesilecek.length})`}</a>
+    <a href="/yonetim/finans/hepsiburada">Hepsiburada</a>
+  </nav>
+
+  <details class="y-kart" open={!adaylar.some((a) => a.fatura)}>
+    <summary><strong>Fatura nasıl kesilir? (3 adım)</strong></summary>
+    <ol class="fm-adimlar">
+      <li>Aşağıdan siparişin <strong>“Fatura bilgileri”</strong>ne basın. Alıcı, ürünler, KDV hariç fiyat ve KDV hazır gelir; her birinin yanında “Kopyala” var.</li>
+      <li><a class="y-link" href={GIB_PORTAL} target="_blank" rel="noopener noreferrer">GİB e-Arşiv Portalı’na</a> İnteraktif Vergi Dairesi kullanıcı kodu ve şifresiyle girin. <em>Belge İşlemleri › Fatura Oluştur</em>’da bilgileri yapıştırın, “Onayla”yın ve PDF’ini indirin.</li>
+      <li>Buraya fatura numarasını ve PDF’i yükleyin. Sistem Trendyol’a kendisi yükler, web müşterisine e-postayla yollar, muhasebeci listesine yazar. Hepsiburada’da PDF’i satıcı panelinden yükleyip “Yükledim” deyin.</li>
+    </ol>
+    <p class="y-help">1 Ocak 2026’dan beri e-Fatura sistemine girmemiş satıcılar faturalarını GİB portalından e-Arşiv olarak keser; basit usul veya işletme defteri tutanlar için bu tarih 1 Ocak 2027. Hangisine tabi olduğunuzu muhasebecinize doğrulatın. Bireysel alıcının TC kimlik numarası bilinmiyorsa portalda {GENEL_TCKN} yazılır.</p>
+  </details>
+
+  <div class="y-metrics y-metrics--finans">
+    <a class="y-metric" href={filtre({ durum: 'kesilecek' })}><span>Faturası kesilecek</span><strong>{kesilecek.length}</strong></a>
+    <a class="y-metric" href={filtre({ durum: 'kesildi' })}><span>Müşteriye iletilecek</span><strong>{iletilecek.length}</strong></a>
+    <div class="y-metric"><span>Bu ay kesilen</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong></div>
+  </div>
+
+  <nav class="y-sekmeler" aria-label="Fatura filtresi">
+    {[['kesilecek', 'Kesilecek'], ['kesildi', 'Kesildi'], ['tumu', 'Tümü']].map(([id, ad]) => <a href={filtre({ durum: id })} aria-current={durum === id ? 'page' : undefined}>{ad}</a>)}
+    <span class="fm-ayrac"></span>
+    <a href={filtre({ kanal: undefined })} aria-current={!kanal ? 'page' : undefined}>Tüm kanallar</a>
+    {(['web', 'trendyol', 'hepsiburada'] as const).map((k) => <a href={filtre({ kanal: k })} aria-current={kanal === k ? 'page' : undefined}>{FATURA_KANAL_ADLARI[k]}</a>)}
+  </nav>
+
+  {secili && <section class="y-kart fm-secili" id="secili">
+    <div class="y-kart__bas">
+      <h2>{FATURA_KANAL_ADLARI[secili.kanal]} · {secili.siparisNo}</h2>
+      <a class="y-link" href={filtre({})}>Kapat</a>
+    </div>
+    <p class="y-help">{tarih(secili.tarih)} · {secili.durumAdi}{secili.paketNo && secili.paketNo !== secili.siparisNo ? ` · Paket ${secili.paketNo}` : ''}</p>
+    {secili.eksikler.length > 0 && <p class="y-uyari">Eksik bilgi: {secili.eksikler.join(', ')}.</p>}
+
+    <h3>Alıcı</h3>
+    <dl class="fm-alanlar">
+      <div><dt>Alıcı türü</dt><dd>{secili.alici.tip === 'kurumsal' ? 'Kurumsal (VKN ile)' : 'Bireysel (TCKN ile)'}</dd></div>
+      {secili.alici.tip === 'kurumsal' ? <>
+        <div><dt>Vergi no (VKN)</dt><dd>{secili.alici.vergiNo ?? '—'} {secili.alici.vergiNo && <button type="button" class="y-icon-button" data-kopyala={secili.alici.vergiNo}>Kopyala</button>}</dd></div>
+        <div><dt>Unvan</dt><dd>{secili.alici.firma ?? secili.alici.ad} <button type="button" class="y-icon-button" data-kopyala={secili.alici.firma ?? secili.alici.ad}>Kopyala</button></dd></div>
+        <div><dt>Vergi dairesi</dt><dd>{secili.alici.vergiDairesi ?? '—'} {secili.alici.vergiDairesi && <button type="button" class="y-icon-button" data-kopyala={secili.alici.vergiDairesi}>Kopyala</button>}</dd></div>
+      </> : <>
+        <div><dt>TC kimlik no</dt><dd>{secili.alici.tckn} <button type="button" class="y-icon-button" data-kopyala={secili.alici.tckn}>Kopyala</button>{secili.alici.tcknBilinmiyor && <small class="muted"> Bilinmiyor; genel numara</small>}</dd></div>
+        <div><dt>Ad soyad</dt><dd>{secili.alici.ad} <button type="button" class="y-icon-button" data-kopyala={secili.alici.ad}>Kopyala</button></dd></div>
+      </>}
+      <div class="fm-genis"><dt>Adres</dt><dd>{secili.alici.adres || '—'} {secili.alici.adres && <button type="button" class="y-icon-button" data-kopyala={secili.alici.adres}>Kopyala</button>}</dd></div>
+      <div><dt>İl / ilçe</dt><dd>{[secili.alici.il, secili.alici.ilce].filter(Boolean).join(' / ') || '—'}</dd></div>
+      <div><dt>Ülke</dt><dd>Türkiye</dd></div>
+    </dl>
+
+    <h3>Mal / hizmet satırları</h3>
+    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Mal / hizmet</th><th class="y-sayi">Miktar</th><th class="y-sayi">Birim fiyat (KDV hariç)</th><th class="y-sayi">KDV</th><th class="y-sayi">Tutar (KDV hariç)</th><th class="y-sayi">KDV tutarı</th><th class="y-sayi">Toplam (KDV dahil)</th></tr></thead>
+      <tbody>{secili.satirlar.map((s) => <tr>
+        <td data-etiket="Mal / hizmet">{s.ad} <button type="button" class="y-icon-button" data-kopyala={s.ad}>Kopyala</button></td>
+        <td data-etiket="Miktar" class="y-sayi">{s.adet} Adet</td>
+        <td data-etiket="Birim fiyat (KDV hariç)" class="y-sayi y-nowrap">{sayiYaz(s.birimHaric)} <button type="button" class="y-icon-button" data-kopyala={sayiYaz(s.birimHaric)}>Kopyala</button></td>
+        <td data-etiket="KDV" class="y-sayi">%{s.kdvOrani}</td>
+        <td data-etiket="Tutar (KDV hariç)" class="y-sayi y-nowrap">{tlYaz(s.haric)}</td>
+        <td data-etiket="KDV tutarı" class="y-sayi y-nowrap">{tlYaz(s.kdv)}</td>
+        <td data-etiket="Toplam" class="y-sayi y-nowrap"><strong>{tlYaz(s.dahil)}</strong></td>
+      </tr>)}</tbody>
+    </table></div>
+    <dl class="y-hesap">
+      <div><dt>Mal/hizmet toplamı (KDV hariç)</dt><dd>{finansPara(secili.toplam.matrah)}</dd></div>
+      {secili.toplam.oranlar.map((o) => <div><dt>Hesaplanan KDV (%{o.oran})</dt><dd>{finansPara(o.kdv)}</dd></div>)}
+      <div class="sonuc"><dt>Ödenecek tutar (KDV dahil)</dt><dd>{finansPara(secili.toplam.genel)}</dd></div>
+    </dl>
+    <p class="y-help">Portal toplamı kuruş kuruş bunun aynısı olmalı. Birkaç kuruş fark çıkarsa birim fiyatı portalda “KDV dahil” girip ({secili.satirlar.map((s) => sayiYaz(s.birimDahil)).join(' / ')} TL) portalın hesaplamasına bırakın.</p>
+    <p class="y-help">Not alanına: <strong>{secili.aciklama}</strong> <button type="button" class="y-icon-button" data-kopyala={secili.aciklama}>Kopyala</button></p>
+
+    {secili.fatura ? <div class="fm-kesildi">
+      <h3>Kesilen fatura</h3>
+      <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
+        {secili.fatura.ek && <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank">Dosyayı aç</a></>}</p>
+      <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
+      <div class="y-modal__alt">
+        {secili.kanal !== 'hepsiburada' && secili.fatura.ek && <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--sepet" name="eylem" value="ilet" type="submit">{secili.fatura.iletim.durum === 'gonderildi' ? 'Tekrar gönder' : secili.kanal === 'trendyol' ? 'Trendyol’a yükle' : 'Müşteriye gönder'}</button></form>}
+        {secili.fatura.iletim.durum !== 'gonderildi' && secili.fatura.iletim.durum !== 'elle' && <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--cizgi" name="eylem" value="elle" type="submit">{secili.kanal === 'hepsiburada' ? 'Hepsiburada’ya yükledim' : 'Elle ilettim'}</button></form>}
+      </div>
+      <details><summary>Faturayı iptal et</summary>
+        <form method="post" class="fm-iptal">
+          <input type="hidden" name="id" value={secili.fatura.id} />
+          <label class="y-secim"><input type="checkbox" name="onay" required /> Faturayı GİB portalında da iptal edeceğim / ettim.</label>
+          <button class="btn btn--cizgi" name="eylem" value="iptal" type="submit">Kaydı iptal et</button>
+        </form>
+      </details>
+    </div> : <form method="post" enctype="multipart/form-data" class="fm-form">
+      <h3>Kestiğiniz faturayı kaydedin</h3>
+      <input type="hidden" name="eylem" value="kaydet" />
+      <input type="hidden" name="anahtar" value={secili.anahtar} />
+      <div class="y-izgara y-izgara--2">
+        <label class="y-alan">Fatura numarası<input name="no" required maxlength="40" placeholder="GIB2026000000012" autocomplete="off" /><small class="muted">Portalın verdiği 16 haneli numara.</small></label>
+        <label class="y-alan">Fatura tarihi<input type="date" name="tarih" value={bugun} max={bugun} required /></label>
+      </div>
+      <label class="y-alan">Fatura dosyası (PDF ya da fotoğraf)<input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" /><small class="muted">En fazla 4 MB. Portaldan “İndir” ile aldığınız PDF.</small></label>
+      <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal !== 'hepsiburada'} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
+      <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Kaydet</button></div>
+    </form>}
+  </section>}
+
+  <section class="y-kart">
+    {liste.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Sipariş</th><th>Kanal</th><th>Tarih</th><th>Alıcı</th><th class="y-sayi">Tutar</th><th>Fatura</th><th></th></tr></thead>
+      <tbody>{liste.map((a) => <tr class:list={{ 'is-secili': a.anahtar === secili?.anahtar }}>
+        <td data-etiket="Sipariş"><strong>{a.siparisNo}</strong><small class="y-table-note">{a.durumAdi}</small></td>
+        <td data-etiket="Kanal"><span class:list={['y-chip', 'y-chip--' + kanalRengi[a.kanal]]}>{FATURA_KANAL_ADLARI[a.kanal]}</span></td>
+        <td data-etiket="Tarih" class="y-nowrap">{tarih(a.tarih)}</td>
+        <td data-etiket="Alıcı">{a.alici.firma || a.alici.ad || '—'}</td>
+        <td data-etiket="Tutar" class="y-sayi y-nowrap">{finansPara(a.toplam.genel)}</td>
+        <td data-etiket="Fatura">{a.fatura
+          ? <><strong>{a.fatura.no}</strong><small class="y-table-note"><span class:list={['y-chip', 'y-chip--' + ILETIM[a.fatura.iletim.durum][1]]}>{ILETIM[a.fatura.iletim.durum][0]}</span></small></>
+          : <span class="y-chip y-chip--turuncu">Kesilecek</span>}</td>
+        <td><a class="btn btn--cizgi" href={filtre({ sec: a.anahtar }) + '#secili'}>{a.fatura ? 'Görüntüle' : 'Fatura bilgileri'}</a></td>
+      </tr>)}</tbody>
+    </table></div> : <p class="muted">{durum === 'kesilecek' ? 'Faturası kesilecek sipariş yok.' : 'Kayıt yok.'}</p>}
+  </section>
+</Yonetim>
+<style>
+  h3 { font-size: 15px; margin: 18px 0 8px; }
+  .fm-adimlar { margin: 8px 0; padding-left: 20px; display: grid; gap: 8px; }
+  .fm-alanlar { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px 18px; margin: 0; }
+  .fm-alanlar dt { font-size: .8rem; color: #6b6154; }
+  .fm-alanlar dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .fm-alanlar .fm-genis { grid-column: 1 / -1; }
+  .fm-alanlar .y-icon-button, .fm-secili td .y-icon-button, .fm-secili p .y-icon-button { height: auto; margin-left: 4px; padding: 3px 6px; font-size: .78rem; }
+  .fm-form, .fm-kesildi { border-top: 1px solid var(--y-border); margin-top: 16px; padding-top: 4px; display: grid; gap: 10px; }
+  .fm-iptal { display: grid; gap: 8px; justify-items: start; padding-top: 8px; }
+  .fm-ayrac { flex: 0 0 12px; }
+  .fm-secili { scroll-margin-top: 5rem; border-top: 4px solid var(--y-gold, #aa812e); }
+  tr.is-secili { background: var(--y-bg); }
+</style>

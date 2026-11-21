@@ -6,9 +6,10 @@ import {
   PazaryeriApiHatasi, pazaryeriOrtam, type StokKalemi,
 } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriAktar, pazaryeriSiparisleriOku } from './pazaryeriDepo';
+import { otomatikIsler } from './otomasyon';
 
 type KanalSonucu = { siparis?: number; stok?: number; hata?: string; stokHata?: string };
-type SenkronSonucu = { durum: 'tamam' | 'bekliyor' | 'kapali' | 'hata'; kanallar: Partial<Record<Kanal, KanalSonucu>> };
+type SenkronSonucu = { durum: 'tamam' | 'bekliyor' | 'kapali' | 'hata'; kanallar: Partial<Record<Kanal, KanalSonucu>>; otomasyon?: string[] };
 type BekleyenStok = NonNullable<KanalAyari['bekleyenStok']>;
 const GUN = 86400_000;
 const GONDERIM_BEKLENIYOR = 'gonderim-bekleniyor';
@@ -176,7 +177,7 @@ async function stokYayimla(
   return undefined;
 }
 
-export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici'): Promise<SenkronSonucu> {
+export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici', gunlukZorla = false): Promise<SenkronSonucu> {
   const kanallar: SenkronSonucu['kanallar'] = {};
   const bagli = KANAL_LISTESI.filter((k) => pazaryeriApiDurumu(k) !== 'kapali');
   if (!bagli.length) return { durum: 'kapali', kanallar };
@@ -193,6 +194,8 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici'): Pro
   if (kilit.error) throw new PazaryeriApiHatasi('Senkronizasyon kilidi alınamadı. Supabase senkronizasyon migration kaydını kontrol edin.');
   if (!kilit.data) return { durum: 'bekliyor', kanallar };
 
+  const baslangic0 = Date.now();
+  const yeniIdler: string[] = [];
   try {
     const ilkAyar = await envanterAyarlariOku();
     const bitis = Date.now();
@@ -207,6 +210,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici'): Pro
           if (tetikleyen === 'zamanlayici') a.sonOtomatikApi = a.sonApi;
         });
         kanallar[kanal] = { siparis: sonuc.yeni + sonuc.guncellenen };
+        yeniIdler.push(...sonuc.yeniIdler);
       } catch (e) {
         const hata = hataMesaji(e);
         kanallar[kanal] = { hata };
@@ -258,7 +262,11 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici'): Pro
       }
     }
     const hataVar = Object.values(kanallar).some((k) => k.hata || k.stokHata);
-    return { durum: hataVar ? 'hata' : 'tamam', kanallar };
+    // Otomatik işler (bildirim, fatura iletimi, günlük hakediş…). Süre kalmadıysa bir sonraki çalışmaya kalır.
+    let otomasyon: string[] | undefined;
+    const kalan = 52_000 - (Date.now() - baslangic0);
+    if (kalan > 6000) otomasyon = await otomatikIsler({ yeniIdler, sureMs: kalan - 2000, gunlukZorla: tetikleyen === 'panel' && gunlukZorla }).catch(() => undefined);
+    return { durum: hataVar ? 'hata' : 'tamam', kanallar, otomasyon };
   } finally {
     try {
       const { error } = await sb.rpc('pazaryeri_senkron_kilidi_birak', { sahip }).abortSignal(AbortSignal.timeout(5000));
