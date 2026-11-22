@@ -16,11 +16,14 @@ import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import KanalOzeti from '../../../components/yonetim/KanalOzeti.astro';
 import { kanalToplamlari } from '../../../lib/kanalOzeti';
 
-const q = (Astro.url.searchParams.get('q') ?? '').trim();
-const sira = Astro.url.searchParams.get('sira') ?? 'yeni';
-const bas = Astro.url.searchParams.get('baslangic') ?? '';
-const son = Astro.url.searchParams.get('bitis') ?? '';
-const secilenKanal = Astro.url.searchParams.get('kanal');
+/* Adres boşsa son seçilen filtre (kanal, sıralama) çerezden okunur. Eskiden sayfa açıldıktan sonra tarayıcı
+   filtreli adrese ikinci kez gidiyordu; artık tek açılışta doğru liste gelir. */
+const p = new URLSearchParams(!Astro.url.search ? (Astro.cookies.get('y-filtre-siparis')?.value ?? '').slice(0, 300) : Astro.url.search);
+const q = (p.get('q') ?? '').trim();
+const sira = p.get('sira') ?? 'yeni';
+const bas = p.get('baslangic') ?? '';
+const son = p.get('bitis') ?? '';
+const secilenKanal = p.get('kanal');
 const kanal = secilenKanal === 'web' || kanalMi(secilenKanal) ? secilenKanal : 'tumu';
 const aranan = q.toLocaleLowerCase('tr');
 const [tum, finans, magaza, pazaryeri] = await Promise.all([
@@ -44,7 +47,7 @@ const pazaryeriDetayi = (id: string) => '/yonetim/siparisler/pazaryeri/' + encod
 
 /* Barkod okuyucu / numara ile doğrudan açma ("AL" ve tire yazılmasa da bulunur) */
 const numara = (v: string) => { const m = /^(?:AL)?(\d{6})-?(\d{4})$/.exec(v.toUpperCase().replace(/[\s#]/g, '')); return m ? `AL${m[1]}-${m[2]}` : undefined; };
-const tarama = Astro.url.searchParams.get('tara') === '1';
+const tarama = p.get('tara') === '1';
 let taramaUyarisi = 'Bu numarayla eşleşen sipariş bulunamadı.';
 if (tarama && q) {
   const no = numara(q);
@@ -72,8 +75,8 @@ const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi
   ['tumu', 'Tümü', () => true, () => true],
 ];
 const gorunumler = FILTRELER.filter(([id]) => kanal === 'web' || kanal === 'tumu' || id !== 'belgesiz');
-const filtre = gorunumler.find(([id]) => id === Astro.url.searchParams.get('durum'))?.[0]
-  ?? (Astro.url.searchParams.get('durum') === 'gonderilecek' ? 'islem' : q ? 'tumu' : 'islem');
+const filtre = gorunumler.find(([id]) => id === p.get('durum'))?.[0]
+  ?? (p.get('durum') === 'gonderilecek' ? 'islem' : q ? 'tumu' : 'islem');
 const rakam = /^(?:al)?[\s()+#\d-]+$/.test(aranan) ? aranan.replace(/\D/g, '') : '';
 const basGecerli = gecerliGun(bas), sonGecerli = gecerliGun(son);
 function aramayaUygun(tarih: string, metinler: (string | undefined)[]) {
@@ -109,7 +112,7 @@ liste.sort((a, b) => {
 });
 const SAYFA_BOYUTU = 30;
 const sonSayfa = Math.max(1, Math.ceil(liste.length / SAYFA_BOYUTU));
-const istenenSayfa = Number(Astro.url.searchParams.get('sayfa'));
+const istenenSayfa = Number(p.get('sayfa'));
 const sayfa = Number.isSafeInteger(istenenSayfa) ? Math.max(1, Math.min(sonSayfa, istenenSayfa)) : 1;
 const ilkSatir = (sayfa - 1) * SAYFA_BOYUTU;
 const gorunen = liste.slice(ilkSatir, ilkSatir + SAYFA_BOYUTU);

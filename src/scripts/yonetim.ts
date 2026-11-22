@@ -136,21 +136,20 @@ if (toplu) {
   secimDurumu();
 }
 
+/* Son seçilen liste filtresi (kanal, sıralama) çerezde saklanır; sunucu adres boşken onu okur.
+ * Eskiden tarayıcı sayfayı açtıktan sonra filtreli adrese ikinci kez gidiyordu (her açılış iki kat sürüyordu). */
+const filtreCerezi = (ad: string, deger: string) => {
+  document.cookie = `${ad}=${encodeURIComponent(deger)}; path=/yonetim; max-age=7776000; samesite=strict${location.protocol === 'https:' ? '; secure' : ''}`;
+};
 document.querySelectorAll<HTMLFormElement>('[data-filtre-form]').forEach((form) => {
-  const key = 'y-filtre-' + form.dataset.filtreForm;
-  const url = new URL(location.href);
+  const ad = 'y-filtre-' + form.dataset.filtreForm;
   const alanlar = [...form.querySelectorAll<HTMLSelectElement>('select[name]')];
   try {
-    if (!url.search && localStorage.getItem(key)) {
-      url.search = localStorage.getItem(key)!;
-      location.replace(url);
-      return;
-    }
-    form.addEventListener('submit', () => {
-      const f = new URLSearchParams(alanlar.map((a) => [a.name, a.value]));
-      localStorage.setItem(key, f.toString());
-    });
-  } catch {}
+    // Eski yöntemle (tarayıcı depolaması) kaydedilmiş filtreyi bir kez çereze taşı
+    const eski = localStorage.getItem(ad);
+    if (eski !== null) { if (!document.cookie.includes(ad + '=')) filtreCerezi(ad, eski); localStorage.removeItem(ad); }
+  } catch { /* depolama kapalı */ }
+  form.addEventListener('submit', () => filtreCerezi(ad, new URLSearchParams(alanlar.map((a) => [a.name, a.value])).toString()));
 });
 
 const formlar = [...document.querySelectorAll<HTMLFormElement>('form[data-editor]')];
@@ -584,6 +583,51 @@ if (panel && onizlemeFormu && acma) {
   onizlemeFormu.addEventListener('change', iste);
   onizlemeFormu.addEventListener('y-sekme-degisti', iste);
 }
+
+/* ---------- Anında tepki: basılan düğme ve üstte akan çizgi ----------
+ * Sunucu yanıtı gelene kadar düğme "basıldı" görünür ve ikinci kez gönderilmez (çift kayıt olmaz);
+ * sayfa değişirken ekranın üstünde ince altın çizgi akar. İndirme gibi sayfanın değişmediği
+ * durumlarda birkaç saniye sonra kendiliğinden kapanır; geri tuşuyla dönülünce sıfırlanır. */
+const yukleme = document.createElement('div');
+yukleme.className = 'y-yukleme';
+yukleme.setAttribute('aria-hidden', 'true');
+document.body.append(yukleme);
+let yuklemeZamani = 0;
+function yuklemeBitti() {
+  delete root.dataset.yYukleniyor;
+  clearTimeout(yuklemeZamani);
+  document.querySelectorAll('[data-y-basildi]').forEach((b) => { b.removeAttribute('data-y-basildi'); b.removeAttribute('aria-busy'); });
+  document.querySelectorAll<HTMLFormElement>('form[data-y-gonderiliyor]').forEach((f) => { delete f.dataset.yGonderiliyor; });
+}
+function yuklemeBasla(sure: number) {
+  root.dataset.yYukleniyor = '1';
+  clearTimeout(yuklemeZamani);
+  yuklemeZamani = window.setTimeout(yuklemeBitti, sure);
+}
+window.addEventListener('pageshow', yuklemeBitti);
+/* Dosya indiren adresler: sayfa yerinde kalır, çizgi kısa sürede kapanır */
+const indirmeAdresi = (u: URL) => /^\/yonetim\/(finans\/(rapor|belge|etiket|fatura-dosya)|yedek)$/.test(u.pathname) && !/[?&](goster|onizle)=1/.test(u.search);
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = (e.target as Element).closest<HTMLAnchorElement>('a[href]');
+  if (!a || (a.target && a.target !== '_self') || a.hasAttribute('download')) return;
+  const u = new URL(a.href, location.href);
+  if (u.origin !== location.origin || !/^https?:$/.test(u.protocol)) return;
+  if (u.pathname === location.pathname && u.search === location.search) return; // aynı sayfa / sayfa içi bağlantı
+  if (degisenler.size && !gonderiliyor) return; // "kaydedilmemiş değişiklik" uyarısı çıkacak
+  yuklemeBasla(indirmeAdresi(u) ? 3000 : 20000);
+});
+document.addEventListener('submit', (e) => {
+  const form = e.target as HTMLFormElement;
+  if (e.defaultPrevented || form.method === 'dialog') return;
+  const b = (e as SubmitEvent).submitter as HTMLButtonElement | HTMLInputElement | null;
+  if ((b?.getAttribute('formtarget') ?? form.target) === '_blank') return;
+  if (form.dataset.yGonderiliyor) { e.preventDefault(); return; } // çift tıklama: ikinci gönderim yok
+  form.dataset.yGonderiliyor = '1';
+  if (b) { b.setAttribute('aria-busy', 'true'); b.dataset.yBasildi = ''; }
+  const indirme = form.hasAttribute('data-indirme') || indirmeAdresi(new URL(b?.formAction || form.action, location.href));
+  yuklemeBasla(indirme ? 5000 : 30000);
+});
 
 /* ---------- Küçük bildirimler ---------- */
 function bildirim(mesaj: string, hata = false) {

@@ -1,5 +1,6 @@
 import { magazaOku, siparisGuncelle } from './depo';
 import { durumDegisti } from './bildirim';
+import { arkaPlanda } from './arkaPlan';
 import { kargoFirmalari, takipBaglantisi } from './kargoTakip';
 import { IADE_ISLEMI, gonderildi, iadeEdildi, iptalEdilebilir, siradakiDurum } from './siparisAkisi';
 import { SiparisDurumSema, type Magaza, type Siparis, type Urun } from './sema';
@@ -119,7 +120,9 @@ export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ 
   }, true);
   if (durumDegistiMi) {
     const link = new URL('/siparis/' + guncel.no + '?t=' + guncel.token, girdi.origin).href;
-    await durumDegisti(guncel, m.site, link).catch(() => undefined);
+    // Müşteriye SMS/e-posta arka planda gider: "Kargoya verildi" gibi düğmeler e-postayı beklemez.
+    // Gönderim sonucu sipariş sayfasındaki "E-postalar" bölümünde görünür.
+    arkaPlanda(durumDegisti(guncel, m.site, link), 'sipariş durum bildirimi');
   }
   return { siparis: guncel, mesaj };
 }

@@ -13,6 +13,7 @@ import type { Database } from './supabase.types';
 import { MagazaSema, SiparisSema, type Magaza, type Siparis } from './sema';
 import { magazaTutarlilik } from './katalog';
 import { magazaDegisikliginiBildir } from './indexnow';
+import { arkaPlanda } from './arkaPlan';
 
 const ortam = (ad: string): string | undefined =>
   process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
@@ -41,8 +42,7 @@ export function supabaseIstemci(): SupabaseClient<Database> | null {
   sbIstemci = createClient<Database>(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: {
-      headers: sunucuAnahtari ? { 'x-sunucu-anahtari': sunucuAnahtari } : {},
-    },
+      headers: sunucuAnahtari ? { 'x-sunucu-anahtari': sunucuAnahtari } : {},    },
   });
   return sbIstemci;
 }
@@ -125,17 +125,34 @@ const ONBELLEK_SURE_MS = 1000;
 let bulutOkumaHatasi = false;
 export const supabaseDurumu = () => !supabaseBagliMi() ? 'yerel' : bulutOkumaHatasi ? 'hata' : 'bagli';
 
-export async function magazaOku(kayitIcin = false): Promise<Magaza> {
+/*
+ * Aynı anda gelen okumalar tek veritabanı isteğini paylaşır: bir panel sayfası açılırken ara katman,
+ * sayfa ve yan menü aynı veriyi ister; her biri ayrı ayrı Supabase'e gitmesin.
+ * "Nesil" her yazmada artar: yazmadan önce başlamış bir okuma, eski veriyi önbelleğe geri koyamaz.
+ */
+let magazaNesil = 0;
+let magazaOkunan: Promise<Magaza> | undefined;
+function magazaOnbellegiSil() { magazaOnbellek = undefined; magazaNesil++; magazaOkunan = undefined; }
+
+export function magazaOku(kayitIcin = false): Promise<Magaza> {
+  if (kayitIcin) return magazaOkuIc(true);
+  if (supabaseIstemci() && magazaOnbellek && Date.now() - magazaOnbellek.zaman < ONBELLEK_SURE_MS) return Promise.resolve(magazaOnbellek.veri);
+  if (magazaOkunan) return magazaOkunan;
+  const is: Promise<Magaza> = magazaOkuIc(false).finally(() => { if (magazaOkunan === is) magazaOkunan = undefined; });
+  magazaOkunan = is;
+  return is;
+}
+
+async function magazaOkuIc(kayitIcin: boolean): Promise<Magaza> {
+  const nesil = magazaNesil;
+  const sakla = (o: NonNullable<typeof magazaOnbellek>) => { if (nesil === magazaNesil) magazaOnbellek = o; };
   const sb = supabaseIstemci();
   if (sb) {
-    if (!kayitIcin && magazaOnbellek && Date.now() - magazaOnbellek.zaman < ONBELLEK_SURE_MS) {
-      return magazaOnbellek.veri;
-    }
     const { data, error } = await sb.rpc('magaza_oku');
     if (!error && data) {
       bulutOkumaHatasi = false;
       const veri = MagazaSema.parse(data);
-      magazaOnbellek = { mtime: 0, zaman: Date.now(), veri };
+      sakla({ mtime: 0, zaman: Date.now(), veri });
       return veri;
     }
     if (!error && data === null) {
@@ -145,7 +162,7 @@ export async function magazaOku(kayitIcin = false): Promise<Magaza> {
       if (!kayitHata && kaydedilen) {
         bulutOkumaHatasi = false;
         const veri = MagazaSema.parse(kaydedilen);
-        magazaOnbellek = { mtime: 0, zaman: Date.now(), veri };
+        sakla({ mtime: 0, zaman: Date.now(), veri });
         return veri;
       }
     }
@@ -157,7 +174,7 @@ export async function magazaOku(kayitIcin = false): Promise<Magaza> {
   const st = await fs.stat(MAGAZA);
   if (magazaOnbellek && magazaOnbellek.mtime === st.mtimeMs && magazaOnbellek.mtime > 0) return magazaOnbellek.veri;
   const veri = MagazaSema.parse(JSON.parse(await fs.readFile(MAGAZA, 'utf8')));
-  magazaOnbellek = { mtime: st.mtimeMs, zaman: Date.now(), veri };
+  sakla({ mtime: st.mtimeMs, zaman: Date.now(), veri });
   return veri;
 }
 
@@ -181,7 +198,7 @@ export function magazaGuncelle(degistir: (m: Magaza) => void, sebep?: string): P
 export const cakismaHatasi = (e: { code?: string } | null | undefined) => e?.code === 'PT409' || e?.code === '40001';
 
 async function magazaYaz(degistir: (m: Magaza) => void, sebep?: string): Promise<Magaza> {
-  magazaOnbellek = undefined;
+  magazaOnbellegiSil();
   const mevcut = await magazaOku(true);
   const yeni = magazaAdayi(mevcut, degistir);
   const sb = supabaseIstemci();
@@ -195,15 +212,16 @@ async function magazaYaz(degistir: (m: Magaza) => void, sebep?: string): Promise
     if (kayit.error) throw new Error('Mağaza veritabanına kaydedilemedi.');
     const kaydedilen = kayit.data ? MagazaSema.parse(kayit.data) : yeni;
     await magazaYansit(kaydedilen);
-    // Değişen ürün sayfalarını Bing/Yandex'e bildir (yalnız canlıda; hata kaydı etkilemez, en fazla 3 sn)
-    await magazaDegisikliginiBildir(mevcut, kaydedilen);
-    await stokSonrasi(mevcut, kaydedilen);
+    // Değişen ürün sayfalarını Bing/Yandex'e bildir ve stok uyarısı gönder (yalnız canlıda).
+    // Kayıt tamamlandı; bu işler arka planda sürer, panel düğmesi beklemez.
+    arkaPlanda(magazaDegisikliginiBildir(mevcut, kaydedilen), 'IndexNow bildirimi');
+    arkaPlanda(stokSonrasi(mevcut, kaydedilen), 'stok uyarısı');
     return kaydedilen;
   }
 
   await yedekAl();
   await atomikYaz(MAGAZA, JSON.stringify(yeni, null, 2));
-  magazaOnbellek = undefined;
+  magazaOnbellegiSil();
   await yerelStokDefteri(mevcut, yeni, sebep).catch((e) => console.error('[stok] Yerel hareket kaydedilemedi:', e));
   await stokSonrasi(mevcut, yeni);
   return yeni;
@@ -258,6 +276,7 @@ export function magazaAdayi(mevcut: Magaza, degistir: (m: Magaza) => void): Maga
 export async function magazaYansit(m: Magaza): Promise<void> {
   await yedekAl().catch(() => undefined);
   await atomikYaz(MAGAZA, JSON.stringify(m, null, 2)).catch(() => undefined);
+  magazaOnbellegiSil();
   magazaOnbellek = { mtime: 0, zaman: Date.now(), veri: m };
 }
 
@@ -271,17 +290,29 @@ async function yedekAl(): Promise<void> {
 
 /* ---------------- Siparişler ---------------- */
 let siparisOnbellek: { mtime: number; zaman: number; veri: Siparis[] } | undefined;
+let siparisNesil = 0;
+let siparisOkunan: Promise<Siparis[]> | undefined;
+function siparisOnbellegiSil() { siparisOnbellek = undefined; siparisNesil++; siparisOkunan = undefined; }
 
-export async function siparisleriOku(kayitIcin = false): Promise<Siparis[]> {
+/** Aynı anda gelen okumalar tek isteği paylaşır (bkz. magazaOku) */
+export function siparisleriOku(kayitIcin = false): Promise<Siparis[]> {
+  if (kayitIcin) return siparisleriOkuIc(true);
+  if (supabaseIstemci() && siparisOnbellek && Date.now() - siparisOnbellek.zaman < ONBELLEK_SURE_MS) return Promise.resolve(siparisOnbellek.veri);
+  if (siparisOkunan) return siparisOkunan;
+  const is: Promise<Siparis[]> = siparisleriOkuIc(false).finally(() => { if (siparisOkunan === is) siparisOkunan = undefined; });
+  siparisOkunan = is;
+  return is;
+}
+
+async function siparisleriOkuIc(kayitIcin: boolean): Promise<Siparis[]> {
+  const nesil = siparisNesil;
+  const sakla = (o: NonNullable<typeof siparisOnbellek>) => { if (nesil === siparisNesil) siparisOnbellek = o; };
   const sb = supabaseIstemci();
   if (sb) {
-    if (!kayitIcin && siparisOnbellek && Date.now() - siparisOnbellek.zaman < ONBELLEK_SURE_MS) {
-      return siparisOnbellek.veri;
-    }
     const { data, error } = await sb.rpc('siparisleri_oku');
     if (!error && Array.isArray(data)) {
       const veri = SiparisSema.array().parse(data);
-      siparisOnbellek = { mtime: 0, zaman: Date.now(), veri };
+      sakla({ mtime: 0, zaman: Date.now(), veri });
       return veri;
     }
     if (error) console.error('[Supabase] siparisleri_oku hatası, yerel yedeğe dönülüyor:', error.message);
@@ -295,7 +326,7 @@ export async function siparisleriOku(kayitIcin = false): Promise<Siparis[]> {
   }
   if (siparisOnbellek && siparisOnbellek.mtime === st.mtimeMs && siparisOnbellek.mtime > 0) return siparisOnbellek.veri;
   const veri = SiparisSema.array().parse(JSON.parse(await fs.readFile(SIPARISLER, 'utf8')));
-  siparisOnbellek = { mtime: st.mtimeMs, zaman: Date.now(), veri };
+  sakla({ mtime: st.mtimeMs, zaman: Date.now(), veri });
   return veri;
 }
 
@@ -332,7 +363,7 @@ export function webAyrilanAdetleri(
 
 export function siparisVeSozlesmeEkle(s: Siparis, belge?: SozlesmeKaydi): Promise<Siparis> {
   return sirala(async () => {
-    siparisOnbellek = undefined;
+    siparisOnbellegiSil();
     // Numara çakışması ve stok ayrımı kararı yalnızca güncel bulut verisiyle verilir (eski yerel kopyayla değil)
     const liste = await siparisleriOku(true);
     if (liste.some((x) => x.no === s.no || (s.paytr && x.paytr?.ref === s.paytr.ref))) throw new SiparisNumarasiDolu();
@@ -349,8 +380,8 @@ export function siparisVeSozlesmeEkle(s: Siparis, belge?: SozlesmeKaydi): Promis
       if (error?.code === 'PT422') throw new StokYetersiz();
       if (error?.code === '23505') throw new SiparisNumarasiDolu();
       if (error) throw new Error(`Supabase sipariş kayıt hatası (${error.code}): ${error.message}`);
-      magazaOnbellek = undefined;
-      siparisOnbellek = undefined;
+      magazaOnbellegiSil();
+      siparisOnbellegiSil();
       if (belge) await atomikYaz(sozlesmeDosyasi(s.no), JSON.stringify(belge)).catch(() => undefined);
       await siparisListesiYaz([yeni, ...liste]).catch(() => undefined);
       return yeni;
@@ -394,24 +425,24 @@ async function eskiSiparisKaydi(sb: SupabaseClient<Database>, yeni: Siparis, lis
       // Sözleşmesiz sipariş bırakılmaz: müşteri tekrar denediğinde ikinci kayıt ve boşuna stok ayrımı oluşmaz
       const { error: silHata } = await sb.from('siparisler').delete().eq('no', yeni.no);
       if (silHata) console.error('[Supabase] Sözleşmesi kaydedilemeyen sipariş geri alınamadı:', yeni.no);
-      siparisOnbellek = undefined;
+      siparisOnbellegiSil();
       throw new Error(`Supabase sözleşme kayıt hatası: ${bErr.message}`);
     }
     await atomikYaz(sozlesmeDosyasi(yeni.no), JSON.stringify(belge)).catch(() => undefined);
   }
-  siparisOnbellek = undefined;
+  siparisOnbellegiSil();
   await siparisListesiYaz([yeni, ...liste]).catch(() => undefined);
   return yeni;
 }
 
 async function siparisListesiYaz(liste: Siparis[]): Promise<void> {
   await atomikYaz(SIPARISLER, JSON.stringify(liste, null, 2));
-  siparisOnbellek = undefined;
+  siparisOnbellegiSil();
 }
 
 export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import('./paytr').paytrBildirimDogrula>>) {
   return sirala(async () => {
-    siparisOnbellek = undefined;
+    siparisOnbellegiSil();
     const liste = structuredClone(await siparisleriOku(true));
     const s = liste.find((x) => x.paytr?.ref === bildirim.ref);
     const p = s?.paytr;
@@ -452,7 +483,7 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
     let m: Magaza | undefined;
     let aday: Magaza | undefined;
     if (stokDusulecek) {
-      magazaOnbellek = undefined;
+      magazaOnbellegiSil();
       m = await magazaOku(true);
       ayrilan = webAyrilanAdetleri(await siparisleriOku(true), Date.now(), m.paytrStokIslemleri, s.no);
       if (!m.paytrStokIslemleri?.includes(ref)) {
@@ -482,9 +513,9 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
       } else if (aday) {
         const kaydedilen = atomik.data ? MagazaSema.parse(atomik.data) : aday;
         await magazaYansit(kaydedilen);
-        if (m) await stokSonrasi(m, kaydedilen);
+        if (m) arkaPlanda(stokSonrasi(m, kaydedilen), 'stok uyarısı');
       }
-      siparisOnbellek = undefined;
+      siparisOnbellegiSil();
       await siparisListesiYaz(liste).catch(() => undefined);
       return { durum: 'kaydedildi', siparis: s } as const;
     }
@@ -503,13 +534,13 @@ export function siparisGuncelle(
   panelIslemi = false,
 ): Promise<Siparis> {
   return sirala(async () => {
-    siparisOnbellek = undefined;
+    siparisOnbellegiSil();
     const liste = structuredClone(await siparisleriOku(true));
     const s = liste.find((x) => x.no === no);
     if (!s) throw new Error('Sipariş bulunamadı');
     const onceki = structuredClone(s);
     const sb = supabaseIstemci();
-    magazaOnbellek = undefined;
+    magazaOnbellegiSil();
     const m = panelIslemi ? await magazaOku(true) : undefined;
     if (m?.paytrStokIslemleri?.includes('panel:' + no + ':-1') && s.durum === 'odeme-bekliyor') s.stokDusuldu = true;
     const stokIsareti = degistir(s);
@@ -543,7 +574,7 @@ export function siparisGuncelle(
         if (aday) {
           const kaydedilen = data ? MagazaSema.parse(data) : aday;
           await magazaYansit(kaydedilen);
-          if (m) await stokSonrasi(m, kaydedilen);
+          if (m) arkaPlanda(stokSonrasi(m, kaydedilen), 'stok uyarısı');
         }
         await siparisListesiYaz(liste).catch(() => undefined);
         return dogrulanmis;

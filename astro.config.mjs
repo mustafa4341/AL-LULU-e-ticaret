@@ -10,6 +10,9 @@ const vercelOrtam = Boolean(process.env.VERCEL);
 export default defineConfig({
   site: SITE,
   output: 'server',              // sayfalar her istekte güncel veriyle üretilir (panel değişiklikleri anında yansır)
+  // Sunucu bölgesi vercel.json'da: hnd1 (Tokyo). Supabase veritabanı Tokyo'da (ap-northeast-1); sunucu
+  // Frankfurt'tayken her veri okuması ~250 ms dünyayı dolaşıyordu, panel sayfaları 2–5 sn sürüyordu.
+  // Veritabanı başka bölgeye taşınırsa bu bölge de onunla aynı yapılmalı.
   adapter: vercelOrtam
     ? vercel({ includeFiles: ['./public/img/logo/yazi.png'], maxDuration: 60 }) // 60 sn her Vercel planında geçerli (Hobby dahil)
     : node({ mode: 'standalone' }),

@@ -375,3 +375,18 @@ a.y-chip:hover { filter: brightness(.96); }
 .y-panel details.y-kart > summary::before { content: "\25B8"; flex: none; display: inline-block; width: 1em; color: #8a7f70; transition: transform .15s; }
 .y-panel details.y-kart[open] > summary::before { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) { .y-panel details.y-kart > summary::before { transition: none; } }
+
+/* Anında tepki: sayfa değişirken üstte akan ince çizgi ve basılan düğmede dönen işaret (scripts/yonetim.ts) */
+.y-yukleme { position: fixed; top: 0; left: 0; right: 0; height: 3px; z-index: 100; overflow: hidden; pointer-events: none; visibility: hidden; }
+.y-yukleme::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 35%; background: linear-gradient(90deg, transparent, #e0be6a 45%, #aa812e); transform: translateX(-100%); }
+:root[data-y-yukleniyor] .y-yukleme { visibility: visible; }
+:root[data-y-yukleniyor] .y-yukleme::before { animation: y-yukleme 1.1s ease-in-out infinite; }
+@keyframes y-yukleme { to { transform: translateX(300%); } }
+.y-panel [aria-busy="true"] { cursor: progress; }
+.y-panel button[data-y-basildi] { opacity: .78; }
+.y-panel button[data-y-basildi]::after { content: ''; flex: none; display: inline-block; width: 11px; height: 11px; margin-left: 7px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: y-don .7s linear infinite; }
+@keyframes y-don { to { transform: rotate(1turn); } }
+@media (prefers-reduced-motion: reduce) {
+  :root[data-y-yukleniyor] .y-yukleme::before { animation: none; transform: none; width: 100%; }
+  .y-panel button[data-y-basildi]::after { animation: none; }
+}

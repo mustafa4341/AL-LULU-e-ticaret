@@ -3,6 +3,7 @@ import { Katalog } from './lib/katalog';
 import { magazaOku, satisAdetleri } from './lib/depo';
 import { CEREZ, girisYolu, oturumGecerli } from './lib/oturum';
 import { PAYTR_BILDIRIM, PAYTR_ORIGIN } from './lib/paytr';
+import { panelRozetiOku } from './lib/panelRozet';
 
 export const onRequest = defineMiddleware(async (ctx, next) => {
   const yol = ctx.url.pathname;
@@ -56,7 +57,11 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     // "Müşteri gibi gör" açıkken örnek (taslak) ürünler yönetici için de gizlenir
     const musteriGorunumu = ctx.cookies.get('musteri_gorunumu')?.value === '1';
     ctx.locals.musteriGorunumu = musteriGorunumu;
-    const katalog = new Katalog(await magazaOku(), await satisAdetleri(), !musteriGorunumu && yonetici);
+    // Panel sayfasında yan menüdeki sipariş sayısı şimdiden istenir; sayfa verisiyle aynı anda gelir
+    if (panel && yonetici && ctx.request.method === 'GET') ctx.locals.panelRozet = panelRozetiOku();
+    // Mağaza ve satış adetleri aynı anda okunur (sırayla beklemek her sayfayı bir tur yavaşlatıyordu)
+    const [magaza, satislar] = await Promise.all([magazaOku(), satisAdetleri()]);
+    const katalog = new Katalog(magaza, satislar, !musteriGorunumu && yonetici);
     ctx.locals.katalog = katalog;
 
     // Tadilat (bakım) modu: müşterilere bakım sayfasını gösterir; yönetici siteyi gezmeye ve düzenlemeye devam edebilir

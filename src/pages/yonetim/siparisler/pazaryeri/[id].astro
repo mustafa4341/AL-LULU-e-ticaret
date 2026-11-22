@@ -158,7 +158,7 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
           <button class="btn btn--sepet" type="submit" name="eylem" value="ty-toplama">Toplamaya başla</button>
           <small class="muted">Trendyol’a “sipariş işleme alındı” bildirilir.</small>
         </form>}
-        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && <form method="post">
+        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && <form method="post" data-indirme>
           <button class="btn btn--cizgi" type="submit" name="eylem" value="ty-etiket">Kargo etiketini indir (ZPL)</button>
           <small class="muted">Termal etiket yazıcısı (Zebra vb.) içindir; Trendyol Express ve Aras “Trendyol öder” gönderilerinde çalışır. Normal yazıcıda etiketi Trendyol satıcı panelinden yazdırın.</small>
         </form>}

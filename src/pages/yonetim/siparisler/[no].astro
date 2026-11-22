@@ -43,7 +43,10 @@ if (Astro.request.method === 'POST') {
     hatalar = [mesaj.startsWith('Supabase') ? 'Sipariş kaydedilemedi. Sayfayı yenileyerek tekrar deneyin.' : mesaj];
   }
 }
-const magaza = await magazaOku();
+/* Sayfanın geri kalan verisi aynı anda okunur (sırayla beklenince sayfa her biri için bir tur gecikiyordu) */
+const [magaza, finansKaydi, epostalar] = await Promise.all([
+  magazaOku(), s.paytr?.test ? undefined : finansOku(), epostaKayitlari(s.no),
+]);
 const { site } = magaza;
 /* Ürünler açıkça: fotoğraf, ad, model (SKU) ve setin içindeki her ürün */
 const urunBilgi = (id: string) => magaza.urunler.find((u) => u.id === id);
@@ -55,7 +58,6 @@ const parcaAdi = (id: string) => { const u = urunBilgi(id); return u ? `${u.mark
    "Ürünler" satırı gösterilmezse indirim iki kez düşülmüş gibi görünür. */
 const listeToplami = s.urunlerToplami + s.kampanyaIndirimi;
 const indirimVar = s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
-const finansKaydi = s.paytr?.test ? undefined : await finansOku();
 const belgeler = finansKaydi ? finansKaydi.belgeler.filter((b) => b.siparisNo === no) : [];
 const kesilenFatura = finansKaydi?.faturalar.find((x) => x.kanal === 'web' && x.kayit === no && !x.iptal);
 const sonraki = siradakiDurum(s);
@@ -68,7 +70,6 @@ const wa = /^90\d{10}$/.test(musteriTel) ? 'https://wa.me/' + musteriTel + '?tex
 const takipMesaj = kargo && wa && wa + encodeURIComponent('Merhaba ' + s.musteri.ad + ', ' + s.no + ' numaralı siparişiniz ' + kargo.firma + ' ile gönderildi. Takip no: ' + s.kargoTakip + ' · ' + kargo.url);
 const musteriSayfasi = '/siparis/' + s.no + '?t=' + s.token;
 const epostaAcik = epostaBagli();
-const epostalar = await epostaKayitlari(s.no);
 const yenidenSecenekler = [
   ...(s.musteri.eposta ? ['alindi', 'sozlesmeler'] : []),
   'magaza',

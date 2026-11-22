@@ -13,9 +13,11 @@ import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import { urunGtin } from '../../../lib/urunKimlik';
 
 const basari = Astro.url.searchParams.get('ok');
-const filtre = Astro.url.searchParams.get('filtre') ?? 'tumu';
-const soru = Astro.url.searchParams.get('q') ?? '';
-const sira = Astro.url.searchParams.get('sira') ?? 'katalog';
+/* Adres boşsa son seçilen filtre ve sıralama çerezden okunur (sayfa ikinci kez açılmaz) */
+const p = new URLSearchParams(!Astro.url.search ? (Astro.cookies.get('y-filtre-urun')?.value ?? '').slice(0, 300) : Astro.url.search);
+const filtre = p.get('filtre') ?? 'tumu';
+const soru = p.get('q') ?? '';
+const sira = p.get('sira') ?? 'katalog';
 let duzenle = Astro.url.searchParams.get('duzenle');
 let hatalar: string[] = [];
 let form: FormData | undefined;

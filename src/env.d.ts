@@ -33,5 +33,7 @@ declare namespace App {
     yonetici: boolean;
     vitrinOnizleme?: boolean;
     musteriGorunumu: boolean;
+    /** Panelde yan menü sipariş sayısı (ara katmanda başlatılır, düzen bileşeninde beklenir) */
+    panelRozet?: Promise<import('./lib/panelRozet').PanelRozeti>;
   }
 }

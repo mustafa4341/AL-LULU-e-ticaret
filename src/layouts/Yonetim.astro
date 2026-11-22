@@ -4,9 +4,8 @@ import '../styles/yonetim.css';
 import '../styles/panel.css';
 import Ikonlar from '../components/Ikonlar.astro';
 import Ikon from '../components/Ikon.astro';
-import { siparisleriOku, supabaseDurumu } from '../lib/depo';
-import { gonderilecek } from '../lib/yonetimRapor';
-import { pazaryeriBekleyenSayisi } from '../lib/pazaryeriDepo';
+import { supabaseDurumu } from '../lib/depo';
+import { panelRozetiOku } from '../lib/panelRozet';
 import type { IkonAdi } from '../lib/sema';
 
 interface Props {
@@ -20,11 +19,8 @@ interface Props {
 const { baslik, altBaslik, aktif, basari, hatalar = [] } = Astro.props;
 const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 const baglanti = supabaseDurumu();
-/* Yan menüde Siparişler'in yanında hazırlanacak/kargolanacak sipariş sayısı */
-const [bekleyenWeb, bekleyenPazar] = await Promise.all([
-  siparisleriOku().then((l) => l.filter((x) => !x.paytr?.test && gonderilecek(x)).length).catch(() => 0),
-  pazaryeriBekleyenSayisi().catch(() => 0),
-]);
+/* Yan menüde Siparişler'in yanında hazırlanacak/kargolanacak sipariş sayısı (ara katman okumayı önceden başlatır) */
+const { web: bekleyenWeb, pazar: bekleyenPazar } = await (Astro.locals.panelRozet ?? panelRozetiOku());
 const bekleyen = bekleyenWeb + bekleyenPazar;
 const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
   ['ozet', 'Genel Bakış', '/yonetim', 'ev'],

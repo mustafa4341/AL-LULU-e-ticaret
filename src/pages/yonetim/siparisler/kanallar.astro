@@ -14,14 +14,18 @@ const ok = Astro.url.searchParams.get('ok');
 const duzenlenenKanal = Astro.url.searchParams.get('eslestirme');
 const bagli = supabaseBagliMi();
 let ayar = bosAyarlar();
-let depoHazir = bagli && await pazaryeriHazirMi();
-try {
-  ayar = await envanterAyarlariOku();
-} catch {
+/* Üç okuma aynı anda: ayar satırı (iki çağrı tek isteği paylaşır) ve mağaza */
+const [hazirSonuc, ayarSonuc, magaza] = await Promise.all([
+  bagli ? pazaryeriHazirMi() : Promise.resolve(false),
+  envanterAyarlariOku().then((a) => ({ a }), () => undefined),
+  magazaOku(),
+]);
+let depoHazir = hazirSonuc;
+if (ayarSonuc) ayar = ayarSonuc.a;
+else {
   depoHazir = false;
   hatalar.push('Kanal ayarları okunamadı. Bağlantıyı kontrol edip sayfayı yenileyin.');
 }
-const magaza = await magazaOku();
 const urunler = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
 const baglantiAdi = { kapali: 'Bağlı değil', eksik: 'API ayarları eksik', test: 'Test bağlantısı', canli: 'Canlı bağlantı' };
 const panel = { trendyol: 'https://partner.trendyol.com/', hepsiburada: 'https://merchant.hepsiburada.com/' };

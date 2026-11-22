@@ -8,6 +8,7 @@ import {
   type BirlesimOzeti, type EnvanterAyarlari, type GelenSiparis, type Kanal, type KanalAyari, type PazaryeriSiparisi,
 } from './pazaryeri';
 import { MagazaSema, type Magaza } from './sema';
+import { arkaPlanda } from './arkaPlan';
 import type { Database, Json } from './supabase.types';
 
 type Depo = NonNullable<ReturnType<typeof supabaseIstemci>>;
@@ -37,10 +38,18 @@ function yazmaDeposu(): Depo {
   return sb;
 }
 
-async function ayarKaydiOku(sb: Depo): Promise<AyarKaydi> {
-  const { data, error } = await sb.from('envanter_ayarlari').select('veri, surum').eq('id', 1).single();
-  if (error || !data) depoHatasi('Ayarlar okuma', error ?? undefined);
-  return { ayar: EnvanterAyarSema.parse(data.veri), surum: data.surum };
+/* Aynı anda gelen ayar okumaları tek isteği paylaşır (Genel Bakış'ta kanal durumu, sipariş listesi ve
+ * stok eşiği aynı satırı okur). Önbellek yok: her yeni istek güncel satırı görür. */
+let ayarOkunan: Promise<AyarKaydi> | undefined;
+function ayarKaydiOku(sb: Depo): Promise<AyarKaydi> {
+  if (ayarOkunan) return ayarOkunan;
+  const is: Promise<AyarKaydi> = (async () => {
+    const { data, error } = await sb.from('envanter_ayarlari').select('veri, surum').eq('id', 1).single();
+    if (error || !data) depoHatasi('Ayarlar okuma', error ?? undefined);
+    return { ayar: EnvanterAyarSema.parse(data.veri), surum: data.surum };
+  })().finally(() => { if (ayarOkunan === is) ayarOkunan = undefined; });
+  ayarOkunan = is;
+  return is;
 }
 
 /** Menü rozeti için: pazaryerinde hazırlanacak/hazırlanan paket sayısı (tablo okunamazsa 0) */
@@ -129,13 +138,15 @@ async function siparisSayfalari(sb: Depo): Promise<PazaryeriSiparisi[]> {
 export async function pazaryeriSiparisleriOku(): Promise<PazaryeriSiparisi[]> {
   const sb = supabaseIstemci();
   if (!sb) return [];
-  try {
-    await ayarKaydiOku(sb); // Gizli anahtara izin verilmezse RLS boş bir liste döndürür.
-  } catch (e) {
-    if (e instanceof PazaryeriKurulmadi) return []; // Henüz kurulmadı: listede yalnız web siparişleri
-    throw e;
+  // Ayar satırı ve sipariş listesi aynı anda istenir (sırayla beklemek sayfayı bir tur daha yavaşlatıyordu).
+  // Ayar okuması izin denetimidir: gizli anahtara izin verilmezse RLS boş bir liste döndürür.
+  const [ayar, liste] = await Promise.allSettled([ayarKaydiOku(sb), siparisSayfalari(sb)]);
+  if (ayar.status === 'rejected') {
+    if (ayar.reason instanceof PazaryeriKurulmadi) return []; // Henüz kurulmadı: listede yalnız web siparişleri
+    throw ayar.reason;
   }
-  return (await siparisSayfalari(sb)).sort((a, b) => b.tarih.localeCompare(a.tarih) || a.id.localeCompare(b.id));
+  if (liste.status === 'rejected') throw liste.reason;
+  return liste.value.sort((a, b) => b.tarih.localeCompare(a.tarih) || a.id.localeCompare(b.id));
 }
 
 async function siparisOku(sb: Depo, id: string): Promise<PazaryeriSiparisi | undefined> {
@@ -190,7 +201,7 @@ async function pazaryeriKaydet(
     const sonuc = MagazaSema.safeParse(data);
     const kaydedilen = sonuc.success ? sonuc.data : yeniMagaza;
     await magazaYansit(kaydedilen);
-    await stokSonrasi(magaza, kaydedilen);
+    arkaPlanda(stokSonrasi(magaza, kaydedilen), 'stok uyarısı');
   }
 }
 
