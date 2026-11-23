@@ -5,7 +5,7 @@
  *  1. Yeni Trendyol/Hepsiburada siparişi → mağazaya e-posta (aynı sipariş için bir kez)
  *  2. (isteğe bağlı) Yeni Trendyol paketi → "toplanıyor" bildirimi
  *  3. Kaydedilmiş ama iletilememiş faturalar → Trendyol'a yükleme / müşteriye e-posta yeniden denenir
- *  4. (isteğe bağlı) Site fiyatı değişen ürünlerin Trendyol fiyatı gönderilir
+ *  4. Trendyol/Hepsiburada fiyatı sitedeki son fiyattan farklıysa sitedeki fiyat gönderilir (kanalFiyat.ts)
  *  5. Günde bir: Trendyol hakedişi (son 15 gün), ilan onay durumları
  */
 import { siparisleriOku } from './depo';
@@ -18,7 +18,8 @@ import { PazaryeriApiHatasi, pazaryeriApiDurumu } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriSiparisiOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
 import { trendyolEkstreCek, tyPaketDurumu } from './trendyolApi';
 import { trendyolEkstreSatirlari } from './trendyolFinans';
-import { ilanDurumlariniYenile, trendyolFiyatlariGonder } from './trendyolIlanIslem';
+import { ilanDurumlariniYenile } from './trendyolIlanIslem';
+import { fiyatOzeti, pazaryeriFiyatlariEsitle } from './kanalFiyat';
 
 const SITE = 'https://alluluhome.com';
 const mesaj = (e: unknown) => e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'bilinmeyen hata';
@@ -73,12 +74,14 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
     } catch (e) { ozet.push(`Fatura iletimi: ${mesaj(e)}`); }
   }
 
-  // 4. Fiyat
-  if (ot.otoFiyat && tyBagli && kaldi() > 5000) {
+  // 4. Fiyat: Trendyol/Hepsiburada fiyatı = sitedeki son fiyat. Aynı uyarı her 5 dakikada bir tekrar yazılmaz.
+  if (ot.otoFiyat && kaldi() > 5000) {
     try {
-      const r = await trendyolFiyatlariGonder();
-      if (r.gonderilen) ozet.push(`${r.gonderilen} ürünün Trendyol fiyatı güncellendi`);
-    } catch (e) { ozet.push(`Fiyat gönderimi: ${mesaj(e)}`); }
+      const sonuclar = await pazaryeriFiyatlariEsitle({ otomatik: true });
+      for (const satir of fiyatOzeti(sonuclar)) {
+        if (!(ot.sonOzet ?? []).some((x) => x.endsWith(satir))) ozet.push(satir);
+      }
+    } catch (e) { ozet.push(`Fiyat eşitleme: ${mesaj(e)}`); }
   }
 
   // 5. Günlük işler

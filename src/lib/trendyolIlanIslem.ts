@@ -2,13 +2,10 @@
  * Trendyol'a gönderilen ilanların durum takibi ve fiyat gönderimi.
  * Onaylanan ilan, aynı barkodla "Satış kanalları › Ürün eşleştirmeleri"ne otomatik bağlanır; stok eşitlemesi oradan devam eder.
  */
-import { magazaOku } from './depo';
-import { DogrulamaHatasi } from './depo';
 import type { KanalIlanTaslagi } from './pazaryeri';
 import { PazaryeriApiHatasi } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
-import { tyFiyatGonder, tyKuyrukSonucu, tyOnayliUrun, tyOnaysizUrun } from './trendyolApi';
-import { ilanFiyati } from './trendyolIlan';
+import { tyKuyrukSonucu, tyOnayliUrun, tyOnaysizUrun } from './trendyolApi';
 
 const BEKLEYEN = new Set<KanalIlanTaslagi['durum']>(['gonderildi', 'onay-bekliyor']);
 export const ilanBekliyor = (t?: KanalIlanTaslagi) => !!t && BEKLEYEN.has(t.durum);
@@ -72,29 +69,4 @@ export async function ilanDurumlariniYenile(urunIdler?: string[], enFazla = 6): 
   return notlar;
 }
 
-/** Eşleştirilmiş Trendyol ilanlarına kanal fiyatını gönderir (liste fiyatı = satış fiyatı). */
-export async function trendyolFiyatlariGonder(): Promise<{ gonderilen: number; atlanan: number }> {
-  const [ayar, magaza] = await Promise.all([envanterAyarlariOku(), magazaOku(true)]);
-  const k = ayar.kanallar.trendyol;
-  const kalemler: { urunId: string; barcode: string; salePrice: number; listPrice: number }[] = [];
-  let atlanan = 0;
-  for (const [urunId, e] of Object.entries(k.urunler)) {
-    const u = magaza.urunler.find((x) => x.id === urunId);
-    if (!u || !e.kod || !e.satista) { atlanan++; continue; }
-    const fiyat = ilanFiyati(u, k.ilanlar[urunId], k);
-    if (!(fiyat > 0) || k.ilanlar[urunId]?.sonFiyat === fiyat) { atlanan++; continue; }
-    kalemler.push({ urunId, barcode: e.kod, salePrice: fiyat, listPrice: fiyat });
-  }
-  if (!kalemler.length) return { gonderilen: 0, atlanan };
-  if (kalemler.length > 1000) throw new DogrulamaHatasi(['Bir seferde en fazla 1.000 fiyat gönderilebilir.']);
-  const batchId = await tyFiyatGonder(kalemler.map(({ urunId: _u, ...x }) => x));
-  const tarih = new Date().toISOString();
-  await envanterAyarlariGuncelle((a) => {
-    const kanal = a.kanallar.trendyol;
-    for (const x of kalemler) {
-      const t = kanal.ilanlar[x.urunId] ?? { durum: 'onaylandi', barkod: x.barcode, stokKodu: '', anaKod: '', baslik: '', ozellikler: [], kdv: 20, mesajlar: [] };
-      kanal.ilanlar[x.urunId] = { ...t, sonFiyat: x.salePrice, sonFiyatTarih: tarih, fiyatBatchId: batchId };
-    }
-  });
-  return { gonderilen: kalemler.length, atlanan };
-}
+// Fiyat gönderimi kanalFiyat.ts'e taşındı (Trendyol + Hepsiburada, fiyat = sitedeki son fiyat).

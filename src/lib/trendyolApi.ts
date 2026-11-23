@@ -172,15 +172,6 @@ export async function tyOnayliUrun(barkod: string): Promise<{ stok?: number; fiy
   return undefined;
 }
 
-/** updatePriceAndInventory — yalnız fiyat (adet gönderilmez; stok eşitlemesi ayrıca çalışır). */
-export async function tyFiyatGonder(kalemler: { barcode: string; salePrice: number; listPrice: number }[]): Promise<string> {
-  if (!kalemler.length || kalemler.length > 1000) throw new PazaryeriApiHatasi('Bir seferde 1–1000 fiyat gönderilebilir.');
-  const y = nesne(await trendyolCagir((id) => `/inventory/sellers/${id}/products/price-and-inventory`, 'Trendyol fiyat gönderimi', sinyal(), { json: { items: kalemler } }));
-  const kimlik = yazi(y.batchRequestId);
-  if (!kimlik) throw new PazaryeriApiHatasi('Trendyol fiyat gönderimi takip numarası döndürmedi.');
-  return kimlik;
-}
-
 /* ---------------- Sipariş paketi: toplama, fatura ---------------- */
 
 /** updatePackage — önce Picking, sonra Invoiced (fatura numarasıyla). */
@@ -328,9 +319,51 @@ export async function tySoruCevapla(soruId: number, metin: string) {
   await trendyolCagir((id) => `/qna/sellers/${id}/questions/${soruId}/answers`, 'Trendyol soru cevabı', sinyal(), { json: { text: t } });
 }
 
+export type TyEtiketBilgisi = {
+  siparisNo: string; paketNo: string; kargoFirma?: string; kargoTakip?: string; gondericiNo?: string; durum?: string;
+  alici: { ad?: string; adres?: string; mahalle?: string; ilce?: string; il?: string; postaKodu?: string };
+  kalemler: { ad: string; adet: number; barkod?: string }[];
+};
+
+/**
+ * Kargo etiketi için paketin güncel hali (getShipmentPackages ?orderNumber=). Teslimat adresi sitede saklanmaz,
+ * etiket her açıldığında Trendyol'dan okunur (kişisel veri yalnız gerektiği an işlenir).
+ */
+export async function tyEtiketBilgisi(siparisNo: string, paketNo: string): Promise<TyEtiketBilgisi> {
+  if (!/^\d{1,20}$/.test(siparisNo) || !/^\d{1,20}$/.test(paketNo)) throw new PazaryeriApiHatasi('Sipariş veya paket numarası geçersiz.');
+  const y = nesne(await trendyolCagir((id) => `/order/sellers/${id}/orders`, 'Trendyol paket bilgisi', sinyal(), { sorgu: { orderNumber: siparisNo, size: 50 } }));
+  const p = dizi(y.content).find((x) => yazi(x.shipmentPackageId) === paketNo || yazi(x.id) === paketNo);
+  if (!p) throw new PazaryeriApiHatasi('Paket Trendyol’da bulunamadı. Bölünmüş ya da iptal edilmiş olabilir; sayfayı yenileyin.');
+  const a = nesne(p.shipmentAddress);
+  return {
+    siparisNo, paketNo, kargoFirma: yazi(p.cargoProviderName), kargoTakip: yazi(p.cargoTrackingNumber), gondericiNo: yazi(p.cargoSenderNumber),
+    durum: yazi(p.shipmentPackageStatus) ?? yazi(p.status),
+    alici: {
+      ad: yazi(a.fullName) ?? ([yazi(a.firstName), yazi(a.lastName)].filter(Boolean).join(' ') || undefined),
+      adres: yazi(a.fullAddress) ?? ([yazi(a.address1), yazi(a.address2)].filter(Boolean).join(' ') || undefined),
+      mahalle: yazi(a.neighborhood), ilce: yazi(a.district), il: yazi(a.city), postaKodu: yazi(a.postalCode),
+    },
+    kalemler: dizi(p.lines).map((l) => ({ ad: yazi(l.productName) ?? 'Ürün', adet: tam(l.quantity) ?? 1, barkod: yazi(l.barcode) })),
+  };
+}
+
+/**
+ * Ortak etiket servisi yalnız Trendyol Express (TEX) ve Aras Kargo "Trendyol öder" gönderilerinde çalışır
+ * (createCommonLabel belgesi, Sipariş Süreci Akışı 20.07.2026). Diğer firmalarda (DHL eCommerce, Yurtiçi, Sürat,
+ * PTT...) etiketi kargo firması verir; satıcı panelinden yazdırılır. Trendyol adları: "Trendyol Express Marketplace",
+ * "Aras Kargo Marketplace", "DHL eCommerce Marketplace".
+ */
+export function tyOrtakEtiketVar(kargoFirma: string | undefined): boolean {
+  const ad = (kargoFirma ?? '').toLocaleLowerCase('tr').replace(/[^a-z0-9ıüşöçğ]/g, '');
+  return ad.includes('trendyolexpress') || ad.startsWith('tex') || ad.includes('aras');
+}
+
 /** Ortak etiket (TEX / Aras, "Trendyol öder"): önce talep, sonra ZPL etiket(ler). Talep zaten yapılmışsa doğrudan alınır. */
-export async function tyKargoEtiketi(takipNo: string): Promise<string[]> {
+export async function tyKargoEtiketi(takipNo: string, kargoFirma?: string): Promise<string[]> {
   if (!/^\d{5,30}$/.test(takipNo)) throw new PazaryeriApiHatasi('Kargo takip numarası geçersiz.');
+  if (kargoFirma !== undefined && !tyOrtakEtiketVar(kargoFirma)) {
+    throw new PazaryeriApiHatasi(`Bu paket ${kargoFirma} ile gidiyor. Trendyol hazır etiketi yalnız Trendyol Express ve Aras Kargo gönderilerinde verir; bu paketin etiketini Trendyol satıcı panelinden yazdırın.`);
+  }
   const yol = (id: string) => `/sellers/${id}/common-label/${takipNo}`;
   const al = async () => dizi(nesne(await trendyolCagir(yol, 'Trendyol kargo etiketi', sinyal())).data).map((x) => yazi(x.label)).filter((x): x is string => !!x);
   try {

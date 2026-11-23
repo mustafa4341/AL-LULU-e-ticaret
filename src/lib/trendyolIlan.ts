@@ -2,7 +2,7 @@
  * Sitedeki ürün kartı → Trendyol ürün isteği (createProducts V2).
  * Ürünün sitedeki bilgileri tek kaynaktır; panelde yalnız Trendyol'a özel alanlar (kategori, marka, özellikler, desi) tutulur.
  */
-import { kanalFiyati, type KanalAyari, type KanalIlanTaslagi } from './pazaryeri';
+import { kanalSatisFiyati, type KanalAyari, type KanalIlanTaslagi } from './pazaryeri';
 import type { Urun } from './sema';
 import type { TyOzellik, TyUrunIstegi } from './trendyolApi';
 import { markaliUrunAdi, urunGtin } from './urunKimlik';
@@ -45,7 +45,8 @@ export function ilanGorselleri(u: Urun): string[] {
   });
 }
 
-export const ilanFiyati = (u: Urun, t: KanalIlanTaslagi | undefined, k: KanalAyari) => t?.fiyat ?? kanalFiyati(u.fiyat, k);
+/** Trendyol fiyatı her zaman sitedeki son fiyattır (kampanya ve sepette indirim dahil); ürüne özel veya kurallı fiyat yok. */
+export const ilanFiyati = (u: Urun) => kanalSatisFiyati(u);
 
 /**
  * Sitedeki teknik özelliklerden Trendyol özelliklerine öneri: etiket adı eşleşirse değer listesinde aynı adı arar,
@@ -74,7 +75,7 @@ export function ozellikOnerileri(u: Urun, ozellikler: TyOzellik[]): KanalIlanTas
 export type IlanHazirlik = { istek?: TyUrunIstegi; eksikler: string[] };
 
 export function ilanIstegi(
-  u: Urun, t: KanalIlanTaslagi, k: KanalAyari, stok: number, ozellikler: TyOzellik[] | undefined,
+  u: Urun, t: KanalIlanTaslagi, _k: KanalAyari, stok: number, ozellikler: TyOzellik[] | undefined,
   adres: { sevkiyat?: number; iade?: number },
 ): IlanHazirlik {
   const eksikler: string[] = [];
@@ -93,7 +94,7 @@ export function ilanIstegi(
     const g = t.ozellikler.find((x) => x.attributeId === o.id);
     if (!g || (!g.attributeValueIds?.length && !g.attributeValue)) eksikler.push(`“${o.ad}” özelliği`);
   }
-  const fiyat = ilanFiyati(u, t, k);
+  const fiyat = ilanFiyati(u);
   if (!(fiyat > 0)) eksikler.push('satış fiyatı');
   if (eksikler.length) return { eksikler };
   return {
@@ -102,8 +103,8 @@ export function ilanIstegi(
       barcode: t.barkod, title: t.baslik, productMainId: t.anaKod, brandId: t.markaId!, categoryId: t.kategoriId!,
       quantity: Math.max(0, Math.min(20_000, stok)), stockCode: t.stokKodu, dimensionalWeight: t.desi!,
       description: ilanAciklamasi(u),
-      // Üstü çizili fiyat yalnız gerçek indirimde gösterilebilir (Ticari Reklam ve Haksız Ticari Uygulamalar Yön. m.14):
-      // liste fiyatı satış fiyatıyla aynı gönderilir. Kampanya Trendyol'un kendi indirim araçlarıyla yapılmalı.
+      // Üstü çizili fiyat her kanalın kendi önceki fiyatına dayanmalı (Ticari Reklam Yön. m.14/5):
+      // liste fiyatı satış fiyatıyla aynı gönderilir; sitedeki indirim düşük satış fiyatı olarak yansır.
       listPrice: fiyat, salePrice: fiyat, vatRate: t.kdv,
       images: gorseller.map((url) => ({ url })),
       attributes: t.ozellikler

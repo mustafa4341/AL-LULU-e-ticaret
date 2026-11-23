@@ -10,7 +10,7 @@ import { urunGtin } from '../../../../lib/urunKimlik';
 import { yTarih } from '../../../../lib/yonetimRapor';
 import BilgiKutusu from '../../../../components/yonetim/BilgiKutusu.astro';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
-import { tyFaturaLinki, tyKargoEtiketi, tyPaketDurumu } from '../../../../lib/trendyolApi';
+import { tyFaturaLinki, tyKargoEtiketi, tyOrtakEtiketVar, tyPaketDurumu } from '../../../../lib/trendyolApi';
 
 const id = Astro.params.id ?? '';
 const siparisler = '/yonetim/siparisler';
@@ -46,7 +46,7 @@ if (kayit && Astro.request.method === 'POST') {
           mesaj = 'Trendyol’a “faturalandı” bildirildi.';
         } else if (tur === 'ty-etiket') {
           if (!kayit.kargoTakip) throw new DogrulamaHatasi(['Kargo takip numarası henüz oluşmadı. Önce “Toplamaya başla”ya basın.']);
-          const etiketler = await tyKargoEtiketi(kayit.kargoTakip);
+          const etiketler = await tyKargoEtiketi(kayit.kargoTakip, kayit.kargoFirma ?? '');
           return new Response(etiketler.join(String.fromCharCode(10)), { headers: {
             'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
             'Content-Disposition': `attachment; filename="trendyol-etiket-${kayit.kargoTakip}.zpl"`,
@@ -158,10 +158,13 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
           <button class="btn btn--sepet" type="submit" name="eylem" value="ty-toplama">Toplamaya başla</button>
           <small class="muted">Trendyol’a “sipariş işleme alındı” bildirilir.</small>
         </form>}
-        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && <form method="post" data-indirme>
+        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && (tyOrtakEtiketVar(s.kargoFirma) ? <form method="post" data-indirme>
           <button class="btn btn--cizgi" type="submit" name="eylem" value="ty-etiket">Kargo etiketini indir (ZPL)</button>
-          <small class="muted">Termal etiket yazıcısı (Zebra vb.) içindir; Trendyol Express ve Aras “Trendyol öder” gönderilerinde çalışır. Normal yazıcıda etiketi Trendyol satıcı panelinden yazdırın.</small>
-        </form>}
+          <small class="muted">Termal etiket yazıcısı (Zebra vb.) içindir. Normal yazıcıda etiketi Trendyol satıcı panelinden yazdırın.</small>
+        </form> : <div class="ty-etiket">
+          <a class="btn btn--sepet" href={Astro.url.pathname + '/etiket'} target="_blank" rel="noopener">Kargo etiketini yazdır</a>
+          <small class="muted">{s.kargoFirma || 'Kargo'} · takip no {s.kargoTakip}. Barkodlu etiket açılır; normal yazıcıda A4’e ya da 10×10 cm etiket yazıcısına basılır. Paketin üstüne yapıştırın, kargo görevlisi barkodu okutur.</small>
+        </div>)}
         <p><a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('trendyol:' + s.id) + '#secili'}>Fatura bilgileri ve faturayı yükle</a>
           <small class="muted"> GİB portalına yazılacak bilgiler hazır; kestiğiniz PDF oradan Trendyol’a yüklenir.</small></p>
         <details>
@@ -262,7 +265,7 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
   .siparis-bilgileri dd { margin: 0; font-size: .94rem; font-weight: 600; overflow-wrap: anywhere; }
   .siparis-bilgileri .y-icon-button { height: auto; margin-left: 4px; padding: 3px 5px; font-size: .8rem; }
   .ty-islemler { display: grid; gap: 14px; }
-  .ty-islemler form { display: grid; gap: 8px; justify-items: start; }
+  .ty-islemler form, .ty-etiket { display: grid; gap: 8px; justify-items: start; }
   .ty-islemler details > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
   .kalem-durumlari { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
   .kalem-durumlari .y-chip { white-space: normal; }

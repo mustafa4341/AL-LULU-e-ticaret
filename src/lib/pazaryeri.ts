@@ -15,6 +15,7 @@
  * Aynı paket tekrar gelirse güncellenir; stok durumu kalem kalem saklandığı için iki kez düşülmez.
  */
 import { z } from 'astro/zod';
+import { gecerliSepetteIndirim, sepetteFiyat } from './fiyat';
 import type { Magaza, Urun } from './sema';
 import { urunGtin } from './urunKimlik';
 
@@ -304,8 +305,11 @@ const KanalAyarSema = z.object({
     bildirilen: z.number().int().min(0).optional(),
     sonHedef: z.number().int().min(0).optional(),
     tarih: z.string().optional(),
+    /** Kanala en son gönderilen satış fiyatı (TL) ve zamanı — aynı fiyat 30 dk içinde yeniden gönderilmez */
+    fiyat: z.number().nonnegative().optional(),
+    fiyatTarih: z.string().optional(),
   })).default({}),
-  /** Kanal fiyatı = site fiyatı × (1 + yuzde/100) + ekTL, sonra isteğe bağlı ,90'a yuvarlama */
+  /** ESKİ (23.11.2026'dan beri kullanılmıyor): kanal fiyatı artık her zaman sitedeki fiyattır, bkz. kanalSatisFiyati. */
   fiyatKurali: z.object({
     yuzde: z.number().min(-50).max(300).default(0),
     ekTL: z.number().min(0).max(100_000).default(0),
@@ -317,15 +321,15 @@ const KanalAyarSema = z.object({
 export type KanalAyari = z.infer<typeof KanalAyarSema>;
 export type KanalIlanTaslagi = z.infer<typeof IlanSema>;
 
-/** Kanal fiyat kuralını uygular (TL, 2 hane). Satış fiyatı hiçbir zaman sitedeki fiyatın altına inmez, kural negatif değilse. */
-export function kanalFiyati(siteFiyati: number, k: Pick<KanalAyari, 'fiyatKurali'>): number {
-  const r = k.fiyatKurali;
-  let f = siteFiyati * (1 + r.yuzde / 100) + r.ekTL;
-  if (r.yuvarla) {
-    const yuvarlak = Math.floor(f) + 0.9;
-    f = yuvarlak + 1e-9 < f ? yuvarlak + 1 : yuvarlak;
-  }
-  return Math.round(f * 100) / 100;
+/**
+ * Pazaryeri satış fiyatı = müşterinin sitede ödediği son birim fiyat (TL): fiyat düşüşü (kampanya) ve sepette indirim
+ * dahil; fırsat süresi bitince sepette indirim kendiliğinden düşer. Trendyol ve Hepsiburada her zaman bununla aynı tutulur.
+ * Üstü çizili (liste) fiyat gönderilmez: indirim gösterimi her kanalın KENDİ önceki fiyatına dayanmalı,
+ * başka kanaldaki fiyat esas alınamaz (Ticari Reklam Yön. m.14/5, RG 01.07.2026/33297).
+ */
+export function kanalSatisFiyati(u: Pick<Urun, 'fiyat' | 'sepetteIndirim' | 'firsat'>, simdi = Date.now()): number {
+  const yuzde = gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }, simdi);
+  return Math.round(sepetteFiyat(u.fiyat, yuzde) * 100) / 100;
 }
 
 export const EnvanterAyarSema = z.object({
@@ -345,8 +349,8 @@ export const EnvanterAyarSema = z.object({
     faturaYenidenDene: z.boolean().default(true),
     /** Günde bir: Trendyol hakedişini çek, ilan onaylarını yenile */
     gunlukIsler: z.boolean().default(true),
-    /** Site fiyatı değişince Trendyol fiyatını kendiliğinden gönder */
-    otoFiyat: z.boolean().default(false),
+    /** Trendyol/Hepsiburada fiyatını sitedeki fiyatla kendiliğinden aynı tut */
+    otoFiyat: z.boolean().default(true),
     sonGunluk: z.string().optional(),
     sonCalisma: z.string().optional(),
     /** Son çalışmanın kısa özeti (panelde gösterilir) */
@@ -828,7 +832,10 @@ export function birlestir(
       gecmis: eski?.gecmis ?? [], surum: eski?.surum ?? 0, fatura: g.fatura ?? eski?.fatura,
     });
     if (!eski || eski.durum !== durum) {
-      kayit.gecmis.push({ tarih: simdi, durum, not: eski ? `${PY_DURUM_ADLARI[eski.durum]} → ${PY_DURUM_ADLARI[durum]}` : (kaynak === 'api' ? 'API ile alındı' : 'Excel ile yüklendi') });
+      // Tanınmayan durumda kanalın ham durum adı geçmişe yazılır: eşleme tablosu buna göre genişletilir.
+      const hamlar = durum === 'bilinmiyor' ? [...new Set([paketHam, ...g.kalemler.map((k) => k.hamDurum)].filter(Boolean))].join(' / ').slice(0, 120) : '';
+      const not = eski ? `${PY_DURUM_ADLARI[eski.durum]} → ${PY_DURUM_ADLARI[durum]}` : (kaynak === 'api' ? 'API ile alındı' : 'Excel ile yüklendi');
+      kayit.gecmis.push({ tarih: simdi, durum, not: hamlar ? `${not} (${KANALLAR[g.kanal]} durumu: ${hamlar})` : not });
       if (eski) ozet.durumDegisen.push({ id, eski: eski.durum, yeni: durum });
     }
     if (stokDisi && !eski) ozet.stokDisi++;

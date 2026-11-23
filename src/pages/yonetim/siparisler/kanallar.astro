@@ -1,8 +1,9 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, supabaseBagliMi, webAyrilanAdetleri } from '../../../lib/depo';
+import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle, type IlanEslesmesi } from '../../../lib/kanalFiyat';
 import { KANALLAR, KANAL_LISTESI, bosAyarlar, kanalHedefStok, kanalMi, tarihOku } from '../../../lib/pazaryeri';
-import { otomatikStokYazmaAcik, pazaryeriApiDurumu, pazaryeriOrtam } from '../../../lib/pazaryeriApi';
+import { PazaryeriApiHatasi, otomatikStokYazmaAcik, pazaryeriApiDurumu, pazaryeriOrtam } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
 import { pazaryeriSenkron } from '../../../lib/pazaryeriSenkron';
 import { urunGtin } from '../../../lib/urunKimlik';
@@ -45,6 +46,20 @@ if (Astro.request.method === 'POST' && depoHazir) {
         `${kanalMi(id) ? KANALLAR[id] : id} · ${[s.hata, s.stokHata].filter(Boolean).join(' ')}`).filter((s) => !s.endsWith(' · ')));
       if (r.durum === 'kapali') throw new DogrulamaHatasi(['Senkron için kanalın API ayarları ve stok başlangıcı gerekli.']);
       return Astro.redirect(yol + (r.durum === 'bekliyor' ? '?ok=bekliyor' : '?ok=senkron'), 303);
+    }
+    if (eylem === 'fiyat-esitle') {
+      const sonuclar = await pazaryeriFiyatlariEsitle();
+      const hata = sonuclar.filter((s) => s.hata).map((s) => `${KANALLAR[s.kanal]}: ${s.hata}`);
+      if (hata.length) throw new DogrulamaHatasi(hata);
+      const ozet = fiyatOzeti(sonuclar);
+      const ayni = sonuclar.reduce((t, s) => t + s.ayni + s.bekleyen, 0);
+      const metin = ozet.length ? ozet.join(' ') + ' Kanal birkaç dakika içinde uygular.'
+        : sonuclar.length ? `Fiyatlar siteyle aynı (${ayni} bağlı ilan).` : 'Fiyat eşitlemek için bağlı bir satış kanalı yok.';
+      return Astro.redirect(`${yol}?m=${encodeURIComponent(metin.slice(0, 900))}#fiyatlar`, 303);
+    }
+    if (eylem === 'ilan-bagla') {
+      const r = await trendyolIlanlariniEsle(true);
+      return Astro.redirect(`${yol}?ilanlar=1&m=${encodeURIComponent(r.baglanan ? `${r.baglanan} Trendyol ilanı sitedeki ürünüyle bağlandı. Stok ve fiyatı artık siteden gider.` : 'Bağlanacak yeni ilan bulunamadı.')}#ty-ilanlar`, 303);
     }
     const kanal = f.get('kanal');
     if (!kanalMi(kanal)) throw new DogrulamaHatasi(['Geçerli bir satış kanalı seçin.']);
@@ -97,9 +112,16 @@ if (Astro.request.method === 'POST' && depoHazir) {
     } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
     return Astro.redirect(`${yol}?ok=ayar#${kanal}`, 303);
   } catch (e) {
-    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : ['Kanal işlemi tamamlanamadı. Bağlantıyı kontrol edip tekrar deneyin.']));
+    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : e instanceof PazaryeriApiHatasi ? [e.message] : ['Kanal işlemi tamamlanamadı. Bağlantıyı kontrol edip tekrar deneyin.']));
     ayar = await envanterAyarlariOku().catch(() => ayar);
   }
+}
+/* Trendyol'daki tüm ilanlar ve sitedeki karşılıkları (yalnız istenince: ?ilanlar=1) */
+const tyHazir = ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+let ilanSatirlari: IlanEslesmesi[] | undefined;
+if (Astro.request.method === 'GET' && Astro.url.searchParams.has('ilanlar') && tyHazir && depoHazir) {
+  try { ilanSatirlari = (await trendyolIlanlariniEsle(false)).satirlar; }
+  catch (e) { hatalar.push(e instanceof PazaryeriApiHatasi ? e.message : 'Trendyol ilanları okunamadı. Biraz sonra tekrar deneyin.'); }
 }
 const [web, hareketler] = await Promise.all([
   siparisleriOku(true).catch(() => {
@@ -115,7 +137,13 @@ const ayrilan = web && webAyrilanAdetleri(web, Date.now(), magaza.paytrStokIslem
 const urunAdlari = new Map(urunler.map((u) => [u.id, u.kisaAd]));
 const yerelSaat = (t?: string) => t ? new Date(Date.parse(t) + 3 * 3600e3).toISOString().slice(0, 16) : '';
 const zaman = (t?: string) => t ? yTarih.format(new Date(t)) : 'Henüz yok';
-const basari = ok === 'senkron' ? 'Siparişler güncellendi.' : ok === 'bekliyor' ? 'Güncelleme zaten çalışıyor, birazdan tekrar bakın.' : ok === 'ayar' ? 'Kaydedildi.' : undefined;
+const basari = ok === 'senkron' ? 'Siparişler güncellendi.' : ok === 'bekliyor' ? 'Güncelleme zaten çalışıyor, birazdan tekrar bakın.' : ok === 'ayar' ? 'Kaydedildi.'
+  : Astro.url.searchParams.get('m')?.slice(0, 900) || undefined;
+const fiyatKanallari = KANAL_LISTESI.filter((kanal) => ['canli', 'test'].includes(pazaryeriApiDurumu(kanal)));
+const tlYaz = (n?: number) => n === undefined ? '—' : n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' TL';
+const ILAN_DURUMU: Record<IlanEslesmesi['durum'], [string, string]> = {
+  bagli: ['Bağlı', 'yesil'], yeni: ['Bağlanabilir', 'turuncu'], cakisma: ['Elle kontrol edin', 'kirmizi'], yok: ['Sitede karşılığı yok', 'gri'],
+};
 
 const API_YARDIM = {
   trendyol: 'Trendyol satıcı panelinde Hesap Bilgilerim → Entegrasyon Bilgileri bölümüne gidin. Satıcı ID, API Key ve API Secret değerlerini Vercel ortam ayarlarına girin.',
@@ -132,6 +160,7 @@ const simdi = Date.now();
 <Yonetim baslik="Satış kanalları" altBaslik="Trendyol ve Hepsiburada siparişlerini ve ortak stoğu yönetin." aktif="siparisler" {basari} {hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/siparisler">Siparişlere dön</a>
+    <a class="btn btn--cizgi" href="#fiyatlar">Fiyatlar</a>
     {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit">Şimdi eşitle</button></form>}
   </div>
 
@@ -165,7 +194,7 @@ const simdi = Date.now();
         <a class="btn btn--sepet" href="/yonetim/siparisler/trendyol-urunler">Trendyol’a ürün gönder</a>
         <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru">İadeler</a>
         <a class="btn btn--cizgi" href="/yonetim/finans/faturalar?kanal=trendyol">Faturalar</a>
-        <span class="y-help">{Object.values(k.ilanlar).filter((x) => x.durum === 'onaylandi').length} ilan API ile açıldı · fiyat kuralı {k.fiyatKurali.yuzde ? '%' + k.fiyatKurali.yuzde.toLocaleString('tr-TR') : 'site fiyatı'}</span>
+        <span class="y-help">{Object.values(k.ilanlar).filter((x) => x.durum === 'onaylandi').length} ilan API ile açıldı · fiyat = sitedeki fiyat</span>
       </p>}
       {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}
       {k.sonStokHata && <p class="y-uyari-satir" role="alert">Stok gönderilemedi: {k.sonStokHata}</p>}
@@ -238,6 +267,46 @@ const simdi = Date.now();
   })}
   </div>
 
+  <section class="y-kart kanal-fiyatlar" id="fiyatlar" aria-labelledby="fiyatlar-baslik">
+    <div class="y-kart__bas"><h2 id="fiyatlar-baslik">Fiyatlar ve Trendyol ilanları</h2></div>
+    <p class="y-help">Trendyol ve Hepsiburada fiyatı, müşterinin sitede ödediği son fiyatla (sepette indirim dahil) aynı tutulur. Sitede fiyatı değiştirdiğinizde 5 dakika içinde kanala gider. Bu yalnız sitedeki bir ürüne bağlı ilanlarda çalışır. Trendyol’da üstü çizili eski fiyat gösterilmez, çünkü yönetmelik indirimin her kanalın kendi önceki fiyatına dayanmasını istiyor.</p>
+    <div class="kanal-kisayol">
+      <form method="post"><button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-esitle" disabled={!depoHazir || !fiyatKanallari.length}>Fiyatları şimdi siteyle eşitle</button></form>
+      {tyHazir && <a class="btn btn--cizgi" href="?ilanlar=1#ty-ilanlar" data-astro-prefetch="false">Trendyol ilanlarımı getir</a>}
+      <span class="y-help">Otomatik fiyat eşitleme: <strong>{ayar.otomasyon.otoFiyat ? 'açık' : 'kapalı'}</strong> · <a class="y-link" href="/yonetim/isler">Bugünkü işler</a></span>
+    </div>
+    {ilanSatirlari && <div id="ty-ilanlar" class="kanal-ilanlar">
+      {(() => {
+        const say = (d: IlanEslesmesi['durum']) => ilanSatirlari!.filter((s) => s.durum === d).length;
+        const yeni = say('yeni');
+        return <>
+          <p class="y-help">Trendyol’da {ilanSatirlari!.length} ilan var: {say('bagli')} bağlı, {yeni} bağlanabilir, {say('cakisma')} elle kontrol edilecek, {say('yok')} ilanın sitede karşılığı bulunamadı. Eşleşme; barkodun ürünün teknik özelliklerindeki “Barkod” satırıyla ya da SKU ile aynı olmasına göre yapılır.</p>
+          {yeni > 0 && <form method="post" class="kanal-kurtarma">
+            <p class="y-uyari-satir uyari--turuncu" role="note">Bağlanan ilanların stoğu ve fiyatı bundan sonra siteden yönetilir: Trendyol stoğu depodaki satılabilir stok eksi güvenlik payı, fiyatı sitedeki fiyat olur.</p>
+            <button class="btn btn--sepet" type="submit" name="eylem" value="ilan-bagla" disabled={!depoHazir}>{yeni} ilanı sitedeki ürünüyle bağla</button>
+          </form>}
+          {say('yok') > 0 && <p class="y-help">Sitede karşılığı bulunamayan ilanı bağlamak için “Ürün eşleştirme” bölümünde ürünün satırına ilanın barkodunu yazın.</p>}
+        </>;
+      })()}
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+        <thead><tr><th>Trendyol ilanı</th><th class="y-sayi">Trendyol fiyatı</th><th class="y-sayi">Trendyol stok</th><th>Sitedeki ürün</th><th class="y-sayi">Site fiyatı</th><th>Durum</th></tr></thead>
+        <tbody>{ilanSatirlari.map((s) => {
+          const [ad, renk] = ILAN_DURUMU[s.durum];
+          const fark = s.siteFiyat !== undefined && s.kanalFiyat !== undefined && Math.abs(s.siteFiyat - s.kanalFiyat) >= 0.005;
+          return <tr>
+            <td data-etiket="Trendyol ilanı"><strong>{s.barkod}</strong>{s.stokKodu && s.stokKodu !== s.barkod && <small class="y-table-note">Stok kodu {s.stokKodu}</small>}</td>
+            <td data-etiket="Trendyol fiyatı" class="y-sayi y-nowrap">{tlYaz(s.kanalFiyat)}</td>
+            <td data-etiket="Trendyol stok" class="y-sayi">{s.kanalStok ?? '—'}</td>
+            <td data-etiket="Sitedeki ürün">{s.urunId ? <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(s.urunId)}>{s.urunAdi}</a> : '—'}</td>
+            <td data-etiket="Site fiyatı" class="y-sayi y-nowrap">{tlYaz(s.siteFiyat)}{fark && <small class="y-table-note">{s.durum === 'bagli' ? 'Eşitlenecek' : 'Bağlanınca eşitlenir'}</small>}</td>
+            <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + renk]}>{ad}</span>{s.not && <small class="y-table-note">{s.not}</small>}</td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+      {!ilanSatirlari.length && <p>Trendyol’da onaylı ilan bulunamadı.</p>}
+    </div>}
+  </section>
+
   <details class="y-kart kanal-bolum" id="hareketler">
     <summary>Son stok hareketleri</summary>
     {hareketler.length > 0 ? <ul class="kanal-hareketler">
@@ -288,6 +357,10 @@ const simdi = Date.now();
   .kanal-hareketler li { grid-template-columns: minmax(0, 9rem) minmax(0, 1.5fr) 4rem minmax(0, 1.5fr); padding-block: .6rem; border-top: 1px solid var(--y-border); }
   .kanal-kisayol { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 1rem; }
   .kanal-kurtarma { display: grid; justify-items: start; gap: .7rem; padding-bottom: 1rem; }
+  .kanal-fiyatlar { margin-bottom: 14px; scroll-margin-top: 5rem; }
+  .kanal-fiyatlar h2 { font-size: 1.2rem; }
+  .kanal-ilanlar { scroll-margin-top: 5rem; }
+  .uyari--turuncu { background: var(--y-turuncu-zemin); color: var(--y-turuncu); border-color: #e9d5a4; }
   @media (max-width: 700px) {
     .kanal-urun { grid-template-columns: minmax(0, 1fr) auto; }
     .kanal-urun .y-alan { grid-column: 1 / -1; }

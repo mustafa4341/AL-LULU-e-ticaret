@@ -237,7 +237,12 @@ export function kanalSiparisAl(kanal: Kanal, baslangic: number, bitis: number, s
 }
 
 export type StokKalemi = { urunId: string; kod: string; stok: number };
-type KanalIlani = { stok: number; hbSku?: string };
+/** Kanaldaki ilanın anlık hali. fiyat = satış fiyatı, listeFiyati = üstü çizili fiyat (TL, KDV dahil). */
+export type KanalIlani = { stok: number; hbSku?: string; fiyat?: number; listeFiyati?: number };
+const tutar = (v: unknown) => {
+  const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v.replace(',', '.')) : NaN;
+  return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
+};
 
 export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: AbortSignal): Promise<Map<string, KanalIlani>> {
   const a = baglanti(kanal);
@@ -252,7 +257,11 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
         for (const varyant of liste(urun, islem, 'variants')) {
           const kod = metin(varyant.barcode);
           const stok = tamsayi(varyant.quantity);
-          if (kod && stok !== undefined) sonuc.set(kod, { stok });
+          // Belge (filterApprovedProductsInventoryAndPrice): salePrice/listPrice varyantta; eski yanıtta price nesnesinde.
+          const fiyat = nesne(varyant.price);
+          if (kod && stok !== undefined) sonuc.set(kod, {
+            stok, fiyat: tutar(varyant.salePrice) ?? tutar(fiyat.salePrice), listeFiyati: tutar(varyant.listPrice) ?? tutar(fiyat.listPrice),
+          });
         }
       }
     }
@@ -270,7 +279,8 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
       if (kayit.length !== 1) return;
       const stok = tamsayi(alan(kayit[0]!, 'availableStock'));
       const hbSku = metin(alan(kayit[0]!, 'hepsiburadaSku'));
-      if (stok !== undefined && hbSku) return { kod, stok, hbSku };
+      // HB listing alanı "price" (ilk gerçek bağlantıda doğrulanacak)
+      if (stok !== undefined && hbSku) return { kod, stok, hbSku, fiyat: tutar(alan(kayit[0]!, 'price')) };
     }));
     for (const kayit of grup) if (kayit) sonuc.set(kayit.kod, kayit);
   }
@@ -294,6 +304,65 @@ export async function kanalStokGonder(
   }
   if (!id) throw new PazaryeriApiHatasi(`${islem} takip kimliği döndürmedi.`);
   return id;
+}
+
+export type FiyatKalemi = { urunId: string; kod: string; fiyat: number };
+
+/**
+ * Yalnız fiyat gönderir (adet gönderilmez; stok eşitlemesi ayrı çalışır).
+ * Trendyol updatePriceAndInventory: { items: [{ barcode, salePrice, listPrice }] } — yalnız barcode zorunlu, en fazla 1000;
+ *   aynı istek 15 dk içinde tekrarlanamaz. Liste fiyatı = satış fiyatı (üstü çizili fiyat yok).
+ * Hepsiburada listing price-uploads: [{ merchantSku, hepsiburadaSku, price }] (developers.hepsiburada.com, 23.11.2026).
+ */
+export async function kanalFiyatGonder(
+  kanal: Kanal, kalemler: FiyatKalemi[], ilanlar: Map<string, KanalIlani>, sinyal: AbortSignal,
+): Promise<string> {
+  if (!kalemler.length || kalemler.length > 1000) throw new PazaryeriApiHatasi('Bir seferde 1–1000 fiyat gönderilebilir.');
+  if (kalemler.some((k) => !(k.fiyat > 0))) throw new PazaryeriApiHatasi('Sıfır veya geçersiz fiyat gönderilemez.');
+  const a = baglanti(kanal);
+  const islem = `${KANALLAR[kanal]} fiyat gönderimi`;
+  let id: string | undefined;
+  if (kanal === 'trendyol') {
+    const url = new URL(`/integration/inventory/sellers/${a.kimlik}/products/price-and-inventory`, trendyolAdres(a));
+    const items = kalemler.map((k) => ({ barcode: k.kod, salePrice: k.fiyat, listPrice: k.fiyat }));
+    id = metin(nesne(await istek(a, url, islem, sinyal, { items })).batchRequestId);
+  } else {
+    const url = new URL(hbYol(a, 'listings', '/price-uploads'), hbAdres(a, 'listing'));
+    const govde = kalemler.map((k) => ({ merchantSku: k.kod, hepsiburadaSku: ilanlar.get(k.kod)?.hbSku, price: k.fiyat }));
+    id = metin(alan(nesne(await istek(a, url, islem, sinyal, govde)), 'id'));
+  }
+  if (!id) throw new PazaryeriApiHatasi(`${islem} takip kimliği döndürmedi.`);
+  return id;
+}
+
+export type TrendyolIlanOzeti = { barkod: string; stokKodu?: string; anaKod?: string; fiyat?: number; listeFiyati?: number; stok?: number };
+
+/** Trendyol'daki tüm onaylı ilanlar (barkod, stok kodu, fiyat, stok). Sayfa başına 100; en fazla 10.000 ilan. */
+export async function trendyolTumIlanlar(sinyal: AbortSignal): Promise<TrendyolIlanOzeti[]> {
+  const a = baglanti('trendyol');
+  const islem = 'Trendyol ilan listesi';
+  const sonuc = new Map<string, TrendyolIlanOzeti>();
+  for (let sayfa = 0; sayfa < 100; sayfa++) {
+    const url = new URL(`/integration/product/sellers/${a.kimlik}/products/approved/inventory-and-price`, trendyolAdres(a));
+    url.searchParams.set('page', String(sayfa));
+    url.searchParams.set('size', '100');
+    const yanit = nesne(await istek(a, url, islem, sinyal));
+    const icerik = liste(yanit, islem, 'content');
+    for (const urun of icerik) {
+      for (const v of liste(urun, islem, 'variants')) {
+        const barkod = metin(v.barcode);
+        if (!barkod) continue;
+        const fiyat = nesne(v.price);
+        sonuc.set(barkod, {
+          barkod, stokKodu: metin(v.stockCode), anaKod: metin(urun.productMainId),
+          fiyat: tutar(v.salePrice) ?? tutar(fiyat.salePrice), listeFiyati: tutar(v.listPrice) ?? tutar(fiyat.listPrice), stok: tamsayi(v.quantity),
+        });
+      }
+    }
+    const toplamSayfa = tamsayi(yanit.totalPages) ?? 0;
+    if (!icerik.length || sayfa + 1 >= toplamSayfa) break;
+  }
+  return [...sonuc.values()];
 }
 
 export async function kanalStokSonucu(
@@ -373,8 +442,11 @@ export async function trendyolCagir(
       let ayrinti = '';
       try {
         const h = nesne(JSON.parse(govde));
-        const hatalar = Array.isArray(h.errors) ? h.errors.map((x) => metin(nesne(x).message)).filter(Boolean) : [];
-        ayrinti = (hatalar.length ? hatalar.join(' ') : metin(h.message) ?? metin(h.error) ?? '').slice(0, 400);
+        // Trendyol hata gövdesi: { errors: [{ key, message, errorCode }] } ya da { message | detail | title | exception }
+        const hatalar = Array.isArray(h.errors)
+          ? h.errors.map((x) => { const o = nesne(x); return metin(o.message) ?? metin(o.errorMessage) ?? metin(o.key) ?? metin(o.errorCode); }).filter(Boolean) : [];
+        ayrinti = (hatalar.length ? hatalar.join(' ')
+          : metin(h.message) ?? metin(h.errorMessage) ?? metin(h.detail) ?? metin(h.title) ?? metin(h.error) ?? metin(h.exception) ?? '').slice(0, 400);
       } catch { /* gövde JSON değil */ }
       const genel = yanit.status === 401 || yanit.status === 403 ? ' API bilgilerini ve yetkisini kontrol edin.'
         : yanit.status === 429 ? ' Trendyol istek sınırına ulaşıldı, biraz sonra tekrar deneyin.' : '';

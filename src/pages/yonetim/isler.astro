@@ -21,7 +21,7 @@ const AYARLAR = [
   ['otoToplama', 'Yeni Trendyol siparişini hemen “toplanıyor” yap', 'Müşteri artık iptal edemez ve kargo süreci başlar. Stokta olmayan ürün satıyorsanız kapalı tutun.'],
   ['faturaYenidenDene', 'Gidemeyen faturaları tekrar dene', 'Trendyol’a yüklenemeyen ya da müşteriye e-postası gitmeyen faturalar 30 dakikada bir yeniden denenir.'],
   ['gunlukIsler', 'Her gün Trendyol hakedişini çek, ilan onaylarını kontrol et', 'Finans › Trendyol ve “Trendyol’a ürün gönder” kendiliğinden güncel kalır.'],
-  ['otoFiyat', 'Sitede fiyat değişince Trendyol fiyatını da güncelle', 'Fiyat kuralınıza göre (Trendyol’a ürün gönder › Trendyol fiyatı).'],
+  ['otoFiyat', 'Trendyol ve Hepsiburada fiyatını siteyle aynı tut', 'Sitedeki son fiyat (sepette indirim dahil) 5 dakikada bir kanallara gider. Yarıdan fazla düşüş güvenlik için sizin onayınızı bekler (Satış kanalları › Fiyatlar).'],
 ] as const;
 
 if (Astro.request.method === 'POST') {
