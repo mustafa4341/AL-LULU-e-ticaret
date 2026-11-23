@@ -1,5 +1,7 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import { magazaOku } from '../../../lib/depo';
 import { finansGunu, finansPara, paraOku, type HbUrunAyar } from '../../../lib/finans';
 import { finansOku, hbAyarKaydet, hbFinansKaydet, hbUrunKaydet } from '../../../lib/finansDepo';
@@ -127,16 +129,21 @@ const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Gid
 const grupSirasi: HbGrup[] = ['satis', 'iade', 'komisyon', 'kampanya', 'kargo', 'islem', 'hizmet', 'odemeServisi', 'ceza', 'reklam', 'kdv', 'stopaj', 'diger'];
 const bugun = finansGunu();
 ---
-<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+<Yonetim baslik="Hepsiburada Finans" altBaslik="Bir ürünün tüm Hepsiburada kesintilerini hesaba katarak tahmini kârı, marjı ve başabaş fiyatını görün; hakedişlerinizi takip edin." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+  <KanalLogo slot="baslik-onu" kanal="hepsiburada" boyut="buyuk" />
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/finans"><PIkon ad="ok-sol" boyut={18} />Finans ve Belgeler'e dön</a>
+    <a class="btn btn--sepet" href="/yonetim/finans/hepsiburada#hesap"><PIkon ad="arti" boyut={18} />Yeni hesaplama</a>
+  </div>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
     <a href="/yonetim/finans/faturalar">Faturalar</a>
     <a href="/yonetim/finans/hepsiburada" aria-current="page">Hepsiburada</a>
   </nav>
 
-  <section class="y-kart" id="hesap">
-    <h2>Bu fiyattan satarsam elime ne kalır?</h2>
-    <p class="y-help">Komisyon oranları Hepsiburada EK-4 tablosundan, kargo ücretleri {KARGO_TABLO_TARIHI.split('-').reverse().join('.')} tarihli desi tablosundan alındı. Ürünün kesin komisyon oranı Hepsiburada satıcı panelinde ürünün sayfasında yazar; farklıysa kategoriyi "Elle oran" yapın.</p>
+  <div class="y-hesap-izgara" id="hesap">
+  <section class="y-kart">
+    <div class="y-kart__bas"><div><h2><PIkon ad="kutu" /> Ürün bilgileri ve maliyetler</h2><p class="y-kart__alt">Bu fiyattan satarsam elime ne kalır? Ürünü seçin, eksik bilgileri girin.</p></div></div>
     <form method="get" class="y-izgara" action="#hesap">
       <label class="y-alan">Ürün
         <select name="urun" onchange="this.form.querySelectorAll('[data-urun-bagli]').forEach((e) => { e.disabled = true; }); this.form.submit()">
@@ -166,14 +173,29 @@ const bugun = finansGunu();
       </div>
       <label class="y-alan">Hedeflediğiniz net kâr (TL, isteğe bağlı)<input name="hedef" inputmode="decimal" value={hedefGirdi} placeholder="ör. 150" /></label>
       <div class="y-modal__alt">
-        <button class="btn btn--sepet" type="submit">Hesapla</button>
-        {secili && <button class="btn btn--cizgi" type="submit" formmethod="post" name="eylem" value="urun-kaydet">Bu ürün için kaydet</button>}
+        <button class="btn btn--sepet" type="submit"><PIkon ad="hedef" boyut={18} />Hesapla</button>
+        {secili && <button class="btn btn--cizgi" type="submit" formmethod="post" name="eylem" value="urun-kaydet"><PIkon ad="tik" boyut={18} />Bu ürün için kaydet</button>}
       </div>
     </form>
+  </section>
 
+  <section class="y-kart">
+    <div class="y-kart__bas"><div><h2><PIkon ad="grafik" /> Hesaplama sonuçları</h2><p class="y-kart__alt">Girdiğiniz bilgilere göre tahmini kârlılık.</p></div></div>
     {eksikler.length > 0 && <p class="y-uyari">Hesap için eksik: {eksikler.join(', ')}.</p>}
     {hesap && <>
       {hesap.kargoBulunamadi && <p class="y-uyari">Seçili kargo firmasının tablosunda bu desi yok (en fazla {kargoUstSiniri(ayar.kargoFirmasi)} desi). Kargo 0 sayıldı; sonucu kullanmayın.</p>}
+      <div class="y-sonuc-vurgu">
+        <PIkon ad="para" />
+        {hesap.netKar !== undefined
+          ? <div><span>Tahmini net kâr (birim)</span><strong class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</strong></div>
+          : <div><span>Hesabınıza yatacak</span><strong>{finansPara(hesap.hesabaYatan)}</strong><small>Net kâr için alış maliyetini girin</small></div>}
+      </div>
+      <div class="y-sonuc-kutular">
+        <div class="y-sonuc-kutu"><PIkon ad="yuzde" boyut={18} /><span>Kâr marjı</span><strong>{hesap.marj !== undefined ? '%' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—'}</strong><small>Net kârın satış fiyatına oranı</small></div>
+        <div class="y-sonuc-kutu"><PIkon ad="hedef" boyut={18} /><span>Başabaş fiyatı</span><strong>{basaBas !== undefined ? finansPara(basaBas) : '—'}</strong><small>Zarar etmemek için en düşük fiyat</small></div>
+        <div class="y-sonuc-kutu"><PIkon ad="trend" boyut={18} /><span>Hedef kâr için fiyat</span><strong>{hedef !== undefined ? finansPara(hedef) : '—'}</strong><small>{hedef !== undefined ? finansPara(tlKurus(hedefGirdi)!) + ' net kâr için' : 'Hedef net kârı girin'}</small></div>
+      </div>
+      <h3>Kesinti dökümü</h3>
       <dl class="y-hesap">
         <div><dt>Müşterinin ödediği <small>KDV dahil</small></dt><dd>{finansPara(hesap.kdvHaricSatis + hesap.satisKdv)}</dd></div>
         {hesap.kalemler.map((k) => <div class="eksi"><dt>{k.ad} <small>{finansPara(k.net)} + %20 KDV</small></dt><dd>−{finansPara(k.net + k.kdv)}</dd></div>)}
@@ -184,17 +206,32 @@ const bugun = finansGunu();
           ? <div class="sonuc"><dt>Net kâr <small>KDV hariç satış − kesintiler − alış maliyeti{hesap.marj !== undefined ? ' · marj %' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : ''}</small></dt><dd class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</dd></div>
           : <div class="alt"><dt>Net kâr</dt><dd>Alış maliyeti girilmedi</dd></div>}
       </dl>
-      {basaBas !== undefined && <p class="y-help">Zarar etmemek için en düşük fiyat: <strong>{finansPara(basaBas)}</strong>{hedef !== undefined && <> · {finansPara(tlKurus(hedefGirdi)!)} net kâr için fiyat: <strong>{finansPara(hedef)}</strong></>}</p>}
       <details class="y-block-gap"><summary>Bu satışta olası Hepsiburada cezaları</summary>
         <ul class="y-task-list">{hesap.cezalar.map((c) => <li><span>{c.ad}</span><span>{finansPara(c.tutar)}</span></li>)}</ul>
         <p class="y-help">Platform kılavuzundaki tablolar. Ayrıca stok yokken iptal edilen ürünün satışı askıya alınabilir; geciken veya tedarik edilemeyen sipariş başka satıcıya kaydırılırsa fiyat farkı size yansıtılır.</p>
       </details>
     </>}
-    {gercek && <p class="y-help">Hepsiburada'nın gerçek kayıtlarına göre (son {gercek.siparis} sipariş): işlem bedeli ort. {finansPara(gercek.islem)}, hizmet bedeli ort. {finansPara(gercek.hizmet)}, komisyon oranı ort. {yuzde(gercek.komisyonBp)} (KDV hariç). Ayarlardaki tutarları bunlarla karşılaştırın.</p>}
   </section>
 
+  <aside class="y-kart">
+    <div class="y-kart__bas"><div><h2><PIkon ad="ayarlar-cubuk" /> Hesaplama varsayımları</h2><p class="y-kart__alt">Bu hesapta kullanılan temel değerler.</p></div></div>
+    <ul class="y-varsayim">
+      <li><PIkon ad="yuzde" /><span>Platform komisyonu<small>{kategori === 'elle' ? 'Elle girilen oran' : hbKategori(kategori)?.ad ?? 'Kategori seçilmedi'}</small></span><strong>{oranBp !== undefined && !Number.isNaN(oranBp) ? yuzde(oranBp) : '—'}</strong></li>
+      <li><PIkon ad="kargo" /><span>Kargo firması<small>Hepsiburada anlaşmalı tablo fiyatı</small></span><strong>{KARGO_FIRMALARI.find((k) => k.kod === ayar.kargoFirmasi)?.ad ?? 'Seçilmedi'}</strong></li>
+      <li><PIkon ad="fatura" /><span>İşlem bedeli<small>Sipariş başına, KDV hariç</small></span><strong>{finansPara(ayar.islemBedeli)}</strong></li>
+      <li><PIkon ad="kutu" /><span>Hizmet bedeli<small>Ürün başına, KDV hariç</small></span><strong>{finansPara(ayar.hizmetBedeli)}</strong></li>
+      <li><PIkon ad="banka" /><span>E-ticaret stopajı<small>KDV hariç satış üzerinden</small></span><strong>{yuzde(ayar.stopajBp)}</strong></li>
+      <li><PIkon ad="belge" /><span>Ürün KDV oranı</span><strong>%{kdv}</strong></li>
+      <li><PIkon ad="takvim" /><span>Ödeme vadesi<small>Teslimattan sonra</small></span><strong>{ODEME_VADESI_IS_GUNU} iş günü</strong></li>
+    </ul>
+    <div class="y-veri-not"><PIkon ad="saat" boyut={18} /><p><strong>Veri güncelliği</strong>Komisyon oranları Hepsiburada EK-4 tablosundan, kargo ücretleri {KARGO_TABLO_TARIHI.split('-').reverse().join('.')} tarihli desi tablosundan alındı. Ürünün kesin komisyon oranı Hepsiburada satıcı panelinde ürünün sayfasında yazar; farklıysa kategoriyi "Elle oran" yapın.</p></div>
+    {gercek && <p class="y-help">Hepsiburada'nın gerçek kayıtlarına göre (son {gercek.siparis} sipariş): işlem bedeli ort. {finansPara(gercek.islem)}, hizmet bedeli ort. {finansPara(gercek.hizmet)}, komisyon oranı ort. {yuzde(gercek.komisyonBp)} (KDV hariç). Ayarlardaki tutarları bunlarla karşılaştırın.</p>}
+    <a class="btn btn--cizgi" href="#ayarlar" data-ac="ayarlar"><PIkon ad="ayar" boyut={18} />Maliyet ayarlarını düzenle</a>
+  </aside>
+  </div>
+
   <details class="y-kart" id="ayarlar" open={!ayar.kargoFirmasi}>
-    <summary><strong>Hepsiburada maliyet ayarları</strong></summary>
+    <summary><PIkon ad="ayar" /> <strong>Hepsiburada maliyet ayarları</strong></summary>
     <form method="post" class="y-izgara">
       <input type="hidden" name="eylem" value="ayar-kaydet" />
       {Object.entries(Object.fromEntries(['urun', 'fiyat', 'kategori', 'oran', 'desi', 'kdv', 'maliyet', 'hedef'].map((k) => [k, q.get(k) ?? '']))).filter(([, v]) => v).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
@@ -216,7 +253,7 @@ const bugun = finansGunu();
   </details>
 
   <section class="y-kart" id="hesabim">
-    <div class="y-kart__bas"><h2>Hepsiburada hesabım</h2>{finans.hbSonCekim && <small class="muted">Son çekim: {tarihTr(finans.hbSonCekim.tarih)}</small>}</div>
+    <div class="y-kart__bas"><h2><PIkon ad="banka" /> Hepsiburada hesabım</h2>{finans.hbSonCekim && <small class="muted">Son çekim: {tarihTr(finans.hbSonCekim.tarih)}</small>}</div>
     {apiDurumu === 'kapali' || apiDurumu === 'eksik'
       ? <p class="y-help">Hepsiburada bağlantısı henüz kurulmadı. Hepsiburada'dan gelecek test bilgileri sunucuya girildiğinde, buradaki "Şimdi çek" düğmesi her siparişin satışını, komisyonunu, kargo ve diğer kesintilerini, ödenip ödenmediğini ve vade gününü getirir. Bunun için talebinizde "Muhasebe entegrasyonu" yetkisinin de istenmiş olması gerekir.</p>
       : <form method="post" class="y-toolbar">

@@ -1,16 +1,15 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
-import { pazaryeriDurumu } from '../../components/yonetim/pazaryeriGorunumu';
-import { DogrulamaHatasi, magazaOku, siparisleriOku } from '../../lib/depo';
-import { faturaAdaylari } from '../../lib/faturaMerkezi';
-import { finansOku } from '../../lib/finansDepo';
+import PIkon from '../../components/yonetim/PIkon.astro';
+import { DogrulamaHatasi } from '../../lib/depo';
 import { evet, metin } from '../../lib/form';
 import { otomatikIsler } from '../../lib/otomasyon';
-import { KANALLAR, KANAL_LISTESI, bosAyarlar } from '../../lib/pazaryeri';
+import { KANALLAR, KANAL_LISTESI } from '../../lib/pazaryeri';
 import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
-import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../lib/pazaryeriDepo';
+import { envanterAyarlariGuncelle } from '../../lib/pazaryeriDepo';
 import { pazaryeriSenkron } from '../../lib/pazaryeriSenkron';
 import { yTarih } from '../../lib/yonetimRapor';
+import { panelIsleriniOku } from '../../lib/panelIsleri';
 
 const yol = '/yonetim/isler';
 const q = Astro.url.searchParams;
@@ -34,9 +33,12 @@ if (Astro.request.method === 'POST') {
     }
     if (eylem === 'hepsi') {
       const notlar: string[] = [];
+      let calismaDurumu = 'Otomatik işler çalıştırıldı.';
       if (bagliKanallar.length) {
         const r = await pazaryeriSenkron('panel', true);
-        if (r.durum === 'bekliyor') notlar.push('Otomatik eşitleme şu an zaten çalışıyor; bir dakika sonra tekrar basın.');
+        if (r.durum === 'bekliyor') calismaDurumu = 'Eşitleme zaten çalışıyor. Bir dakika sonra yeniden kontrol edin.';
+        else if (r.durum === 'kapali') calismaDurumu = 'Eşitleme için kanal kurulumu bekleniyor.';
+        else if (r.durum === 'hata') calismaDurumu = 'Kanal işlemlerinde hata oluştu.';
         for (const [k, s] of Object.entries(r.kanallar)) {
           const ad = KANALLAR[k as keyof typeof KANALLAR];
           if (s.hata || s.stokHata) notlar.push(`${ad}: ${[s.hata, s.stokHata].filter(Boolean).join(' ')}`);
@@ -44,7 +46,7 @@ if (Astro.request.method === 'POST') {
         }
         notlar.push(...(r.otomasyon ?? []));
       } else notlar.push(...await otomatikIsler({ gunlukZorla: true, sureMs: 40_000 }));
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent(['Otomatik işler tamamlandı.', ...notlar].join(' · ').slice(0, 1500))}`, 303);
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent([calismaDurumu, ...notlar].join(' · ').slice(0, 1500))}`, 303);
     }
     throw new DogrulamaHatasi(['Geçersiz işlem.']);
   } catch (e) {
@@ -52,64 +54,60 @@ if (Astro.request.method === 'POST') {
   }
 }
 
-const [magaza, web, py, ayar, finans] = await Promise.all([
-  magazaOku(), siparisleriOku(), pazaryeriSiparisleriOku().catch(() => []), envanterAyarlariOku().catch(() => bosAyarlar()), finansOku(),
-]);
-const ot = ayar.otomasyon;
-const webler = web.filter((s) => !s.paytr?.test);
-const faturalar = faturaAdaylari(finans, webler, py, ayar);
-const urunIdleri = new Set(magaza.urunler.map((u) => u.id));
-const pyDurum = py.map((s) => ({ s, d: pazaryeriDurumu(s, Date.now(), urunIdleri) }));
-const elle = [
-  { ad: 'Faturası kesilecek siparişler', aciklama: 'GİB e-Arşiv Portalı’nda kesip PDF’i yükleyin; gerisi otomatik.', sayi: faturalar.filter((x) => !x.fatura).length, url: '/yonetim/finans/faturalar' },
-  { ad: 'Hepsiburada’ya yüklenecek faturalar', aciklama: 'PDF’i Hepsiburada satıcı panelinden yükleyip “Yükledim” deyin.', sayi: faturalar.filter((x) => x.fatura && x.kanal === 'hepsiburada' && x.fatura.iletim.durum === 'bekliyor').length, url: '/yonetim/finans/faturalar?durum=kesildi&kanal=hepsiburada' },
-  { ad: 'Hazırlanacak web siparişleri', aciklama: 'Paketleyin, kargo takip numarasını girin; müşteriye e-posta kendiliğinden gider.', sayi: webler.filter((s) => s.durum === 'odendi' || s.durum === 'hazirlaniyor').length, url: '/yonetim/siparisler?durum=odendi' },
-  ...KANAL_LISTESI.map((k) => ({ ad: `Kargoya verilecek ${KANALLAR[k]} siparişleri`, aciklama: 'Paketi hazırlayın, kargo etiketini yapıştırın; takip numarası kanaldan kendiliğinden gelir.', sayi: pyDurum.filter(({ s, d }) => s.kanal === k && (d.hazirlanacak || d.hazirlaniyor)).length, url: `/yonetim/siparisler?kanal=${k}&durum=islem` })),
-  { ad: 'Ürünü eşleşmeyen / stoğu yetmeyen pazaryeri siparişi', aciklama: 'Siparişi açıp doğru ürünü bir kez seçin; sonra kendiliğinden eşleşir.', sayi: pyDurum.filter(({ d }) => d.uyari.some((u) => u.renk === 'kirmizi')).length, url: '/yonetim/siparisler?durum=kontrol' },
-].filter((x) => x.sayi > 0);
+const { envanter, isler } = await panelIsleriniOku();
+const ot = envanter.otomasyon;
 const OTOMATIK = [
   'Trendyol / Hepsiburada siparişi 5 dakikada bir gelir: sipariş no, paket no, ürün barkodu, müşteri, fatura adresi.',
   'Ürün barkoddan tanınır, stok tek depodan düşer; iptalde geri eklenir. Kalan stok kanallara gönderilir.',
   'Kargo takip numarası: Trendyol ve Hepsiburada siparişlerinde kanal verir, eşitlemeyle gelir. Web siparişinde numarayı siz girersiniz.',
-  'Faturayı kaydettiğiniz an Trendyol’a yüklenir, web müşterisine e-postayla gider, muhasebeci listesine yazılır.',
+  'Fatura kaydı muhasebe listesine girer. İletim durumu Faturalar ekranında ayrıca izlenir.',
 ];
 ---
 <Yonetim baslik="Bugünkü işler" altBaslik="Otomatik işler kendiliğinden çalışır; size kalanlar aşağıda." aktif="ozet" basari={q.get('ok')} {hatalar}>
   <section class="y-kart is-hepsi">
+    <span class="y-spot-icon is-spot-buyuk" aria-hidden="true"><PIkon ad="simsek" boyut={28} /></span>
     <div>
-      <h2>Hepsini şimdi yap</h2>
+      <h2>Tek tuşla çalıştır</h2>
       <p class="y-help">Siparişleri ve stoğu eşitler, bildirimleri gönderir, bekleyen faturaları iletir, Trendyol hakedişini ve ilan onaylarını günceller. Bunlar zaten 5 dakikada bir kendiliğinden çalışıyor; düğme yalnız “hemen olsun” istediğinizde.</p>
       {ot.sonCalisma && <p class="y-help">Son otomatik çalışma: {yTarih.format(new Date(ot.sonCalisma))}</p>}
     </div>
-    <form method="post"><button class="btn btn--sepet is-buyuk" name="eylem" value="hepsi" type="submit">Hepsini şimdi yap</button></form>
+    <form method="post"><button class="btn btn--sepet is-buyuk" name="eylem" value="hepsi" type="submit"><PIkon ad="yenile" boyut={20} />İşleri şimdi çalıştır</button></form>
   </section>
 
-  <section class="y-kart">
-    <h2>Size kalan işler</h2>
-    {elle.length ? <ul class="y-is-listesi">{elle.map((x) => <li><a href={x.url}><span>{x.ad}<small class="is-aciklama">{x.aciklama}</small></span><b class="y-chip y-chip--turuncu">{x.sayi}</b></a></li>)}</ul>
-      : <p class="muted">Şu an sizin yapmanız gereken bir iş yok.</p>}
+  <div class="y-operasyon-izgara">
+  <section class="y-kart" id="acil-isler">
+    <h2><PIkon ad="pano" /> Size kalan işler</h2>
+    {isler.length ? <ul class="y-satir-liste y-is-satirlari">{isler.map((x) => <li><a href={x.url} class={'is-' + x.ton}>
+        <span class:list={['y-ton-ikon', 'y-ton-ikon--' + x.ton]} aria-hidden="true"><PIkon ad={x.ton === 'kirmizi' ? 'uyari' : x.ton === 'turuncu' ? 'saat' : 'bilgi'} boyut={20} /></span>
+        <span class="y-satir__ana"><strong>{x.ad}</strong>{x.aciklama && <small class="is-aciklama">{x.aciklama}</small>}</span>
+        <b class:list={['y-chip', 'y-chip--' + x.ton]}>{x.sayi} adet</b>
+      </a></li>)}</ul>
+      : <p class="y-bos-satir"><PIkon ad="tik-daire" boyut={20} />Şu an sizin yapmanız gereken bir iş yok.</p>}
   </section>
 
-  <section class="y-kart">
-    <h2>Kendiliğinden olanlar</h2>
+  <section class="y-kart" id="otomatik-ayarlar">
+    <h2><PIkon ad="ayar" /> Kendiliğinden olanlar</h2>
     <ul class="is-otomatik">{OTOMATIK.map((x) => <li>{x}</li>)}</ul>
     <form method="post" class="is-ayarlar">
       <input type="hidden" name="eylem" value="ayarlar" />
       {AYARLAR.map(([k, ad, aciklama]) => <label class="y-secim is-ayar"><input type="checkbox" name={k} checked={ot[k]} /><span><strong>{ad}</strong><small>{aciklama}</small></span></label>)}
-      <button class="btn btn--cizgi" type="submit">Kaydet</button>
+      <button class="btn btn--cizgi" type="submit"><PIkon ad="tik" boyut={18} />Kaydet</button>
     </form>
     {!bagliKanallar.length && <p class="y-uyari">Hiçbir pazaryeri bağlı değil; bağlanınca bu işler kendiliğinden çalışmaya başlar.</p>}
   </section>
+  </div>
 
   {ot.sonOzet.length > 0 && <details class="y-kart">
-    <summary><strong>Son otomatik işlemler</strong></summary>
+    <summary><PIkon ad="gecmis" /> <strong>Son otomatik işlemler</strong></summary>
     <ul class="y-task-list">{ot.sonOzet.map((x) => <li><span>{x}</span></li>)}</ul>
   </details>}
 </Yonetim>
 <style>
-  .is-hepsi { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; justify-content: space-between; border-top: 4px solid var(--y-gold, #aa812e); }
+  .is-hepsi { display: flex; flex-wrap: wrap; gap: 18px 22px; align-items: center; justify-content: space-between; background: linear-gradient(135deg, #fffaf2, #fbf0df); border-color: #f0dcbb; }
   .is-hepsi > div { flex: 1 1 320px; }
-  .is-buyuk { min-height: 56px; padding-inline: 28px; font-size: 17px; }
+  .is-hepsi h2 { margin-bottom: 4px; font-size: 22px; }
+  .is-spot-buyuk { width: 64px; height: 64px; border-radius: 16px; background: #f7dfba; color: #a0651c; }
+  .is-buyuk { min-height: 58px; padding-inline: 28px; font-size: 17px; }
   .is-aciklama { display: block; color: var(--ink-3); font-size: 13px; font-weight: 400; margin-top: 2px; }
   .is-otomatik { margin: 0 0 14px; padding-left: 20px; display: grid; gap: 6px; }
   .is-ayarlar { display: grid; gap: 10px; justify-items: start; }

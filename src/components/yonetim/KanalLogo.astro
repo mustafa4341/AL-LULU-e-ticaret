@@ -1,0 +1,27 @@
+---
+/**
+ * Satış kanalı işareti (panel genelinde tek görünüm):
+ * Web sitesi → mağaza ikonu · Trendyol → turuncu "trendyol" · Hepsiburada → turuncu "hepsi/burada".
+ * boyut: 'kucuk' (satır içi, 24 px), 'orta' (kart başlığı, 40 px), 'buyuk' (sayfa başlığı, 52 px)
+ */
+import PIkon from './PIkon.astro';
+
+interface Props {
+  kanal: string;
+  boyut?: 'kucuk' | 'orta' | 'buyuk';
+  /** Yanına kanal adını da yaz */
+  ad?: boolean;
+}
+const { kanal, boyut = 'orta', ad = false } = Astro.props;
+const ADLAR: Record<string, string> = { web: 'Web sitesi', trendyol: 'Trendyol', hepsiburada: 'Hepsiburada' };
+const adi = ADLAR[kanal] ?? kanal;
+---
+<span class:list={['y-kanal', 'y-kanal--' + boyut]} title={ad ? undefined : adi}>
+  <span class:list={['y-kanal-logo', 'y-kanal-logo--' + kanal]} aria-hidden="true">
+    {kanal === 'web' ? <PIkon ad="magaza" boyut={boyut === 'kucuk' ? 14 : boyut === 'buyuk' ? 26 : 20} />
+      : kanal === 'hepsiburada' ? (boyut === 'kucuk' ? 'hb' : <><span>hepsi</span><span>burada</span></>)
+      : kanal === 'trendyol' ? (boyut === 'kucuk' ? 'ty' : 'trendyol')
+      : adi.slice(0, 2)}
+  </span>
+  {ad ? <span class="y-kanal__ad">{adi}</span> : <span class="visually-hidden">{adi}</span>}
+</span>

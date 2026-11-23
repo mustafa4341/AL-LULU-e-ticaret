@@ -1,0 +1,11 @@
+---
+/* Panel ikonu: mağaza sprite'ındaki (Ikonlar.astro) ve panel sprite'ındaki (PanelIkonlar.astro) tüm ikonları çizer. */
+import type { PanelIkonAdi } from './panelIkon';
+interface Props {
+  ad: PanelIkonAdi;
+  boyut?: number;
+  class?: string;
+}
+const { ad, boyut = 20, class: cls } = Astro.props;
+---
+<svg width={boyut} height={boyut} class={cls} aria-hidden="true" focusable="false"><use href={`#i-${ad}`} /></svg>

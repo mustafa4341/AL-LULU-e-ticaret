@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import Ikon from '../../../components/Ikon.astro';
 import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
@@ -126,6 +127,7 @@ const gecmis = [...(kayitli?.fiyatGecmisi ?? [])].reverse();
 const siparisler = await siparisleriOku();
 const urunSatis = kayitli ? urunBazliSatislar(m, siparisler).find((x) => x.urun.id === kayitli.id) : undefined;
 const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+const eksikBilgiler = yayinEksikleri(u);
 
 
 ---
@@ -137,8 +139,8 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
   genis
 >
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a href="/yonetim/urunler" class="y-link">Ürünlere dön</a>
-    <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="urun-onizleme" aria-expanded="false">Önizle</button>
+    <a href="/yonetim/urunler" class="btn btn--cizgi"><PIkon ad="ok-sol" boyut={18} />Ürünlere dön</a>
+    <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="urun-onizleme" aria-expanded="false"><PIkon ad="goz" boyut={18} />Önizle</button>
     {kayitli && <span class={'y-yayin-rozet y-yayin-rozet--' + kayitli.durum} title="Şu anki yayın durumu">{kayitli.durum === 'yayinda' ? 'Yayında' : kayitli.durum === 'gizli' ? 'Gizli' : 'Taslak'}</span>}
     {kayitli?.durum === 'yayinda'
       ? <>
@@ -154,12 +156,12 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         </>}
     {!yeni && <button type="submit" form="urun-form" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.">Sil</button>}
   </div>
-  <div class="y-editor-duzen" data-editor-duzen>
+  <div class="y-editor-duzen y-urun-editor" data-editor-duzen>
     <!-- SOL SÜTUN: REHBERLİ ÜRÜN FORMU -->
     <form method="post" enctype="multipart/form-data" id="urun-form" class="y-editor-form" data-editor data-onizleme-form="urun" data-kayit={u.id} data-kayit-durum={kayitli?.durum ?? "taslak"}>
       <input type="hidden" name="eskiStok" value={kayitli?.stok ?? 0} />
       <input type="hidden" name="eskiFiyat" value={kayitli?.fiyat ?? 0} />
-      <BilgiKutusu baslik={yeni ? 'Yeni ürün 3 adımda eklenir' : 'Bu sayfada ne var?'} anahtar={yeni ? 'urun-yeni' : 'urun-duzenle'} ton="ipucu" acik={yeni}>
+      <BilgiKutusu baslik={yeni ? 'Yeni ürün yayınlama adımları' : 'Ürün düzenleme rehberi'} anahtar={yeni ? 'urun-yeni' : 'urun-duzenle'} ton="ipucu" acik={false}>
         <ol>
           <li><strong>Genel Bilgiler:</strong> marka, ürün adı ve kategori.</li>
           <li><strong>Fiyat &amp; Stok:</strong> satış fiyatı ve depodaki adet. Stok 0 ise sitede “stokta yok” yazar.</li>
@@ -168,10 +170,10 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <p><strong>Barkod:</strong> kutunun üzerindeki çizgili kodun altındaki 13 haneli sayı. <em>Detaylar → Teknik özellikler</em> bölümüne “Barkod (EAN)” satırı olarak yazın. Google'da ve Trendyol eşleştirmesinde bu numara kullanılır; tahmin edip yazmayın, kutudan okuyun.</p>
         <p>Emin olmadığınız bir şey varsa <em>Taslak kaydet</em> deyin: müşteri görmez, sonra tamamlarsınız.</p>
       </BilgiKutusu>
-      <Sekmeler secenekler={[["genel", "Genel Bilgiler"], ["fiyat", "Fiyat & Stok"], ["fotograf", "Fotoğraflar"], ["satis", "Satış İçeriği"], ["detay", "Detaylar"], ["gelismis", "Gelişmiş"]]} />
+      <Sekmeler secenekler={[["genel", "Genel Bilgiler"], ["fiyat", "Fiyat ve Stok"], ["fotograf", "Fotoğraflar"], ["satis", "Satış İçeriği"], ["detay", "Detaylar"], ["gelismis", "Gelişmiş"]]} />
       <!-- 1. TEMEL BİLGİLER -->
       <section class="y-kart" id="bolum-temel" data-bolum="genel">
-        <h2>Temel Bilgiler</h2>
+        <h2><PIkon ad="belge" /> Temel Bilgiler</h2>
 
 
         <div class="y-izgara">
@@ -263,7 +265,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
       <!-- 2. FİYAT VE İNDİRİM -->
       <section class="y-kart" id="bolum-fiyat" data-bolum="fiyat" hidden data-fiyat-kutu data-mevcut={kayitli?.fiyat ?? 0} data-gun={m.site.indirimReferansGun} data-aktif-onceki={bilgi?.onceki ?? ''}>
-        <h2>Fiyat ve İndirim Yönetimi</h2>
+        <h2><PIkon ad="etiket" /> Fiyat ve İndirim Yönetimi</h2>
 
 
         <div class="y-izgara y-izgara--2">
@@ -364,7 +366,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
       <!-- 3. FIRSAT ÜRÜNÜ -->
       <section class="y-kart" id="bolum-firsat" data-bolum="satis" hidden style="border-color:#F3B8C0">
         <div class="y-kart-ust-etiket" style="color:var(--flas)">Adım 3 · Fırsat Vitrini & Canlı Geri Sayım Sayacı</div>
-        <h2>⚡ Fırsat Ürünü ve Geri Sayım Sayacı</h2>
+        <h2><PIkon ad="simsek" /> Fırsat Ürünü ve Geri Sayım Sayacı</h2>
 
 
         <label class="y-secim">
@@ -413,7 +415,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
       <!-- 4. STOK VE SATIŞ TAKİBİ -->
       <section class="y-kart" id="bolum-stok" data-bolum="fiyat" hidden>
-        <h2>Stok ve Model Kodu</h2>
+        <h2><PIkon ad="katman" /> Stok ve Model Kodu</h2>
 
 
         <div class="y-izgara y-izgara--3">
@@ -451,20 +453,21 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
           </div>
         </div>
 
-        {urunSatis && (
-          <div class="y-stok-satis-cubugu" style="margin-top:12px">
-            <span>📊 <strong>Bu Ürünün Satış Özeti:</strong></span>
-            <span>✅ Onaylı Satış: <strong>{urunSatis.onayliAdet} adet</strong> ({formatTL(urunSatis.onayliCiro)})</span>
-            <span>🚚 Kargolanan/Teslim: <strong>{urunSatis.kargolananAdet} adet</strong></span>
-            <span>⏳ Ödeme Bekleyen: <strong>{urunSatis.bekleyenAdet} adet</strong></span>
-            <span>✕ İptal Edilen: <strong>{urunSatis.iptalAdet} adet</strong></span>
+        {urunSatis && <>
+          <h3 class="y-alt-baslik-kucuk">Bu ürünün web satış özeti</h3>
+          <div class="y-mini-ozet">
+            <div class="y-mini-ozet--yesil"><PIkon ad="tik-daire" boyut={18} /><strong>{urunSatis.onayliAdet} adet</strong><span>Onaylı satış · {formatTL(urunSatis.onayliCiro)}</span></div>
+            <div><PIkon ad="kargo" boyut={18} /><strong>{urunSatis.kargolananAdet} adet</strong><span>Kargolanan / teslim</span></div>
+            <div class="y-mini-ozet--turuncu"><PIkon ad="saat" boyut={18} /><strong>{urunSatis.bekleyenAdet} adet</strong><span>Ödeme bekleyen</span></div>
+            <div class="y-mini-ozet--kirmizi"><PIkon ad="carpi-daire" boyut={18} /><strong>{urunSatis.iptalAdet} adet</strong><span>İptal edilen</span></div>
           </div>
-        )}
+        </>}
+        <p class="y-bilgi-satiri"><PIkon ad="bilgi" boyut={17} /><span>Stok tek sayıdır: web, Trendyol ve Hepsiburada aynı depodan satar. Değişiklik stok hareketlerine sebebiyle yazılır; kanallara bildirilen adetleri <a class="y-link" href="/yonetim/siparisler/kanallar#eslestirmeler">Ürün eşleştirme</a> ekranında görebilirsiniz. <a class="y-link" href="/yonetim/urunler#stok-gecmisi">Stok hareketleri</a></span></p>
       </section>
 
       <!-- 5. GÖRSELLER -->
       <section class="y-kart" id="bolum-gorsel" data-bolum="fotograf" hidden>
-        <h2>Görseller</h2>
+        <h2><PIkon ad="resim" /> Görseller</h2>
 
 
         {u.gorseller.length > 0 && (
@@ -492,7 +495,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
       <!-- 6. ROZETLER VE VİTRİN -->
       <section class="y-kart" id="bolum-rozet" data-bolum="satis" hidden>
-        <h2>Rozetler, Garanti ve Hediye</h2>
+        <h2><PIkon ad="yildiz" /> Rozetler, Garanti ve Hediye</h2>
 
 
         <div class="y-izgara y-izgara--2">
@@ -565,7 +568,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
       <!-- 7. ÖNE ÇIKAN BİLGİLER & FAYDALAR -->
       <section class="y-kart" id="bolum-ozellik" data-bolum="satis" hidden>
-        <h2>Öne Çıkan Bilgiler </h2>
+        <h2><PIkon ad="liste" /> Öne Çıkan Bilgiler </h2>
 
 
         <div class="y-tekrar" data-tekrar="bilgi">
@@ -609,7 +612,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
 
-        <h2>Fayda Bölümleri </h2>
+        <h2><PIkon ad="tik-daire" /> Fayda Bölümleri </h2>
         <p class="y-ipucu">Boş bırakırsanız ürünün kategorisine göre otomatik başlık (örn. "Neden bu takım?", "Neden bu tava?") gösterilir.</p>
         <div class="y-izgara y-izgara--3" style="margin-bottom:12px">
           <div class="y-alan">
@@ -699,7 +702,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
 
         </details>
-        <h2>Teknik özellikler ve kutu içeriği</h2>
+        <h2><PIkon ad="ayarlar-cubuk" /> Teknik özellikler ve kutu içeriği</h2>
         <p class="y-help">Ürün kutusundaki barkodu “Barkod (EAN)”, doğrulanmış üretici model kodunu “MPN” satırı olarak ekleyin. Bu alanlar ürün akışında kullanılır.</p>
         <div class="y-tekrar">
           {u.teknik.map(([e, d]) => (
@@ -738,7 +741,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
 
       <!-- 9. SSS, TAMAMLAYICI ÜRÜNLER VE İÇ NOTLAR -->
       <section class="y-kart" id="bolum-sss" data-bolum="detay" hidden>
-        <h2>Sık Sorulan Sorular (Ürüne Özel) </h2>
+        <h2><PIkon ad="soru" /> Sık Sorulan Sorular (Ürüne Özel) </h2>
         <div class="y-tekrar">
           {u.sss.map((x) => (
             <div class="y-tekrar__satir">
@@ -764,7 +767,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         {digerUrunler.length > 0 && (
           <>
             <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
-            <h2>Bununla İyi Gider (Tamamlayıcı Ürünler) </h2>
+            <h2><PIkon ad="set" /> Bununla İyi Gider (Tamamlayıcı Ürünler) </h2>
 
             <p class="y-ipucu">Önizleme tüm seçilenleri gösterir. Mağazada yayındaki ve stoktaki ürünler gösterilir.</p>
             {tamamlayiciGruplar.map((grup) => <fieldset class="y-kart y-block-gap">
@@ -780,7 +783,7 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
       </section>
       <section class="y-kart" data-bolum="gelismis" hidden>
-                <h2>Arama görünümü ve iç notlar</h2>
+                <h2><PIkon ad="buyutec" /> Arama görünümü ve iç notlar</h2>
         <p class="y-ipucu">Sayfa başlığı ürün adı ve markadan, arama açıklaması kısa açıklamadan oluşturulur.</p>
         <p class="y-block-gap"><strong>{u.marka} {u.ad} · {m.site.ad}</strong></p>
         {u.ozet && <p class="muted">{u.ozet}</p>}
@@ -794,6 +797,14 @@ const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'sh
         <button class="btn btn--tehlike btn--kucuk" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün kalıcı olarak silinsin mi?">Ürünü sil</button>
       </details>}
     </form>
+    <aside class="y-kart y-urun-editor-ozet" aria-label={yeni ? 'Yayınlama kontrolü' : 'Ürün özeti'}>
+      <h2><PIkon ad="goz" /> {yeni ? 'Yayınlama kontrolü' : 'Mağaza kartı'}</h2>
+      {u.gorseller[0] && <img src={u.gorseller[0].src} alt="" width="280" height="200" decoding="async" />}
+      {u.ad && <p><strong>{u.marka} {u.kisaAd || u.ad}</strong></p>}
+      {!yeni && <dl class="y-money-lines y-money-lines--kucuk"><div><dt>Satış fiyatı</dt><dd>{u.fiyat > 1 ? formatTL(u.fiyat) : 'Girilmedi'}</dd></div><div><dt>Depo stoku</dt><dd>{u.stok} adet</dd></div></dl>}
+      {eksikBilgiler.length > 0 ? <><p class="y-help">Yayın için gerekenler</p><ul>{eksikBilgiler.map((x) => <li>{x}</li>)}</ul></> : <p class="y-help">Yayın için gerekli bilgiler tamam.</p>}
+      <p class="y-help">Formdaki değişiklikleri görmek için Önizle’yi açın.</p>
+    </aside>
     <Onizleme id="urun-onizleme" tur="urun" kayit={u.id} />
   </div>
 </Yonetim>

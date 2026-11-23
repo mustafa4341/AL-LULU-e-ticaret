@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
 import { tumYorumlar, yorumGuncelle, type YorumDurumu } from '../../lib/yorum';
 import { yTarih } from '../../lib/yonetimRapor';
 
@@ -29,16 +30,20 @@ const urunAdi = (id: string) => Astro.locals.katalog.urunBul(id)?.kisaAd ?? id;
 const sekmeler: [YorumDurumu | 'tumu', string][] = [['bekliyor', `Onay bekleyen (${sayi('bekliyor')})`], ['yayinda', `Yayında (${sayi('yayinda')})`], ['reddedildi', `Yayınlanmayan (${sayi('reddedildi')})`], ['tumu', 'Tümü']];
 ---
 <Yonetim baslik="Değerlendirmeler" altBaslik="Yalnızca teslim edilmiş siparişlerin müşterileri yorum yazabilir" aktif="yorumlar" basari={basari} hatalar={hatalar}>
+  <div class="y-metrics y-metrics--finans">
+    <a class:list={['y-metric', { 'y-metric--turuncu': sayi('bekliyor') > 0 }]} href="/yonetim/yorumlar?durum=bekliyor"><PIkon ad="saat" /><span>Onay bekleyen</span><strong>{sayi('bekliyor')}</strong><small>Yayınlamadan önce okuyun</small></a>
+    <a class="y-metric y-metric--yesil" href="/yonetim/yorumlar?durum=yayinda"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{sayi('yayinda')}</strong><small>Ürün sayfasında görünüyor</small></a>
+    <a class="y-metric" href="/yonetim/yorumlar?durum=reddedildi"><PIkon ad="carpi-daire" /><span>Yayınlanmayan</span><strong>{sayi('reddedildi')}</strong><small>Kurala uymayan yorumlar</small></a>
+    <a class="y-metric" href="/yonetim/yorumlar?durum=tumu"><PIkon ad="yildiz" /><span>Ortalama puan</span><strong>{tum.length ? (tum.reduce((n, y) => n + y.puan, 0) / tum.length).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—'}</strong><small>{tum.length} değerlendirme</small></a>
+  </div>
   <section class="y-kart">
-    <p class="muted" style="margin-top:0">
-      Kural: Olumsuz yorumlar da yayınlanmalı. Yalnızca hakaret, kişisel bilgi (telefon, adres) veya ürünle ilgisiz içerik içeren yorumları “Yayınlama”.
-      Olumsuz yoruma kibar bir yanıt yazmak güven verir.
-    </p>
-    <nav class="y-sekme" style="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0">
-      {sekmeler.map(([d, ad]) => <a class:list={['y-chip', d === filtre ? 'y-chip--turuncu' : 'y-chip--gri']} href={`/yonetim/yorumlar?durum=${d}`}>{ad}</a>)}
+    <div class="y-kart__bas"><div><h2><PIkon ad="yildiz" /> Müşteri değerlendirmeleri</h2></div></div>
+    <div class="y-veri-not"><PIkon ad="bilgi" boyut={18} /><p><strong>Yayın kuralı</strong>Olumsuz yorumlar da yayınlanmalı. Yalnızca hakaret, kişisel bilgi (telefon, adres) veya ürünle ilgisiz içerik içeren yorumları “Yayınlama”. Olumsuz yoruma kibar bir yanıt yazmak güven verir.</p></div>
+    <nav class="y-filtreler" aria-label="Yorum durumları">
+      {sekmeler.map(([d, ad]) => <a href={`/yonetim/yorumlar?durum=${d}`} aria-current={d === filtre ? 'page' : undefined}>{ad}</a>)}
     </nav>
-    {liste.length === 0 ? <p class="muted">Bu listede yorum yok.</p> : liste.map((y) => (
-      <article style="border-top:1px solid var(--line);padding:14px 0;display:grid;gap:8px">
+    {liste.length === 0 ? <p class="y-bos-satir"><PIkon ad="yildiz" boyut={20} />Bu listede yorum yok.</p> : liste.map((y) => (
+      <article class="y-yorum" style="border-top:1px solid var(--line);padding:16px 0;display:grid;gap:10px">
         <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap">
           <span><b>{'★'.repeat(y.puan)}{'☆'.repeat(5 - y.puan)}</b> · {y.ad} · {urunAdi(y.urunId)}</span>
           <span class="muted"><a class="y-link" href={`/yonetim/siparisler/${y.siparisNo}`}>{y.siparisNo}</a> · {yTarih.format(new Date(y.tarih))}</span>

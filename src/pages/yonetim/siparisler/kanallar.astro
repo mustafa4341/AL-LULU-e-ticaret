@@ -1,5 +1,7 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, supabaseBagliMi, webAyrilanAdetleri } from '../../../lib/depo';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle, type IlanEslesmesi } from '../../../lib/kanalFiyat';
 import { KANALLAR, KANAL_LISTESI, bosAyarlar, kanalHedefStok, kanalMi, tarihOku } from '../../../lib/pazaryeri';
@@ -12,7 +14,7 @@ import { stokSebebi, yTarih } from '../../../lib/yonetimRapor';
 const yol = '/yonetim/siparisler/kanallar';
 const hatalar: string[] = [];
 const ok = Astro.url.searchParams.get('ok');
-const duzenlenenKanal = Astro.url.searchParams.get('eslestirme');
+let duzenlenenKanal = Astro.url.searchParams.get('eslestirme');
 const bagli = supabaseBagliMi();
 let ayar = bosAyarlar();
 /* Üç okuma aynı anda: ayar satırı (iki çağrı tek isteği paylaşır) ve mağaza */
@@ -90,6 +92,7 @@ if (Astro.request.method === 'POST' && depoHazir) {
         k.sonStokHata = 'Satıcı paneli kontrolü sonrasında önceki stok işlemi kapatıldı. Yeni kanal okuması bekleniyor.';
       });
     } else if (eylem === 'urun-ayari') {
+      duzenlenenKanal = kanal;
       const urunId = String(f.get('urunId') ?? '');
       const kod = String(f.get('kod') ?? '').trim();
       const satista = f.get('satista') === 'on';
@@ -157,16 +160,26 @@ const zamanlayiciAnahtariVar = (pazaryeriOrtam('CRON_SECRET')?.length ?? 0) >= 3
 const otomatikYazma = otomatikStokYazmaAcik();
 const simdi = Date.now();
 ---
-<Yonetim baslik="Satış kanalları" altBaslik="Trendyol ve Hepsiburada siparişlerini ve ortak stoğu yönetin." aktif="siparisler" {basari} {hatalar}>
+<Yonetim baslik="Satış Kanalları" altBaslik="Trendyol ve Hepsiburada siparişlerini ve ortak stoğu yönetin." aktif="siparisler" {basari} {hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/siparisler">Siparişlere dön</a>
-    <a class="btn btn--cizgi" href="#fiyatlar">Fiyatlar</a>
-    {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit">Şimdi eşitle</button></form>}
+    <a class="btn btn--cizgi" href="#fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyatlar</a>
+    <a class="btn btn--cizgi" href="#eslestirmeler"><PIkon ad="degistir" boyut={18} />Ürün eşleştirme</a>
+    {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit"><PIkon ad="yenile" boyut={18} />Şimdi eşitle</button></form>}
   </div>
 
   {!depoHazir && <p class="y-uyari-satir" role="status">Kanal ayarları kullanılamıyor. Veritabanı bağlantısını ve pazaryeri tablolarını kontrol edin.</p>}
 
   <div class="kanal-izgara">
+    <section class="y-kart kanal kanal--web" id="web">
+      <div class="y-kart__bas"><h2><KanalLogo kanal="web" /> Web sitesi</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu&amp;kanal=web">Siparişler</a></div>
+      <dl class="kanal-durum">
+        <div><dt>Mağaza durumu</dt><dd>{magaza.site.tadilat.aktif ? 'Bakımda' : 'Yayında'}</dd></div>
+        <div><dt>Stok kaynağı</dt><dd>Ortak depo</dd></div>
+        <div><dt>Hazırlanacak</dt><dd>{web?.filter((s) => s.durum === 'odendi' && !s.paytr?.test && !s.paytr?.stokEksik).length ?? '—'}</dd></div>
+        <div><dt>Kargolanacak</dt><dd>{web?.filter((s) => s.durum === 'hazirlaniyor' && !s.paytr?.test).length ?? '—'}</dd></div>
+      </dl>
+      <a class="btn btn--cizgi" href="/yonetim/site-duzeni">Mağaza görünümü</a>
+    </section>
   {KANAL_LISTESI.map((kanal) => {
     const k = ayar.kanallar[kanal];
     const api = pazaryeriApiDurumu(kanal);
@@ -179,7 +192,7 @@ const simdi = Date.now();
       : k.bekleyenStok ? 'Kanal onayı bekleniyor' : eslesen === 0 ? 'İlan eşleştirmesi bekliyor' : 'Otomatik';
     return <section class:list={['y-kart', 'kanal', 'kanal--' + kanal]} id={kanal}>
       <div class="y-kart__bas">
-        <h2>{KANALLAR[kanal]}</h2>
+        <h2><KanalLogo kanal={kanal} /> {KANALLAR[kanal]}</h2>
         <a class="y-link" href={panel[kanal]} target="_blank" rel="noopener noreferrer">Satıcı paneli ↗</a>
       </div>
       <dl class="kanal-durum">
@@ -188,12 +201,17 @@ const simdi = Date.now();
         <div><dt>Son otomatik çekim</dt><dd>{zaman(k.sonOtomatikApi)}</dd></div>
         <div><dt>Son başarılı çekim</dt><dd>{zaman(k.sonApi)}</dd></div>
         <div><dt>Stok gönderimi</dt><dd>{stokDurumu}</dd></div>
+        <div><dt>Bağlı ürünler</dt><dd>{eslesen}</dd></div>
+        <div><dt>Başlangıç sayımı</dt><dd class:list={{ 'y-uyari-kucuk': !k.stokBaslangic }}>{k.stokBaslangic ? zaman(k.stokBaslangic) : 'Girilmedi'}</dd></div>
+        <div><dt>Güvenlik payı</dt><dd>{k.guvenlikPayi} adet</dd></div>
+        {k.bekleyenStok && <div class="kanal-durum--uyari"><dt>Bekleyen stok işlemi</dt><dd class="y-uyari-kucuk">{k.bekleyenStok.kalemler.length} ürün · kanal onayı bekliyor</dd></div>}
       </dl>
 
+      <a class="btn btn--cizgi" href={'?eslestirme=' + kanal + '#eslestirme-' + kanal} data-astro-prefetch="false" data-eslestirme-ac={'eslestirme-' + kanal}><PIkon ad="degistir" boyut={18} />Ürün eşleştirmelerini aç</a>
       {kanal === 'trendyol' && apiHazir && <p class="kanal-kisayol">
-        <a class="btn btn--sepet" href="/yonetim/siparisler/trendyol-urunler">Trendyol’a ürün gönder</a>
-        <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru">İadeler</a>
-        <a class="btn btn--cizgi" href="/yonetim/finans/faturalar?kanal=trendyol">Faturalar</a>
+        <a class="btn btn--sepet" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a ürün gönder</a>
+        <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru"><PIkon ad="iade" boyut={18} />İadeler</a>
+        <a class="btn btn--cizgi" href="/yonetim/finans/faturalar?kanal=trendyol"><PIkon ad="fatura" boyut={18} />Faturalar</a>
         <span class="y-help">{Object.values(k.ilanlar).filter((x) => x.durum === 'onaylandi').length} ilan API ile açıldı · fiyat = sitedeki fiyat</span>
       </p>}
       {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}
@@ -233,42 +251,13 @@ const simdi = Date.now();
         </form>
       </details>
 
-      <details class="kanal-bolum" open={duzenlenenKanal === kanal} data-eslestirmeler>
-        <summary>Ürün eşleştirmeleri ({eslesen} bağlı)</summary>
-        <p class="y-help">{KOD_YARDIM[kanal]}</p>
-        {urunler.length > 0 && <label class="y-alan kanal-ara" hidden>Ürün veya ilan kodu ara
-          <input type="search" data-eslestirme-ara />
-        </label>}
-        <p class="y-help" role="status" data-eslestirme-bos hidden>Aramanıza uyan ürün yok.</p>
-        <div>
-          {urunler.map((u) => {
-            const eslesme = k.urunler[u.id];
-            const hedef = ayrilan && kanalHedefStok(Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0)), k);
-            const oneri = kanal === 'trendyol' ? urunGtin(u) : u.sku || undefined;
-            return <form method="post" id={`${kanal}-${u.id}`} class:list={['kanal-urun', { 'is-bagli': eslesme?.kod }]} data-eslestirme-urun={`${u.marka} ${u.ad} ${u.sku} ${oneri ?? ''} ${eslesme?.kod ?? ''}`}>
-              <input type="hidden" name="kanal" value={kanal} />
-              <input type="hidden" name="urunId" value={u.id} />
-              <div class="kanal-urun__ad">
-                <strong>{u.marka} {u.kisaAd}</strong>
-                <small>{eslesme?.kod ? 'Bağlı' : 'Bağlı değil'} · Depo {u.stok}{eslesme?.kod && hedef !== undefined ? ` · Hedef ${eslesme.satista ? hedef : 0}` : ''}{eslesme?.bildirilen !== undefined ? ` · Kanalda ${eslesme.bildirilen}` : ''}</small>
-              </div>
-              <label class="y-alan">{kanal === 'trendyol' ? 'Barkod' : 'Satıcı stok kodu'}
-                <input name="kod" value={eslesme?.kod ?? ''} placeholder={oneri} maxlength="120" required disabled={!depoHazir || Boolean(k.bekleyenStok)} autocomplete="off" />
-              </label>
-              <label class="kanal-onay"><input type="checkbox" name="satista" checked={eslesme?.satista ?? true} disabled={!depoHazir || Boolean(k.bekleyenStok)} /> Satışa açık</label>
-              <button class="btn btn--cizgi" type="submit" name="eylem" value="urun-ayari" disabled={!depoHazir || Boolean(k.bekleyenStok)}>Kaydet</button>
-            </form>;
-          })}
-          {!urunler.length && <p>Katalogda ürün yok.</p>}
-        </div>
-      </details>
 
     </section>;
   })}
   </div>
 
   <section class="y-kart kanal-fiyatlar" id="fiyatlar" aria-labelledby="fiyatlar-baslik">
-    <div class="y-kart__bas"><h2 id="fiyatlar-baslik">Fiyatlar ve Trendyol ilanları</h2></div>
+    <div class="y-kart__bas"><h2 id="fiyatlar-baslik"><PIkon ad="etiket" /> Fiyatlar ve Trendyol ilanları</h2></div>
     <p class="y-help">Trendyol ve Hepsiburada fiyatı, müşterinin sitede ödediği son fiyatla (sepette indirim dahil) aynı tutulur. Sitede fiyatı değiştirdiğinizde 5 dakika içinde kanala gider. Bu yalnız sitedeki bir ürüne bağlı ilanlarda çalışır. Trendyol’da üstü çizili eski fiyat gösterilmez, çünkü yönetmelik indirimin her kanalın kendi önceki fiyatına dayanmasını istiyor.</p>
     <div class="kanal-kisayol">
       <form method="post"><button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-esitle" disabled={!depoHazir || !fiyatKanallari.length}>Fiyatları şimdi siteyle eşitle</button></form>
@@ -307,8 +296,50 @@ const simdi = Date.now();
     </div>}
   </section>
 
+  <section id="eslestirmeler" class="kanal-eslesmeler">
+    <div class="y-kart__bas"><h2><PIkon ad="degistir" /> Ürün Eşleştirme</h2><a class="y-link" href="#hareketler">Stok hareketleri</a></div>
+    {KANAL_LISTESI.map((kanal) => {
+      const k = ayar.kanallar[kanal];
+      const eslesen = Object.values(k.urunler).filter((u) => u.kod).length;
+      return <details class="y-kart kanal-eslesme" id={'eslestirme-' + kanal} open={duzenlenenKanal === kanal} data-eslestirmeler>
+        <summary><KanalLogo kanal={kanal} boyut="kucuk" /> {KANALLAR[kanal]} <span class="y-chip y-chip--gri">{eslesen} bağlı</span></summary>
+        <p class="y-help">{KOD_YARDIM[kanal]}</p>
+        {urunler.length > 0 && <label class="y-alan kanal-ara" hidden>Ürün veya ilan kodu ara
+          <input type="search" data-eslestirme-ara />
+        </label>}
+        <p class="y-help" role="status" data-eslestirme-bos hidden>Aramanıza uyan ürün yok.</p>
+        <div>
+          {urunler.map((u) => {
+            const eslesme = k.urunler[u.id];
+            const satilabilir = ayrilan && Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0));
+            const hedef = satilabilir === undefined ? undefined : kanalHedefStok(satilabilir, k);
+            const oneri = kanal === 'trendyol' ? urunGtin(u) : u.sku || undefined;
+            return <form method="post" id={`${kanal}-${u.id}`} class:list={['kanal-urun', { 'is-bagli': eslesme?.kod }]} data-eslestirme-urun={`${u.marka} ${u.ad} ${u.sku} ${oneri ?? ''} ${eslesme?.kod ?? ''}`}>
+              <input type="hidden" name="kanal" value={kanal} />
+              <input type="hidden" name="urunId" value={u.id} />
+              <div class="kanal-urun__ad">
+                <a class="y-link" href={'/yonetim/urunler/' + u.id}>
+                  {u.gorseller[0] && <img src={u.gorseller[0].src} alt="" width="40" height="40" loading="lazy" decoding="async" />}
+                  <strong>{u.marka} {u.kisaAd}</strong>
+                </a>
+                <span class:list={['y-chip', eslesme?.kod ? 'y-chip--yesil' : 'y-chip--turuncu']}>{eslesme?.kod ? 'Eşleşti' : 'Eşleşme bekliyor'}</span>
+                <dl class="kanal-stok"><div><dt>Depo</dt><dd>{u.stok}</dd></div><div><dt>Ayrılan (web)</dt><dd>{ayrilan ? ayrilan.get(u.id) ?? 0 : '—'}</dd></div><div><dt>Satılabilir</dt><dd>{satilabilir ?? '—'}</dd></div><div><dt>Kanal hedefi</dt><dd>{eslesme?.kod && hedef !== undefined ? eslesme.satista ? hedef : 0 : '—'}</dd></div><div><dt>Kanala bildirilen</dt><dd>{eslesme?.bildirilen ?? '—'}</dd></div></dl>
+              </div>
+              <label class="y-alan">{kanal === 'trendyol' ? 'Barkod' : 'Satıcı stok kodu'}
+                <input name="kod" value={eslesme?.kod ?? ''} placeholder={oneri} maxlength="120" required disabled={!depoHazir || Boolean(k.bekleyenStok)} autocomplete="off" />
+              </label>
+              <label class="kanal-onay"><input type="checkbox" name="satista" checked={eslesme?.satista ?? true} disabled={!depoHazir || Boolean(k.bekleyenStok)} /> Satışa açık</label>
+              <button class="btn btn--cizgi" type="submit" name="eylem" value="urun-ayari" disabled={!depoHazir || Boolean(k.bekleyenStok)}>Kaydet</button>
+            </form>;
+          })}
+          {!urunler.length && <p>Katalogda ürün yok.</p>}
+        </div>
+      </details>;
+    })}
+  </section>
+
   <details class="y-kart kanal-bolum" id="hareketler">
-    <summary>Son stok hareketleri</summary>
+    <summary><PIkon ad="gecmis" /> Son stok hareketleri</summary>
     {hareketler.length > 0 ? <ul class="kanal-hareketler">
       {hareketler.map((h) => <li><time datetime={h.tarih}>{zaman(h.tarih)}</time><strong>{urunAdlari.get(h.urunId) ?? h.urunId}</strong><span>{h.onceki} → {h.sonraki}</span><span>{stokSebebi(h.sebep)}</span></li>)}
     </ul> : <p>Henüz stok hareketi yok.</p>}
@@ -316,6 +347,17 @@ const simdi = Date.now();
 </Yonetim>
 
 <script>
+  for (const link of document.querySelectorAll<HTMLAnchorElement>('[data-eslestirme-ac]')) {
+    link.addEventListener('click', (e) => {
+      if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      const bolum = document.getElementById(link.dataset.eslestirmeAc ?? '');
+      if (!(bolum instanceof HTMLDetailsElement)) return;
+      e.preventDefault();
+      bolum.open = true;
+      bolum.scrollIntoView();
+      bolum.querySelector('summary')?.focus({ preventScroll: true });
+    });
+  }
   for (const bolum of document.querySelectorAll('[data-eslestirmeler]')) {
     const ara = bolum.querySelector<HTMLInputElement>('[data-eslestirme-ara]');
     const bos = bolum.querySelector<HTMLElement>('[data-eslestirme-bos]');
@@ -333,8 +375,9 @@ const simdi = Date.now();
 </script>
 
 <style>
-  .kanal-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 390px), 1fr)); gap: 14px; align-items: start; margin-bottom: 14px; }
+  .kanal-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 270px), 1fr)); gap: 14px; align-items: start; margin-bottom: 14px; }
   .kanal { margin: 0; scroll-margin: 5rem; border-top: 4px solid #f27a1a; }
+  .kanal--web { border-top-color: #a77d51; }
   .kanal--hepsiburada { border-top-color: #6b4fbb; }
   .kanal h2 { font-size: 18px; }
   .kanal-bolum { border-top: 1px solid var(--y-border); }
@@ -349,13 +392,21 @@ const simdi = Date.now();
   .kanal-urun { grid-template-columns: minmax(0, 1fr) auto auto; align-items: end; padding-block: .75rem; border-bottom: 1px solid var(--y-border); scroll-margin-top: 5rem; }
   .kanal-urun:target { outline: 2px solid var(--y-gold); outline-offset: 4px; }
   .kanal-ara[hidden], .kanal-urun[hidden], [data-eslestirme-bos][hidden] { display: none; }
+  .kanal-eslesmeler > .y-kart__bas { margin-bottom: 8px; }
+  .kanal-eslesmeler h2 { font-size: 1.2rem; }
   .kanal-urun__ad { grid-column: 1 / -1; }
+  .kanal-urun__ad .y-link { display: inline-flex; align-items: center; min-height: 44px; gap: 8px; margin-right: 9px; }
+  .kanal-urun__ad img { flex: none; object-fit: contain; border: 1px solid var(--y-border); border-radius: 7px; }
+  .kanal-stok { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 115px), 1fr)); gap: 6px; margin: 8px 0; }
+  .kanal-stok div { padding: 8px; background: var(--y-bg); border-radius: 8px; }
+  .kanal-stok dt { color: var(--y-muted); font-size: .8rem; }
+  .kanal-stok dd { margin: 0; font-weight: 700; }
   .kanal-urun.is-bagli .kanal-urun__ad small:first-of-type { color: #0a7f3f; }
   .kanal-urun small { display: block; margin-top: .25rem; }
   .kanal-onay { white-space: nowrap; padding-block: .55rem; display: inline-flex; gap: 6px; align-items: center; min-height: 44px; }
   .kanal-hareketler { list-style: none; padding: 0; margin: 0; }
   .kanal-hareketler li { grid-template-columns: minmax(0, 9rem) minmax(0, 1.5fr) 4rem minmax(0, 1.5fr); padding-block: .6rem; border-top: 1px solid var(--y-border); }
-  .kanal-kisayol { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 0 0 1rem; }
+  .kanal-kisayol { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 12px 0 1rem; }
   .kanal-kurtarma { display: grid; justify-items: start; gap: .7rem; padding-bottom: 1rem; }
   .kanal-fiyatlar { margin-bottom: 14px; scroll-margin-top: 5rem; }
   .kanal-fiyatlar h2 { font-size: 1.2rem; }

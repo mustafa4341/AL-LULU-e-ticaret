@@ -1,6 +1,7 @@
 ---
 import '../../styles/global.css';
 import '../../styles/yonetim.css';
+import '../../styles/panel-tasarim.css';
 import { basariliGiris, basarisizGiris, girisEngelliMi, oturumAc, parolaDogruMu, yonetimHazirMi } from '../../lib/oturum';
 import { istemciIp } from '../../lib/guvenlik';
 
@@ -38,9 +39,10 @@ if (Astro.request.method === 'POST' && hazir) {
     <title>Giriş</title>
     <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
   </head>
-  <body class="y-giris">
-    <form method="post">
-      <img src="/img/logo/al-lulu-home.webp" alt="Al Lulu Home" width="720" height="641" />
+  <body class="y-giris y-giris-panel">
+    <form method="post" class="y-giris-kart">
+      <img src="/img/logo/amblem.webp" alt="" width="64" height="64" />
+      <p class="y-giris-brand">AL LULU HOME</p>
       <h1>Yönetim paneli</h1>
       {!hazir ? (
         <p class="y-bildirim y-bildirim--hata">Panel parolası ayarlanmamış. Proje klasöründeki <code>.env</code> dosyasına <code>YONETIM_PAROLA</code> ve en az 32 karakterlik <code>OTURUM_GIZLI</code> yazın.</p>

@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import Ikon from '../../../components/Ikon.astro';
 import { siparisleriOku } from '../../../lib/depo';
 import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, kalanTutar, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
@@ -124,7 +125,7 @@ const hazirAraliklar = (() => {
 })();
 const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyor' ? 'turuncu' : d === 'iptal' ? 'gri' : 'yesil';
 ---
-<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
+<Yonetim baslik="Finans ve Belgeler" altBaslik="Gelir, gider, belge ve muhasebe kayıtlarını takip edin." aktif="finans" basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'?sekme=' + id + (id === 'ozet' || id === 'giderler' ? '&ay=' + ay : '')} aria-current={sekme === id ? 'page' : undefined}>{ad}</a>)}
     <a href="/yonetim/finans/faturalar">Faturalar</a>
@@ -133,18 +134,19 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
 
   {sekme === 'ozet' && <>
     <div class="y-metrics y-metrics--finans">
-      <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><span>Bugünkü web satışı (onaylı)</span><strong>{finansPara(bugunSatis.webSatis - bugunSatis.webIade)}</strong></a>
-      <a class="y-metric" href="/yonetim/siparisler?durum=belgesiz"><span>Belgesi hazırlanmamış</span><strong>{belgeGerekenler.length}</strong></a>
-      <a class="y-metric" href={'?sekme=giderler&ay=' + bugun.slice(0, 7)}><span>Bu ayki giderler</span><strong>{finansPara(buAy.gider)}</strong></a>
-      <a class="y-metric" href={'?sekme=ozet&ay=' + bugun.slice(0, 7) + '#ay-hesabi'}><span>Tahmini kalan · bu ay</span><strong>{finansPara(kalan(buAy))}</strong>
+      <a class="y-metric" href="/yonetim/siparisler?durum=tumu"><PIkon ad="trend" /><span>Bugünkü web satışı (onaylı)</span><strong>{finansPara(bugunSatis.webSatis - bugunSatis.webIade)}</strong></a>
+      <a class="y-metric" href="/yonetim/siparisler?durum=belgesiz"><PIkon ad="belge" /><span>Belgesi hazırlanmamış</span><strong>{belgeGerekenler.length}</strong></a>
+      <a class="y-metric" href={'?sekme=giderler&ay=' + bugun.slice(0, 7)}><PIkon ad="cuzdan" /><span>Bu ayki giderler</span><strong>{finansPara(buAy.gider)}</strong></a>
+      <a class="y-metric" href={'?sekme=ozet&ay=' + bugun.slice(0, 7) + '#ay-hesabi'}><PIkon ad="para" /><span>Tahmini kalan · bu ay</span><strong>{finansPara(kalan(buAy))}</strong>
         {buAy.tahmini === undefined && <small class="y-uyari-kucuk">Ürün maliyeti girilmedi</small>}</a>
     </div>
 
+    <div class="y-iki-sutun"><div>
     <section class="y-kart" id="ay-hesabi">
       <div class="y-kart__bas">
         <div class="y-ay-secici">
           <a class="y-icon-button" href={'?sekme=ozet&ay=' + ayKaydir(-1)} aria-label="Önceki ay">‹</a>
-          <h2>{ayDonemi.ad}</h2>
+          <h2><PIkon ad="takvim" /> {ayDonemi.ad}</h2>
           {ay < bugun.slice(0, 7) ? <a class="y-icon-button" href={'?sekme=ozet&ay=' + ayKaydir(1)} aria-label="Sonraki ay">›</a> : <span class="y-icon-button" aria-hidden="true"></span>}
         </div>
         <a class="y-link" href={disari('pdf', ayDonemi.bas, ayDonemi.son)}>Bu ayın özetini PDF indir</a>
@@ -164,7 +166,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
     </section>
 
     <section class="y-kart">
-      <h2>Son 6 ay</h2>
+      <h2><PIkon ad="grafik" /> Son 6 ay</h2>
       <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
         <thead><tr><th>Ay</th><th class="y-sayi">Satış</th><th class="y-sayi">İade</th><th class="y-sayi">Gider</th><th class="y-sayi">Kalan</th></tr></thead>
         <tbody>{son6.map((a) => <tr class:list={{ 'is-secili': a.bas.slice(0, 7) === ay }}>
@@ -175,9 +177,10 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
       </table></div>
       {son6.some((a) => a.r.tahmini === undefined) && <p class="y-help">* Ürün alış maliyeti girilmemiş ay; kalan kesin değildir.</p>}
     </section>
+    </div><div>
 
     <section class="y-kart">
-      <div class="y-kart__bas"><h2>İşlem gerektiren siparişler</h2><a class="y-link" href="/yonetim/siparisler">Siparişlere git</a></div>
+      <div class="y-kart__bas"><h2><PIkon ad="uyari" /> İşlem gerektiren siparişler</h2><a class="y-link" href="/yonetim/siparisler">Siparişlere git</a></div>
       {isler.length ? <ul class="y-task-list">
         {isler.slice(0, 10).map((s) => <li><a href={'/yonetim/siparisler/' + s.no + (gonderilecek(s) ? '' : '#belgeler')}>
           <span><strong>{s.no}</strong> · {s.musteri.ad} {s.musteri.soyad}</span>
@@ -185,6 +188,17 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
         </a></li>)}
       </ul> : <p class="muted">Bekleyen işlem yok.</p>}
     </section>
+    <section class="y-kart">
+      <div class="y-kart__bas"><h2><PIkon ad="simsek" /> Hızlı işlemler</h2></div>
+      <div class="y-hizli-islemler">
+        <a class="btn btn--sepet" href={'?sekme=giderler&ay=' + bugun.slice(0, 7) + '&yeni=diger'}><PIkon ad="arti" boyut={18} />Gider ekle</a>
+        <a class="btn btn--cizgi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" boyut={18} />Faturalar</a>
+        <a class="btn btn--cizgi" href="?sekme=raporlar"><PIkon ad="indir" boyut={18} />Muhasebeci raporu</a>
+        <a class="btn btn--cizgi" href="?sekme=belgeler"><PIkon ad="belge" boyut={18} />Belgeler</a>
+      </div>
+      <p class="y-help">Her gider tarih, kategori ve belgesiyle tutulur. Muhasebe dosyalarını Raporlar bölümünden indirebilirsiniz.</p>
+    </section>
+    </div></div>
   </>}
 
   {sekme === 'belgeler' && <>
@@ -311,7 +325,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
 
   {sekme === 'trendyol' && <>
     {(pazaryeriApiDurumu('trendyol') === 'canli' || pazaryeriApiDurumu('trendyol') === 'test') && <section class="y-kart">
-      <h2>Trendyol hesabımı çek</h2>
+      <h2><PIkon ad="indir" /> Trendyol hesabımı çek</h2>
       <p class="y-help">Satış, iade, komisyon, satıcı indirimi, kargo ve hizmet kesintilerini ve ödemeleri doğrudan Trendyol cari hesabından alır. Seçilen dönem her çekimde baştan hesaplanır, aynı sipariş iki kez sayılmaz. Kayıtlar sipariş teslim edildikten sonra oluşur.</p>
       <form class="y-toolbar" method="post">
         <input type="hidden" name="eylem" value="trendyol-cek" />
@@ -335,7 +349,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
       <button class="btn btn--cizgi">Uygula</button>
     </form>
     <section class="y-kart">
-      <h2>“Hesabıma ne kadar yatacak?”</h2>
+      <h2><PIkon ad="banka" /> “Hesabıma ne kadar yatacak?”</h2>
       <dl class="y-hesap">
         <div><dt>Brüt satış</dt><dd>{finansPara(rapor.trendyol.reduce((t, x) => t + x.brut, 0))}</dd></div>
         {(['indirim', 'iade', 'komisyon', 'hizmet', 'kargo', 'diger'] as const).map((k) => <div class="eksi"><dt>{TRENDYOL_TUTARLARI[k]}</dt><dd>−{finansPara(rapor.trendyol.reduce((t, x) => t + x[k], 0))}</dd></div>)}
@@ -361,7 +375,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
       <button class="btn btn--cizgi">Uygula</button>
       <span class="y-hazir-aralik">{hazirAraliklar.map(([ad, b, s]) => <a class="y-chip y-chip--gri" aria-current={b === bas && s === son ? 'true' : undefined} href={'?sekme=raporlar&baslangic=' + b + '&bitis=' + s}>{ad}</a>)}</span>
     </form>
-    <section class="y-kart"><div class="y-kart__bas"><h2>Dönem özeti · {bas} – {son}</h2><a class="btn btn--sepet" href={disari('pdf')}>PDF indir</a></div>
+    <section class="y-kart"><div class="y-kart__bas"><h2><PIkon ad="takvim" /> Dönem özeti · {bas} – {son}</h2><a class="btn btn--sepet" href={disari('pdf')}>PDF indir</a></div>
       <dl class="y-hesap">
         <div><dt>Onaylı web satışları <small>{rapor.satislar.length} sipariş</small></dt><dd>{finansPara(rapor.webSatis)}</dd></div>
         <div class="eksi"><dt>İade ve iptal geri ödemeleri</dt><dd>−{finansPara(rapor.webIade)}</dd></div>
@@ -378,7 +392,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
       <p class="y-help">Satışlar ödeme tarihine, iadeler geri ödeme tarihine göre sayılır. KDV, tahsilat ve muhasebe kârı ayrı değerlendirilir.</p>
     </section>
     <section class="y-kart">
-      <h2>Muhasebeci için dışa aktar</h2>
+      <h2><PIkon ad="indir" /> Muhasebeci için dışa aktar</h2>
       <p class="y-help">Tek Excel dosyasında: aylık özet, satışlar (belge numaralarıyla), iade ve iptaller, giderler, Trendyol kesintileri, Hepsiburada kayıtları ve belge listesi.</p>
       <div class="y-ust-aksiyonlar">
         <a class="btn btn--sepet" href={disari('excel')}>Excel indir</a>

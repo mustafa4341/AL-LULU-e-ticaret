@@ -1,5 +1,7 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import { siparisleriOku } from '../../../lib/depo';
 import { finansGunu, finansPara, gecerliGun, type FaturaKaydi } from '../../../lib/finans';
 import { faturaEki, faturaGuncelle, faturaKaydet, finansOku } from '../../../lib/finansDepo';
@@ -96,7 +98,7 @@ const iletimAciklamasi = (k: FaturaKanali) => k === 'trendyol' ? (tyBagli ? 'Tre
   : k === 'web' ? 'Müşteriye e-postayla gönder' : 'Hepsiburada’ya satıcı panelinden siz yükleyeceksiniz';
 const bugun = finansGunu();
 ---
-<Yonetim baslik="Finans & Belgeler" aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+<Yonetim baslik="Faturalar" altBaslik="GİB’de düzenlenen faturaları kaydedin ve iletim durumunu takip edin." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
     <a href={yol} aria-current="page">Faturalar{kesilecek.length > 0 && ` (${kesilecek.length})`}</a>
@@ -108,15 +110,15 @@ const bugun = finansGunu();
     <ol class="fm-adimlar">
       <li>Aşağıdan siparişin <strong>“Fatura bilgileri”</strong>ne basın. Alıcı, ürünler, KDV hariç fiyat ve KDV hazır gelir; her birinin yanında “Kopyala” var.</li>
       <li><a class="y-link" href={GIB_PORTAL} target="_blank" rel="noopener noreferrer">GİB e-Arşiv Portalı’na</a> İnteraktif Vergi Dairesi kullanıcı kodu ve şifresiyle girin. <em>Belge İşlemleri › Fatura Oluştur</em>’da bilgileri yapıştırın, “Onayla”yın ve PDF’ini indirin.</li>
-      <li>Buraya fatura numarasını ve PDF’i yükleyin. Sistem Trendyol’a kendisi yükler, web müşterisine e-postayla yollar, muhasebeci listesine yazar. Hepsiburada’da PDF’i satıcı panelinden yükleyip “Yükledim” deyin.</li>
+      <li>Fatura numarasını ve PDF’i kaydedin. Trendyol yüklemesini veya web müşterisine e-postayı ayrıca seçebilir, sonucunu faturanın iletim durumundan izleyebilirsiniz. Hepsiburada’da PDF’i satıcı panelinden yükleyip “Yükledim” deyin.</li>
     </ol>
     <p class="y-help">1 Ocak 2026’dan beri e-Fatura sistemine girmemiş satıcılar faturalarını GİB portalından e-Arşiv olarak keser; basit usul veya işletme defteri tutanlar için bu tarih 1 Ocak 2027. Hangisine tabi olduğunuzu muhasebecinize doğrulatın. Bireysel alıcının TC kimlik numarası bilinmiyorsa portalda {GENEL_TCKN} yazılır.</p>
   </details>
 
   <div class="y-metrics y-metrics--finans">
-    <a class="y-metric" href={filtre({ durum: 'kesilecek' })}><span>Faturası kesilecek</span><strong>{kesilecek.length}</strong></a>
-    <a class="y-metric" href={filtre({ durum: 'kesildi' })}><span>Müşteriye iletilecek</span><strong>{iletilecek.length}</strong></a>
-    <div class="y-metric"><span>Bu ay kesilen</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong></div>
+    <a class="y-metric y-metric--kirmizi" href={filtre({ durum: 'kesilecek' })}><PIkon ad="fatura" /><span>Faturası kesilecek</span><strong>{kesilecek.length}</strong><small>GİB'de düzenlenip kaydedilecek</small></a>
+    <a class="y-metric y-metric--turuncu" href={filtre({ durum: 'kesildi' })}><PIkon ad="gonder" /><span>Müşteriye iletilecek</span><strong>{iletilecek.length}</strong><small>Kaydedildi, iletim bekliyor</small></a>
+    <div class="y-metric"><PIkon ad="tik-daire" /><span>Bu ay kesilen</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong></div>
   </div>
 
   <nav class="y-sekmeler" aria-label="Fatura filtresi">
@@ -128,7 +130,7 @@ const bugun = finansGunu();
 
   {secili && <section class="y-kart fm-secili" id="secili">
     <div class="y-kart__bas">
-      <h2>{FATURA_KANAL_ADLARI[secili.kanal]} · {secili.siparisNo}</h2>
+      <h2><PIkon ad="fatura" /> {FATURA_KANAL_ADLARI[secili.kanal]} · {secili.siparisNo}</h2>
       <a class="y-link" href={filtre({})}>Kapat</a>
     </div>
     <p class="y-help">{tarih(secili.tarih)} · {secili.durumAdi}{secili.paketNo && secili.paketNo !== secili.siparisNo ? ` · Paket ${secili.paketNo}` : ''}</p>
@@ -197,7 +199,8 @@ const bugun = finansGunu();
       </div>
       <label class="y-alan">Fatura dosyası (PDF ya da fotoğraf)<input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" /><small class="muted">En fazla 4 MB. Portaldan “İndir” ile aldığınız PDF.</small></label>
       <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal !== 'hepsiburada'} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
-      <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Kaydet</button></div>
+      {secili.kanal !== 'hepsiburada' && <p class="y-help">Otomatik fatura iletimi açıksa PDF’i bulunan bekleyen kayıtlar da yeniden denenir. <a class="y-link" href="/yonetim/isler#otomatik-ayarlar">Otomatik iş ayarları</a></p>}
+      <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Fatura kaydını oluştur</button></div>
     </form>}
   </section>}
 
@@ -206,7 +209,7 @@ const bugun = finansGunu();
       <thead><tr><th>Sipariş</th><th>Kanal</th><th>Tarih</th><th>Alıcı</th><th class="y-sayi">Tutar</th><th>Fatura</th><th></th></tr></thead>
       <tbody>{liste.map((a) => <tr class:list={{ 'is-secili': a.anahtar === secili?.anahtar }}>
         <td data-etiket="Sipariş"><strong>{a.siparisNo}</strong><small class="y-table-note">{a.durumAdi}</small></td>
-        <td data-etiket="Kanal"><span class:list={['y-chip', 'y-chip--' + kanalRengi[a.kanal]]}>{FATURA_KANAL_ADLARI[a.kanal]}</span></td>
+        <td data-etiket="Kanal"><KanalLogo kanal={a.kanal} boyut="kucuk" ad /></td>
         <td data-etiket="Tarih" class="y-nowrap">{tarih(a.tarih)}</td>
         <td data-etiket="Alıcı">{a.alici.firma || a.alici.ad || '—'}</td>
         <td data-etiket="Tutar" class="y-sayi y-nowrap">{finansPara(a.toplam.genel)}</td>

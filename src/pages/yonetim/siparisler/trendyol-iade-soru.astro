@@ -1,5 +1,7 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import { metin, liste } from '../../../lib/form';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { tyIadeOnayla, tyIadeler, type TyIade } from '../../../lib/trendyolApi';
@@ -43,20 +45,39 @@ const DURUM: Record<string, [string, string]> = {
 const durumu = (d: string) => DURUM[d] ?? [d || '—', 'gri'];
 const zaman = (ms: number) => ms ? yTarih.format(new Date(ms)) : '—';
 const para = (n?: number) => n === undefined ? '' : n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' TL';
+const iadeSirasi = iadeler.map((iade, i) => ({
+  iade, id: 'iade-talebi-' + i,
+  bekleyen: iade.kalemler.filter((k) => k.durum === 'WaitingInAction').length,
+})).sort((a, b) => Number(b.bekleyen > 0) - Number(a.bekleyen > 0) || b.iade.tarih - a.iade.tarih);
+const acikIadeler = iadeSirasi.filter((x) => x.bekleyen > 0);
 ---
-<Yonetim baslik="Trendyol iadeleri" altBaslik="Depoya ulaşan iadeyi Trendyol paneline girmeden onaylayın." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
+<Yonetim baslik="Trendyol İadeleri" altBaslik="Gelen talepleri inceleyin, depoda kontrol edilen ürünlerin iadesini onaylayın." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
+  <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol">Satış kanalları</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
   </div>
   {!apiHazir && <p class="y-uyari-satir" role="status">Trendyol bağlantısı kurulmamış.</p>}
 
-  <>
-    <p class="y-help">Son 30 günün iadeleri. Ürün deponuza ulaşınca kontrol edin: sorun yoksa burada onaylayın. Ürün hasarlı, eksik ya da kullanılmışsa <strong>onaylamayın</strong>; Trendyol satıcı panelinden fotoğrafla “ret talebi” açın. 48 saat içinde işlem yapılmayan iade Trendyol tarafından otomatik kabul edilir.</p>
-    {iadeler.length === 0 && apiHazir && <p class="y-kart muted">Son 30 günde iade yok.</p>}
-    {iadeler.map((c) => {
-      const bekleyen = c.kalemler.filter((k) => k.durum === 'WaitingInAction');
-      return <section class="y-kart iade">
-        <div class="y-kart__bas"><h2>Sipariş {c.siparisNo}</h2><small class="muted">{zaman(c.tarih)}</small></div>
+    <p class="y-uyari">Hasarlı, eksik veya kullanılmış ürünler için Trendyol satıcı panelinden fotoğraflı ret talebi açın. Trendyol, 48 saat içinde işlem yapılmayan iadeyi otomatik kabul eder.</p>
+    {iadeler.length === 0 && apiHazir && hatalar.length === 0 && <p class="y-kart muted">Son 30 günde iade yok.</p>}
+    {iadeSirasi.length > 0 && <>
+    <div class="y-metrics y-metrics--finans">
+      <div class="y-metric"><PIkon ad="iade" /><span>Son 30 gün · iade talebi</span><strong>{iadeler.length}</strong></div>
+      <div class="y-metric y-metric--turuncu"><PIkon ad="saat" /><span>Onay bekleyen talep</span><strong>{acikIadeler.length}</strong></div>
+      <div class="y-metric y-metric--altin"><PIkon ad="kutu" /><span>Kontrol edilecek ürün kalemi</span><strong>{acikIadeler.reduce((n, x) => n + x.bekleyen, 0)}</strong></div>
+    </div>
+    <div class="y-operasyon-izgara iade-izgara">
+    <section class="y-kart">
+      <h2><PIkon ad="iade" /> İade talepleri</h2>
+      <ul class="y-is-listesi">{iadeSirasi.map(({ iade, id, bekleyen }) => <li><a href={'#' + id} data-ac={id}>
+        <span><strong>{iade.siparisNo}</strong><small class="y-table-note">{zaman(iade.tarih)}</small></span>
+        <span class:list={['y-chip', bekleyen ? 'y-chip--turuncu' : 'y-chip--gri']}>{bekleyen ? 'Kontrol bekliyor' : 'Durumu gör'}</span>
+      </a></li>)}</ul>
+    </section>
+    <div>
+    {iadeSirasi.map(({ iade: c, id, bekleyen }, i) => (
+      <details class="y-kart iade" {id} open={i === 0}>
+        <summary><strong>Sipariş {c.siparisNo}</strong></summary>
         <p class="y-help">{c.musteri}{c.kargo ? ` · ${c.kargo}` : ''}{c.kargoTakip ? ` · Takip ${c.kargoTakip}` : ''}
           {c.kargoLink && <> · <a class="y-link" href={c.kargoLink} target="_blank" rel="noopener noreferrer">Kargoyu izle ↗</a></>}
           {c.paketId && <> · <a class="y-link" href={'/yonetim/siparisler/pazaryeri/trendyol-' + encodeURIComponent(c.paketId)}>Siparişi aç</a></>}</p>
@@ -71,17 +92,20 @@ const para = (n?: number) => n === undefined ? '' : n.toLocaleString('tr-TR', { 
               <span class:list={['y-chip', 'y-chip--' + renk]}>{ad}</span>
             </li>;
           })}</ul>
-          {bekleyen.length > 0 && <div class="iade-onay">
+          {bekleyen > 0 && <div class="iade-onay">
             <label class="y-secim"><input type="checkbox" name="kontrol" required /> Ürün depoya ulaştı, kontrol ettim; sorun yok.</label>
             <button class="btn btn--sepet" type="submit" name="eylem" value="iade-onayla">İadeyi onayla</button>
           </div>}
         </form>
-      </section>;
-    })}
-  </>}
+      </details>
+    ))}
+    </div>
+    </div>
+    </>}
 
 </Yonetim>
 <style>
+  @media (min-width: 1000px) { .iade-izgara { grid-template-columns: minmax(230px, .72fr) minmax(0, 1.28fr); } }
   .iade-kalemler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .iade-kalemler li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--y-border); }
   .iade-kalemler small { display: block; color: var(--ink-3); }

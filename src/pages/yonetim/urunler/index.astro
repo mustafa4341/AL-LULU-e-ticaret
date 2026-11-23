@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
 import { DogrulamaHatasi, gorselSil, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
 import { yayinEksikleri } from '../../../lib/yonetimUrun';
 import { formatTL } from '../../../lib/fiyat';
@@ -11,6 +12,7 @@ import { bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import { urunGtin } from '../../../lib/urunKimlik';
+import Ikon from '../../../components/Ikon.astro';
 
 const basari = Astro.url.searchParams.get('ok');
 /* Adres boşsa son seçilen filtre ve sıralama çerezden okunur (sayfa ikinci kez açılmaz) */
@@ -105,6 +107,11 @@ const fiyatGirilmedi = (u: (typeof m.urunler)[number]) => u.fiyat <= 1;
 /* Şablonda "<=" yazılırsa Astro derleyicisi etiket sanıyor; rozet metni burada hesaplanır */
 const stokYazisi = (u: (typeof m.urunler)[number]) => u.durum !== 'yayinda' ? undefined
   : u.stok === 0 ? 'Tükendi' : u.stok <= esik(u.id) ? `${u.stok} · Azalıyor` : undefined;
+/* Stok hücresi: yeşil stokta, turuncu azalıyor, kırmızı tükendi (yalnız yayındaki ürünlerde uyarı) */
+const stokGorunumu = (u: (typeof m.urunler)[number]): [string, string] => u.durum !== 'yayinda' ? [`${u.stok} adet`, 'gri']
+  : u.stok === 0 ? ['Tükendi', 'tukendi'] : u.stok <= esik(u.id) ? [`${u.stok} adet · Azalıyor`, 'kritik'] : [`${u.stok} adet`, 'normal'];
+const tukenenSayisi = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0).length;
+const toplamStok = m.urunler.filter((u) => u.durum === 'yayinda').reduce((n, u) => n + u.stok, 0);
 const liste = m.urunler.filter((u) => {
   const gtin = urunGtin(u);
   const uygun = filtre === 'tumu' || u.durum === filtre
@@ -113,13 +120,25 @@ const liste = m.urunler.filter((u) => {
   return uygun && (!aranan || [u.ad, u.kisaAd, u.sku, u.marka, gtin ?? ''].some((x) => x.toLocaleLowerCase('tr').includes(aranan)));
 }).sort((a, b) => sira === 'stok' ? a.stok - b.stok : sira === 'fiyat' ? a.fiyat - b.fiyat : sira === 'ad' ? a.kisaAd.localeCompare(b.kisaAd, 'tr') : b.oncelik - a.oncelik);
 const url = (id?: string) => '?' + new URLSearchParams({ filtre, q: soru, sira, ...(id ? { duzenle: id } : {}) }) + (id ? '#u-' + id : '');
+const acikEditor = liste.some((u) => u.id === duzenle);
 // Etikete basılabilecek SKU (yalnız yazdırılabilir ASCII, en fazla 55 karakter).
 // Not: regex şablonun içinde yazılırsa Astro derleyicisi onu etiket sanıp sayfa açılmaz; burada kalmalı.
 const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
 ---
-<Yonetim baslik="Ürünler & Stok" aktif="urunler" basari={basari} hatalar={hatalar}>
-  <div slot="ust-sag" class="y-ust-aksiyonlar"><a class="y-link" href="/yonetim/setler">Setler</a><a class="y-link" href="/yonetim/kategoriler">Kategoriler</a><a class="btn btn--sepet" href="/yonetim/urunler/yeni">Yeni Ürün</a></div>
-  <BilgiKutusu baslik="Stok nasıl artar, nasıl azalır?" anahtar="urunler-stok">
+<Yonetim baslik="Ürünler ve Stok" altBaslik="Kataloğu, fiyatları ve depodaki ürün adetlerini yönetin." aktif="urunler" basari={basari} hatalar={hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="#stok-gecmisi" data-ac="stok-gecmisi"><PIkon ad="gecmis" boyut={18} />Stok hareketleri</a>
+    <a class="btn btn--cizgi" href="/yonetim/setler"><PIkon ad="set" boyut={18} />Setler</a>
+    <a class="btn btn--cizgi" href="/yonetim/kategoriler"><PIkon ad="kategori" boyut={18} />Kategoriler</a>
+    <a class="btn btn--sepet" href="/yonetim/urunler/yeni"><PIkon ad="arti" boyut={18} />Yeni ürün</a>
+  </div>
+  <div class="y-metrics y-metrics--finans">
+    <a class="y-metric" href="?filtre=tumu"><PIkon ad="kutu" /><span>Toplam ürün</span><strong>{m.urunler.length}</strong><small>Katalogdaki tüm kayıtlar</small></a>
+    <a class="y-metric y-metric--yesil" href="?filtre=yayinda"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.urunler.filter((u) => u.durum === 'yayinda').length}</strong><small>Müşteri görüyor · depoda {toplamStok} adet</small></a>
+    <a class="y-metric y-metric--turuncu" href="?filtre=kritik"><PIkon ad="uyari" /><span>Azalan / tükenen stok</span><strong>{azalan}</strong><small>{tukenenSayisi} tükendi · {azalan - tukenenSayisi} azalıyor · eşik {envanter.kritikVarsayilan}</small></a>
+    <a class="y-metric" href="?filtre=taslak"><PIkon ad="kalem" /><span>Taslak</span><strong>{m.urunler.filter((u) => u.durum === 'taslak').length}</strong><small>Yayın dışı</small></a>
+  </div>
+  <BilgiKutusu baslik="Stok nasıl artar, nasıl azalır?" anahtar="urunler-stok" acik={false}>
     <p>Stok <strong>tek</strong> sayıdır: web sitesi, Trendyol ve Hepsiburada aynı depodan satar.</p>
     <ul>
       <li><strong>Azalır:</strong> web siparişinin ödemesi alınınca, Trendyol/Hepsiburada siparişi gelince (kendiliğinden).</li>
@@ -134,17 +153,22 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
       {Object.entries({ tumu: 'Tümü', ...YAYIN_ADLARI, kritik: `Azalan / tükenen stok (${azalan})`, barkod: `Barkodu eksik (${barkodsuz})` }).map(([id, ad]) => <option value={id} selected={filtre === id}>{ad}</option>)}
     </select>
     <select class="y-girdi" name="sira" aria-label="Ürün sıralaması">{Object.entries({ katalog: 'Katalog sırası', stok: 'En az stok', fiyat: 'En düşük fiyat', ad: 'Ürün adı' }).map(([id, ad]) => <option value={id} selected={sira === id}>{ad}</option>)}</select>
-    <button class="btn btn--cizgi" type="submit">Uygula</button>
+    <button class="btn btn--cizgi" type="submit"><PIkon ad="filtre" boyut={17} />Uygula</button>
   </form>
   {filtre === 'barkod' && <p class="y-help">Yayındaki ürünlerin barkodunu Detaylar → Teknik özellikler bölümüne “Barkod (EAN)” olarak girin.</p>}
-  {liste.length ? <div class="y-tablo-kap y-tablo-kap--kart urun-tablo"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Fiyat</th><th>İndirim</th><th>Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
-    {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return <>
+  {liste.length ? <div class="y-liste-detay" data-panel-secim>
+  <div class="y-liste-ana y-tablo-kap y-tablo-kap--kart urun-tablo"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Fiyat</th><th>İndirim</th><th>Depo stoku</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+    {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return (
       <tr id={'u-' + u.id}>
         <td class="urun-hucre"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" />}</span><span><a class="y-link" href={'/yonetim/urunler/' + u.id}>{u.marka} {u.kisaAd}</a><small class="y-table-note">{u.gorseller.length ? u.sku : 'Fotoğraf eksik'}</small></span></div></td>
         <td class="y-nowrap" data-etiket="Fiyat">{fiyatGirilmedi(u) ? <span class="y-stok-rozet y-stok-rozet--kritik">Fiyat girilmedi</span> : <strong>{formatTL(u.fiyat)}</strong>}{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
         <td data-etiket="İndirim">{fiyat.yuzde ? <span>%{fiyat.yuzde} fiyat indirimi</span> : null}{fiyat.sepette && <small class="y-table-note">Sepette %{fiyat.sepette.yuzde} · {formatTL(fiyat.sepette.fiyat)}</small>}{!fiyat.yuzde && !fiyat.sepette && '—'}</td>
-        <td data-etiket="Stok">{stokYazisi(u) ? <span class="y-stok-rozet y-stok-rozet--kritik">{stokYazisi(u)}</span> : <strong>{u.stok}</strong>}</td><td data-etiket="Durum"><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>{u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}</td>
+        <td data-etiket="Depo stoku" class="y-stok-hucre"><span class={'y-stok-rozet y-stok-rozet--' + stokGorunumu(u)[1]} title={stokYazisi(u)}>{stokGorunumu(u)[0]}</span>{u.durum === 'yayinda' && <small class="y-table-note">Uyarı eşiği: {esik(u.id)} adet</small>}</td><td data-etiket="Durum"><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>{u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}</td>
         <td class="urun-islem"><div class="y-row-actions">
+          <a class="btn btn--cizgi" href={url(duzenle === u.id ? undefined : u.id)} data-astro-prefetch="false" data-panel-sec={'urun-hizli-' + u.id} aria-controls={'urun-hizli-' + u.id} aria-expanded={duzenle === u.id ? 'true' : 'false'}>Hızlı düzenle</a>
+          <details class="y-row-menu y-row-menu--sag"><summary aria-label="Ürün işlemleri">•••</summary><div>
+          <a href={'/yonetim/urunler/' + u.id}>Ürünü düzenle</a>
+          {skuGecerli(u.sku) && <a href={'/yonetim/finans/etiket?sku=' + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi</a>}
           <form method="post" class="y-satir-form">
             <input type="hidden" name="id" value={u.id} />
             {u.durum === 'yayinda'
@@ -152,19 +176,28 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
               : <button class="btn btn--kucuk y-yayinla-btn" name="eylem" value="yayinla">Yayına al</button>}
             <button class="y-link y-link--tehlike" name="eylem" value="sil" data-onayla={`"${u.marka} ${u.kisaAd}" KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.`}>Sil</button>
           </form>
-          <a class="y-link" href={'/yonetim/urunler/' + u.id}>Düzenle</a><a class="y-link" href={url(duzenle === u.id ? undefined : u.id)}>{duzenle === u.id ? "Kapat" : "Hızlı düzenle"}</a>{skuGecerli(u.sku) && <details class="y-row-menu"><summary aria-label="Ürün işlemleri">•••</summary><a href={"/yonetim/finans/etiket?sku=" + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi ↗</a></details>}</div></td>
+          </div></details></div></td>
       </tr>
-      {duzenle === u.id && <tr class="y-inline-edit"><td colspan="6"><form method="post" class="y-inline-fields" data-editor>
+    ); })}
+  </tbody></table></div>
+  <aside class="y-kart y-liste-secim y-urun-secim" aria-label="Hızlı ürün düzenleme">
+    <div data-panel-bos hidden={acikEditor}><h2><PIkon ad="kalem" /> Hızlı düzenleme</h2><p class="y-help">Bir ürün seçerek fiyatını, depo stokunu ve sepet indirimini güncelleyin.</p></div>
+    {liste.map((u) => <section id={'urun-hizli-' + u.id} data-panel-kayit hidden={duzenle !== u.id}>
+      <div class="y-kart__bas"><h2><PIkon ad="kalem" /> Hızlı düzenleme</h2><a href={url()} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat aria-label="Hızlı düzenlemeyi kapat"><Ikon ad="kapat" boyut={17} /></a></div>
+      <p><strong>{u.marka} {u.kisaAd}</strong>{u.sku && <small class="y-table-note">{u.sku}</small>}</p>
+      <form method="post" class="y-izgara" data-editor>
         <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />
-        <label class="y-alan">Fiyat (TL)<input name="fiyat" type="number" min="1" required value={String(form?.get('fiyat') ?? u.fiyat)} /></label>
-        <label class="y-alan">Stok<input name="stok" type="number" min="0" required value={String(form?.get('stok') ?? u.stok)} /></label>
-        <label class="y-alan">Sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String(form?.get('sepetteIndirim') ?? u.sepetteIndirim)} /></label>
-        <button class="btn btn--sepet" type="submit">Kaydet</button>
-      </form></td></tr>}
-    </>; })}
-  </tbody></table></div> : <p class="y-kart muted">Bu görünümde ürün bulunamadı.</p>}
-  <div class="y-report-links">
-    <details class="y-kart" id="stok-gecmisi"><summary>Stok hareketleri (son 40) — stok neden değişti?</summary>
+        <label class="y-alan">Fiyat (TL)<input name="fiyat" type="number" min="1" step="0.01" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
+        <label class="y-alan">Depo stoku<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
+        <label class="y-alan">Sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
+        <p class="y-help">Kanallara bildirilen adetleri <a class="y-link" href="/yonetim/siparisler/kanallar#eslestirmeler">Ürün eşleştirmede</a> kontrol edin.</p>
+        <div class="y-ust-aksiyonlar"><a class="btn btn--cizgi" href={'/yonetim/urunler/' + u.id}>Tüm alanlar</a><button class="btn btn--sepet" type="submit">Değişiklikleri kaydet</button></div>
+      </form>
+    </section>)}
+  </aside>
+  </div> : <p class="y-kart muted">Bu görünümde ürün bulunamadı.</p>}
+    <div class="y-report-links">
+    <details class="y-kart" id="stok-gecmisi"><summary><PIkon ad="gecmis" /> Stok hareketleri (son 40) — stok neden değişti?</summary>
       {hareketler.length ? <ul class="y-gecmis stok-defteri">{hareketler.map((h) => <li>
         <span>{yTarih.format(new Date(h.tarih))}</span>
         <span><strong>{urunAdi.get(h.urunId) ?? h.urunId}</strong> · {h.onceki} → {h.sonraki}
@@ -172,7 +205,7 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
           <small class="y-table-note">{stokSebebi(h.sebep)}</small></span>
       </li>)}</ul> : <p class="muted">Henüz stok hareketi kaydı yok. Stok her değiştiğinde (satış, iptal, iade, elle düzeltme) buraya sebebiyle birlikte yazılır.</p>}
     </details>
-    <details class="y-kart" id="stok-uyari"><summary>Stok uyarı ayarı (şu an {envanter.kritikVarsayilan} adet)</summary>
+    <details class="y-kart" id="stok-uyari"><summary><PIkon ad="zil" /> Stok uyarı ayarı (şu an {envanter.kritikVarsayilan} adet)</summary>
       <form method="post" class="stok-uyari-form">
         <input type="hidden" name="eylem" value="stok-uyari" />
         <label class="y-alan">Stok bu sayıya inince uyar
@@ -181,10 +214,10 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
         <label class="stok-uyari-onay"><input type="checkbox" name="epostaBildirimi" checked={envanter.epostaBildirimi} /> Ayrıca mağaza e-postasına bildirim gönder</label>
         <button class="btn btn--cizgi" type="submit">Kaydet</button>
       </form>
-      <p class="y-help">Uyarılar Genel Bakış'ta “Bugün yapılacaklar” listesinde ve (açıksa) e-postayla gelir. Sitede ise 3 ve daha az kalınca müşteriye “Stokta son X adet” yazar.</p>
+      <p class="y-help">Uyarıları İş Merkezi ve Bugünkü İşler ekranlarında görebilirsiniz. E-posta bildirimi açıksa uyarılar e-postayla da gelir.</p>
     </details>
-    <details class="y-kart"><summary>Fiyat geçmişi</summary>{gecmis.length ? <ul class="y-gecmis">{gecmis.map((g) => <li><span>{yTarih.format(new Date(g.tarih))}</span><span>{g.urunAd} · {g.eskiFiyat && formatTL(g.eskiFiyat) + ' → '}{formatTL(g.yeniFiyat)}</span></li>)}</ul> : <p class="muted">Fiyat kaydı yok.</p>}</details>
-    <details class="y-kart"><summary>Ürün satış raporu (web sitesi)</summary><div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Onaylı adet</th><th>Kargolanan adet</th><th>Bekleyen adet</th><th>İptal / iade</th></tr></thead><tbody>{rapor.map((r) => <tr><td>{r.urun.kisaAd}</td><td>{r.onayliAdet}</td><td>{r.kargolananAdet}</td><td>{r.bekleyenAdet}</td><td>{r.iptalAdet}</td></tr>)}</tbody></table></div></details>
+    <details class="y-kart"><summary><PIkon ad="etiket" /> Fiyat geçmişi</summary>{gecmis.length ? <ul class="y-gecmis">{gecmis.map((g) => <li><span>{yTarih.format(new Date(g.tarih))}</span><span>{g.urunAd} · {g.eskiFiyat && formatTL(g.eskiFiyat) + ' → '}{formatTL(g.yeniFiyat)}</span></li>)}</ul> : <p class="muted">Fiyat kaydı yok.</p>}</details>
+    <details class="y-kart"><summary><PIkon ad="grafik" /> Ürün satış raporu (web sitesi)</summary><div class="y-tablo-kap"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Onaylı adet</th><th>Kargolanan adet</th><th>Bekleyen adet</th><th>İptal / iade</th></tr></thead><tbody>{rapor.map((r) => <tr><td>{r.urun.kisaAd}</td><td>{r.onayliAdet}</td><td>{r.kargolananAdet}</td><td>{r.bekleyenAdet}</td><td>{r.iptalAdet}</td></tr>)}</tbody></table></div></details>
   </div>
 </Yonetim>
 
@@ -197,8 +230,6 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
     :global(.y-panel) .urun-tablo .urun-hucre, :global(.y-panel) .urun-tablo .urun-islem { grid-column: 1 / -1; }
     :global(.y-panel) .urun-tablo .urun-islem { padding-top: 8px; border-top: 1px solid var(--y-border); }
     :global(.y-panel) .urun-tablo .y-row-actions { align-items: center; gap: 8px 16px; }
-    :global(.y-panel) .urun-tablo tr.y-inline-edit { display: block; }
-    :global(.y-panel) .urun-tablo tr.y-inline-edit > td { display: block; }
   }
   .stok-fark { display: inline-block; min-width: 34px; margin-left: 6px; padding: 0 6px; border-radius: 999px; font-size: 12px; text-align: center; }
   .stok-fark--eksi { background: var(--y-kirmizi-zemin); color: var(--y-kirmizi); }

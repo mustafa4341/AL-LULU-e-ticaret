@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
 import { DogrulamaHatasi, magazaGuncelle, magazaOku, supabaseBagliMi } from '../../lib/depo';
 import { metin, sayi } from '../../lib/form';
 import { bosYasalBilgi } from '../../lib/yonetimSite';
@@ -30,10 +31,10 @@ const alanlar = [
 ] as const;
 const eksik = alanlar.slice(0, 4).filter(([id]) => bosYasalBilgi(satici[id])).map(([, ad]) => ad);
 ---
-<Yonetim baslik="Ayarlar" aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
-  <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet">Kaydet</button>
+<Yonetim baslik="Ayarlar" altBaslik="Yasal bilgiler, bağlantı durumu ve veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
+  <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button>
   <form method="post" id="yasal-form" class="y-kart" data-editor>
-    <h2>Yasal Bilgiler</h2>
+    <h2><PIkon ad="terazi" /> Yasal Bilgiler</h2>
     {eksik.length > 0 && <p class="y-help">Boş bıraktığınız alanlar ({eksik.join(', ')}) sitede, sözleşmelerde ve belgelerde hiç gösterilmez.</p>}
     <div class="y-izgara y-izgara--2">
       {alanlar.map(([id, ad]) => <label class="y-alan">{ad}<input name={id} value={satici[id]} /></label>)}
@@ -42,8 +43,12 @@ const eksik = alanlar.slice(0, 4).filter(([id]) => bosYasalBilgi(satici[id])).ma
     <p class="y-form-state" data-kayit-durum role="status"></p>
   </form>
   <details class="y-kart">
-    <summary>Bağlantı ve erişim</summary>
+    <summary><PIkon ad="kilit" /> Bağlantı ve erişim</summary>
     <p class="muted">{supabaseBagliMi() ? 'Depo yapılandırması · Supabase' : 'Depo yapılandırması · Yerel dosya'}</p>
     <p class="muted">Yönetim işlemleri oturum gerektirir.</p>
   </details>
+  <section class="y-kart">
+    <div class="y-kart__bas"><h2><PIkon ad="veritabani" /> Veri yedeği</h2><a class="btn btn--cizgi" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedeği indir (ZIP)</a></div>
+    <p class="y-help">Mağaza, sipariş ve finans kayıtlarının arşivini indirin.</p>
+  </section>
 </Yonetim>

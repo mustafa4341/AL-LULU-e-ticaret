@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
 import Ikon from '../../components/Ikon.astro';
 import Onizleme from '../../components/yonetim/Onizleme.astro';
 import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku } from '../../lib/depo';
@@ -46,10 +47,12 @@ const k = new Katalog(m);
 const yeni = secim === 'yeni';
 const s = taslak ?? (yeni ? BOS_SET : m.setler.find((x) => x.id === secim));
 const engeller = s && !yeni ? k.setEngelleri(s) : [];
+const DURUM_RENGI: Record<string, string> = { yayinda: 'yesil', taslak: 'gri', gizli: 'turuncu' };
+const vitrinDisi = m.setler.filter((x) => x.durum === 'yayinda' && k.setEngelleri(x).length > 0).length;
 ---
-<Yonetim baslik={s ? yeni ? "Yeni Set" : s.ad || "Seti Düzenle" : "Setler"} aktif="setler" basari={basari} hatalar={hatalar}>
+<Yonetim baslik={s ? yeni ? "Yeni Set" : s.ad || "Seti Düzenle" : "Setler"} altBaslik={s ? undefined : 'Birlikte satılan ürün setlerini ve set indirimlerini yönetin.'} aktif="setler" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    {s ? <><a class="y-link" href="/yonetim/setler">Setlere dön</a><button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="set-onizleme" aria-expanded="false">Önizle</button><button type="submit" form="set-form" class="btn btn--sepet">Kaydet</button></> : <a href="?duzenle=yeni" class="btn btn--sepet">Yeni Set</a>}
+    {s ? <><a class="btn btn--cizgi" href="/yonetim/setler"><PIkon ad="ok-sol" boyut={18} />Setlere dön</a><button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="set-onizleme" aria-expanded="false"><PIkon ad="goz" boyut={18} />Önizle</button><button type="submit" form="set-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button></> : <a href="?duzenle=yeni" class="btn btn--sepet"><PIkon ad="arti" boyut={18} />Yeni set</a>}
   </div>
   {s ? <div class="y-editor-duzen" data-editor-duzen>
       <form method="post" enctype="multipart/form-data" id="set-form" class="y-editor-form y-kart" data-editor data-onizleme-form="set">
@@ -101,7 +104,26 @@ const engeller = s && !yeni ? k.setEngelleri(s) : [];
     {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><button type="submit" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu set silinsin mi?">Seti sil</button></details>}
     </form>
     <Onizleme id="set-onizleme" tur="set" kayit={s.id} />
-  </div> : m.setler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Set</th><th>Ürünler</th><th>Ayrı ayrı</th><th>Set fiyatı</th><th>Tasarruf</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
-    {m.setler.map((x) => { const f = k.setFiyati(x); const engel = x.durum === "yayinda" && k.setEngelleri(x).length > 0; return <tr><td data-etiket="Set"><strong>{x.ad}</strong></td><td data-etiket="Ürünler" class="y-urunler">{f.dokum.map((d) => d.adet + " × " + d.urun.kisaAd).join(", ")}</td><td data-etiket="Ayrı ayrı">{formatTL(f.ayriAyri)}</td><td data-etiket="Set fiyatı"><strong>{formatTL(f.fiyat)}</strong></td><td data-etiket="Tasarruf">{formatTL(f.kazanc)}</td><td data-etiket="Durum">{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</td><td class="y-islem"><a class="y-link" href={"?duzenle=" + x.id}>Düzenle</a></td></tr>; })}
-  </tbody></table></div> : <p class="y-kart muted">Henüz set yok.</p>}
+  </div> : <>
+    <div class="y-metrics y-metrics--finans">
+      <div class="y-metric"><PIkon ad="set" /><span>Toplam set</span><strong>{m.setler.length}</strong><small>Katalogdaki set kayıtları</small></div>
+      <div class="y-metric y-metric--yesil"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.setler.filter((x) => x.durum === 'yayinda').length - vitrinDisi}</strong><small>Müşteri görüyor</small></div>
+      <div class="y-metric"><PIkon ad="kalem" /><span>Taslak / gizli</span><strong>{m.setler.filter((x) => x.durum !== 'yayinda').length}</strong><small>Yayın dışı</small></div>
+      <div class:list={['y-metric', { 'y-metric--kirmizi': vitrinDisi > 0 }]}><PIkon ad="uyari" /><span>Vitrin dışında</span><strong>{vitrinDisi}</strong><small>Yayında ama bir ürünü satılamıyor</small></div>
+    </div>
+    {m.setler.length ? <section class="y-kart">
+      <div class="y-kart__bas"><div><h2><PIkon ad="set" /> Set listesi</h2><p class="y-kart__alt">Set fiyatı, ayrı ayrı alındığındaki tutar ve müşterinin kazancı.</p></div></div>
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Set</th><th>Ürünler</th><th class="y-sayi">Ayrı ayrı</th><th class="y-sayi">Set fiyatı</th><th class="y-sayi">Tasarruf</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+      {m.setler.map((x) => { const f = k.setFiyati(x); const engel = x.durum === "yayinda" && k.setEngelleri(x).length > 0; const gorsel = x.gorsel?.src ?? f.dokum[0]?.urun.gorseller[0]?.src; return <tr>
+        <td data-etiket="Set"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{gorsel && <img src={gorsel} alt="" loading="lazy" />}</span><span><a class="y-tablo-urun__ad" href={"?duzenle=" + x.id}>{x.ad}</a>{x.rozet && <small class="y-table-note">{x.rozet}</small>}</span></div></td>
+        <td data-etiket="Ürünler" class="y-urunler">{f.dokum.map((d) => d.adet + " × " + d.urun.kisaAd).join(", ")}</td>
+        <td data-etiket="Ayrı ayrı" class="y-sayi y-nowrap"><s class="muted">{formatTL(f.ayriAyri)}</s></td>
+        <td data-etiket="Set fiyatı" class="y-sayi y-nowrap"><strong>{formatTL(f.fiyat)}</strong></td>
+        <td data-etiket="Tasarruf" class="y-sayi y-nowrap"><span class="y-chip y-chip--yesil">{formatTL(f.kazanc)}</span></td>
+        <td data-etiket="Durum"><span class:list={['y-chip', engel ? 'y-chip--kirmizi' : 'y-chip--' + (DURUM_RENGI[x.durum] ?? 'gri')]}>{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</span></td>
+        <td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={"?duzenle=" + x.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
+      </tr>; })}
+      </tbody></table></div>
+    </section> : <p class="y-bos-satir"><PIkon ad="set" boyut={20} />Henüz set yok. “Yeni set” ile ilk setinizi oluşturun.</p>}
+  </>}
 </Yonetim>

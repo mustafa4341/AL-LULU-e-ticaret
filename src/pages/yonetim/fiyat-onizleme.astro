@@ -1,6 +1,7 @@
 ---
 /* Yalnızca panelde: üç fiyat sunumunu ÖRNEK rakamlarla yan yana gösterir. Sitedeki gerçek fiyatı etkilemez. */
 import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
 import Fiyat from '../../components/Fiyat.astro';
 import Ikon from '../../components/Ikon.astro';
 import type { FiyatBilgisi } from '../../lib/katalog';
@@ -14,12 +15,12 @@ const SECENEKLER = [
   { id: 'dengeli', ad: 'C — Dengeli premium (önerilen)', not: 'Fiyat bordo ve büyük, eski fiyat gri ve küçük, % rozeti küçük; tasarruf TL olarak yeşil. Hem avantaj net hem marka sakin.' },
 ] as const;
 ---
-<Yonetim baslik="Fiyat sunumu önizleme" aktif="ayarlar">
+<Yonetim baslik="Fiyat sunumu önizleme" aktif="site">
   <p class="y-aciklama" style="margin-bottom:14px">Aşağıdaki rakamlar <strong>yalnızca örnektir</strong> (13.999 → 12.999 TL). Sitede üstü çizili fiyat yalnızca ürün en az 30 gün gerçekten daha yüksek fiyattan satıldıysa çıkar. Şu an seçili: <strong>{SECENEKLER.find((s) => s.id === secili)?.ad}</strong> · <a href="/yonetim/ayarlar">Ayarlardan değiştir</a></p>
   <div class="y-izgara y-izgara--3">
     {SECENEKLER.map((s) => (
       <section class="y-kart" style={s.id === secili ? 'border-color:var(--ink);box-shadow:0 0 0 2px var(--ink)' : undefined}>
-        <h2>{s.ad}</h2>
+        <h2><PIkon ad="etiket" /> {s.ad}</h2>
         <p class="y-aciklama">{s.not}</p>
         <div class="urun-fiyat"><Fiyat bilgi={indirimli} boyut="buyuk" sunum={s.id} /><p class="urun-fiyat__alt">Vergiler dahil · <strong class="yesil">Kargo Bedava</strong></p></div>
         <div class="satin-al"><span class="btn btn--simdi">Şimdi Al</span><span class="btn btn--sepet"><Ikon ad="canta" boyut={18} />Sepete Ekle</span></div>
@@ -29,7 +30,7 @@ const SECENEKLER = [
     ))}
   </div>
   <section class="y-kart">
-    <h2>İndirim yokken (bugünkü durum)</h2>
+    <h2><PIkon ad="etiket" /> İndirim yokken (bugünkü durum)</h2>
     <p class="y-aciklama">Sahte eski fiyat gösterilmez. Değer; fayda maddeleri, kargo bedava, garanti ve teslimat sayacıyla anlatılır.</p>
     <div class="urun-fiyat" style="max-width:420px"><Fiyat bilgi={normal} boyut="buyuk" /><p class="urun-fiyat__alt">Vergiler dahil · <strong class="yesil">Kargo Bedava</strong> · 2 yıl garanti</p></div>
   </section>

@@ -1,6 +1,7 @@
 ---
 /* Sipariş detayındaki "Belgeler" kartı ve "Belge Oluştur" penceresi (önizlemeli). */
 import Ikon from '../Ikon.astro';
+import PIkon from './PIkon.astro';
 import { BELGE_DURUMLARI, BELGE_TURLERI, belgeGecerli, type Belge, type BelgeTuru } from '../../lib/finans';
 import { iadeEdildi } from '../../lib/siparisAkisi';
 import type { Siparis } from '../../lib/sema';
@@ -22,7 +23,7 @@ const sirali = [...belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturm
 ---
 {!s.paytr?.test && <section class="y-kart" id="belgeler">
   <div class="y-kart__bas">
-    <h2>Belgeler</h2>
+    <h2><PIkon ad="belge" /> Belgeler</h2>
     <button class="btn btn--cizgi" type="button" data-y-dialog="belge-olustur"><Ikon ad="belge" boyut={16} />Belge Oluştur</button>
   </div>
   {sirali.length === 0 && <p class="muted">Bu sipariş için henüz belge hazırlanmadı.</p>}

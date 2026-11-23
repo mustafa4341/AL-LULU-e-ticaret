@@ -5,7 +5,7 @@ import { magazaOku, siparisleriOku } from '../../../lib/depo';
 import { finansOku } from '../../../lib/finansDepo';
 import { BELGE_TURLERI, belgeGecerli, finansGunu, gecerliGun } from '../../../lib/finans';
 import { gonderilecek, odemeEtiketi, onayliSatis, yTarih } from '../../../lib/yonetimRapor';
-import { gonderildi, iadeEdildi, iptalEdilebilir } from '../../../lib/siparisAkisi';
+import { gonderildi, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
 import { siparisKargoBaglantisi } from '../../../lib/kargoTakip';
 import { formatTL } from '../../../lib/fiyat';
 import type { Siparis } from '../../../lib/sema';
@@ -15,6 +15,9 @@ import { pazaryeriDurumu } from '../../../components/yonetim/pazaryeriGorunumu';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import KanalOzeti from '../../../components/yonetim/KanalOzeti.astro';
 import { kanalToplamlari } from '../../../lib/kanalOzeti';
+import SiparisSonraki from '../../../components/yonetim/SiparisSonraki.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import type { PanelIkonAdi } from '../../../components/yonetim/panelIkon';
 
 /* Adres boşsa son seçilen filtre (kanal, sıralama) çerezden okunur. Eskiden sayfa açıldıktan sonra tarayıcı
    filtreli adrese ikinci kez gidiyordu; artık tek açılışta doğru liste gelir. */
@@ -62,6 +65,7 @@ if (tarama && q) {
 const belgesiVar = (no: string) => finans.belgeler.some((b) => b.siparisNo === no && belgeGecerli(b));
 type Durum = ReturnType<typeof pazaryeriDurumu>;
 const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi, d: Durum) => boolean][] = [
+  ['tumu', 'Tümü', () => true, () => true],
   ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr) || !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip),
     (_, d) => d.hazirlanacak || d.hazirlaniyor || d.uyari.length > 0],
   ['kontrol', 'Kontrol gerekli', (s) => !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip), (_, d) => d.uyari.length > 0],
@@ -72,8 +76,11 @@ const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi
   ['odeme-bekliyor', 'Ödeme bekleyen', (s) => s.durum === 'odeme-bekliyor', (s) => s.kalemler.some((k) => k.durum === 'onay-bekliyor')],
   ['teslim-edildi', 'Teslim edilen', (s) => s.durum === 'teslim-edildi' && !iadeEdildi(s), (s) => s.kalemler.some((k) => k.durum === 'teslim-edildi')],
   ['iptal', 'İptal / İade', (s) => s.durum === 'iptal' || iadeEdildi(s), (s) => s.kalemler.some((k) => ['iptal', 'iade', 'teslim-edilemedi', 'bolundu'].includes(k.durum))],
-  ['tumu', 'Tümü', () => true, () => true],
 ];
+const FILTRE_IKONU: Record<string, PanelIkonAdi> = {
+  tumu: 'liste', islem: 'simsek', kontrol: 'uyari', odendi: 'kutu', hazirlaniyor: 'kargo', kargoda: 'kargo',
+  belgesiz: 'belge', 'odeme-bekliyor': 'cuzdan', 'teslim-edildi': 'tik-daire', iptal: 'iade',
+};
 const gorunumler = FILTRELER.filter(([id]) => kanal === 'web' || kanal === 'tumu' || id !== 'belgesiz');
 const filtre = gorunumler.find(([id]) => id === p.get('durum'))?.[0]
   ?? (p.get('durum') === 'gonderilecek' ? 'islem' : q ? 'tumu' : 'islem');
@@ -153,10 +160,10 @@ const ozet = kanalToplamlari(gercek, pazaryeri ?? [], ozetBas, ozetSon);
 const ozetDonemi = basGecerli || sonGecerli ? `${ozetBas.split('-').reverse().join('.')} – ${ozetSon.split('-').reverse().join('.')}` : 'Bu ay';
 const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', kanal: k, ...(bas ? { baslangic: bas } : {}), ...(son ? { bitis: son } : {}) });
 ---
-<Yonetim baslik="Siparişler" aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}>
+<Yonetim baslik="Siparişler" altBaslik="Siparişleri hazırlayın, kargo ve belge durumunu takip edin." aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a href="/yonetim/siparisler/kanallar" class="btn btn--cizgi">Satış kanalları</a>
-    <button type="button" class="btn btn--cizgi" data-y-dialog="barkod-oku"><Ikon ad="buyutec" boyut={16} />Numarayla aç</button>
+    <a href="/yonetim/siparisler/kanallar" class="btn btn--cizgi"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
+    <button type="button" class="btn btn--sepet" data-y-dialog="barkod-oku"><PIkon ad="barkod" boyut={18} />Barkod / numarayla aç</button>
   </div>
 
   <dialog class="y-modal" id="barkod-oku" data-hata-ac={tarama ? '1' : undefined} aria-labelledby="barkod-baslik">
@@ -174,20 +181,20 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
 
   {!pazaryeri && <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} /><span>Pazaryeri siparişleri okunamadı. <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanallarını kontrol edin</a></span></p>}
 
-  <KanalOzeti ozet={ozet} donem={ozetDonemi} adres={kanalAdresi} secili={kanal} aciklama="İptal ve iadeler hariç. Karta dokunursanız liste o kanala süzülür." />
+  <div class="y-siparis-govde">
+  <div class="y-siparis-ozet">
+  <KanalOzeti ozet={ozet} donem={ozetDonemi} adres={kanalAdresi} secili={kanal} aciklama="İptal ve iadeler hariç." />
 
-  <BilgiKutusu baslik="Bu sayfa nasıl okunur?" anahtar="siparisler">
+  <BilgiKutusu baslik="Sipariş işlemleri rehberi" anahtar="siparisler" acik={false}>
     <p>Web sitesinden, Trendyol'dan ve Hepsiburada'dan gelen siparişler aynı listede. Her siparişin altında <strong>hangi kanaldan geldiği</strong> yazar.</p>
-    <ul>
-      <li><strong>Web sitesi</strong> siparişlerini buradan hazırlar, kargoya verir ve belgesini basarsınız.</li>
-      <li><strong>Trendyol / Hepsiburada</strong> siparişleri burada yalnız <em>görünür</em>. Kargo ve fatura işlemleri o sitenin satıcı panelinde yapılır; durum buraya kendiliğinden gelir.</li>
-      <li>Kırmızı etiket “yapılması gereken bir iş var” demektir; üstüne dokunun, ne yapacağınız yazar.</li>
-    </ul>
+    <p>Web siparişlerinin hazırlık ve kargo adımlarını panelden tamamlayın. Trendyol ve Hepsiburada işlemlerinin nerede yapılacağı sipariş ayrıntılarında gösterilir.</p>
   </BilgiKutusu>
+  </div>
 
+  <div class="y-siparis-kuyruk">
   <nav class="y-filtreler" aria-label="Sipariş görünümleri">
-    {gorunumler.map(([id, ad]) => <a href={filtreAdresi(id)} aria-current={filtre === id ? 'page' : undefined}>
-      {ad}{id !== 'tumu' && sayilar[id] > 0 && <b>{sayilar[id]}</b>}
+    {gorunumler.map(([id, ad]) => <a href={filtreAdresi(id)} aria-current={filtre === id ? 'page' : undefined} class={'y-filtre--' + id}>
+      <PIkon ad={FILTRE_IKONU[id] ?? 'liste'} boyut={18} />{ad}{id !== 'tumu' && sayilar[id] > 0 && <b>{sayilar[id]}</b>}
     </a>)}
   </nav>
 
@@ -217,13 +224,15 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
   </form>
 
   {liste.length ? <>
+    <div class="y-liste-detay" data-panel-secim>
+    <div class="y-liste-ana">
     <div class="y-tablo-kap y-tablo-kap--kart">
       <table class="y-tablo y-siparis-tablo">
         <thead><tr>
-          <th class="y-sec">{webSecilebilir && <input type="checkbox" data-y-tumu aria-label="Görünen web siparişlerinin tümünü seç" />}</th>
+          <th class="y-sec">{webSecilebilir && <label class="y-siparis-sec-kutusu"><input type="checkbox" data-y-tumu aria-label="Görünen web siparişlerinin tümünü seç" /></label>}</th>
           <th>Sipariş / kanal</th><th>Müşteri</th><th>Ürünler</th><th class="y-sayi">Tutar</th><th>Durum</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th>
         </tr></thead>
-        <tbody>{gorunen.map((satir) => {
+        <tbody>{gorunen.map((satir, i) => {
           if (satir.kanal !== 'web') {
             const { siparis: s, durum } = satir;
             const detay = pazaryeriDetayi(s.id);
@@ -252,7 +261,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
                 </div>
                 {Number.isFinite(durum.sonKargo) && <small class="y-table-note">Son kargolama {yTarih.format(durum.sonKargo)}</small>}
               </td>
-              <td class="y-sayi y-islem"><a class="y-link detay-link" href={detay} aria-label={KANALLAR[s.kanal] + ' sipariş detayı ' + s.siparisNo}>Detay ›</a></td>
+              <td class="y-sayi y-islem"><a class="y-link detay-link" href={detay} aria-label={KANALLAR[s.kanal] + ' sipariş detayı ' + s.siparisNo}>Detay</a><button class="btn btn--cizgi y-secim-ac" type="button" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded="false" aria-label={s.siparisNo + ' hızlı işlem'} hidden>İşlem</button></td>
             </tr>;
           }
           const { siparis: s } = satir;
@@ -262,7 +271,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
           const hazirlanabilir = s.durum !== 'iptal' && !iadeEdildi(s);
           const uo = urunOzeti(s);
           return <tr data-satir={s.no}>
-            <td class="y-sec"><input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} /></td>
+            <td class="y-sec"><label class="y-siparis-sec-kutusu"><input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} /></label></td>
             <td data-etiket="Sipariş" class="y-siparis-no">
               <a class="y-link" href={detay}>{s.no}</a>
               <button type="button" class="y-kopya" data-kopyala={s.no} title="Numarayı kopyala" aria-label={s.no + ' kopyala'}><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
@@ -283,6 +292,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
               {b.yazi !== '—' && <small class:list={['y-table-note', { 'kritik-not': b.renk === 'kirmizi' }]} title={b.baslik}>Belge: {b.yazi}</small>}
             </td>
             <td class="y-sayi y-islem">
+              <button class="btn btn--cizgi y-secim-ac" type="button" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded="false" aria-label={s.no + ' hızlı işlem'} hidden>İşlem</button>
               <details class="y-row-menu y-row-menu--sag"><summary aria-label={s.no + ' işlemleri'}>•••</summary>
                 <div>
                   <a href={detay}>Detayı aç</a>
@@ -311,23 +321,61 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
       </nav>}
     </div>
 
+    </div>
+    <aside class="y-kart y-liste-secim y-siparis-secim" aria-label="Sipariş hızlı işlem">
+      <div data-panel-bos><h2><PIkon ad="simsek" /> Hızlı işlem</h2><p class="y-help">Bir siparişin İşlem düğmesini kullanın.</p></div>
+      {gorunen.map((satir, i) => {
+        const s = satir.siparis;
+        const web = satir.kanal === 'web';
+        const detay = web ? '/yonetim/siparisler/' + satir.siparis.no : pazaryeriDetayi(satir.siparis.id);
+        const no = web ? satir.siparis.no : satir.siparis.siparisNo;
+        const musteri = web ? `${satir.siparis.musteri.ad} ${satir.siparis.musteri.soyad}` : satir.siparis.musteri;
+        const pazarDurumu = !web && (satir.durum.hazirlanacak ? 'yeni' : satir.durum.hazirlaniyor ? 'hazirlaniyor' : satir.siparis.durum);
+        const durum = web ? kargoChip(satir.siparis) : { yazi: PY_DURUM_ADLARI[pazarDurumu || satir.siparis.durum], renk: PY_DURUM_RENK[pazarDurumu || satir.siparis.durum] };
+        return <section id={'siparis-hizli-' + i} data-panel-kayit hidden>
+          <div class="y-kart__bas"><h2><PIkon ad="kutu" /> {no}</h2><button type="button" class="y-icon-button" data-panel-kapat aria-label="Hızlı işlemi kapat"><Ikon ad="kapat" boyut={17} /></button></div>
+          <p class="muted">{web ? 'Web sitesi' : KANALLAR[satir.kanal]} · {yTarih.format(new Date(s.tarih))}</p>
+          <div class="y-durumlar"><span class:list={['y-chip', 'y-chip--' + durum.renk]}>{durum.yazi === '—' && web ? odemeChip(satir.siparis).yazi : durum.yazi}</span><strong>{web ? formatTL(s.toplam) : kurusTL(s.toplam)}</strong></div>
+          <p><strong>{musteri || 'Müşteri bilgisi yok'}</strong></p>
+          {web && s.kalemler.length > 0 && <p class="y-help">{urunOzeti(satir.siparis).metin}</p>}
+          {web && siradakiDurum(satir.siparis) && <><h3>Sıradaki adım</h3><SiparisSonraki siparis={satir.siparis} kargo={site.kargo} action={detay} /></>}
+          {!web && satir.durum.uyari.map((u) => <p class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</p>)}
+          <div class="y-ust-aksiyonlar">
+            <a class="btn btn--cizgi" href={detay}>Sipariş ayrıntıları</a>
+            {web && <a class="btn btn--cizgi" href={detay + '#belgeler'}>Belgeler</a>}
+            {web && <a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + no) + '#secili'}>Fatura</a>}
+          </div>
+        </section>;
+      })}
+    </aside>
+    </div>
+
     {webSecilebilir && <div class="y-toplu" data-y-toplu hidden role="region" aria-label="Toplu web siparişi işlemleri">
       <strong data-y-secim>0 seçili</strong>
+      <details class="y-toplu-onizleme"><summary>Seçilen siparişler</summary><p data-y-secim-onizleme></p></details>
       <label class="y-toplu__tur">Belge
         <select data-y-toplu-tur aria-label="Toplu belge türü">{Object.entries(BELGE_TURLERI).map(([id, ad]) => <option value={id}>{ad}</option>)}</select>
       </label>
-      <button class="btn btn--sepet" type="button" data-y-toplu-eylem="belge">PDF / ZIP indir</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="a4">Etiket A4</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="etiket">Etiket 10×15</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="toplama">Toplama listesi</button>
+      <button class="btn btn--sepet" type="button" data-y-toplu-eylem="belge"><PIkon ad="indir" boyut={17} />PDF / ZIP indir</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="a4"><PIkon ad="yazici" boyut={17} />Etiket A4</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="etiket"><PIkon ad="yazici" boyut={17} />Etiket 10×15</button>
+      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="toplama"><PIkon ad="liste" boyut={17} />Toplama listesi</button>
       <button class="y-icon-button" type="button" data-y-toplu-temizle aria-label="Seçimi temizle"><Ikon ad="kapat" boyut={16} /></button>
     </div>}
+    {webSecilebilir && <dialog class="y-modal" data-y-toplu-onay aria-labelledby="toplu-onay-baslik">
+      <div class="y-modal__bas"><strong id="toplu-onay-baslik">Toplu işlem özeti</strong></div>
+      <p data-y-toplu-ozet></p>
+      <p class="y-help">Seçilen web siparişleri</p><p class="y-toplu-onay-listesi" data-y-toplu-siparisler></p>
+      <form method="dialog" class="y-modal__alt"><button class="btn btn--cizgi" value="vazgec" autofocus>Vazgeç</button><button class="btn btn--sepet" value="indir">İndir</button></form>
+    </dialog>}
   </> : <div class="y-kart y-bos">
     <p><strong>{!pazaryeri && kanal !== 'web' ? 'Pazaryeri sipariş listesi kullanılamıyor.' : q ? '“' + q + '” için sipariş bulunamadı.' : filtre === 'islem' ? 'Bekleyen iş yok.' : 'Bu görünümde sipariş yok.'}</strong></p>
     {filtre === 'islem' && !q && (sayilar.belgesiz ?? 0) > 0 && <p class="muted">Belgesi hazırlanmamış {sayilar.belgesiz} web siparişi var. <a class="y-link" href={filtreAdresi('belgesiz')}>Belgesi eksik siparişleri aç</a></p>}
     {q && filtre !== 'tumu' && <a class="y-link" href={filtreAdresi('tumu')}>Tüm durumlarda ara</a>}
     {(filtre !== 'tumu' || kanal !== 'tumu' || q || tarihAcik) && <a class="y-link" href="?durum=tumu">Tüm siparişleri göster</a>}
   </div>}
+  </div>
+  </div>
 </Yonetim>
 
 <style>

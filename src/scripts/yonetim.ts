@@ -2,33 +2,40 @@ import { formatTL, sepetteFiyat, setToplamlari } from '../lib/fiyat';
 import { kod } from '../lib/form';
 
 const root = document.documentElement;
-const menu = document.querySelector<HTMLButtonElement>('[data-menu-ac]');
+const menuDugmeleri = [...document.querySelectorAll<HTMLButtonElement>('[data-menu-ac]')];
 const scrim = document.querySelector<HTMLElement>('[data-menu-kapat]');
 const dar = matchMedia('(max-width: 999px)');
 const arama = document.querySelector<HTMLDialogElement>('[data-panel-arama]');
+let menuOdak: HTMLButtonElement | undefined;
 
 function mobilMenu(acik: boolean) {
   root.dataset.yMobile = acik ? 'acik' : 'kapali';
   if (scrim) scrim.hidden = !acik;
-  menu?.setAttribute('aria-expanded', String(acik));
+  for (const dugme of menuDugmeleri) dugme.setAttribute('aria-expanded', String(acik));
 }
 function menuDurumu() {
-  if (dar.matches) mobilMenu(false);
-  else menu?.setAttribute('aria-expanded', String(root.dataset.yMenu !== 'kapali'));
+  mobilMenu(false);
+  if (!dar.matches) menuDugmeleri[0]?.setAttribute('aria-expanded', String(root.dataset.yMenu !== 'kapali'));
 }
 menuDurumu();
 dar.addEventListener('change', menuDurumu);
-menu?.addEventListener('click', () => {
+window.addEventListener('pageshow', (e) => { if (e.persisted) menuDurumu(); });
+for (const dugme of menuDugmeleri) dugme.addEventListener('click', () => {
   if (dar.matches) {
+    menuOdak = dugme;
     mobilMenu(root.dataset.yMobile !== 'acik');
-    if (root.dataset.yMobile === 'acik') document.querySelector<HTMLElement>('.y-sidebar a')?.focus();
+    if (root.dataset.yMobile === 'acik') document.querySelector<HTMLElement>('.y-sidebar .is-grup, .y-sidebar .y-nav-link')?.focus();
     return;
   }
   root.dataset.yMenu = root.dataset.yMenu === 'kapali' ? 'acik' : 'kapali';
   try { localStorage.setItem('y-menu', root.dataset.yMenu); } catch {}
   menuDurumu();
 });
-scrim?.addEventListener('click', () => { mobilMenu(false); menu?.focus(); });
+function mobilMenuKapat() { mobilMenu(false); menuOdak?.focus(); }
+scrim?.addEventListener('click', mobilMenuKapat);
+document.querySelector('.y-sidebar')?.addEventListener('click', (e) => {
+  if (dar.matches && (e.target as Element).closest('a')) mobilMenu(false);
+});
 
 function aramayiAc() {
   const yerel = document.querySelector<HTMLInputElement>('.y-toolbar input[type="search"]');
@@ -39,7 +46,7 @@ function aramayiAc() {
 document.querySelector('[data-panel-ara]')?.addEventListener('click', aramayiAc);
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); aramayiAc(); }
-  if (e.key === 'Escape' && root.dataset.yMobile === 'acik') { mobilMenu(false); menu?.focus(); }
+  if (e.key === 'Escape' && root.dataset.yMobile === 'acik') mobilMenuKapat();
 });
 
 const degistir = (el: Element | null) => el?.closest('form')?.dispatchEvent(new Event('input', { bubbles: true }));
@@ -95,17 +102,72 @@ document.addEventListener('click', (e) => {
 });
 
 document.querySelectorAll<HTMLDialogElement>('dialog[data-hata-ac="1"]').forEach((d) => d.showModal());
+
+for (const alan of document.querySelectorAll<HTMLElement>('[data-panel-secim]')) {
+  const kayitlar = [...alan.querySelectorAll<HTMLElement>('[data-panel-kayit]')];
+  const dugmeler = [...alan.querySelectorAll<HTMLElement>('[data-panel-sec]')];
+  const bos = alan.querySelector<HTMLElement>('[data-panel-bos]');
+  const kaydiBirak = () => {
+    const form = kayitlar.find((x) => !x.hidden)?.querySelector<HTMLFormElement>('form[data-editor]');
+    if (!form || !degisenler.has(form)) return true;
+    if (!confirm('Kaydedilmemiş değişiklikler silinsin mi?')) return false;
+    form.reset();
+    form.dispatchEvent(new Event('input', { bubbles: true }));
+    return true;
+  };
+  const sec = (id?: string) => {
+    for (const kayit of kayitlar) kayit.hidden = kayit.id !== id;
+    for (const dugme of dugmeler) {
+      const secili = dugme.dataset.panelSec === id;
+      dugme.setAttribute('aria-expanded', String(secili));
+      dugme.closest('tr')?.classList.toggle('is-inceleme', secili);
+    }
+    if (bos) bos.hidden = !!id;
+    alan.classList.toggle('has-secim', !!id);
+  };
+  const ilk = kayitlar.find((x) => !x.hidden);
+  sec(ilk?.id);
+  alan.dataset.panelHazir = '1';
+  for (const dugme of dugmeler) {
+    if (dugme instanceof HTMLButtonElement) dugme.hidden = false;
+    dugme.addEventListener('click', (e) => {
+      if (e instanceof MouseEvent && (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey || e.button !== 0)) return;
+      const kayit = kayitlar.find((x) => x.id === dugme.dataset.panelSec);
+      if (!kayit) return;
+      e.preventDefault();
+      if (!kaydiBirak()) return;
+      sec(kayit.hidden ? kayit.id : undefined);
+      if (!kayit.hidden) {
+        if (matchMedia('(max-width: 1199px)').matches) kayit.scrollIntoView({ block: 'start' });
+        kayit.querySelector<HTMLElement>('[data-panel-kapat]')?.focus({ preventScroll: true });
+      }
+    });
+  }
+  for (const kayit of kayitlar) kayit.querySelector('[data-panel-kapat]')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    if (!kaydiBirak()) return;
+    sec();
+    dugmeler.find((x) => x.dataset.panelSec === kayit.id)?.focus();
+  });
+}
+
 /* ---------- Sipariş listesi: toplu işlem çubuğu (yalnızca seçim yapınca görünür) ---------- */
 const toplu = document.querySelector<HTMLElement>('[data-y-toplu]');
 if (toplu) {
   const kutular = [...document.querySelectorAll<HTMLInputElement>('[data-y-secim-kutusu]')];
   const tumu = document.querySelector<HTMLInputElement>('[data-y-tumu]');
   const sayac = toplu.querySelector<HTMLElement>('[data-y-secim]');
+  const onizleme = toplu.querySelector<HTMLElement>('[data-y-secim-onizleme]');
+  const topluOnay = document.querySelector<HTMLDialogElement>('[data-y-toplu-onay]');
+  const islemOzeti = topluOnay?.querySelector<HTMLElement>('[data-y-toplu-ozet]');
+  const siparisOzeti = topluOnay?.querySelector<HTMLElement>('[data-y-toplu-siparisler]');
+  let bekleyenIslem: HTMLButtonElement | undefined;
   const secili = () => kutular.filter((x) => x.checked).map((x) => x.value);
   const secimDurumu = () => {
     const n = secili().length;
     toplu.hidden = n === 0;
     if (sayac) sayac.textContent = n + ' sipariş seçili';
+    if (onizleme) onizleme.textContent = secili().join(' · ');
     kutular.forEach((x) => x.closest('tr')?.classList.toggle('is-secili', x.checked));
     if (tumu) { tumu.checked = n > 0 && n === Math.min(30, kutular.length); tumu.indeterminate = n > 0 && !tumu.checked; }
   };
@@ -115,9 +177,7 @@ if (toplu) {
     secimDurumu();
   }));
   toplu.querySelector('[data-y-toplu-temizle]')?.addEventListener('click', () => { kutular.forEach((x) => { x.checked = false; }); secimDurumu(); });
-  toplu.addEventListener('click', (e) => {
-    const b = (e.target as Element).closest<HTMLButtonElement>('[data-y-toplu-eylem]');
-    if (!b) return;
+  const calistir = (b: HTMLButtonElement) => {
     const form = document.createElement('form');
     const alan = (ad: string, deger: string) => { const i = document.createElement('input'); i.type = 'hidden'; i.name = ad; i.value = deger; form.append(i); };
     secili().forEach((no) => alan('no', no));
@@ -132,6 +192,22 @@ if (toplu) {
     document.body.append(form);
     form.submit();
     form.remove();
+  };
+  toplu.addEventListener('click', (e) => {
+    const b = (e.target as Element).closest<HTMLButtonElement>('[data-y-toplu-eylem]');
+    if (!b || !secili().length) return;
+    if (!topluOnay || !islemOzeti || !siparisOzeti) { calistir(b); return; }
+    bekleyenIslem = b;
+    const tur = toplu.querySelector<HTMLSelectElement>('[data-y-toplu-tur]')?.selectedOptions[0]?.textContent;
+    islemOzeti.textContent = b.dataset.yTopluEylem === 'belge' ? `${tur ?? 'Belge'} · PDF / ZIP hazırlanacak.`
+      : `${b.textContent?.trim()} · PDF hazırlanacak.`;
+    siparisOzeti.textContent = secili().join(' · ');
+    topluOnay.showModal();
+  });
+  topluOnay?.addEventListener('submit', (e) => {
+    const b = bekleyenIslem;
+    bekleyenIslem = undefined;
+    if (b && ((e as SubmitEvent).submitter as HTMLButtonElement | null)?.value === 'indir') calistir(b);
   });
   secimDurumu();
 }
@@ -650,15 +726,15 @@ document.querySelectorAll<HTMLElement>('[data-y-toast]').forEach((el) => {
 /* ---------- Üç noktalı menüler: dışarı tıklayınca / Esc ile kapanır ---------- */
 document.addEventListener('click', (e) => {
   const hedef = e.target as Element;
-  document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open], details.y-tarih[open]').forEach((d) => {
-    if (!d.contains(hedef) || (d.classList.contains('y-row-menu') && hedef.closest('a'))) d.open = false;
+  document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open], details.y-tarih[open], details.y-ust-menu[open]').forEach((d) => {
+    if (!d.contains(hedef) || (d.matches('.y-row-menu, .y-ust-menu') && hedef.closest('a'))) d.open = false;
   });
   const ac = hedef.closest<HTMLAnchorElement>('[data-ac]');
   const hedefDetay = ac && document.getElementById(ac.dataset.ac!);
   if (hedefDetay instanceof HTMLDetailsElement) { hedefDetay.open = true; hedefDetay.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open]').forEach((d) => { d.open = false; });
+  if (e.key === 'Escape') document.querySelectorAll<HTMLDetailsElement>('details.y-row-menu[open], details.y-ust-menu[open]').forEach((d) => { d.open = false; });
 });
 /* Menü, tablonun kaydırılabilir kutusunun içinde kesilmesin ve tabloyu kaydırmasın:
  * açılınca ekrana sabitlenir; aşağıda yer yoksa yukarı doğru açılır. Sayfa kayınca kapanır. */
@@ -693,8 +769,7 @@ addEventListener('resize', satirMenuleriniKapat, { passive: true });
   let tampon = '';
   let son = 0;
   document.addEventListener('keydown', (e) => {
-    const hedef = e.target as HTMLElement;
-    if (hedef.closest('input, textarea, select, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!(e.target instanceof Element) || e.target.closest('input, textarea, select, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return;
     const simdi = performance.now();
     if (simdi - son > 80) tampon = '';
     son = simdi;

@@ -2,11 +2,13 @@
 import '../styles/global.css';
 import '../styles/yonetim.css';
 import '../styles/panel.css';
+import '../styles/panel-tasarim.css';
 import Ikonlar from '../components/Ikonlar.astro';
-import Ikon from '../components/Ikon.astro';
+import PanelIkonlar from '../components/yonetim/PanelIkonlar.astro';
+import PIkon from '../components/yonetim/PIkon.astro';
 import { supabaseDurumu } from '../lib/depo';
 import { panelRozetiOku } from '../lib/panelRozet';
-import type { IkonAdi } from '../lib/sema';
+import type { PanelIkonAdi } from '../components/yonetim/panelIkon';
 
 interface Props {
   baslik: string;
@@ -19,19 +21,50 @@ interface Props {
 const { baslik, altBaslik, aktif, basari, hatalar = [] } = Astro.props;
 const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 const baglanti = supabaseDurumu();
-/* Yan menüde Siparişler'in yanında hazırlanacak/kargolanacak sipariş sayısı (ara katman okumayı önceden başlatır) */
-const { web: bekleyenWeb, pazar: bekleyenPazar } = await (Astro.locals.panelRozet ?? panelRozetiOku());
+/* Rozetler: hazırlanacak/kargolanacak sipariş ve stok uyarısı sayısı (ara katman okumayı önceden başlatır) */
+const { web: bekleyenWeb, pazar: bekleyenPazar, stok: stokUyari } = await (Astro.locals.panelRozet ?? panelRozetiOku());
 const bekleyen = bekleyenWeb + bekleyenPazar;
-const menu: [NonNullable<Props['aktif']>, string, string, IkonAdi][] = [
-  ['ozet', 'Genel Bakış', '/yonetim', 'ev'],
-  ['siparisler', 'Siparişler', '/yonetim/siparisler', 'kargo'],
-  ['urunler', 'Ürünler', '/yonetim/urunler', 'kutu'],
-  ['finans', 'Finans & Belgeler', '/yonetim/finans', 'belge'],
-  ['site', 'Site Düzeni', '/yonetim/site-duzeni', 'ayar'],
+const dikkat = bekleyen + stokUyari;
+type MenuBolumu = NonNullable<Props['aktif']> | 'kanallar';
+const menu: [MenuBolumu, string, string, PanelIkonAdi][] = [
+  ['ozet', 'İş Merkezi', '/yonetim', 'ev'],
+  ['siparisler', 'Siparişler', '/yonetim/siparisler', 'sepet'],
+  ['urunler', 'Ürünler ve Stok', '/yonetim/urunler', 'kutu'],
+  ['kanallar', 'Satış Kanalları', '/yonetim/siparisler/kanallar', 'zincir'],
+  ['finans', 'Finans ve Belgeler', '/yonetim/finans', 'grafik'],
+  ['site', 'Mağaza Görünümü', '/yonetim/site-duzeni', 'magaza'],
+  ['ayarlar', 'Ayarlar', '/yonetim/ayarlar', 'ayar'],
 ];
+const yol = Astro.url.pathname;
+const arama = Astro.url.searchParams;
+const satisKanallari = ['/yonetim/siparisler/kanallar', '/yonetim/siparisler/trendyol-urunler', '/yonetim/siparisler/trendyol-iade-soru'].includes(yol);
 const urunAlt = aktif === 'setler' || aktif === 'kategoriler' || aktif === 'yorumlar';
-const satisKanallari = Astro.url.pathname === '/yonetim/siparisler/kanallar';
-const sayfa = satisKanallari ? 'Satış kanalları' : menu.find(([id]) => id === aktif)?.[1] ?? (aktif === 'setler' ? 'Setler' : aktif === 'kategoriler' ? 'Kategoriler' : aktif === 'yorumlar' ? 'Değerlendirmeler' : 'Ayarlar');
+const bolum = satisKanallari ? 'kanallar' : urunAlt ? 'urunler' : aktif;
+const bolumMenu = menu.find(([id]) => id === bolum);
+const sayfa = bolumMenu?.[1];
+const mobilAdlar = { ozet: 'İşler', siparisler: 'Siparişler', urunler: 'Ürünler', kanallar: 'Kanallar' };
+/* Alt menü: [ad, adres, kanal işareti (isteğe bağlı)] */
+const altMenu: Partial<Record<MenuBolumu, [string, string, string?][]>> = {
+  ozet: [['Bugünkü işler', '/yonetim/isler']],
+  urunler: [['Tüm ürünler', '/yonetim/urunler'], ['Setler', '/yonetim/setler'], ['Kategoriler', '/yonetim/kategoriler'], ['Değerlendirmeler', '/yonetim/yorumlar']],
+  kanallar: [['Kanal durumu', '/yonetim/siparisler/kanallar'], ['Ürün eşleştirme', '/yonetim/siparisler/kanallar#eslestirmeler'], ['Trendyol ürünleri', '/yonetim/siparisler/trendyol-urunler', 'trendyol'], ['Trendyol iadeleri', '/yonetim/siparisler/trendyol-iade-soru', 'trendyol']],
+  finans: [['Genel bakış', '/yonetim/finans'], ['Faturalar', '/yonetim/finans/faturalar'], ['Trendyol hakedişi', '/yonetim/finans?sekme=trendyol', 'trendyol'], ['Hepsiburada', '/yonetim/finans/hepsiburada', 'hepsiburada'], ['Raporlar', '/yonetim/finans?sekme=raporlar']],
+};
+/* Bulunulan alt sayfa: önce adres + sorgu tam eşleşmesi, yoksa sorgusuz adres (finans sekmeleri hariç) */
+const altAdresi = (adres: string) => {
+  const [yolKismi, sorgu] = adres.split('?');
+  return { yolKismi, sorgu: sorgu ? '?' + sorgu : '' };
+};
+const altlar = (bolum && altMenu[bolum]) || [];
+const secili = altlar.find(([, adres]) => !adres.includes('#') && altAdresi(adres).sorgu && altAdresi(adres).yolKismi === yol && altAdresi(adres).sorgu === Astro.url.search)
+  ?? altlar.find(([, adres]) => !adres.includes('#') && !altAdresi(adres).sorgu && adres === yol && !arama.has('sekme'));
+/* Konum çubuğu: Panel / Bölüm / Alt sayfa / Başlık (tekrar eden adlar atlanır) */
+const kirinti: [string, string][] = [['Panel', '/yonetim']];
+if (bolumMenu) kirinti.push([bolumMenu[1], bolumMenu[2]]);
+if (secili) kirinti.push([secili[0], secili[1]]);
+const ayni = (a?: string, b?: string) => !!a && !!b && a.toLocaleLowerCase('tr') === b.toLocaleLowerCase('tr');
+if (!ayni(baslik, sayfa) && !ayni(baslik, secili?.[0])) kirinti.push([baslik, '']);
+const baglantiYazisi = baglanti === 'bagli' ? 'Veritabanı bağlı' : baglanti === 'yerel' ? 'Yerel veri deposu kullanılıyor' : 'Veritabanı okunamadı · yerel yedek gösteriliyor';
 ---
 <!doctype html>
 <html lang="tr">
@@ -48,53 +81,90 @@ const sayfa = satisKanallari ? 'Satış kanalları' : menu.find(([id]) => id ===
   </head>
   <body class="yonetim y-panel">
     <Ikonlar />
+    <PanelIkonlar />
     <a class="skip-link" href="#y-icerik">İçeriğe geç</a>
     <header class="y-top">
-      <button type="button" class="y-icon-button" aria-label="Menüyü aç veya kapat" aria-controls="y-menu" aria-expanded="true" data-menu-ac><Ikon ad="menu" boyut={20} /></button>
+      <button type="button" class="y-icon-button y-menu-dugme" aria-label="Menüyü aç veya kapat" aria-controls="y-menu" aria-expanded="true" data-menu-ac><PIkon ad="menu" boyut={20} /></button>
       <a href="/yonetim" class="y-brand" aria-label="Al Lulu Home yönetimi"><img src="/img/logo/amblem.webp" alt="" width="30" height="24" /><span>AL LULU HOME</span></a>
-      <span class="y-top-title">{sayfa}</span>
+      <nav class="y-kirinti" aria-label="Bulunduğunuz yer">
+        <ol>{kirinti.map(([ad, adres], i) => <li>{i < kirinti.length - 1 && adres ? <a href={adres}>{ad}</a> : <span aria-current="page">{ad}</span>}</li>)}</ol>
+      </nav>
+      <button type="button" class="y-arama-cubugu" data-panel-ara aria-label="Panelde ara" title="Ara · Ctrl/⌘ K"><PIkon ad="buyutec" boyut={18} /><span>Sipariş, ürün, müşteri veya telefon ara…</span><kbd>Ctrl K</kbd></button>
       <div class="y-top-end">
-        <button type="button" class="y-icon-button" data-panel-ara aria-label="Panelde ara" title="Ara · Ctrl/K"><Ikon ad="buyutec" boyut={18} /><span>Ara</span></button>
-        {baglanti === 'hata'
-          ? <span class="y-service-error" role="status" title="Supabase okunamadı. Yerel yedek gösteriliyor.">Bağlantı hatası</span>
-          : <span class:list={['y-service', { 'y-service--warning': baglanti === 'yerel' }]} title={baglanti === 'bagli' ? 'Supabase bağlı' : 'Yerel veri deposu kullanılıyor'}></span>}
-        <a class:list={['y-live', { 'y-live--maintenance': tadilat }]} href="/yonetim/site-duzeni?bolum=tadilat">{tadilat ? 'Bakımda' : 'Yayında'}</a>
-        <details class="y-account">
-          <summary class="y-icon-button">Hesap</summary>
-          <div><a href="/" target="_blank" rel="noopener">Canlı site ↗</a><form method="post" action="/yonetim/cikis"><button type="submit">Çıkış</button></form></div>
+        {baglanti !== 'bagli' && <span class:list={['y-baglanti-uyari', { 'is-hata': baglanti === 'hata' }]} role="status" title={baglantiYazisi}><PIkon ad="veritabani" boyut={16} /><span>{baglanti === 'hata' ? 'Bağlantı hatası' : 'Yerel veri'}</span></span>}
+        <details class="y-ust-menu y-yardim">
+          <summary class="y-ust-ikon" aria-label="Yardım ve kısayollar" title="Yardım"><PIkon ad="soru" boyut={20} /></summary>
+          <div>
+            <strong>Yardım ve kısayollar</strong>
+            <p><kbd>Ctrl</kbd> + <kbd>K</kbd> ile her sayfadan arama açılır.</p>
+            <a href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={17} /><span>Bugünkü işler<small>Otomatik işler ve size kalanlar</small></span></a>
+            <a href="/yonetim/siparisler/kanallar"><PIkon ad="zincir" boyut={17} /><span>Satış kanalları<small>Bağlantı, eşitleme ve stok eşleştirme</small></span></a>
+            <a href="/yonetim/yedek"><PIkon ad="indir" boyut={17} /><span>Veri yedeği indir<small>Tüm kayıtlar tek ZIP dosyasında</small></span></a>
+            <p class:list={['y-baglanti-satir', 'is-' + baglanti]}><i></i>{baglantiYazisi}</p>
+          </div>
+        </details>
+        <details class="y-ust-menu y-bildirim-menu">
+          <summary class="y-ust-ikon" aria-label={dikkat ? `${dikkat} konu dikkat bekliyor` : 'Bildirimler'} title="Dikkat bekleyenler"><PIkon ad="zil" boyut={20} />{dikkat > 0 && <b class="y-ust-sayi">{dikkat > 99 ? '99+' : dikkat}</b>}</summary>
+          <div>
+            <strong>Dikkat bekleyenler</strong>
+            <a href="/yonetim/siparisler?durum=islem&amp;kanal=tumu"><PIkon ad="sepet" boyut={17} /><span>{bekleyen ? `${bekleyen} sipariş işlem bekliyor` : 'İşlem bekleyen sipariş yok'}<small>Web {bekleyenWeb} · Pazaryeri {bekleyenPazar}</small></span>{bekleyen > 0 && <b class="y-chip y-chip--turuncu">{bekleyen}</b>}</a>
+            <a href="/yonetim/urunler?filtre=kritik"><PIkon ad="uyari" boyut={17} /><span>{stokUyari ? `${stokUyari} ürün stok uyarısında` : 'Stok uyarısı yok'}<small>Tükenen veya uyarı eşiğine inen yayındaki ürünler</small></span>{stokUyari > 0 && <b class="y-chip y-chip--kirmizi">{stokUyari}</b>}</a>
+            <a href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={17} /><span>Bugünkü işlerin tamamı<small>Fatura, iade, eşleştirme ve otomatik işler</small></span></a>
+          </div>
+        </details>
+        <details class="y-ust-menu y-account">
+          <summary aria-label="Hesap menüsü"><span class="y-avatar">AL</span><span class="y-account-label"><strong>AL LULU HOME</strong><small>Mağaza yöneticisi</small></span><PIkon ad="asagi" boyut={16} /></summary>
+          <div>
+            <a href="/" target="_blank" rel="noopener"><PIkon ad="dis-baglanti" boyut={17} /><span>Canlı siteyi aç</span></a>
+            <a href="/yonetim/gorunum?m=1&amp;d=/"><PIkon ad="goz" boyut={17} /><span>Siteye müşteri gibi bak</span></a>
+            <a href="/yonetim/site-duzeni?bolum=tadilat"><PIkon ad="anahtar" boyut={17} /><span>Bakım modu ({tadilat ? 'açık' : 'kapalı'})</span></a>
+            <a href="/yonetim/yedek"><PIkon ad="indir" boyut={17} /><span>Veri yedeği indir</span></a>
+            <form method="post" action="/yonetim/cikis"><button type="submit"><PIkon ad="cikis" boyut={17} /><span>Çıkış yap</span></button></form>
+          </div>
         </details>
       </div>
     </header>
     <button type="button" class="y-mobile-scrim" aria-label="Menüyü kapat" data-menu-kapat hidden></button>
     <nav id="y-menu" class="y-sidebar" aria-label="Yönetim menüsü">
-      {menu.map(([id, ad, href, ikon]) => <>
-        <a href={href} aria-current={aktif === id && !satisKanallari ? "page" : undefined} class:list={{ 'is-grup': (id === "urunler" && urunAlt) || (id === "site" && aktif === "ayarlar") || (id === "siparisler" && satisKanallari) }} title={ad}>
-          <Ikon ad={ikon} boyut={19} /><span>{ad}</span>
-          {id === "siparisler" && bekleyen > 0 && <b class="y-rozet" title={`${bekleyen} sipariş hazırlanacak veya kargolanacak (web ${bekleyenWeb}, pazaryeri ${bekleyenPazar})`}>{bekleyen}</b>}
+      <a href="/yonetim" class="y-sidebar-brand" title="Al Lulu Home"><span class="y-logo-halka"><img src="/img/logo/amblem.webp" alt="" width="30" height="30" /></span><span><strong>AL LULU HOME</strong><small>Yönetim Paneli</small></span></a>
+      <div class="y-nav-liste">
+        {menu.map(([id, ad, href, ikon]) => <>
+          <a href={href} aria-current={yol === href && !secili ? 'page' : undefined} class:list={['y-nav-link', { 'is-grup': bolum === id, 'y-nav-settings': id === 'ayarlar' }]} title={ad}>
+            <PIkon ad={ikon} boyut={21} /><span>{ad}</span>
+            {id === 'siparisler' && bekleyen > 0 && <b class="y-rozet" title={`${bekleyen} sipariş hazırlanacak veya kargolanacak (web ${bekleyenWeb}, pazaryeri ${bekleyenPazar})`}>{bekleyen}</b>}
+            {id === 'urunler' && stokUyari > 0 && <b class="y-rozet y-rozet--stok" title={`${stokUyari} yayındaki ürün tükendi veya stok uyarı eşiğinde`}>{stokUyari}</b>}
+          </a>
+          {bolum === id && altMenu[id] && <div class="y-sidebar-sub">
+            {altMenu[id].map(([ad, adres, kanal]) => <a href={adres} aria-current={secili?.[1] === adres ? 'page' : undefined}>{kanal && <span class:list={['y-alt-kanal', 'y-alt-kanal--' + kanal]} aria-hidden="true">{kanal === 'trendyol' ? 'ty' : 'hb'}</span>}{ad}</a>)}
+          </div>}
+        </>)}
+      </div>
+      <div class="y-sidebar-alt">
+        <a class:list={['y-magaza-durum', { 'is-bakim': tadilat }]} href="/yonetim/site-duzeni?bolum=tadilat" title="Bakım modunu yönet">
+          <i aria-hidden="true"></i>
+          <span><strong>Mağaza durumu: {tadilat ? 'Bakımda' : 'Yayında'}</strong><small>Tüm kanallar tek ortak stoktan satar</small></span>
         </a>
-        {id === "siparisler" && <div class="y-sidebar-sub"><a href="/yonetim/siparisler/kanallar" aria-current={satisKanallari ? "page" : undefined}>Satış kanalları</a></div>}
-        {id === "urunler" && <div class="y-sidebar-sub">
-          <a href="/yonetim/setler" aria-current={aktif === "setler" ? "page" : undefined}>Setler</a>
-          <a href="/yonetim/kategoriler" aria-current={aktif === "kategoriler" ? "page" : undefined}>Kategoriler</a>
-          <a href="/yonetim/yorumlar" aria-current={aktif === "yorumlar" ? "page" : undefined}>Değerlendirmeler</a>
-        </div>}
-        {id === "site" && <div class="y-sidebar-sub"><a href="/yonetim/ayarlar" aria-current={aktif === "ayarlar" ? "page" : undefined}>Ayarlar ve yasal bilgiler</a></div>}
-      </>)}
+        <a href="/" target="_blank" rel="noopener" class="y-sidebar-store" title="Canlı mağazayı aç"><PIkon ad="dis-baglanti" boyut={17} /><span>Canlı mağazayı aç</span></a>
+      </div>
+    </nav>
+    <nav class="y-bottom-nav" aria-label="Mobil yönetim menüsü">
+      {menu.slice(0, 4).map(([id, , href, ikon]) => <a href={href} aria-current={bolum === id ? 'location' : undefined}><PIkon ad={ikon} boyut={20} /><span>{mobilAdlar[id as keyof typeof mobilAdlar]}</span>{id === 'siparisler' && bekleyen > 0 && <b class="y-rozet">{bekleyen}</b>}</a>)}
+      <button type="button" data-menu-ac aria-controls="y-menu" aria-expanded="false" class:list={{ 'is-active': bolum === 'finans' || bolum === 'site' || bolum === 'ayarlar' }}><PIkon ad="menu" boyut={20} /><span>Diğer</span></button>
     </nav>
     <main class="y-workspace" id="y-icerik" tabindex="-1">
       <div class="y-sayfa-ust">
-        <div><h1 class="y-baslik">{baslik}</h1>{altBaslik && <p class="y-alt-baslik">{altBaslik}</p>}</div>
+        <div class="y-baslik-satiri"><slot name="baslik-onu" /><div><h1 class="y-baslik">{baslik}</h1>{altBaslik && <p class="y-alt-baslik">{altBaslik}</p>}</div></div>
         <slot name="ust-sag" />
       </div>
-      {basari && <p class="y-toast" role="status" data-y-toast><Ikon ad="tik" boyut={16} />{basari}</p>}
-      {hatalar.length > 0 && <div class="y-bildirim y-bildirim--hata" role="alert"><strong>İşlem tamamlanamadı</strong><ul>{hatalar.map((h) => <li>{h}</li>)}</ul></div>}
+      {basari && <p class="y-toast" role="status" data-y-toast><PIkon ad="tik" boyut={16} />{basari}</p>}
+      {hatalar.length > 0 && <div class="y-bildirim y-bildirim--hata" role="alert"><PIkon ad="uyari" boyut={20} /><div><strong>İşlem tamamlanamadı</strong><ul>{hatalar.map((h) => <li>{h}</li>)}</ul></div></div>}
       <slot />
     </main>
     <dialog class="y-search" data-panel-arama>
-      <div class="y-kart__bas"><strong>Panelde ara</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+      <div class="y-kart__bas"><strong>Panelde ara</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><PIkon ad="kapat" boyut={18} /></button></form></div>
       <form method="get" action="/yonetim/urunler" data-genel-arama>
         <label class="y-alan">Arama<input name="q" type="search" placeholder="Ürün, sipariş no, müşteri veya telefon" required /></label>
-        <div class="y-ust-aksiyonlar"><button class="btn btn--sepet" type="submit">Ürünlerde ara</button><button class="btn btn--cizgi" type="submit" formaction="/yonetim/siparisler" name="durum" value="tumu">Siparişlerde ara</button></div>
+        <div class="y-ust-aksiyonlar"><button class="btn btn--sepet" type="submit"><PIkon ad="kutu" boyut={17} />Ürünlerde ara</button><button class="btn btn--cizgi" type="submit" formaction="/yonetim/siparisler" name="durum" value="tumu"><PIkon ad="sepet" boyut={17} />Siparişlerde ara</button></div>
       </form>
     </dialog>
     <script>

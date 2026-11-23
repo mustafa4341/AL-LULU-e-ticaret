@@ -1,5 +1,8 @@
 ---
 import FinansSiparis from '../../../components/yonetim/FinansSiparis.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import SiparisSonraki from '../../../components/yonetim/SiparisSonraki.astro';
 import Ikon from '../../../components/Ikon.astro';
 import { finansOku } from '../../../lib/finansDepo';
 import Yonetim from '../../../layouts/Yonetim.astro';
@@ -9,7 +12,7 @@ import { evet, istegeBagli, metin } from '../../../lib/form';
 import { kargoFirmalari, siparisKargoBaglantisi } from '../../../lib/kargoTakip';
 import { siparisDurumGuncelle } from '../../../lib/urunIslem';
 import { BELGE_TURLERI, belgeGecerli } from '../../../lib/finans';
-import { gonderildi, IADE_ISLEMI, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
+import { gonderildi, IADE_ISLEMI, iadeEdildi, iptalEdilebilir } from '../../../lib/siparisAkisi';
 import { odemeEtiketi, yTarih } from '../../../lib/yonetimRapor';
 import { SIPARIS_DURUM_ADLARI, type Siparis } from '../../../lib/sema';
 import { EPOSTA_TUR_ADLARI, epostaKayitlari, epostaYenidenGonder } from '../../../lib/bildirim';
@@ -60,7 +63,6 @@ const listeToplami = s.urunlerToplami + s.kampanyaIndirimi;
 const indirimVar = s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
 const belgeler = finansKaydi ? finansKaydi.belgeler.filter((b) => b.siparisNo === no) : [];
 const kesilenFatura = finansKaydi?.faturalar.find((x) => x.kanal === 'web' && x.kayit === no && !x.iptal);
-const sonraki = siradakiDurum(s);
 const iade = iadeEdildi(s);
 const iptal = s.durum === 'iptal';
 const kargolar = kargoFirmalari(site.kargo);
@@ -107,14 +109,14 @@ if (iptal && gecerliBelgeler.some((b) => b.tur !== 'iade')) uyarilar.push('İpta
 if (s.paytr && s.paytr.sonuc === 'bekliyor' && Date.now() - Date.parse(s.tarih) > 60 * 60_000) uyarilar.push('Bir saattir ödeme sonucu gelmedi. PayTR Mağaza Paneli’nden işlemi kontrol edin.');
 if (s.paytr?.test) uyarilar.push('Bu bir test siparişidir; ciroya ve stoğa dahil edilmez.');
 
-const adim = { odendi: 'Ödemeyi onayla', hazirlaniyor: 'Hazırlamaya al', 'teslim-edildi': 'Teslim edildi olarak işaretle' } as const;
-const kargoFormuAcik = sonraki === 'kargoda';
 const takipDuzenlenebilir = s.durum === 'kargoda' && !s.paytr?.test && !iade;
 const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new URLSearchParams({ no: s.no, bicim, ...(tur ? { tur } : {}) });
 ---
 <Yonetim baslik={'Sipariş ' + s.no} altBaslik={yTarih.format(new Date(s.tarih)) + ' · Web sitesi'} aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={[...hatalar, ...(Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : [])]}>
+  <KanalLogo slot="baslik-onu" kanal="web" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <button class="btn btn--cizgi" type="button" data-kopyala={s.no} title="Sipariş numarasını kopyala">Numarayı kopyala</button>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler"><PIkon ad="ok-sol" boyut={18} />Siparişlere dön</a>
+    <button class="btn btn--cizgi" type="button" data-kopyala={s.no} title="Sipariş numarasını kopyala"><PIkon ad="kopya" boyut={18} />Numarayı kopyala</button>
     <details class="y-row-menu y-row-menu--sag">
       <summary class="btn btn--cizgi" aria-label="Diğer işlemler">•••</summary>
       <div>
@@ -141,6 +143,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
   )}
 
   <section class="y-kart y-durum-kart" id="kargo">
+    <div class="y-kart__bas"><h2><PIkon ad="kargo" /> Sipariş süreci</h2><a class="y-link" href="#urunler">Ürünler ve tutar</a></div>
     {iptal ? (
       <p class="y-iptal-bant"><strong>{s.paytr?.sonuc === 'basarisiz' ? 'Ödeme tamamlanamadı' : 'Sipariş iptal edildi'}</strong>{s.iptalNotu && <span> · {s.iptalNotu}</span>}</p>
     ) : (
@@ -159,23 +162,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
       <strong class="y-durumlar__tutar">{formatTL(s.toplam)}</strong>
     </div>
 
-    {sonraki && sonraki !== 'kargoda' && (
-      <form method="post" class="y-sonraki">
-        <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value={sonraki} />
-        {sonraki === 'odendi' && <label class="y-secim"><input type="checkbox" name="odemeOnay" required />Ödemenin hesaba geçtiğini kontrol ettim.</label>}
-        <button class="btn btn--sepet" type="submit">{adim[sonraki]}</button>
-      </form>
-    )}
-    {kargoFormuAcik && (
-      <form method="post" class="y-sonraki y-sonraki--kargo">
-        <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value="kargoda" />
-        <label class="y-alan">Kargo firması<select name="kargoFirma" required><option value="">Firma seçin</option>
-          {kargolar.map((x) => <option value={x.ad} selected={x.ad === (forma?.get('kargoFirma') || s.kargoFirma || site.kargo.firma)}>{x.ad}</option>)}
-        </select></label>
-        <label class="y-alan">Kargo takip numarası<input name="kargoTakip" required minlength="6" maxlength="40" autocomplete="off" value={String(forma?.get('kargoTakip') ?? s.kargoTakip ?? '')} placeholder="Kargo fişindeki numara" /></label>
-        <button class="btn btn--sepet" type="submit"><Ikon ad="kargo" boyut={16} />Kargoya verildi</button>
-      </form>
-    )}
+    <div class="y-siparis-sonraki"><SiparisSonraki siparis={s} kargo={site.kargo} form={forma} /></div>
     {kargo && <p class="y-shipment"><Ikon ad="kargo" boyut={16} /><strong>{kargo.firma} · {s.kargoTakip}</strong>
       <a class="y-link" href={kargo.url} target="_blank" rel="noopener">Takibi aç ↗</a>
       {takipMesaj && !iade && <a class="y-link" href={takipMesaj} target="_blank" rel="noopener">Müşteriye WhatsApp’tan gönder ↗</a>}
@@ -211,7 +198,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
         <form method="post" class="y-sonraki">
           <input type="hidden" name="eylem" value="iade" />
           <label class="y-alan">İade notu<input name="iptalNotu" maxlength="500" value={String(forma?.get('iptalNotu') ?? '')} /></label>
-          <label class="y-secim"><input type="checkbox" name="iadeOnay" required />Ürünleri teslim aldım ve geri ödemeyi yaptım.</label>
+          <label class="y-secim"><input type="checkbox" name="iadeOnay" required />Ürünleri teslim alıp satışa uygun olduklarını kontrol ettim ve geri ödemeyi yaptım.</label>
           <button type="submit" class="btn btn--tehlike" data-onayla="İade tamamlandı olarak kaydedilsin mi? Ürünler stoğa geri eklenir, tutar iade olarak raporlanır.">İadeyi kaydet</button>
         </form>
       </details>
@@ -220,7 +207,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
 
   <div class="y-izgara y-izgara--2">
     <section class="y-kart">
-      <h2>Müşteri ve Teslimat</h2>
+      <h2><PIkon ad="kullanici" /> Müşteri ve Teslimat</h2>
       <p><strong>{s.musteri.ad} {s.musteri.soyad}</strong></p>
       <p><a class="y-link" href={'tel:' + s.musteri.tel}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a class="y-link" href={'mailto:' + s.musteri.eposta}>{s.musteri.eposta}</a></>}</p>
       <p>{s.teslimat.adres}<br />{s.teslimat.ilce} / {s.teslimat.il}</p>
@@ -228,8 +215,8 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
       <p class="muted">e-Arşiv fatura: {kesilenFatura ? <strong>{kesilenFatura.no}</strong> : 'Kesilmedi'} · <a class="y-link" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + s.no) + '#secili'}>{kesilenFatura ? 'Faturayı görüntüle' : 'Fatura bilgileri'}</a></p>
       <p class="muted">Fatura: {s.fatura.tip === 'kurumsal' ? [s.fatura.firma, s.fatura.vd, s.fatura.vno].filter(Boolean).join(' · ') : 'Bireysel'}{s.fatura.adres && <> · {s.fatura.adres}</>}</p>
     </section>
-    <section class="y-kart">
-      <h2>Ürünler ve Tutar</h2>
+    <section class="y-kart" id="urunler">
+      <h2><PIkon ad="kutu" /> Ürünler ve Tutar</h2>
       <ul class="y-siparis-kalem-liste y-siparis-kalem-liste--gorselli">{s.kalemler.map((k) => {
         const gorsel = kalemGorseli(k);
         return <li>

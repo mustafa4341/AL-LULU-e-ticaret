@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
 import Ikon from '../../components/Ikon.astro';
 import Onizleme from '../../components/yonetim/Onizleme.astro';
 import Sekmeler from '../../components/yonetim/Sekmeler.astro';
@@ -36,10 +37,10 @@ const a = m.anaSayfa;
 const t = s.tadilat;
 const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.includes(b))];
 ---
-<Yonetim baslik="Site Düzeni" aktif="site" basari={basari} hatalar={hatalar}>
+<Yonetim baslik="Mağaza Görünümü" altBaslik="Vitrin, kampanyalar, kargo, iletişim ve bakım ayarları." aktif="site" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="site-onizleme" aria-expanded="false">Önizle</button>
-    <button type="submit" form="site-ayar-form" class="btn btn--sepet">Kaydet</button>
+    <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="site-onizleme" aria-expanded="false"><PIkon ad="goz" boyut={18} />Önizle</button>
+    <button type="submit" form="site-ayar-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button>
   </div>
   <form id="bakim-form" method="post" action="/yonetim/tadilat">
     <input type="hidden" name="islem" value={t.aktif ? "kapat" : "ac"} />
@@ -50,7 +51,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
       <Sekmeler secenekler={SITE_SEKMELERI} aktif={aktifBolum} />
       <!-- 1. TADİLAT MODU AYARLARI -->
       <section class="y-kart" id="tadilat-bolum" data-bolum="tadilat" hidden={aktifBolum !== "tadilat"} style="border-color:#E8C860">
-        <h2>Bakım Modu</h2>
+        <h2><PIkon ad="anahtar" /> Bakım Modu</h2>
 
 
         <div class="y-maintenance-control">
@@ -105,7 +106,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 2. ANA SAYFA VİTRİNİ (HERO) VE BÖLÜM SIRALAMASI -->
       <section class="y-kart" id="anasayfa-bolum" data-bolum="anasayfa" hidden={aktifBolum !== "anasayfa"}>
-        <h2>Ana Sayfa</h2>
+        <h2><PIkon ad="duzen" /> Ana Sayfa</h2>
 
 
         <div class="y-izgara y-izgara--2">
@@ -204,7 +205,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 3. DUYURU ŞERİDİ VE KAMPANYA KURALLARI -->
       <section class="y-kart" id="duyuru-bolum" data-bolum="duyuru" hidden={aktifBolum !== "duyuru"}>
-        <h2>Duyurular ve fiyat görünümü</h2>
+        <h2><PIkon ad="zil" /> Duyurular ve fiyat görünümü</h2>
 
         <div class="y-alan">
           <label for="duyurular">Üst Şerit Duyuruları  <span class="y-ipucu">(her satır bir mesaj; otomatik sırayla döner)</span></label>
@@ -251,7 +252,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 4. KARGO VE TESLİMAT -->
       <section class="y-kart" id="kargo-bolum" data-bolum="kargo" hidden={aktifBolum !== "kargo"}>
-        <h2>Kargo ve Teslimat</h2>
+        <h2><PIkon ad="kargo" /> Kargo ve Teslimat</h2>
         <div class="y-izgara y-izgara--3">
           <div class="y-alan"><label>Kargo Firması</label><input id="kargoFirma" name="kargoFirma" value={s.kargo.firma} data-site-demo-sekme="anasayfa" /></div>
           <div class="y-alan"><label>Kargo Ücreti (TL)</label><input id="kargoUcret" name="kargoUcret" inputmode="numeric" value={s.kargo.ucret} data-site-demo-sekme="anasayfa" /></div>
@@ -282,7 +283,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 5. İLETİŞİM VE MAĞAZA KİMLİĞİ -->
       <section class="y-kart" id="iletisim-bolum" data-bolum="iletisim" hidden={aktifBolum !== "iletisim"}>
-        <h2>WhatsApp ve İletişim</h2>
+        <h2><PIkon ad="whatsapp" /> WhatsApp ve İletişim</h2>
 
         <div class="y-izgara y-izgara--2">
           <div class="y-alan"><label for="telefon">WhatsApp / Telefon Numarası</label><input id="telefon" name="telefon" type="tel" value={s.telefonGorunen} required data-site-demo-sekme="anasayfa" /></div>
@@ -297,7 +298,7 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 6. ANA SAYFA SSS -->
       <section class="y-kart" id="sss-bolum" data-bolum="sss" hidden={aktifBolum !== "sss"}>
-        <h2>Sık Sorulan Sorular</h2>
+        <h2><PIkon ad="soru" /> Sık Sorulan Sorular</h2>
         <p class="y-ipucu" style="margin:-4px 0 10px">Kartlı ödeme (PayTR) açılana kadar içinde "taksit" geçen sorular sitede gösterilmez; ödeme açılınca kendiliğinden görünür.</p>
         <div class="y-tekrar">
           {a.sss.map((x) => (

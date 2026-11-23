@@ -1,5 +1,7 @@
 ---
 import Ikon from '../../../../components/Ikon.astro';
+import KanalLogo from '../../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../../components/yonetim/PIkon.astro';
 import Yonetim from '../../../../layouts/Yonetim.astro';
 import { pazaryeriDurumu } from '../../../../components/yonetim/pazaryeriGorunumu';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../../lib/depo';
@@ -111,9 +113,10 @@ const tyIslemAcik = !!s && s.kanal === 'trendyol' && !!s.paketNo && !s.stokDisi 
 const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
 ---
 <Yonetim baslik={s ? 'Sipariş ' + s.siparisNo : 'Pazaryeri siparişi'} altBaslik={s ? `${KANALLAR[s.kanal]} · ${tarihYaz(s.tarih) ?? 'Tarih belirtilmemiş'}` : undefined} aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
+  {s && <KanalLogo slot="baslik-onu" kanal={s.kanal} boyut="buyuk" />}
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a href={siparisler + '?durum=tumu' + (s ? '&kanal=' + s.kanal : '')} class="btn btn--cizgi">Sipariş listesi</a>
-    {s && <a href={KANAL_PANELI[s.kanal]} target="_blank" rel="noreferrer noopener" class="btn btn--sepet">{KANALLAR[s.kanal]} panelini aç ↗</a>}
+    <a href={siparisler + '?durum=tumu' + (s ? '&kanal=' + s.kanal : '')} class="btn btn--cizgi"><PIkon ad="ok-sol" boyut={18} />Sipariş listesi</a>
+    {s && <a href={KANAL_PANELI[s.kanal]} target="_blank" rel="noreferrer noopener" class="btn btn--sepet"><PIkon ad="dis-baglanti" boyut={18} />{KANALLAR[s.kanal]} panelini aç</a>}
   </div>
 
   {s ? <>
@@ -130,7 +133,7 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
       </ul>
     </BilgiKutusu>
     <section class="y-kart y-durum-kart" aria-labelledby="siparis-baslik">
-      <h2 id="siparis-baslik">Sipariş özeti</h2>
+      <h2 id="siparis-baslik"><PIkon ad="kutu" /> Sipariş özeti</h2>
       <div class="y-durumlar">
         <span>Kanal durumu <strong class:list={['y-chip', 'y-chip--' + PY_DURUM_RENK[s.durum]]}>{PY_DURUM_ADLARI[s.durum]}</strong></span>
         {s.stokDisi && <span class="y-chip y-chip--gri">Stok takibi başlangıcından önce</span>}
@@ -151,7 +154,7 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
     </section>
 
     {tyIslemAcik && <section class="y-kart" id="trendyol-islem" aria-labelledby="ty-islem-baslik">
-      <h2 id="ty-islem-baslik">Trendyol işlemleri</h2>
+      <h2 id="ty-islem-baslik"><PIkon ad="simsek" /> Trendyol işlemleri</h2>
       <p class="y-help">Paket durumu: <strong>{s.hamDurum || '—'}</strong>. Sıra: önce “Toplamaya başla”, sonra fatura. Trendyol kargo etiketini paket “toplanıyor” olunca oluşturur.</p>
       <div class="ty-islemler">
         {(s.hamDurum === 'Created' || s.hamDurum === 'Awaiting') && <form method="post">
@@ -185,7 +188,7 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
     </section>}
 
     <section class="y-kart" id="urunler" aria-labelledby="urunler-baslik">
-      <h2 id="urunler-baslik">Ürünler ve stok</h2>
+      <h2 id="urunler-baslik"><PIkon ad="katman" /> Ürünler ve stok</h2>
       <ul class="y-siparis-kalem-liste y-siparis-kalem-liste--gorselli">
         {s.kalemler.map((k) => {
           const u = k.urunId ? urunler.get(k.urunId) : undefined;
