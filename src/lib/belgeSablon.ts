@@ -4,7 +4,7 @@
  * Bu belgeler mağaza içi/bilgilendirme belgeleridir; resmî e-Fatura / e-Arşiv yerine geçmez.
  */
 import { BELGE_BASLIKLARI, type BelgeAyarlari, type BelgeTuru } from './finans';
-import { barkodSvg, htmlKacis } from './finansPdf';
+import { barkodSvg, metniSar, yaziOlc, yaziYoluSvg } from './finansPdf';
 import type { Siparis } from './sema';
 
 export type SaticiBilgisi = {
@@ -37,31 +37,21 @@ export const belgeTarihi = (d: Date | string) => tarihSaat.format(typeof d === '
 
 type Hiza = 'start' | 'middle' | 'end';
 function yazi(v: string, x: number, y: number, o: { boy?: number; kalin?: boolean; renk?: string; hiza?: Hiza } = {}) {
-  return '<text x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" fill="' + (o.renk ?? RENK.yazi) +
-    '" font-family="Arial, DejaVu Sans, Helvetica, sans-serif" font-size="' + (o.boy ?? 9.5) + '" font-weight="' + (o.kalin ? 700 : 400) +
-    '" text-anchor="' + (o.hiza ?? 'start') + '">' + htmlKacis(v) + '</text>';
+  return yaziYoluSvg(v, x, y, {
+    boy: o.boy ?? 9.5,
+    kalin: o.kalin,
+    renk: o.renk ?? RENK.yazi,
+    hiza: o.hiza ?? 'start',
+  });
 }
 const cizgi = (x1: number, y1: number, x2: number, y2: number, renk: string = RENK.cizgi, kalinlik = 0.8) =>
   '<line x1="' + x1 + '" y1="' + y1.toFixed(1) + '" x2="' + x2 + '" y2="' + y2.toFixed(1) + '" stroke="' + renk + '" stroke-width="' + kalinlik + '"/>';
 const kutu = (x: number, y: number, w: number, h: number, dolgu: string, kenar = 'none', r = 3) =>
   '<rect x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + h.toFixed(1) + '" rx="' + r + '" fill="' + dolgu + '" stroke="' + kenar + '" stroke-width="0.8"/>';
 
-/** Metni yaklaşık karakter genişliğine göre satırlara böler (Arial ortalama genişliği ≈ 0,5 × punto). */
-export function sar(metin: string, en: number, boy = 9.5): string[] {
-  const n = Math.max(8, Math.floor(en / (boy * 0.5)));
-  const satirlar: string[] = [];
-  for (const parca of metin.split(/\r?\n/)) {
-    let kalan = parca.trim();
-    if (!kalan) { satirlar.push(''); continue; }
-    while (kalan.length > n) {
-      const bos = kalan.lastIndexOf(' ', n);
-      const i = bos >= Math.floor(n / 2) ? bos : n;
-      satirlar.push(kalan.slice(0, i));
-      kalan = kalan.slice(i).trimStart();
-    }
-    satirlar.push(kalan);
-  }
-  return satirlar;
+/** Metni gerçek yazı tipi genişliğine göre satırlara böler (taşma yapmaz). */
+export function sar(metin: string, en: number, boy = 9.5, kalin = false): string[] {
+  return metniSar(metin, en, boy, kalin);
 }
 
 function odemeBilgisi(s: Siparis) {
@@ -104,7 +94,7 @@ function secenekler(liste: string[], x: number, y: number, boy = 9.5) {
   for (const metin of liste) {
     svg += kutu(xx, y - 8.5, 9, 9, '#fff', '#8c7f6c', 1.5);
     svg += yazi(metin, xx + 14, y, { boy });
-    xx += 14 + metin.length * boy * 0.52 + 22;
+    xx += 14 + yaziOlc(metin, boy) + 18;
   }
   return svg;
 }
@@ -322,7 +312,14 @@ export function siparisBelgesiSvg(g: BelgeGirdisi): string[] {
     if (web) alt += yazi(web, SAG, A4.h - 64, { boy: 7.5, hiza: 'end', renk: RENK.ikincil });
     alt += yazi(g.belgeNo + ' · Sayfa ' + (i + 1) + ' / ' + sayfalar.length, SAG, A4.h - 30, { boy: 7.5, hiza: 'end', renk: RENK.ikincil });
     if (g.onizleme) {
-      alt += '<text x="' + A4.w / 2 + '" y="' + A4.h / 2 + '" fill="#ad8a45" fill-opacity="0.12" font-family="Arial, sans-serif" font-size="88" font-weight="700" text-anchor="middle" transform="rotate(-30 ' + A4.w / 2 + ' ' + A4.h / 2 + ')">ÖNİZLEME</text>';
+      alt += yaziYoluSvg('ÖNİZLEME', A4.w / 2, A4.h / 2, {
+        boy: 74,
+        kalin: true,
+        renk: '#ad8a45',
+        hiza: 'middle',
+        opaklik: 0.12,
+        donus: 'rotate(-30 ' + A4.w / 2 + ' ' + A4.h / 2 + ')',
+      });
     }
     return '<svg xmlns="http://www.w3.org/2000/svg" width="' + A4.w + '" height="' + A4.h + '" viewBox="0 0 ' + A4.w + ' ' + A4.h + '">' + svg + alt + '</svg>';
   });

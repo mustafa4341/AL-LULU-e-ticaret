@@ -2,8 +2,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { cakismaHatasi, magazaOku, supabaseIstemci, VERI_KOKU } from './depo';
-import { BelgeAyarSema, FinansSema, faturaKaydiSema, type FaturaKaydi, HbAyarSema, HbUrunAyarSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type HbAyar, type HbKayit, type HbPerformans, type HbUrunAyar, type TrendyolSatiri } from './finans';
+import { cakismaHatasi, magazaOku, siparisleriOku, supabaseIstemci, VERI_KOKU } from './depo';
+import { BELGE_SABLON_SURUMU, BelgeAyarSema, FinansSema, faturaKaydiSema, type FaturaKaydi, HbAyarSema, HbUrunAyarSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type HbAyar, type HbKayit, type HbPerformans, type HbUrunAyar, type TrendyolSatiri } from './finans';
 import { logoDataUri, svgdenPdf, svgdenPng } from './finansPdf';
 import { A4, siparisBelgesiSvg, type SaticiBilgisi } from './belgeSablon';
 import type { Siparis } from './sema';
@@ -200,42 +200,51 @@ export function belgeHazirla(s: Siparis, tur: BelgeTuru, secenek: BelgeSecenegi 
     const f = await finansOku();
     const o = secenekTemizle(secenek);
     const gecerli = f.belgeler.find((b) => b.siparisNo === s.no && b.tur === tur && belgeGecerli(b));
-    if (gecerli && !secenek.yenile) {
+    const guncelSablon = (gecerli?.sablonSurumu ?? 1) >= BELGE_SABLON_SURUMU;
+    if (gecerli && !secenek.yenile && guncelSablon) {
       const yerelVar = await fs.stat(yol(arsiv, gecerli.id)).then(() => true, () => false);
       const bulutVar = yerelVar || Boolean(await bulutOku(bulutBelge(gecerli.id)));
       if (bulutVar) return gecerli;
     }
     const tarih = simdi();
-    if (gecerli) {
-      gecerli.durum = 'iptal';
-      gecerli.guncelleme = tarih;
-      gecerli.olaylar.push({ tarih, islem: 'iptal' });
+    let belge: Belge | undefined;
+    if (gecerli && !secenek.yenile && !guncelSablon) {
+      // Eski yazı tipiyle (kutucuklu) üretilmiş belgeyi iptal etmeden AYNI belgeNo ile tazele
+      belge = gecerli;
+    } else {
+      if (gecerli) {
+        gecerli.durum = 'iptal';
+        gecerli.guncelleme = tarih;
+        gecerli.olaylar.push({ tarih, islem: 'iptal' });
+      }
+      // Hata almış eski deneme varsa aynı kayıt (ve numara) ile tekrar denenir
+      belge = f.belgeler.find((b) => b.siparisNo === s.no && b.tur === tur && (b.durum === 'hata' || b.durum === 'hazirlaniyor'));
+      if (!belge) {
+        const yil = TR_YIL.format(new Date(tarih));
+        const anahtar = tur + '-' + yil;
+        const sira = (f.sayaclar[anahtar] ?? 0) + 1;
+        f.sayaclar[anahtar] = sira;
+        belge = {
+          id: randomUUID(), siparisNo: s.no, tur, durum: 'hazirlaniyor', olusturma: tarih, guncelleme: tarih, olaylar: [],
+          belgeNo: f.ayarlar.onekler[tur] + '-' + yil + '-' + String(sira).padStart(5, '0'),
+        };
+        f.belgeler.push(belge);
+      }
     }
-    // Hata almış eski deneme varsa aynı kayıt (ve numara) ile tekrar denenir
-    let belge = f.belgeler.find((b) => b.siparisNo === s.no && b.tur === tur && (b.durum === 'hata' || b.durum === 'hazirlaniyor'));
-    if (!belge) {
-      const yil = TR_YIL.format(new Date(tarih));
-      const anahtar = tur + '-' + yil;
-      const sira = (f.sayaclar[anahtar] ?? 0) + 1;
-      f.sayaclar[anahtar] = sira;
-      belge = {
-        id: randomUUID(), siparisNo: s.no, tur, durum: 'hazirlaniyor', olusturma: tarih, guncelleme: tarih, olaylar: [],
-        belgeNo: f.ayarlar.onekler[tur] + '-' + yil + '-' + String(sira).padStart(5, '0'),
-      };
-      f.belgeler.push(belge);
-    }
-    belge.not = o.not;
-    belge.fiyatGizle = o.fiyatGizle;
+    const oncekiDurum = belge.durum;
+    belge.not = o.not ?? belge.not;
+    belge.fiyatGizle = o.fiyatGizle ?? belge.fiyatGizle;
     belge.durum = 'hazirlaniyor';
     belge.guncelleme = tarih;
     belge.olaylar.push({ tarih, islem: 'hazirlaniyor' });
     await kaydet(f);
     try {
-      const svgler = await belgeSvgleri(s, tur, f.ayarlar, belge.belgeNo ?? belge.id.slice(0, 8), new Date(belge.olusturma), o);
-      const pdf = await svgdenPdf(svgler, A4.w, A4.h, 150);
+      const svgler = await belgeSvgleri(s, tur, f.ayarlar, belge.belgeNo ?? belge.id.slice(0, 8), new Date(belge.olusturma), { not: belge.not, fiyatGizle: belge.fiyatGizle });
+      const pdf = await svgdenPdf(svgler, A4.w, A4.h, 175);
       await bulutYaz(bulutBelge(belge.id), pdf, 'application/pdf');
       await yaz(yol(arsiv, belge.id), pdf).catch(() => undefined);
-      belge.durum = 'duzenlendi';
+      belge.durum = oncekiDurum === 'gonderildi' ? 'gonderildi' : 'duzenlendi';
+      belge.sablonSurumu = BELGE_SABLON_SURUMU;
     } catch (e) {
       console.error('[belge] PDF üretilemedi', s.no, tur, (e as Error)?.message);
       belge.durum = 'hata';
@@ -295,8 +304,21 @@ export function belgeGonderildi(id: string) {
 }
 export async function belgeOku(id: string) {
   if (!idGecerli(id)) return undefined;
-  const b = (await finansOku()).belgeler.find((x) => x.id === id);
+  const finans = await finansOku();
+  const b = finans.belgeler.find((x) => x.id === id);
   if (!b || !['gonderildi', 'duzenlendi', 'iptal'].includes(b.durum)) return undefined;
+  if ((b.sablonSurumu ?? 1) < BELGE_SABLON_SURUMU && b.durum !== 'iptal') {
+    const siparis = (await siparisleriOku().catch(() => [])).find((s) => s.no === b.siparisNo);
+    if (siparis) {
+      try {
+        const yenilenen = await belgeHazirla(siparis, b.tur, { not: b.not, fiyatGizle: b.fiyatGizle });
+        const tazeVeri = await fs.readFile(yol(arsiv, yenilenen.id)).catch(() => bulutOku(bulutBelge(yenilenen.id)));
+        if (tazeVeri) return { kayit: yenilenen, veri: tazeVeri };
+      } catch (e) {
+        console.error('[belge] Eski belge otomatik yenilenemedi', b.id, (e as Error)?.message);
+      }
+    }
+  }
   let veri: Buffer | undefined = await fs.readFile(yol(arsiv, b.id)).catch(() => undefined);
   if (!veri) {
     veri = await bulutOku(bulutBelge(b.id));

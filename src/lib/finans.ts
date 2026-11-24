@@ -37,6 +37,9 @@ const gider = z.object({
   kategori: z.enum(['urun', 'kargo', 'paket', 'komisyon', 'hizmet', 'reklam', 'iade', 'diger']),
   ek: dosya.optional(), olusturma: z.string(),
 });
+/** PDF yazı tipi/şablon sürümü; eski sürümle (kutucuklu font) üretilmiş belgeler okunduğunda aynı numarayla yenilenir */
+export const BELGE_SABLON_SURUMU = 2;
+
 const belge = z.object({
   id: z.string().uuid(), siparisNo: z.string(), tur: siparisTuru,
   durum: z.enum(['hazirlaniyor', 'duzenlendi', 'gonderildi', 'hata', 'iptal']),
@@ -46,6 +49,7 @@ const belge = z.object({
   /** Bu belgeye özel not ve "fiyatları gizle" (hediye paketi) seçimi */
   not: z.string().max(400).optional(),
   fiyatGizle: z.boolean().optional(),
+  sablonSurumu: z.number().int().optional(),
 });
 const onek = z.string().trim().toUpperCase().regex(/^[A-Z]{1,5}$/, 'Önek 1–5 harf olmalı');
 const notMetni = z.string().max(400);

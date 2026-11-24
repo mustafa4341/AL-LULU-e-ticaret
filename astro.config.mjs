@@ -14,7 +14,14 @@ export default defineConfig({
   // Frankfurt'tayken her veri okuması ~250 ms dünyayı dolaşıyordu, panel sayfaları 2–5 sn sürüyordu.
   // Veritabanı başka bölgeye taşınırsa bu bölge de onunla aynı yapılmalı.
   adapter: vercelOrtam
-    ? vercel({ includeFiles: ['./public/img/logo/yazi.png'], maxDuration: 60 }) // 60 sn her Vercel planında geçerli (Hobby dahil)
+    ? vercel({
+      includeFiles: [
+        './public/img/logo/yazi.png',
+        './public/fonts/DejaVuSans.ttf',
+        './public/fonts/DejaVuSans-Bold.ttf',
+      ],
+      maxDuration: 60,
+    }) // 60 sn her Vercel planında geçerli (Hobby dahil)
     : node({ mode: 'standalone' }),
   trailingSlash: 'never',
   // Önyükleme yalnız açıkça işaretli (data-astro-prefetch) vitrin bağlantılarında. Eskiden TÜM bağlantılar fareyle
