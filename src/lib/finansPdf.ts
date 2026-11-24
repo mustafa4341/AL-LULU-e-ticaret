@@ -34,7 +34,17 @@ function fontAl(kalin = false): opentype.Font {
 /** Metnin gerçek piksel/punto genişliğini ölçer (Vercel Linux'ta sistem fontu gerekmez). */
 export function yaziOlc(metin: string, boy: number, kalin = false): number {
   if (!metin) return 0;
-  return fontAl(kalin).getAdvanceWidth(metin, boy);
+  const f = fontAl(kalin);
+  const olcek = boy / f.unitsPerEm;
+  let en = 0;
+  let onceki: opentype.Glyph | undefined;
+  for (const ch of metin.normalize('NFC')) {
+    const g = f.charToGlyph(ch);
+    if (onceki) en += f.getKerningValue(onceki, g) * olcek;
+    en += (g.advanceWidth ?? 0) * olcek;
+    onceki = g;
+  }
+  return en;
 }
 
 export type YaziSecenegi = {
@@ -46,15 +56,26 @@ export type YaziSecenegi = {
   donus?: string;
 };
 
-/** Metni gömülü DejaVu Sans ile doğrudan SVG <path> eğrisine çevirir (sunucu fontuna bağımlılık sıfırdır). */
+/** Metni gömülü DejaVu Sans ile doğrudan SVG <path> eğrisine çevirir (sunucu fontuna ve GSUB tablolarına bağımlılık sıfırdır). */
 export function yaziYoluSvg(metin: string, x: number, y: number, o: YaziSecenegi = {}): string {
   if (!metin || !metin.trim()) return '';
+  const duzgun = metin.normalize('NFC');
   const boy = o.boy ?? 9.5;
   const f = fontAl(o.kalin);
+  const olcek = boy / f.unitsPerEm;
   const hiza = o.hiza ?? 'start';
-  const en = hiza === 'start' ? 0 : f.getAdvanceWidth(metin, boy);
-  const xx = hiza === 'end' ? x - en : hiza === 'middle' ? x - en / 2 : x;
-  const d = f.getPath(metin, xx, y, boy).toPathData(2);
+  const en = hiza === 'start' ? 0 : yaziOlc(duzgun, boy, o.kalin);
+  let xx = hiza === 'end' ? x - en : hiza === 'middle' ? x - en / 2 : x;
+  const yol = new opentype.Path();
+  let onceki: opentype.Glyph | undefined;
+  for (const ch of duzgun) {
+    const g = f.charToGlyph(ch);
+    if (onceki) xx += f.getKerningValue(onceki, g) * olcek;
+    if (ch.trim()) yol.extend(g.getPath(xx, y, boy));
+    xx += (g.advanceWidth ?? 0) * olcek;
+    onceki = g;
+  }
+  const d = yol.toPathData(2);
   if (!d) return '';
   return '<path d="' + d + '" fill="' + (o.renk ?? '#27231d') + '"'
     + (o.opaklik !== undefined ? ' fill-opacity="' + o.opaklik + '"' : '')
