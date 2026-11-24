@@ -66,7 +66,8 @@ export async function tyKategoriOzellikleri(kategoriId: number): Promise<TyOzell
           'Trendyol özellik değerleri', s, { sorgu: { page: sayfa, size: 1000 } }));
         for (const d of dizi(v.content)) {
           const id = tam(d.attributeValueId);
-          const ad = yazi(d.attributeValueName);
+          // Belge (Kategori Özellik Değerleri Listesi v2): { attributeValueId, attributeValue }. Eski ad: attributeValueName.
+          const ad = yazi(d.attributeValue) ?? yazi(d.attributeValueName) ?? yazi(d.name);
           if (id && ad) degerler.push({ id, ad });
         }
         const toplamSayfa = tam(v.totalPages) ?? 1;
