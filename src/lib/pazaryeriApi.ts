@@ -98,7 +98,10 @@ async function istek(a: Baglanti, url: URL, islem: string, sinyal: AbortSignal, 
 
 function liste(v: unknown, islem: string, ...alanlar: string[]): Ham[] {
   const govde = nesne(v);
-  const dizi = Array.isArray(v) ? v : alanlar.map((k) => alan(govde, k)).find(Array.isArray);
+  // Hepsiburada boş listede diziyi null döndürür: {"totalCount":0,"items":null} (SIT ortamında doğrulandı, 24.11.2026)
+  const toplam = alan(govde, 'totalCount');
+  const bos = (toplam === undefined || toplam === 0) && alanlar.some((k) => alan(govde, k) === null);
+  const dizi = Array.isArray(v) ? v : bos ? [] : alanlar.map((k) => alan(govde, k)).find(Array.isArray);
   if (!Array.isArray(dizi) || dizi.some((x) => !x || typeof x !== 'object' || Array.isArray(x))) {
     throw new PazaryeriApiHatasi(`${islem} beklenen listeyi döndürmedi.`);
   }
@@ -187,7 +190,7 @@ async function hbSiparisleri(a: Baglanti, baslangic: number, sinyal: AbortSignal
     { yol: hbYol(a, 'packages', '/shipped'), durum: 'Shipped', tarih: 'shippedDate' },
     { yol: hbYol(a, 'packages', '/delivered'), durum: 'Delivered', tarih: 'deliveredDate' },
     { yol: hbYol(a, 'packages', '/undelivered'), durum: 'UnDelivered', tarih: 'unDeliveredDate' },
-    { yol: hbYol(a, 'orders', '/cancelled'), durum: 'Cancelled', tarih: 'cancelledDate' },
+    { yol: hbYol(a, 'orders', '/cancelled'), durum: 'Cancelled', tarih: 'cancelDate' },
   ];
   const sayfalar = await Promise.all(akislar.map(({ yol }) => hbSayfalari(a, yol, ['items', 'packages', 'orders'], sinyal)));
   const bekleyen = new Map<string, Ham>();
@@ -283,21 +286,23 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
     return sonuc;
   }
   const islem = 'Hepsiburada stok sorgusu';
-  for (let i = 0; i < kodlar.length; i += 8) {
-    const grup = await Promise.all(kodlar.slice(i, i + 8).map(async (kod) => {
-      const url = new URL(hbYol(a, 'listings'), hbAdres(a, 'listing'));
-      url.searchParams.set('merchantSku', kod);
-      url.searchParams.set('limit', '50');
-      url.searchParams.set('offset', '0');
-      const kayit = liste(await istek(a, url, islem, sinyal), islem, 'listings', 'items')
-        .filter((u) => metin(alan(u, 'merchantSku')) === kod);
-      if (kayit.length !== 1) return;
+  // Filtre parametresi "merchantSkuList" (virgülle ayrılmış). Eski "merchantSku" parametresini HB yok sayıp
+  // tüm ilanları döndürüyordu (SIT ortamında doğrulandı, 24.11.2026). HB satıcı stok kodunu büyük harfe çevirir.
+  const sorgulanabilir = [...new Set(kodlar.filter((k) => k && !k.includes(',')))];
+  for (let i = 0; i < sorgulanabilir.length; i += 20) {
+    const parca = sorgulanabilir.slice(i, i + 20);
+    const url = new URL(hbYol(a, 'listings'), hbAdres(a, 'listing'));
+    url.searchParams.set('merchantSkuList', parca.join(','));
+    url.searchParams.set('limit', '50');
+    url.searchParams.set('offset', '0');
+    const kayitlar = liste(await istek(a, url, islem, sinyal), islem, 'listings', 'items');
+    for (const kod of parca) {
+      const kayit = kayitlar.filter((u) => metin(alan(u, 'merchantSku'))?.toLocaleUpperCase('en-US') === kod.toLocaleUpperCase('en-US'));
+      if (kayit.length !== 1) continue;
       const stok = tamsayi(alan(kayit[0]!, 'availableStock'));
       const hbSku = metin(alan(kayit[0]!, 'hepsiburadaSku'));
-      // HB listing alanı "price" (ilk gerçek bağlantıda doğrulanacak)
-      if (stok !== undefined && hbSku) return { kod, stok, hbSku, fiyat: tutar(alan(kayit[0]!, 'price')) };
-    }));
-    for (const kayit of grup) if (kayit) sonuc.set(kayit.kod, kayit);
+      if (stok !== undefined && hbSku) sonuc.set(kod, { stok, hbSku, fiyat: tutar(alan(kayit[0]!, 'price')) });
+    }
   }
   return sonuc;
 }
@@ -314,7 +319,7 @@ export async function kanalStokGonder(
     id = metin(nesne(await istek(a, url, islem, sinyal, { items })).batchRequestId);
   } else {
     const url = new URL(hbYol(a, 'listings', '/stock-uploads'), hbAdres(a, 'listing'));
-    const govde = kalemler.map((k) => ({ MerchantSku: k.kod, HepsiburadaSku: ilanlar.get(k.kod)?.hbSku, AvailableStock: k.stok }));
+    const govde = kalemler.map((k) => ({ merchantSku: k.kod, hepsiburadaSku: ilanlar.get(k.kod)?.hbSku, availableStock: k.stok }));
     id = metin(alan(nesne(await istek(a, url, islem, sinyal, govde)), 'id'));
   }
   if (!id) throw new PazaryeriApiHatasi(`${islem} takip kimliği döndürmedi.`);
@@ -351,15 +356,40 @@ export async function kanalFiyatGonder(
 }
 
 /**
- * Fiyat gönderiminin sonucu (Trendyol toplu istek sonucu). Reddedilen ilanlar sebebiyle döner.
- * Hepsiburada'nın fiyat yükleme sonucu belgeyle doğrulanamadı: orada sonuç "bilinmiyor" sayılır (bekliyor: false, red yok).
+ * Fiyat gönderiminin sonucu. Reddedilen ilanlar sebebiyle döner.
+ * Trendyol: toplu istek sonucu. Hepsiburada: price-uploads/id/{id} → status (Ready → Done), errors[] ve priceValidations[].
+ * HB fiyatı platform aralığı dışında bulursa yüklemeyi yine "Done" yapar ama ilanı MinLock/MaxLock ile kilitler
+ * ve satışa kapatır (SIT ortamında doğrulandı, 24.11.2026) — bu da ret sayılır.
  */
 export async function kanalFiyatSonucu(
   kanal: Kanal, id: string, sinyal: AbortSignal,
 ): Promise<{ bekliyor: boolean; reddedilen: { kod: string; sebep: string }[]; basarili: string[] }> {
-  if (kanal !== 'trendyol') return { bekliyor: false, reddedilen: [], basarili: [] };
   const a = baglanti(kanal);
   const islem = `${KANALLAR[kanal]} fiyat gönderim sonucu`;
+  if (kanal === 'hepsiburada') {
+    const url = new URL(hbYol(a, 'listings', `/price-uploads/id/${encodeURIComponent(id)}`), hbAdres(a, 'listing'));
+    const yanit = nesne(await istek(a, url, islem, sinyal));
+    const durum = metin(alan(yanit, 'status'))?.toLowerCase();
+    if (durum !== 'done') return { bekliyor: !(durum && ['failed', 'error', 'cancelled'].includes(durum)), reddedilen: [], basarili: [] };
+    const dizi = (v: unknown) => Array.isArray(v) ? v.map(nesne) : [];
+    const reddedilen: { kod: string; sebep: string }[] = [];
+    for (const h of dizi(alan(yanit, 'errors'))) {
+      const kod = metin(alan(h, 'merchantSku')) ?? metin(alan(h, 'hepsiburadaSku'));
+      const sebep = dizi(alan(h, 'errors')).map((x) => metin(alan(x, 'message')) ?? metin(alan(x, 'description'))).filter(Boolean).join('; ')
+        || (Array.isArray(alan(h, 'errors')) ? (alan(h, 'errors') as unknown[]).map(String).join('; ') : '');
+      if (kod) reddedilen.push({ kod, sebep: (sebep || 'Hepsiburada fiyatı kabul etmedi.').slice(0, 300) });
+    }
+    for (const v of dizi(alan(yanit, 'priceValidations'))) {
+      const kod = metin(alan(v, 'merchantSku')) ?? metin(alan(v, 'hepsiburadaSku'));
+      const tur = metin(alan(v, 'type'));
+      if (!kod || reddedilen.some((r) => r.kod === kod)) continue;
+      const sebep = tur === 'MinLock' ? 'Hepsiburada fiyatı platformdaki fiyat aralığının altında bulup ilanı kilitledi (satışa kapalı).'
+        : tur === 'MaxLock' ? 'Hepsiburada fiyatı platformdaki fiyat aralığının üstünde bulup ilanı kilitledi (satışa kapalı).'
+        : metin(alan(v, 'description')) ?? 'Hepsiburada fiyat denetimine takıldı.';
+      reddedilen.push({ kod, sebep: (sebep + ' Fiyattan eminseniz Hepsiburada satıcı panelinde Envanter ekranından kilidi kaldırın.').slice(0, 300) });
+    }
+    return { bekliyor: false, reddedilen, basarili: [] };
+  }
   const yol = `/integration/product/sellers/${a.kimlik}/products/batch-requests/${encodeURIComponent(id)}`;
   const yanit = nesne(await istek(a, new URL(yol, trendyolAdres(a)), islem, sinyal));
   if (yanit.status === 'IN_PROGRESS') return { bekliyor: true, reddedilen: [], basarili: [] };
@@ -496,6 +526,50 @@ export async function trendyolCagir(
     }
     if (!govde.trim()) return {};
     try { return JSON.parse(govde); } catch { return { metin: govde.slice(0, 2000) }; }
+  }
+}
+
+/**
+ * Hepsiburada'ya tek bir istek (paketleme, etiket, fatura bağlantısı, iptal; bkz. hepsiburadaApi.ts).
+ * `yol` içindeki {M} satıcı kimliğiyle değiştirilir. Yazma istekleri otomatik tekrar edilmez.
+ * Hata gövdesi: { message | defaultMessage | messageTR | errors } (SIT ortamında görüldü).
+ */
+export async function hepsiburadaCagir(
+  servis: 'oms' | 'listing', yol: string, islem: string, sinyal: AbortSignal,
+  secenek: { yontem?: 'GET' | 'POST' | 'PUT'; json?: unknown } = {},
+): Promise<{ status: number; govde: unknown }> {
+  const a = baglanti('hepsiburada');
+  const url = new URL(yol.replaceAll('{M}', encodeURIComponent(a.kimlik)), hbAdres(a, servis));
+  const yontem = secenek.yontem ?? (secenek.json !== undefined ? 'POST' : 'GET');
+  const headers: Record<string, string> = {
+    Accept: 'application/json', 'User-Agent': a.temsilci,
+    Authorization: `Basic ${Buffer.from(`${a.kullanici}:${a.sifre}`).toString('base64')}`,
+  };
+  if (secenek.json !== undefined) headers['Content-Type'] = 'application/json';
+  for (let deneme = 0; ; deneme++) {
+    if (sinyal.aborted) throw new PazaryeriApiHatasi(`${islem} zaman sınırını aştı.`);
+    let yanit: Response;
+    try {
+      yanit = await fetch(url, {
+        method: yontem, headers, redirect: 'error', cache: 'no-store',
+        body: secenek.json === undefined ? undefined : JSON.stringify(secenek.json),
+        signal: AbortSignal.any([sinyal, AbortSignal.timeout(15_000)]),
+      });
+    } catch {
+      if (yontem === 'GET' && deneme === 0 && !sinyal.aborted) { await bekle(800); continue; }
+      throw new PazaryeriApiHatasi(`${islem} tamamlanamadı. Bağlantıyı kontrol edin.`);
+    }
+    const metinGovde = await yanit.text().catch(() => '');
+    let govde: unknown = {};
+    if (metinGovde.trim()) { try { govde = JSON.parse(metinGovde); } catch { govde = { metin: metinGovde.slice(0, 2000) }; } }
+    if (yanit.ok) return { status: yanit.status, govde };
+    if (yontem === 'GET' && deneme === 0 && (yanit.status >= 500 || yanit.status === 429)) { await bekle(1500); continue; }
+    const h = nesne(govde);
+    const hatalar = Array.isArray(h.errors) ? h.errors.map((x) => metin(nesne(x).message) ?? metin(x)).filter(Boolean).join(' ') : '';
+    const ayrinti = (metin(h.messageTR) ?? metin(h.message) ?? metin(h.defaultMessage) ?? (hatalar || metin(h.metin)) ?? '').slice(0, 400);
+    const genel = yanit.status === 401 || yanit.status === 403 ? ' API bilgilerini ve yetkisini kontrol edin.'
+      : yanit.status === 429 ? ' Hepsiburada istek sınırına ulaşıldı, biraz sonra tekrar deneyin.' : '';
+    throw new PazaryeriApiHatasi(`${islem} HTTP ${yanit.status} döndürdü.${ayrinti ? ' Hepsiburada: ' + ayrinti : ''}${genel}`, yanit.status);
   }
 }
 

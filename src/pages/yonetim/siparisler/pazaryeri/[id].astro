@@ -13,6 +13,7 @@ import { urunGtin } from '../../../../lib/urunKimlik';
 import { yTarih } from '../../../../lib/yonetimRapor';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
 import { tyFaturaLinki, tyKargoEtiketi, tyOrtakEtiketVar, tyPaketDurumu } from '../../../../lib/trendyolApi';
+import { hbFaturaLinki, hbOrtakEtiket, hbOrtakEtiketVar, hbPaketle, hbSiparisPaketleri } from '../../../../lib/hepsiburadaApi';
 import SiparisAdimlari from '../../../../components/yonetim/SiparisAdimlari.astro';
 import { pazaryeriYolculugu } from '../../../../lib/siparisAdimlari';
 
@@ -70,6 +71,41 @@ if (kayit && Astro.request.method === 'POST') {
       }
       return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#trendyol-islem', 303);
     }
+    if (tur.startsWith('hb-')) {
+      if (kayit.kanal !== 'hepsiburada') throw new DogrulamaHatasi(['Bu işlem yalnız Hepsiburada siparişlerinde yapılabilir.']);
+      if (!['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada'))) throw new DogrulamaHatasi(['Hepsiburada bağlantısı kurulmamış.']);
+      let mesaj: string;
+      try {
+        if (tur === 'hb-paketle') {
+          const desi = Number(metin(f, 'desi').replace(',', '.'));
+          const paketler = await hbPaketle(kayit.siparisNo, Number.isFinite(desi) && desi > 0 && desi < 1000 ? desi : undefined);
+          await pazaryeriGecmiseEkle(id, `Panelden Hepsiburada’da paketlendi (${paketler.map((p) => p.paketNo).join(', ')})`).catch(() => undefined);
+          mesaj = `Sipariş paketlendi (${paketler.length} paket). Kargo barkodu oluştu; durum birkaç dakika içinde buraya gelir.`;
+        } else if (tur === 'hb-etiket') {
+          const paketler = await hbSiparisPaketleri(kayit.siparisNo);
+          const istenen = metin(f, 'paket');
+          const paket = paketler.includes(istenen) ? istenen : paketler[0];
+          if (!paket) throw new DogrulamaHatasi(['Sipariş henüz paketlenmedi. Önce “Kargoya Hazırla”ya basın.']);
+          const pdf = await hbOrtakEtiket(paket);
+          return new Response(new Uint8Array(pdf), { headers: {
+            'Content-Type': 'application/pdf', 'Cache-Control': 'no-store',
+            'Content-Disposition': `attachment; filename="hepsiburada-etiket-${paket.replace(/[^A-Za-z0-9_-]/g, '_')}.pdf"`,
+          } });
+        } else if (tur === 'hb-fatura-link') {
+          const paketler = await hbSiparisPaketleri(kayit.siparisNo);
+          if (!paketler.length) throw new DogrulamaHatasi(['Sipariş henüz paketlenmedi; fatura bağlantısı paketlendikten sonra gönderilebilir.']);
+          const link = metin(f, 'link');
+          for (const p of paketler) await hbFaturaLinki(p, link);
+          await pazaryeriGecmiseEkle(id, 'Fatura bağlantısı Hepsiburada’ya gönderildi').catch(() => undefined);
+          mesaj = 'Fatura bağlantısı Hepsiburada’ya gönderildi; müşteri siparişinde görür.';
+        } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
+      } catch (e) {
+        if (e instanceof PazaryeriApiHatasi) throw new DogrulamaHatasi([e.message]);
+        if (e instanceof TypeError) throw new DogrulamaHatasi(['Fatura bağlantısını tam adres olarak girin (https://...).']);
+        throw e;
+      }
+      return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#hepsiburada-islem', 303);
+    }
     const kalem = metin(f, 'kalem');
     const surum = Number(metin(f, 'surum'));
     let mesaj: string;
@@ -122,6 +158,11 @@ const yolculuk = s ? pazaryeriYolculugu(s, kesilenFatura, faturaAdresi) : undefi
 const sonKargoYazi = s && ['onay-bekliyor', 'yeni', 'bilinmiyor', 'hazirlaniyor'].includes(s.durum) ? tarihYaz(s.sonKargoTarihi) : undefined;
 const tyIslemAcik = !!s && s.kanal === 'trendyol' && !!s.paketNo && !s.stokDisi && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))
   && !['Cancelled', 'UnSupplied', 'Returned'].includes(s.hamDurum);
+/* Hepsiburada: paketlenmemiş kalem varsa "Kargoya Hazırla"; paket varsa (Aras/HepsiJet) ortak barkod etiketi */
+const hbBagli = ['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada'));
+const hbIslemAcik = !!s && s.kanal === 'hepsiburada' && hbBagli && !s.stokDisi;
+const hbPaketlenecek = hbIslemAcik && !!s && s.kalemler.some((k) => ['Open', 'Unpacked'].includes(k.hamDurum ?? ''));
+const hbPaketli = hbIslemAcik && !!s && s.kalemler.some((k) => ['Packaged', 'ReadyToShip'].includes(k.hamDurum ?? ''));
 const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
 const eslesmeyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && STOK_AKTIF.has(k.durum) && !k.urunId && k.stok === 'yok').length : 0;
 const eksikStokAdet = s ? s.kalemler.filter((k) => !s.stokDisi && STOK_AKTIF.has(k.durum) && k.eksik > 0).reduce((n, k) => n + k.eksik, 0) : 0;
@@ -383,16 +424,20 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
           <div class="y-kart__bas">
             <h2><PIkon ad="fatura" /> Fatura Durumu</h2>
             <span class:list={['y-chip', kesilenFatura ? (kesilenFatura.iletim.durum === 'bekliyor' ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--turuncu']}>
-              {kesilenFatura ? (kesilenFatura.iletim.durum === 'bekliyor' ? 'HB’ye Elle Yüklenecek' : 'Fatura Tamamlandı') : 'Fatura Kesilecek'}
+              {kesilenFatura ? (kesilenFatura.iletim.durum === 'gonderildi' || kesilenFatura.iletim.durum === 'elle' ? 'Fatura Tamamlandı' : kesilenFatura.iletim.durum === 'hata' ? 'İletim Hatası' : hbBagli ? 'HB’ye Gönderilecek' : 'HB’ye Elle Yüklenecek') : 'Fatura Kesilecek'}
             </span>
           </div>
           {kesilenFatura ? (
             <div style="display:grid;gap:6px">
               <p style="margin:0"><strong>Fatura No:</strong> {kesilenFatura.no} · <strong>Tarih:</strong> {kesilenFatura.tarih}</p>
-              <p class="y-help" style="margin:0">Hepsiburada PDF faturaları satıcı paneline elle yüklenir; ardından Faturalar ekranında “Hepsiburada’ya yükledim” olarak işaretlenir.</p>
+              <p class="y-help" style="margin:0">{kesilenFatura.iletim.mesaj ?? (hbBagli
+                ? 'PDF faturanın bağlantısı sipariş paketlenince Hepsiburada’ya kendiliğinden gönderilir.'
+                : 'Hepsiburada PDF faturaları satıcı paneline elle yüklenir; ardından Faturalar ekranında “Hepsiburada’ya yükledim” olarak işaretlenir.')}</p>
             </div>
           ) : (
-            <p class="y-help" style="margin:0">GİB e-Arşiv Portalı için hazır alıcı/kalem bilgilerini açıp faturayı kaydedin; ardından PDF’i Hepsiburada satıcı paneline yükleyin.</p>
+            <p class="y-help" style="margin:0">{hbBagli
+              ? 'GİB e-Arşiv Portalı için hazır alıcı/kalem bilgilerini açıp faturayı PDF olarak kaydedin; bağlantısı Hepsiburada’ya kendiliğinden gönderilir.'
+              : 'GİB e-Arşiv Portalı için hazır alıcı/kalem bilgilerini açıp faturayı kaydedin; ardından PDF’i Hepsiburada satıcı paneline yükleyin.'}</p>
           )}
           <div style="margin-top:12px">
             <a class="btn btn--cizgi btn--kucuk" href={faturaAdresi}><PIkon ad="fatura" boyut={16} />{kesilenFatura ? 'Faturayı Görüntüle / Yükledim İşaretle' : 'Fatura Bilgilerini Aç ve Kaydet'}</a>
@@ -405,12 +450,31 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
             <span class="y-chip y-chip--gri">Kanal kodu: {s.hamDurum || '—'}</span>
           </div>
           {iadeBekleyenAdet > 0 && <p class="y-uyari">Bu siparişte <strong>{iadeBekleyenAdet} ürün kalemi</strong> için fiziksel iade kontrolü bekleniyor.</p>}
+          {hbPaketlenecek && (eslesmeyenAdet > 0 || eksikStokAdet > 0) && <p class="y-uyari">Bu siparişte {eslesmeyenAdet > 0 ? `${eslesmeyenAdet} eşleşmeyen ürün` : ''}{eslesmeyenAdet > 0 && eksikStokAdet > 0 ? ' ve ' : ''}{eksikStokAdet > 0 ? `${eksikStokAdet} adet stok açığı` : ''} var. Paketlemeden önce ürün eşleştirmesini tamamlayın.</p>}
           <div class="y-kanal-aksiyon-kutular">
-            <a class="y-aksiyon-karo" href={KANAL_PANELI.hepsiburada} target="_blank" rel="noreferrer noopener">
-              <PIkon ad="kargo" boyut={22} />
-              <strong>Kargo & Etiket İşlemleri</strong>
-              <small>Hepsiburada panelini aç ↗</small>
-            </a>
+            {hbPaketlenecek ? (
+              <form method="post" class="y-aksiyon-karo">
+                <button class="y-aksiyon-karo__ic" type="submit" name="eylem" value="hb-paketle">
+                  <PIkon ad="kutu" boyut={22} />
+                  <strong>Kargoya Hazırla</strong>
+                  <small>Paketle, kargo barkodu oluştur</small>
+                </button>
+              </form>
+            ) : hbPaketli && hbOrtakEtiketVar(s.kargoFirma) ? (
+              <form method="post" data-indirme class="y-aksiyon-karo">
+                <button class="y-aksiyon-karo__ic" type="submit" name="eylem" value="hb-etiket">
+                  <PIkon ad="indir" boyut={22} />
+                  <strong>Kargo Etiketi (PDF)</strong>
+                  <small>{s.kargoFirma} ortak barkodu</small>
+                </button>
+              </form>
+            ) : (
+              <a class="y-aksiyon-karo" href={KANAL_PANELI.hepsiburada} target="_blank" rel="noreferrer noopener">
+                <PIkon ad="kargo" boyut={22} />
+                <strong>Kargo & Etiket İşlemleri</strong>
+                <small>Hepsiburada panelini aç ↗</small>
+              </a>
+            )}
             <a class="y-aksiyon-karo" href={faturaAdresi}>
               <PIkon ad="fatura" boyut={22} />
               <strong>Fatura Yükle / Güncelle</strong>
@@ -427,6 +491,17 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
               <small>Komisyon ve net kârı gör</small>
             </a>
           </div>
+          {hbIslemAcik && !hbPaketlenecek && (
+            <details style="margin-top:10px">
+              <summary style="cursor:pointer;font-weight:600;font-size:.86rem">Harici fatura bağlantısı ile bildir</summary>
+              <form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-top:10px">
+                <input type="hidden" name="eylem" value="hb-fatura-link" />
+                <label class="y-alan" style="flex:1">e-Arşiv PDF bağlantısı<input type="url" name="link" placeholder="https://..." required /></label>
+                <button class="btn btn--cizgi btn--kucuk" type="submit">Bağlantıyı gönder</button>
+              </form>
+              <p class="y-help" style="margin:6px 0 0">Faturayı Faturalar ekranında PDF olarak kaydederseniz bağlantı Hepsiburada’ya kendiliğinden gönderilir; bu alan yalnız başka bir yerde duran fatura içindir.</p>
+            </details>
+          )}
         </section>
       </div>
     )}

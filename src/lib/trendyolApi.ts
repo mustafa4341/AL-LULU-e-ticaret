@@ -82,7 +82,7 @@ export async function tyKategoriOzellikleri(kategoriId: number): Promise<TyOzell
 
 /** getBrandsByName — büyük/küçük harf duyarlı; yazıldığı gibi ve büyük harfle denenir. */
 export async function tyMarkaAra(ad: string): Promise<{ id: number; ad: string }[]> {
-  const aranan = ad.trim();
+  const aranan = ad.replace(/[®™©]/g, '').trim();
   if (!aranan) return [];
   const adaylar = [...new Set([aranan, aranan.toLocaleUpperCase('tr'), aranan.toLocaleUpperCase('en')])];
   const sonuc = new Map<number, string>();
@@ -177,33 +177,58 @@ export async function tyOnayliUrun(barkod: string): Promise<{ stok?: number; fiy
 export type TyIcerik = {
   barkod: string; stokKodu?: string; anaKod?: string; baslik: string; aciklama?: string;
   marka?: { id: number; ad: string }; kategori?: { id: number; ad: string };
-  gorseller: string[]; ozellikler: { ad: string; deger: string }[];
-  fiyat?: number; listeFiyati?: number; kdv?: number; url?: string;
+  gorseller: string[]; ozellikler: { id?: number; degerIdler?: number[]; ad: string; deger: string }[];
+  fiyat?: number; listeFiyati?: number; stok?: number; desi?: number; kdv?: number; url?: string;
   satista: boolean; kilit?: string; arsiv: boolean;
 };
 
+function ozellikOku(a: Ham): TyIcerik['ozellikler'][number] | undefined {
+  const ad = yazi(a.attributeName) ?? yazi(nesne(a.attribute).name) ?? '';
+  const altDegerler = dizi(a.attributeValues);
+  const deger = yazi(a.attributeValue)
+    ?? yazi(a.customAttributeValue)
+    ?? altDegerler.map((v) => yazi(v.attributeValue) ?? yazi(v.value) ?? yazi(v.name)).filter(Boolean).join(', ');
+  if (!ad || !deger) return undefined;
+  const id = tam(a.attributeId) ?? tam(nesne(a.attribute).id);
+  const tekId = tam(a.attributeValueId);
+  const cokluId = altDegerler.map((v) => tam(v.attributeValueId) ?? tam(v.id)).filter((n): n is number => !!n && n > 0);
+  const degerIdler = tekId ? [tekId] : cokluId.length ? cokluId : undefined;
+  return { ...(id ? { id } : {}), ...(degerIdler ? { degerIdler } : {}), ad, deger };
+}
+
 function icerikSatirlari(c: Ham): TyIcerik[] {
-  const marka = nesne(c.brand), kategori = nesne(c.category);
+  const markaNesne = nesne(c.brand), kategoriNesne = nesne(c.category);
+  const markaId = tam(markaNesne.id) ?? tam(c.brandId);
+  const markaAd = yazi(markaNesne.name) ?? (typeof c.brand === 'string' ? yazi(c.brand) : undefined);
+  const kategoriId = tam(kategoriNesne.id) ?? tam(c.pimCategoryId) ?? tam(c.categoryId);
+  const kategoriAd = yazi(kategoriNesne.name) ?? yazi(c.categoryName);
+  const para = (x: unknown) => {
+    const n = typeof x === 'number' ? x : typeof x === 'string' && x.trim() ? Number(x.replace(',', '.')) : NaN;
+    return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
+  };
   const ortak = {
     anaKod: yazi(c.productMainId), baslik: yazi(c.title) ?? 'Ürün', aciklama: yazi(c.description),
-    marka: tam(marka.id) && yazi(marka.name) ? { id: tam(marka.id)!, ad: yazi(marka.name)! } : undefined,
-    kategori: tam(kategori.id) && yazi(kategori.name) ? { id: tam(kategori.id)!, ad: yazi(kategori.name)! } : undefined,
+    marka: markaId && markaAd ? { id: markaId, ad: markaAd } : markaAd ? { id: 0, ad: markaAd } : undefined,
+    kategori: kategoriId && kategoriAd ? { id: kategoriId, ad: kategoriAd } : undefined,
     gorseller: dizi(c.images).map((g) => yazi(g.url)).filter((x): x is string => !!x).slice(0, 12),
-    ozellikler: dizi(c.attributes).map((a) => ({
-      ad: yazi(a.attributeName) ?? '',
-      deger: dizi(a.attributeValues).map((v) => yazi(v.attributeValue)).filter(Boolean).join(', '),
-    })).filter((o) => o.ad && o.deger).slice(0, 40),
+    ozellikler: dizi(c.attributes).map(ozellikOku).filter((o): o is NonNullable<typeof o> => !!o).slice(0, 40),
   };
-  return dizi(c.variants).flatMap((v) => {
+  const varyantlar = dizi(c.variants);
+  const kaynaklar = varyantlar.length ? varyantlar : yazi(c.barcode) ? [c] : [];
+  return kaynaklar.flatMap((v) => {
     const barkod = yazi(v.barcode);
     if (!barkod) return [];
     const fiyat = nesne(v.price);
-    const para = (x: unknown) => typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : undefined;
-    const varyantOz = dizi(v.attributes).map((a) => ({ ad: yazi(a.attributeName) ?? '', deger: yazi(a.attributeValue) ?? '' })).filter((o) => o.ad && o.deger);
+    const varyantOz = v === c ? [] : dizi(v.attributes).map(ozellikOku).filter((o): o is NonNullable<typeof o> => !!o);
     return [{
       ...ortak, ozellikler: [...ortak.ozellikler, ...varyantOz].slice(0, 40),
-      barkod, stokKodu: yazi(v.stockCode), fiyat: para(fiyat.salePrice), listeFiyati: para(fiyat.listPrice),
-      kdv: tam(v.vatRate), url: yazi(v.productUrl),
+      barkod, stokKodu: yazi(v.stockCode) ?? yazi(c.stockCode),
+      fiyat: para(v.salePrice) ?? para(fiyat.salePrice) ?? para(c.salePrice),
+      listeFiyati: para(v.listPrice) ?? para(fiyat.listPrice) ?? para(c.listPrice),
+      stok: tam(v.quantity) ?? tam(c.quantity),
+      desi: para(v.dimensionalWeight) ?? para(c.dimensionalWeight),
+      kdv: tam(v.vatRate) ?? tam(c.vatRate),
+      url: yazi(v.productUrl) ?? yazi(c.productUrl),
       satista: v.onSale !== false && v.archived !== true && v.locked !== true && v.blacklisted !== true,
       kilit: v.locked === true ? (yazi(v.lockReason) ?? 'Kilitli') : undefined, arsiv: v.archived === true,
     }];
@@ -213,16 +238,21 @@ function icerikSatirlari(c: Ham): TyIcerik[] {
 /** filterApprovedProducts (Ürün V2) — onaylı ilanların başlık, açıklama, görsel, marka, kategori ve özellikleri. */
 export async function tyOnayliIcerikler(barkod?: string, enFazla = 2000): Promise<TyIcerik[]> {
   const s = sinyal(45_000);
-  const sonuc: TyIcerik[] = [];
-  for (let sayfa = 0; sayfa < 100 && sonuc.length < enFazla; sayfa++) {
-    const y = nesne(await trendyolCagir((id) => `/product/sellers/${id}/products/approved`, 'Trendyol ilan bilgileri', s, {
-      sorgu: { page: sayfa, size: 100, barcode: barkod },
-    }));
-    const icerik = dizi(y.content);
-    for (const c of icerik) sonuc.push(...icerikSatirlari(c));
-    if (!icerik.length || sayfa + 1 >= (tam(y.totalPages) ?? 0)) break;
-  }
-  return barkod ? sonuc.filter((x) => x.barkod === barkod) : sonuc;
+  const ara = async (alanAdi: 'barcode' | 'barcodes') => {
+    const sonuc: TyIcerik[] = [];
+    for (let sayfa = 0; sayfa < 100 && sonuc.length < enFazla; sayfa++) {
+      const y = nesne(await trendyolCagir((id) => `/product/sellers/${id}/products/approved`, 'Trendyol ilan bilgileri', s, {
+        sorgu: { page: sayfa, size: 100, ...(barkod ? { [alanAdi]: barkod } : {}) },
+      }));
+      const icerik = dizi(y.content);
+      for (const c of icerik) sonuc.push(...icerikSatirlari(c));
+      if (!icerik.length || sayfa + 1 >= (tam(y.totalPages) ?? 0)) break;
+    }
+    return barkod ? sonuc.filter((x) => x.barkod === barkod) : sonuc;
+  };
+  const ilk = await ara('barcode');
+  if (barkod && !ilk.length) return ara('barcodes').catch(() => ilk);
+  return ilk;
 }
 
 /* ---------------- Buybox (aynı ürünü satan başka mağazalar) ---------------- */

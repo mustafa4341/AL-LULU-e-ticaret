@@ -1,4 +1,12 @@
 ---
+// Yazı tipleri siteden sunulur (Google Fonts yerine): ziyaretçi IP'si Google'a gitmez — denetim/KVKK
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/inter/800.css';
+import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/cormorant-garamond/700.css';
 import '../styles/global.css';
 import Ikonlar from './Ikonlar.astro';
 import Ikon from './Ikon.astro';
@@ -19,9 +27,6 @@ if (t.aktif && !Astro.locals.yonetici) {
     <meta name="robots" content="noindex, nofollow" />
     <title>{t.baslik} · {site.ad}</title>
     <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <style>
       body.tadilat-sayfa {
         min-height: 100dvh;

@@ -136,6 +136,8 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
 ---
 <Yonetim baslik="Ürünler ve Stok" altBaslik="Kataloğu, fiyatları ve depodaki ürün adetlerini yönetin." aktif="urunler" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="indir" boyut={18} />Trendyol’dan çek</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a gönder</a>
     <a class="btn btn--cizgi" href="#stok-gecmisi" data-ac="stok-gecmisi"><PIkon ad="gecmis" boyut={18} />Stok hareketleri</a>
     <a class="btn btn--cizgi" href="/yonetim/setler"><PIkon ad="set" boyut={18} />Setler</a>
     <a class="btn btn--cizgi" href="/yonetim/kategoriler"><PIkon ad="kategori" boyut={18} />Kategoriler</a>

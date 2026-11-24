@@ -57,7 +57,10 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
   if (ot.faturaYenidenDene && kaldi() > 6000) {
     try {
       const f = await finansOku();
-      const bekleyen = f.faturalar.filter((x) => !x.iptal && x.ek && (x.kanal === 'trendyol' || x.kanal === 'web')
+      // Hepsiburada: API bağlıysa PDF faturanın bağlantısı sipariş paketlenince gönderilir (bkz. faturaIlet)
+      const hbOtomatik = ['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada'));
+      const bekleyen = f.faturalar.filter((x) => !x.iptal && x.ek
+        && (x.kanal === 'trendyol' || x.kanal === 'web' || (x.kanal === 'hepsiburada' && hbOtomatik && x.ek.tur === 'application/pdf'))
         && (x.iletim.durum === 'bekliyor' || x.iletim.durum === 'hata') && Date.now() - Date.parse(x.iletim.tarih ?? x.olusturma) > 30 * 60_000
         && Date.now() - Date.parse(x.olusturma) < 14 * 86_400_000).slice(0, 3);
       if (bekleyen.length) {

@@ -2,9 +2,10 @@
 import Yonetim from '../../../layouts/Yonetim.astro';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
+import { epostaBagli } from '../../../lib/altyapi';
 import { siparisleriOku } from '../../../lib/depo';
 import { finansGunu, finansPara, gecerliGun, type FaturaKaydi } from '../../../lib/finans';
-import { faturaEki, faturaGuncelle, faturaKaydet, finansOku } from '../../../lib/finansDepo';
+import { faturaDosyaKaydet, faturaEki, faturaGuncelle, faturaKaydet, finansOku } from '../../../lib/finansDepo';
 import { FATURA_KANAL_ADLARI, GENEL_TCKN, GIB_PORTAL, faturaAdaylari, sayiYaz, tlYaz, type FaturaAdayi, type FaturaKanali } from '../../../lib/faturaMerkezi';
 import { evet, metin } from '../../../lib/form';
 import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
@@ -24,6 +25,14 @@ const veriOku = async () => {
   return { finans, adaylar: faturaAdaylari(finans, web, py, ayar) };
 };
 const tyBagli = ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+const smtpAcik = epostaBagli();
+const waFaturaLinki = (a: FaturaAdayi, faturaNo: string) => {
+  const tel = (a.web?.musteri.tel ?? '').replace(/\D/g, '');
+  if (!tel) return undefined;
+  const tamTel = tel.startsWith('90') ? tel : tel.startsWith('0') ? '9' + tel : '90' + tel;
+  const mesaj = `Merhaba ${a.alici.ad}, ${a.siparisNo} numaralı Al Lulu Home siparişinizin ${faturaNo} numaralı e-Arşiv faturası hazırlanmıştır. Sipariş durumunuzu ${Astro.url.origin}/siparis-takip adresinden de görüntüleyebilirsiniz.`;
+  return `https://wa.me/${tamTel}?text=${encodeURIComponent(mesaj)}`;
+};
 
 const ilet = (a: FaturaAdayi, k: FaturaKaydi, ek: { veri: Buffer; tur: string; ad: string } | undefined, zorla: boolean) => faturaIlet(a, k, ek, Astro.url.origin, zorla);
 
@@ -57,6 +66,18 @@ if (Astro.request.method === 'POST') {
     const k = finans.faturalar.find((x) => x.id === metin(f, 'id'));
     if (!k) throw new Error('Fatura kaydı bulunamadı.');
     const a = adaylar.find((x) => x.kanal === k.kanal && x.kayit === k.kayit);
+    if (eylem === 'dosya-yukle') {
+      const dosya = f.get('dosya');
+      if (!(dosya instanceof File) || !dosya.size) throw new Error('Yüklenecek PDF veya görsel dosyasını seçin.');
+      const { kayit: guncel, ek } = await faturaDosyaKaydet(k.id, dosya);
+      let mesaj = 'Fatura dosyası kaydedildi.';
+      if (a && evet(f, 'ilet')) {
+        const iletim = await ilet(a, guncel, ek, true);
+        mesaj += ' ' + (iletim.mesaj ?? '');
+        return Astro.redirect(`${yol}?${iletim.durum === 'hata' ? 'hata' : 'ok'}=${encodeURIComponent(mesaj)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+      }
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(mesaj)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+    }
     if (eylem === 'ilet') {
       if (!a) throw new Error('Siparişi bulamadım; faturayı elle iletin.');
       const ek = await faturaEki(k.id);
@@ -64,8 +85,10 @@ if (Astro.request.method === 'POST') {
       return Astro.redirect(`${yol}?${iletim.durum === 'hata' ? 'hata' : 'ok'}=${encodeURIComponent(iletim.mesaj ?? 'Tamam.')}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
     }
     if (eylem === 'elle') {
-      await faturaGuncelle(k.id, (x) => { x.iletim = { durum: 'elle', mesaj: 'Elle iletildi olarak işaretlendi.', tarih: new Date().toISOString() }; });
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Fatura iletildi olarak işaretlendi.')}`, 303);
+      await faturaGuncelle(k.id, (x) => { x.iletim = { durum: 'elle', mesaj: 'Müşteriye / kanala iletildi olarak işaretlendi.', tarih: new Date().toISOString() }; });
+      const donusDurum = metin(f, 'donusDurum');
+      const ekSorgu = donusDurum ? `&durum=${encodeURIComponent(donusDurum)}` : '';
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Fatura 3. aşamaya (İletildi) taşındı.')}${ekSorgu}`, 303);
     }
     if (eylem === 'iptal') {
       if (!evet(f, 'onay')) throw new Error('İptal için kutucuğu işaretleyin.');
@@ -94,14 +117,16 @@ const ILETIM: Record<FaturaKaydi['iletim']['durum'], [string, string]> = {
   bekliyor: ['2. Aşama · İletim bekliyor', 'turuncu'], hata: ['2. Aşama · İletim hatası', 'kirmizi'], gonderildi: ['3. Aşama · İletildi', 'yesil'], elle: ['3. Aşama · Elle iletildi', 'yesil'], yok: ['2. Aşama · Kaydedildi', 'gri'],
 };
 
-const iletimAciklamasi = (k: FaturaKanali) => k === 'trendyol' ? (tyBagli ? 'Trendyol’a otomatik yükle' : 'Trendyol bağlantısı yok; satıcı panelinden yükleyin')
-  : k === 'web' ? 'Müşteriye e-postayla gönder' : 'Hepsiburada’ya satıcı panelinden siz yükleyeceksiniz';
+const iletimAciklamasi = (k: FaturaKanali) => k === 'trendyol' ? (tyBagli ? 'Kaydedince Trendyol’a otomatik yükle' : 'Trendyol bağlantısı yok; canlı siteden veya satıcı panelinden yükleyin')
+  : k === 'web' ? (smtpAcik ? 'Kaydedince müşteriye e-postayla otomatik gönder' : 'Otomatik e-posta (SMTP) kapalı; kaydettikten sonra WhatsApp/e-posta ile iletip “İletildi işaretle”ye basın')
+  : 'Hepsiburada satıcı panelinden yükleyip “Yükledim” diye işaretleyin';
 const bugun = finansGunu();
 ---
-<Yonetim baslik="Faturalar" altBaslik="GİB’de düzenlenen faturaları kaydedin ve iletim durumunu takip edin." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+<Yonetim baslik="Faturalar" altBaslik="GİB’de düzenlenen faturaları kaydedin ve müşteriye / pazaryerine iletim durumunu tamamlayın." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
     <a href={yol} aria-current="page">Faturalar{kesilecek.length > 0 && ` (${kesilecek.length})`}</a>
+    <a href="/yonetim/finans/trendyol-karlilik">Trendyol Kârlılık</a>
     <a href="/yonetim/finans/hepsiburada">Hepsiburada</a>
   </nav>
 
@@ -116,13 +141,26 @@ const bugun = finansGunu();
   </details>
 
   <div class="y-metrics y-metrics--finans">
-    <a class="y-metric y-metric--kirmizi" href={filtre({ durum: 'kesilecek' })}><PIkon ad="fatura" /><span>Faturası kesilecek</span><strong>{kesilecek.length}</strong><small>GİB'de düzenlenip kaydedilecek</small></a>
-    <a class="y-metric y-metric--turuncu" href={filtre({ durum: 'iletilecek' })}><PIkon ad="gonder" /><span>2. Müşteriye / kanala iletilecek</span><strong>{iletilecek.length}</strong><small>Panelde kayıtlı, iletim bekliyor</small></a>
-    <div class="y-metric"><PIkon ad="tik-daire" /><span>Bu ay kesilen</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong></div>
+    <a class="y-metric y-metric--kirmizi" href={filtre({ durum: 'kesilecek' })}><PIkon ad="fatura" /><span>1. Faturası kesilecek</span><strong>{kesilecek.length}</strong><small>GİB'de düzenlenip kaydedilecek</small></a>
+    <a class="y-metric y-metric--turuncu" href={filtre({ durum: 'iletilecek' })}><PIkon ad="gonder" /><span>2. Müşteriye / kanala iletilecek</span><strong>{iletilecek.length}</strong><small>Kaydedildi · iletim tamamlanacak</small></a>
+    <a class="y-metric y-metric--yesil" href={filtre({ durum: 'kesildi' })}><PIkon ad="tik-daire" /><span>3. İletimi tamamlanan</span><strong>{adaylar.filter((a) => a.fatura && (a.fatura.iletim.durum === 'gonderildi' || a.fatura.iletim.durum === 'elle')).length}</strong><small>Müşteriye veya kanala iletildi</small></a>
+    <div class="y-metric"><PIkon ad="takvim" /><span>Bu ay kesilen toplam</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong><small>Seçili ayda düzenlenen</small></div>
   </div>
 
+  {durum === 'iletilecek' && iletilecek.length > 0 && (
+    <div class="y-veri-not" style="margin-bottom:14px">
+      <PIkon ad="bilgi" boyut={18} />
+      <p>
+        <strong>2. Aşamadaki faturalar 3. aşamaya (İletildi) nasıl geçer?</strong>
+        • <strong>Trendyol:</strong> PDF yüklüyse satırdaki <em>“Trendyol’a Yükle”</em> düğmesiyle otomatik yüklenir (veya satıcı panelinden yükleyip <em>“✓ İletildi İşaretle”</em> deyin).<br />
+        • <strong>Web Sitesi:</strong> {smtpAcik ? '“E-posta Gönder” ile müşteriye otomatik gider.' : 'Otomatik e-posta (SMTP) kapalı olduğu için PDF’i indirip “WhatsApp” veya kendi e-postanızla müşteriye gönderdikten sonra satırdaki “✓ İletildi İşaretle” düğmesine basın.'}<br />
+        • <strong>Hepsiburada:</strong> Satıcı panelinde siparişe yükledikten sonra <em>“✓ İletildi İşaretle”</em> düğmesine basın.
+      </p>
+    </div>
+  )}
+
   <nav class="y-sekmeler" aria-label="Fatura filtresi">
-    {[['kesilecek', `Kesilecek (${kesilecek.length})`], ['iletilecek', `İletilecek (${iletilecek.length})`], ['kesildi', 'Kaydedilenler'], ['tumu', `Tümü (${adaylar.length})`]].map(([id, ad]) => <a href={filtre({ durum: id })} aria-current={durum === id ? 'page' : undefined}>{ad}</a>)}
+    {[['kesilecek', `1. Kesilecek (${kesilecek.length})`], ['iletilecek', `2. İletilecek (${iletilecek.length})`], ['kesildi', 'Kaydedilenler'], ['tumu', `Tümü (${adaylar.length})`]].map(([id, ad]) => <a href={filtre({ durum: id })} aria-current={durum === id ? 'page' : undefined}>{ad}</a>)}
     <span class="fm-ayrac"></span>
     <a href={filtre({ kanal: undefined })} aria-current={!kanal ? 'page' : undefined}>Tüm kanallar</a>
     {(['web', 'trendyol', 'hepsiburada'] as const).map((k) => <a href={filtre({ kanal: k })} aria-current={kanal === k ? 'page' : undefined}>{FATURA_KANAL_ADLARI[k]}</a>)}
@@ -174,14 +212,57 @@ const bugun = finansGunu();
     <p class="y-help">Not alanına: <strong>{secili.aciklama}</strong> <button type="button" class="y-icon-button" data-kopyala={secili.aciklama}>Kopyala</button></p>
 
     {secili.fatura ? <div class="fm-kesildi">
-      <h3>Kesilen fatura</h3>
+      <h3>Kesilen fatura ve iletim işlemleri</h3>
       <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
-        {secili.fatura.ek && <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank">Dosyayı aç</a></>}</p>
+        {secili.fatura.ek ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a></> : <span class="muted"> · Dosya eklenmedi</span>}</p>
       <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
-      <div class="y-modal__alt">
-        {secili.kanal !== 'hepsiburada' && secili.fatura.ek && <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--sepet" name="eylem" value="ilet" type="submit">{secili.fatura.iletim.durum === 'gonderildi' ? 'Tekrar gönder' : secili.kanal === 'trendyol' ? 'Trendyol’a yükle' : 'Müşteriye gönder'}</button></form>}
-        {secili.fatura.iletim.durum !== 'gonderildi' && secili.fatura.iletim.durum !== 'elle' && <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--cizgi" name="eylem" value="elle" type="submit">{secili.kanal === 'hepsiburada' ? 'Hepsiburada’ya yükledim' : 'Elle ilettim'}</button></form>}
+
+      {!secili.fatura.ek ? (
+        <form method="post" enctype="multipart/form-data" class="fm-dosya-kutu">
+          <input type="hidden" name="eylem" value="dosya-yukle" />
+          <input type="hidden" name="id" value={secili.fatura.id} />
+          <strong>Fatura PDF veya Görselini Ekleyin</strong>
+          <small class="muted">GİB portalından indirdiğiniz e-Arşiv PDF dosyasını seçip kaydedin (en fazla 4 MB).</small>
+          <input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" required />
+          {secili.kanal !== 'hepsiburada' && (
+            <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal === 'trendyol' ? tyBagli : smtpAcik} /> {secili.kanal === 'trendyol' ? 'Yükleyince Trendyol’a otomatik gönder' : 'Yükleyince müşteriye e-postayla gönder'}</label>
+          )}
+          <button class="btn btn--sepet btn--kucuk" type="submit"><PIkon ad="indir" boyut={15} />Dosyayı Kaydet{secili.kanal !== 'hepsiburada' ? ' ve İlet' : ''}</button>
+        </form>
+      ) : (
+        <details class="fm-dosya-yenile">
+          <summary>Fatura PDF dosyasını değiştir</summary>
+          <form method="post" enctype="multipart/form-data" class="fm-dosya-kutu" style="margin-top:8px">
+            <input type="hidden" name="eylem" value="dosya-yukle" />
+            <input type="hidden" name="id" value={secili.fatura.id} />
+            <input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" required />
+            <button class="btn btn--cizgi btn--kucuk" type="submit">Yeni Dosyayı Kaydet</button>
+          </form>
+        </details>
+      )}
+
+      <div class="y-modal__alt" style="justify-content:flex-start;flex-wrap:wrap">
+        {secili.kanal === 'trendyol' && secili.fatura.ek && (
+          <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--sepet" name="eylem" value="ilet" type="submit" disabled={!tyBagli}><PIkon ad="gonder" boyut={16} />{secili.fatura.iletim.durum === 'gonderildi' ? 'Trendyol’a Tekrar Yükle' : 'Trendyol’a Otomatik Yükle'}</button></form>
+        )}
+        {secili.kanal === 'web' && secili.fatura.ek && smtpAcik && (
+          <form method="post"><input type="hidden" name="id" value={secili.fatura.id} /><button class="btn btn--sepet" name="eylem" value="ilet" type="submit"><PIkon ad="gonder" boyut={16} />{secili.fatura.iletim.durum === 'gonderildi' ? 'E-postayı Tekrar Gönder' : 'Müşteriye E-posta Gönder'}</button></form>
+        )}
+        {secili.kanal === 'web' && waFaturaLinki(secili, secili.fatura.no) && (
+          <a class="btn btn--cizgi" href={waFaturaLinki(secili, secili.fatura.no)} target="_blank" rel="noopener"><PIkon ad="whatsapp" boyut={16} />WhatsApp ile Müşteriye Bildir ↗</a>
+        )}
+        {secili.kanal === 'hepsiburada' && (
+          <a class="btn btn--cizgi" href="https://merchant.hepsiburada.com" target="_blank" rel="noopener">Hepsiburada Panelini Aç ↗</a>
+        )}
+        {secili.fatura.iletim.durum !== 'gonderildi' && secili.fatura.iletim.durum !== 'elle' && (
+          <form method="post">
+            <input type="hidden" name="id" value={secili.fatura.id} />
+            <input type="hidden" name="donusDurum" value={durum} />
+            <button class="btn btn--sepet" name="eylem" value="elle" type="submit"><PIkon ad="tik" boyut={16} />{secili.kanal === 'hepsiburada' ? 'Hepsiburada’ya Yükledim (Tamamla)' : 'Müşteriye / Kanala İlettim (3. Aşamaya Taşı)'}</button>
+          </form>
+        )}
       </div>
+
       <details><summary>Faturayı iptal et</summary>
         <form method="post" class="fm-iptal">
           <input type="hidden" name="id" value={secili.fatura.id} />
@@ -197,8 +278,8 @@ const bugun = finansGunu();
         <label class="y-alan">Fatura numarası<input name="no" required maxlength="40" placeholder="GIB2026000000012" autocomplete="off" /><small class="muted">Portalın verdiği 16 haneli numara.</small></label>
         <label class="y-alan">Fatura tarihi<input type="date" name="tarih" value={bugun} max={bugun} required /></label>
       </div>
-      <label class="y-alan">Fatura dosyası (PDF ya da fotoğraf)<input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" /><small class="muted">En fazla 4 MB. Portaldan “İndir” ile aldığınız PDF.</small></label>
-      <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal !== 'hepsiburada'} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
+      <label class="y-alan">Fatura dosyası (PDF ya da fotoğraf)<input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" /><small class="muted">En fazla 4 MB. Portaldan “İndir” ile aldığınız PDF (otomatik iletim için gereklidir).</small></label>
+      <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal === 'trendyol' ? tyBagli : secili.kanal === 'web' ? smtpAcik : false} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
       {secili.kanal !== 'hepsiburada' && <p class="y-help">Otomatik fatura iletimi açıksa PDF’i bulunan bekleyen kayıtlar da yeniden denenir. <a class="y-link" href="/yonetim/isler#otomatik-ayarlar">Otomatik iş ayarları</a></p>}
       <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Fatura kaydını oluştur</button></div>
     </form>}
@@ -206,19 +287,55 @@ const bugun = finansGunu();
 
   <section class="y-kart">
     {liste.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-      <thead><tr><th>Sipariş</th><th>Kanal</th><th>Tarih</th><th>Alıcı</th><th class="y-sayi">Tutar</th><th>Fatura</th><th></th></tr></thead>
-      <tbody>{liste.map((a) => <tr class:list={{ 'is-secili': a.anahtar === secili?.anahtar }}>
-        <td data-etiket="Sipariş"><strong>{a.siparisNo}</strong><small class="y-table-note">{a.durumAdi}</small></td>
-        <td data-etiket="Kanal"><KanalLogo kanal={a.kanal} boyut="kucuk" ad /></td>
-        <td data-etiket="Tarih" class="y-nowrap">{tarih(a.tarih)}</td>
-        <td data-etiket="Alıcı">{a.alici.firma || a.alici.ad || '—'}</td>
-        <td data-etiket="Tutar" class="y-sayi y-nowrap">{finansPara(a.toplam.genel)}</td>
-        <td data-etiket="Fatura">{a.fatura
-          ? <><strong>{a.fatura.no}</strong><small class="y-table-note"><span class:list={['y-chip', 'y-chip--' + ILETIM[a.fatura.iletim.durum][1]]}>{ILETIM[a.fatura.iletim.durum][0]}</span></small></>
-          : <span class="y-chip y-chip--turuncu">Kesilecek</span>}</td>
-        <td><a class="btn btn--cizgi" href={filtre({ sec: a.anahtar }) + '#secili'}>{a.fatura ? 'Görüntüle' : 'Fatura bilgileri'}</a></td>
-      </tr>)}</tbody>
-    </table></div> : <p class="muted">{durum === 'kesilecek' ? 'Faturası kesilecek sipariş yok.' : 'Kayıt yok.'}</p>}
+      <thead><tr><th>Sipariş</th><th>Kanal</th><th>Tarih</th><th>Alıcı</th><th class="y-sayi">Tutar</th><th>Fatura ve İletim Durumu</th><th class="y-sayi">Hızlı İşlem</th></tr></thead>
+      <tbody>{liste.map((a) => {
+        const bekliyorMu = Boolean(a.fatura && (a.fatura.iletim.durum === 'bekliyor' || a.fatura.iletim.durum === 'hata'));
+        const waLink = a.fatura && a.kanal === 'web' ? waFaturaLinki(a, a.fatura.no) : undefined;
+        return (
+          <tr class:list={{ 'is-secili': a.anahtar === secili?.anahtar }}>
+            <td data-etiket="Sipariş"><strong>{a.siparisNo}</strong><small class="y-table-note">{a.durumAdi}</small></td>
+            <td data-etiket="Kanal"><KanalLogo kanal={a.kanal} boyut="kucuk" ad /></td>
+            <td data-etiket="Tarih" class="y-nowrap">{tarih(a.tarih)}</td>
+            <td data-etiket="Alıcı">{a.alici.firma || a.alici.ad || '—'}</td>
+            <td data-etiket="Tutar" class="y-sayi y-nowrap">{finansPara(a.toplam.genel)}</td>
+            <td data-etiket="Fatura">
+              {a.fatura ? (
+                <div>
+                  <strong>{a.fatura.no}</strong>
+                  <div style="margin-top:3px"><span class:list={['y-chip', 'y-chip--' + ILETIM[a.fatura.iletim.durum][1]]}>{ILETIM[a.fatura.iletim.durum][0]}</span></div>
+                  {a.fatura.iletim.mesaj && <small class="y-table-note fm-durum-notu">{a.fatura.iletim.mesaj}</small>}
+                </div>
+              ) : <span class="y-chip y-chip--turuncu">1. Kesilecek</span>}
+            </td>
+            <td data-etiket="İşlem" class="y-sayi">
+              <div class="fm-satir-butonlar">
+                {a.fatura?.ek && <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/fatura-dosya?id=' + a.fatura.id} target="_blank" rel="noopener">PDF ↗</a>}
+                {bekliyorMu && a.fatura && !a.fatura.ek && (
+                  <a class="btn btn--sepet btn--kucuk" href={filtre({ sec: a.anahtar }) + '#secili'}>PDF Ekle</a>
+                )}
+                {bekliyorMu && a.fatura?.ek && a.kanal === 'trendyol' && tyBagli && (
+                  <form method="post" style="display:inline"><input type="hidden" name="id" value={a.fatura.id} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="ilet" type="submit">Trendyol’a Yükle</button></form>
+                )}
+                {bekliyorMu && a.fatura?.ek && a.kanal === 'web' && smtpAcik && (
+                  <form method="post" style="display:inline"><input type="hidden" name="id" value={a.fatura.id} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="ilet" type="submit">E-posta Gönder</button></form>
+                )}
+                {bekliyorMu && waLink && (
+                  <a class="btn btn--cizgi btn--kucuk" href={waLink} target="_blank" rel="noopener">WhatsApp ↗</a>
+                )}
+                {bekliyorMu && a.fatura && (
+                  <form method="post" style="display:inline">
+                    <input type="hidden" name="id" value={a.fatura.id} />
+                    <input type="hidden" name="donusDurum" value={durum} />
+                    <button class="btn btn--cizgi btn--kucuk" name="eylem" value="elle" type="submit">✓ İletildi İşaretle</button>
+                  </form>
+                )}
+                <a class="btn btn--cizgi btn--kucuk" href={filtre({ sec: a.anahtar }) + '#secili'}>{a.fatura ? 'Detay' : 'Fatura bilgileri'}</a>
+              </div>
+            </td>
+          </tr>
+        );
+      })}</tbody>
+    </table></div> : <p class="muted">{durum === 'kesilecek' ? 'Faturası kesilecek sipariş yok.' : durum === 'iletilecek' ? 'İletim bekleyen fatura kalmadı; tüm faturalar tamamlandı.' : 'Kayıt yok.'}</p>}
   </section>
 </Yonetim>
 <style>
@@ -230,8 +347,12 @@ const bugun = finansGunu();
   .fm-alanlar .fm-genis { grid-column: 1 / -1; }
   .fm-alanlar .y-icon-button, .fm-secili td .y-icon-button, .fm-secili p .y-icon-button { height: auto; margin-left: 4px; padding: 3px 6px; font-size: .78rem; }
   .fm-form, .fm-kesildi { border-top: 1px solid var(--y-border); margin-top: 16px; padding-top: 4px; display: grid; gap: 10px; }
+  .fm-dosya-kutu { display: grid; gap: 8px; padding: 12px 14px; border: 1.5px dashed #cbbba6; border-radius: 11px; background: #faf7f2; justify-items: start; }
+  .fm-dosya-yenile summary { cursor: pointer; font-size: 13px; color: #6b6154; }
   .fm-iptal { display: grid; gap: 8px; justify-items: start; padding-top: 8px; }
   .fm-ayrac { flex: 0 0 12px; }
   .fm-secili { scroll-margin-top: 5rem; border-top: 4px solid var(--y-gold, #aa812e); }
+  .fm-durum-notu { max-width: 360px; white-space: normal; line-height: 1.35; margin-top: 3px; }
+  .fm-satir-butonlar { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
   tr.is-secili { background: var(--y-bg); }
 </style>

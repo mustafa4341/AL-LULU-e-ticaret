@@ -606,6 +606,20 @@ function faturaAlicisi(a: Ham, ek: { tckn?: unknown; eposta?: unknown; ad?: unkn
 }
 
 /**
+ * Hepsiburada fatura alıcısı. Yapı (SIT ortamında doğrulandı, 24.11.2026):
+ * invoice = { turkishIdentityNumber, taxNumber, taxOffice, address: { address, name, email, city, town (ilçe), district (mahalle) } }.
+ * invoice nesnesi doğrudan yayılırsa "address" alanı nesne olarak kalır ve adres "[object Object]" yazılırdı.
+ */
+function hbFaturaAlicisi(l: Ham): FaturaAlicisi | undefined {
+  const f = nesne(l.invoice);
+  const adr = { ...nesne(l.invoiceAddress), ...nesne(f.address) };
+  return faturaAlicisi(
+    { ...adr, address: yazi(adr.address), district: yazi(adr.town, adr.district), taxOffice: f.taxOffice, taxNumber: f.taxNumber },
+    { tckn: f.turkishIdentityNumber, eposta: yazi(adr.email, nesne(l.customer).email), ad: yazi(adr.name, l.customerName) },
+  );
+}
+
+/**
  * Hepsiburada OMS sipariş listesi kalem kalem gelir (her satır bir ürün satırı). Sipariş numarasına göre gruplanır.
  * Alan adları kaynaklar arasında farklı yazılabildiği için birden çok aday okunur.
  * Dikkat: Hepsiburada'da "barcode" ürün barkodu değil KARGO barkodudur; ürün kimliği merchantSKU'dur.
@@ -632,8 +646,7 @@ export function hepsiburadaSatirlari(satirlar: Ham[]): GelenSiparis[] {
         kargoFirma: yazi(kargo, nesne(l.cargoCompanyModel).name, nesne(l.cargoCompanyModel).shortName),
         kargoTakip: yazi(l.trackingInfoCode, l.trackingNumber, l.barcode),
         sonKargoTarihi: tarihOku(yazi(l.dueDate) ?? ''), kalemler: [],
-        fatura: faturaAlicisi({ ...nesne(nesne(l.invoice).address), ...nesne(l.invoiceAddress), ...nesne(l.invoice) },
-          { tckn: nesne(l.invoice).turkishIdentityNumber, eposta: nesne(l.customer).email, ad: l.customerName }),
+        fatura: hbFaturaAlicisi(l),
       };
       gruplar.set(siparisNo, g);
     }

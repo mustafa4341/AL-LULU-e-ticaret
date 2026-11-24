@@ -31,7 +31,7 @@ export async function trendyolKatalogu(): Promise<TyKatalogSatiri[]> {
   const satirlar: TyKatalogSatiri[] = icerikler.map((c) => {
     const e = durumlar.get(c.barkod);
     const durum = !e || e.durum === 'yok' ? 'yeni' : e.durum === 'yeni' ? 'eslesir' : e.durum;
-    return { ...c, stok: e?.kanalStok, fiyat: e?.kanalFiyat ?? c.fiyat, urunId: e?.urunId, urunAdi: e?.urunAdi, siteFiyat: e?.siteFiyat, not: e?.not, durum };
+    return { ...c, stok: e?.kanalStok ?? c.stok, fiyat: e?.kanalFiyat ?? c.fiyat, urunId: e?.urunId, urunAdi: e?.urunAdi, siteFiyat: e?.siteFiyat, not: e?.not, durum };
   });
   // Stok/fiyat listesinde olup içerik listesinde gelmeyen (nadiren) ilanlar da görünsün
   const gorulen = new Set(satirlar.map((s) => s.barkod));
@@ -78,8 +78,17 @@ async function gorselIndir(url: string, klasor: string): Promise<string | undefi
   try { adres = new URL(url); } catch { return undefined; }
   if (adres.protocol !== 'https:' || !/(^|\.)dsmcdn\.com$/i.test(adres.hostname)) return undefined;
   try {
-    const y = await fetch(adres, { redirect: 'error', signal: AbortSignal.timeout(12_000) });
+    const y = await fetch(adres, {
+      redirect: 'follow',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; AlLuluHome/2.0)',
+        Accept: 'image/webp,image/jpeg,image/png,image/*;q=0.8',
+      },
+      signal: AbortSignal.timeout(12_000),
+    });
     if (!y.ok) return undefined;
+    const sonAdres = new URL(y.url || adres.href);
+    if (sonAdres.protocol !== 'https:' || !/(^|\.)dsmcdn\.com$/i.test(sonAdres.hostname)) return undefined;
     const ham = (y.headers.get('content-type') ?? 'image/jpeg').split(';')[0]!.trim().toLowerCase();
     const tur = ham === 'image/jpg' || ham === 'application/octet-stream' ? 'image/jpeg' : ham;
     const veri = await y.arrayBuffer();
@@ -98,28 +107,44 @@ export type CekmeSonucu = { eklenen: { urunId: string; ad: string; gorsel: numbe
 export async function trendyoldanUrunCek(secimler: CekmeSecimi[]): Promise<CekmeSonucu> {
   if (!secimler.length) throw new DogrulamaHatasi(['Siteye çekilecek ilan seçin.']);
   if (secimler.length > 6) throw new DogrulamaHatasi(['Bir seferde en fazla 6 ilan çekilebilir (görseller indiriliyor). Kalanları ikinci turda seçin.']);
-  const [m, ayar] = await Promise.all([magazaOku(true), envanterAyarlariOku()]);
+  const [m, ayar, eslesme] = await Promise.all([
+    magazaOku(true),
+    envanterAyarlariOku(),
+    trendyolIlanlariniEsle(false).catch(() => undefined),
+  ]);
+  const eslesmeMap = new Map(eslesme?.satirlar.map((x) => [x.barkod, x]) ?? []);
   const k = ayar.kanallar.trendyol;
   const kategoriler = new Set(m.kategoriler.map((x) => x.id));
   const bagliKodlar = new Set(Object.values(k.urunler).map((e) => e.kod).filter(Boolean));
   const sonuc: CekmeSonucu = { eklenen: [], atlanan: [] };
   const kullanilanId = new Set(m.urunler.map((u) => u.id));
-  const yeniUrunler: { urun: Urun; c: TyIcerik }[] = [];
+  const yeniUrunler: { urun: Urun; c: TyIcerik; kanalFiyati?: number }[] = [];
   const baslangic = Date.now();
 
   for (const s of secimler) {
     if (Date.now() - baslangic > 35_000) { sonuc.atlanan.push(`${s.barkod}: süre doldu, tekrar seçin`); continue; }
     if (bagliKodlar.has(s.barkod)) { sonuc.atlanan.push(`${s.barkod}: zaten bir site ürününe bağlı`); continue; }
     if (!kategoriler.has(s.kategori)) { sonuc.atlanan.push(`${s.barkod}: site kategorisi seçilmedi`); continue; }
+    const eslesenSatir = eslesmeMap.get(s.barkod);
     let c: TyIcerik | undefined;
     try { [c] = await tyOnayliIcerikler(s.barkod, 5); } catch (e) {
-      sonuc.atlanan.push(`${s.barkod}: ${e instanceof PazaryeriApiHatasi ? e.message : 'Trendyol’dan okunamadı'}`); continue;
+      if (!eslesenSatir) {
+        sonuc.atlanan.push(`${s.barkod}: ${e instanceof PazaryeriApiHatasi ? e.message : 'Trendyol’dan okunamadı'}`);
+        continue;
+      }
+    }
+    if (!c && eslesenSatir) {
+      c = {
+        barkod: s.barkod, stokKodu: eslesenSatir.stokKodu, baslik: eslesenSatir.urunAdi ?? s.barkod,
+        gorseller: [], ozellikler: [], fiyat: eslesenSatir.kanalFiyat, stok: eslesenSatir.kanalStok,
+        satista: true, arsiv: false,
+      };
     }
     if (!c) { sonuc.atlanan.push(`${s.barkod}: Trendyol’da onaylı ilan bulunamadı`); continue; }
-    const marka = (c.marka?.ad ?? '').trim() || 'Markasız';
-    const ad = c.baslik.replace(/\s+/g, ' ').trim().slice(0, 160);
+    const marka = (c.marka?.ad ?? '').replace(/\s+/g, ' ').trim().slice(0, 80) || 'AL LULU HOME';
+    const ad = (c.baslik || c.barkod).replace(/\s+/g, ' ').trim().slice(0, 160) || c.barkod;
     const markasiz = TR_KUCUK(ad).startsWith(TR_KUCUK(marka) + ' ') ? ad.slice(marka.length).trim() : ad;
-    const kisaAd = (markasiz.length > 60 ? markasiz.slice(0, 60).replace(/\s+\S*$/, '') : markasiz) || ad.slice(0, 60);
+    const kisaAd = ((markasiz.length > 60 ? markasiz.slice(0, 60).replace(/\s+\S*$/, '') : markasiz) || ad.slice(0, 60) || c.barkod).trim();
     const id = benzersizKod(`${marka} ${kisaAd}`, kullanilanId);
     kullanilanId.add(id);
     const gorseller: { src: string; alt: string }[] = [];
@@ -128,14 +153,29 @@ export async function trendyoldanUrunCek(secimler: CekmeSecimi[]): Promise<Cekme
       const src = await gorselIndir(g, id);
       if (src) gorseller.push({ src, alt: `${marka} ${kisaAd}` });
     }
-    const teknik: [string, string][] = c.ozellikler.map((o) => [o.ad.slice(0, 80), o.deger.slice(0, 200)] as [string, string]).slice(0, 30);
+    const teknik: [string, string][] = [];
+    const gorulenOz = new Set<string>();
+    for (const o of c.ozellikler) {
+      const oAd = (o.ad ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const oDeger = (o.deger ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+      const anahtar = TR_KUCUK(oAd);
+      if (!oAd || !oDeger || gorulenOz.has(anahtar)) continue;
+      gorulenOz.add(anahtar);
+      teknik.push([oAd, oDeger]);
+      if (teknik.length >= 29) break;
+    }
     if (gtinGecerli(c.barkod) && !teknik.some(([a]) => /barkod/i.test(a))) teknik.unshift(['Barkod (EAN)', c.barkod]);
+    const garantiOz = teknik.find(([a]) => /garanti\s*s[uü]re/i.test(a))?.[1];
     const aciklama = htmlTemizle(c.aciklama);
-    const stok = Number.isSafeInteger(s.stok) && s.stok! >= 0 ? Math.min(s.stok!, 100_000) : 0;
-    const fiyat = Math.max(1, Math.round(s.fiyat ?? c.fiyat ?? 1));
+    const hamStok = s.stok !== undefined ? s.stok : (c.stok ?? eslesenSatir?.kanalStok ?? 0);
+    const stok = Number.isSafeInteger(hamStok) && hamStok >= 0 ? Math.min(hamStok, 100_000) : 0;
+    const hamFiyat = [s.fiyat, c.fiyat, eslesenSatir?.kanalFiyat, c.listeFiyati]
+      .find((x): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0);
+    const fiyat = Math.max(1, Math.round(hamFiyat ?? 1));
     const urun: Urun = {
       ...structuredClone(BOS_URUN), id, durum: 'taslak', marka, ad, kisaAd, kategoriler: [s.kategori], stok,
-      sku: (c.stokKodu || c.barkod).slice(0, 80), gorseller, teknik,
+      sku: (c.stokKodu || c.barkod).trim().slice(0, 80), gorseller, teknik,
+      ...(garantiOz ? { garanti: /garanti/i.test(garantiOz) ? garantiOz : `${garantiOz} Garantili` } : {}),
       ozet: aciklama.length > 600 ? aciklama.slice(0, 600).replace(/\s+\S*$/, '') + '…' : aciklama,
       dogrula: [
         `! Trendyol’dan içe aktarıldı (${new Date().toLocaleDateString('tr-TR')}): ad, açıklama, kategori, fiyat ve görselleri kontrol edip bu notu silin.`,
@@ -143,7 +183,7 @@ export async function trendyoldanUrunCek(secimler: CekmeSecimi[]): Promise<Cekme
       ],
     };
     fiyatUygula(urun, fiyat, false);
-    yeniUrunler.push({ urun, c });
+    yeniUrunler.push({ urun, c, kanalFiyati: hamFiyat });
   }
   if (!yeniUrunler.length) return sonuc;
 
@@ -162,14 +202,25 @@ export async function trendyoldanUrunCek(secimler: CekmeSecimi[]): Promise<Cekme
   await envanterAyarlariGuncelle((a) => {
     const kanal = a.kanallar.trendyol;
     const kullanilan = new Set(Object.values(kanal.urunler).map((e) => e.kod).filter(Boolean));
-    for (const { urun, c } of yeniUrunler) {
+    for (const { urun, c, kanalFiyati } of yeniUrunler) {
       if (kullanilan.has(c.barkod)) continue;
-      kanal.urunler[urun.id] = { satista: true, kod: c.barkod, fiyatTakip: false, ...(c.fiyat !== undefined ? { kanalFiyat: c.fiyat, kanalFiyatTarih: tarih } : {}) };
+      kanal.urunler[urun.id] = {
+        satista: true, kod: c.barkod, fiyatTakip: false,
+        ...(kanalFiyati !== undefined ? { kanalFiyat: kanalFiyati, kanalFiyatTarih: tarih } : {}),
+      };
       a.eslesmeler[kodNormal(c.barkod)] = urun.id;
       kanal.ilanlar[urun.id] = {
         durum: 'onaylandi', barkod: c.barkod, stokKodu: (c.stokKodu ?? '').slice(0, 100), anaKod: (c.anaKod ?? '').slice(0, 40),
-        baslik: c.baslik.slice(0, 100), kategoriId: c.kategori?.id, kategoriAdi: c.kategori?.ad, markaId: c.marka?.id, markaAdi: c.marka?.ad,
-        ozellikler: [], kdv: [0, 1, 10, 20].includes(c.kdv ?? -1) ? c.kdv! : 20, mesajlar: [], kontrol: tarih,
+        baslik: (c.baslik || urun.ad).slice(0, 100),
+        ...(c.kategori?.id ? { kategoriId: c.kategori.id, kategoriAdi: c.kategori.ad } : {}),
+        ...(c.marka?.id ? { markaId: c.marka.id, markaAdi: c.marka.ad } : {}),
+        ...(c.desi && c.desi > 0 ? { desi: c.desi } : {}),
+        ozellikler: c.ozellikler
+          .filter((o) => o.id && o.id > 0)
+          .map((o) => o.degerIdler?.length
+            ? { attributeId: o.id!, ad: o.ad, attributeValueIds: o.degerIdler, degerAdi: o.deger }
+            : { attributeId: o.id!, ad: o.ad, attributeValue: o.deger.slice(0, 400) }),
+        kdv: [0, 1, 10, 20].includes(c.kdv ?? -1) ? c.kdv! : 20, mesajlar: [], kontrol: tarih,
       };
       kullanilan.add(c.barkod);
     }

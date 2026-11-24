@@ -1,4 +1,10 @@
 ---
+// Yazı tipleri siteden sunulur (Google Fonts yerine): ziyaretçi IP'si Google'a gitmez — denetim/KVKK
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/inter/800.css';
 import '../styles/global.css';
 import '../styles/yonetim.css';
 import '../styles/panel.css';
@@ -92,9 +98,6 @@ const baglantiYazisi = baglanti === 'bagli' ? 'Veritabanı bağlı' : baglanti =
     <meta name="robots" content="noindex, nofollow" />
     <title>{baslik} · Al Lulu Home</title>
     <link rel="icon" href="/img/logo/favicon-64.png" type="image/png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <script is:inline>try { document.documentElement.dataset.yMenu = localStorage.getItem('y-menu') || 'acik'; } catch {}</script>
   </head>
   <body class="yonetim y-panel">

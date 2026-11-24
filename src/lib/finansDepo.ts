@@ -495,3 +495,22 @@ export function faturaGuncelle(id: string, degistir: (k: FaturaKaydi) => void) {
     return k;
   });
 }
+
+/** Kayıtlı bir faturaya sonradan PDF/görsel dosyası ekler veya mevcut dosyayı günceller. */
+export function faturaDosyaKaydet(id: string, dosya: File) {
+  if (!idGecerli(id)) throw new Error('Fatura bulunamadı.');
+  return sirala(async () => {
+    const f = await finansOku();
+    const k = f.faturalar.find((x) => x.id === id && !x.iptal);
+    if (!k) throw new Error('Fatura bulunamadı.');
+    const ek = await ekHazirla(dosya);
+    const uzanti = ek.tur === 'application/pdf' ? 'pdf' : ek.tur === 'image/png' ? 'png' : 'jpg';
+    const ad = `Fatura-${k.no}.${uzanti}`.replace(/[^A-Za-z0-9._-]/g, '_');
+    k.ek = { ad, boyut: ek.veri.length, tur: ek.tur };
+    await bulutYaz(bulutFatura(k.id), ek.veri, ek.tur);
+    await yaz(yol(faturaDosyalari, k.id), ek.veri).catch(() => undefined);
+    f.olaylar.push({ tarih: simdi(), islem: 'fatura-dosya-yuklendi:' + k.id });
+    await kaydet(f);
+    return { kayit: k, ek: { ...ek, ad } };
+  });
+}

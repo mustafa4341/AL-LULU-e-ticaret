@@ -49,11 +49,14 @@ if (Astro.request.method === 'POST') {
       const kategori = metin(f, 'kategori');
       const stokAl = f.get('stokAl') === 'on';
       const barkodlar = metin(f, 'barkod') ? [metin(f, 'barkod')] : secili;
+      if (!barkodlar.length) throw new DogrulamaHatasi(['Siteye çekilecek ilanları soldaki kutulardan seçin ya da satırdaki “Siteye Çek” düğmesini kullanın.']);
       const secimler = barkodlar.map((barkod) => {
         const stokHam = metin(f, 'stok-' + barkod);
         const stok = stokHam === '' ? undefined : Number(stokHam);
         if (stok !== undefined && (!Number.isSafeInteger(stok) || stok < 0)) throw new DogrulamaHatasi([`${barkod}: depo stoğu 0 veya pozitif tam sayı olmalı.`]);
-        return { barkod, kategori, stok: stokAl ? stok : 0 };
+        const fiyatHam = metin(f, 'fiyat-' + barkod).replace(',', '.');
+        const fiyat = fiyatHam && Number(fiyatHam) > 0 ? Number(fiyatHam) : undefined;
+        return { barkod, kategori, stok: stokAl ? stok : 0, fiyat };
       });
       const r = await trendyoldanUrunCek(secimler);
       const parcalar = [
@@ -152,8 +155,8 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
         <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="fiyat-gonder" data-onayla="Seçilen bağlı ilanların fiyatı Trendyol’a gönderilsin mi? Fiyat birkaç dakika içinde canlıda değişir.">Fiyatını gönder (bağlı olanlar)</button>
         <button class="btn btn--cizgi btn--kucuk" type="button" data-hepsini-sec>Hepsini seç</button>
       </div>
-      <details class="tyi-cek">
-        <summary>Seçilen “sitede yok” ilanları siteye taslak ürün olarak çek</summary>
+      <details class="tyi-cek" open={say('yeni') > 0}>
+        <summary>Seçilen “sitede yok” ilanları siteye taslak ürün olarak çek {say('yeni') > 0 ? `(${say('yeni')} uygun ilan)` : ''}</summary>
         <div class="tyi-toplu__satir">
           <label class="y-alan">Site kategorisi
             <select name="kategori" required>{magaza.kategoriler.map((c) => <option value={c.id}>{c.ad}</option>)}</select>
@@ -206,9 +209,10 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
               <form method="post"><input type="hidden" name="urun" value={s.urunId} /><input type="hidden" name="deger" value={e?.fiyatTakip ? 'kapat' : 'ac'} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="takip">{e?.fiyatTakip ? 'Fiyat takibini kapat' : 'Fiyatı otomatik takip et'}</button></form>
             </>}
             {(s.durum === 'yeni' || s.durum === 'cakisma') && <details class="tyi-elle">
-              <summary class="btn btn--cizgi btn--kucuk">{s.durum === 'yeni' ? 'Çek / bağla' : 'Elle bağla'}</summary>
+              <summary class:list={['btn', s.durum === 'yeni' ? 'btn--sepet' : 'btn--cizgi', 'btn--kucuk']}>{s.durum === 'yeni' ? 'Siteye Çek / Bağla' : 'Elle bağla'}</summary>
               {s.durum === 'yeni' && <form method="post" class="tyi-mini">
                 <input type="hidden" name="barkod" value={s.barkod} />
+                <input type="hidden" name={'fiyat-' + s.barkod} value={s.fiyat ?? ''} />
                 <label class="y-alan">Site kategorisi<select name="kategori">{magaza.kategoriler.map((c) => <option value={c.id}>{c.ad}</option>)}</select></label>
                 <label class="y-alan">Depo stoğu<input name={'stok-' + s.barkod} inputmode="numeric" value={s.stok ?? 0} data-tyi-stok={s.barkod} /></label>
                 <input type="hidden" name="stokAl" value="on" />
@@ -222,7 +226,10 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
                 <button class="btn btn--cizgi btn--kucuk" name="eylem" value="elle-bagla">Bağla</button>
               </form>
             </details>}
-            {s.durum === 'yeni' && <input type="hidden" form="toplu" name={'stok-' + s.barkod} value={s.stok ?? 0} data-tyi-toplu-stok={s.barkod} />}
+            {s.durum === 'yeni' && <>
+              <input type="hidden" form="toplu" name={'stok-' + s.barkod} value={s.stok ?? 0} data-tyi-toplu-stok={s.barkod} />
+              <input type="hidden" form="toplu" name={'fiyat-' + s.barkod} value={s.fiyat ?? ''} />
+            </>}
           </td>
         </tr>;
       })}</tbody>

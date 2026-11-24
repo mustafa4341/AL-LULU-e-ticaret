@@ -1,4 +1,13 @@
 ---
+// Yazı tipleri siteden sunulur (Google Fonts yerine): ziyaretçi IP'si Google'a gitmez — denetim/KVKK
+import '@fontsource/inter/400.css';
+import '@fontsource/inter/500.css';
+import '@fontsource/inter/600.css';
+import '@fontsource/inter/700.css';
+import '@fontsource/inter/800.css';
+import '@fontsource/cormorant-garamond/600.css';
+import '@fontsource/cormorant-garamond/700.css';
+import '@fontsource/cormorant-garamond/600-italic.css';
 import '../styles/global.css';
 import '../styles/vitrin.css';
 import Ikonlar from '../components/Ikonlar.astro';
@@ -91,9 +100,6 @@ const vitrinGecisi = !onizleme && !geriYol.startsWith('/yonetim');
       <meta property="product:retailer_item_id" content={urunMeta.id} />
       {urunMeta.gtin && <meta property="product:gtin" content={urunMeta.gtin} />}
     </>}
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,600;0,700;1,600&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="preload" as="image" href="/img/logo/yazi.webp" />
     {vitrinGecisi && <style is:inline>@view-transition { navigation: auto; }</style>}
     {gtm && <script is:inline>

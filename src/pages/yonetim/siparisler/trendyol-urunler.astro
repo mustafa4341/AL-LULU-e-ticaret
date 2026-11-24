@@ -10,7 +10,7 @@ import { bosAyarlar, kanalHedefStok, type KanalIlanTaslagi } from '../../../lib/
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi } from '../../../lib/pazaryeriDepo';
 import { tyAdresler, tyKategoriAra, tyKategoriOzellikleri, tyMarkaAra, tyUrunGonder, type TyKategori, type TyOzellik } from '../../../lib/trendyolApi';
-import { ilanAciklamasi, ilanFiyati, ilanGorselleri, ilanIstegi, ilanVarsayilani, ozellikOnerileri } from '../../../lib/trendyolIlan';
+import { ilanAciklamasi, ilanFiyati, ilanGorselleri, ilanIstegi, ilanVarsayilani, kategoriAramaTerimi, ozellikOnerileri, ozellikleriTamamla, sade, tahminiDesi } from '../../../lib/trendyolIlan';
 import { ilanBekliyor, ilanDurumlariniYenile } from '../../../lib/trendyolIlanIslem';
 import { yTarih } from '../../../lib/yonetimRapor';
 
@@ -51,8 +51,12 @@ const formdanTaslak = (f: FormData, t: KanalIlanTaslagi, oz: TyOzellik[] | undef
   }
   const kdv = Number(metin(f, 'kdv'));
   if (![0, 1, 10, 20].includes(kdv)) throw new DogrulamaHatasi(['KDV oranını seçin.']);
+  const otoMarkaId = Number(metin(f, 'otoMarkaId'));
+  const otoMarkaAdi = metin(f, 'otoMarkaAdi').slice(0, 120);
   const yeni: KanalIlanTaslagi = {
-    ...t, barkod: metin(f, 'barkod').replace(/\s/g, '').slice(0, 40), stokKodu: metin(f, 'stokKodu').slice(0, 100),
+    ...t,
+    ...(t.markaId ? {} : Number.isSafeInteger(otoMarkaId) && otoMarkaId > 0 && otoMarkaAdi ? { markaId: otoMarkaId, markaAdi: otoMarkaAdi } : {}),
+    barkod: metin(f, 'barkod').replace(/\s/g, '').slice(0, 40), stokKodu: metin(f, 'stokKodu').slice(0, 100),
     anaKod: metin(f, 'anaKod').slice(0, 40), baslik: metin(f, 'baslik').slice(0, 100), desi, kdv, fiyat: ozelFiyat,
   };
   if (oz) {
@@ -111,20 +115,36 @@ if (Astro.request.method === 'POST') {
     if (eylem === 'kategori-sec') {
       const id = Number(metin(f, 'kategoriId'));
       if (!Number.isSafeInteger(id) || id <= 0) throw new DogrulamaHatasi(['Kategori seçin.']);
-      const oz = await tyKategoriOzellikleri(id);
-      const yeni: KanalIlanTaslagi = { ...t, kategoriId: id, kategoriAdi: metin(f, 'kategoriAdi').slice(0, 300), ozellikler: ozellikOnerileri(u, oz) };
+      const [oz, markalar] = await Promise.all([
+        tyKategoriOzellikleri(id),
+        !t.markaId && u.marka ? tyMarkaAra(u.marka).catch(() => [] as { id: number; ad: string }[]) : Promise.resolve([] as { id: number; ad: string }[]),
+      ]);
+      const tamMarka = markalar.find((m) => sade(m.ad) === sade(u.marka));
+      const { birlesik } = ozellikleriTamamla(t.kategoriId === id ? t.ozellikler : [], ozellikOnerileri(u, oz));
+      const yeni: KanalIlanTaslagi = {
+        ...t,
+        ...(tamMarka && !t.markaId ? { markaId: tamMarka.id, markaAdi: tamMarka.ad } : {}),
+        kategoriId: id,
+        kategoriAdi: metin(f, 'kategoriAdi').slice(0, 300),
+        ozellikler: birlesik,
+      };
       await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.ilanlar[urunId] = yeni; });
-      return geri({ urun: urunId, ok: 'Kategori seçildi. Zorunlu özellikleri doldurun; sitedeki teknik bilgilerden bulunanlar dolduruldu.' }, '#ozellikler');
+      return geri({ urun: urunId, ok: `Kategori seçildi${tamMarka && !t.markaId ? ` ve “${tamMarka.ad}” markası otomatik eşleştirildi` : ''}. Zorunlu özellikler ürün kartından otomatik dolduruldu; kontrol edip gönderebilirsiniz.` }, '#ozellikler');
     }
     if (eylem === 'marka-sec') {
       const id = Number(metin(f, 'markaId'));
       if (!Number.isSafeInteger(id) || id <= 0) throw new DogrulamaHatasi(['Marka seçin.']);
       await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.ilanlar[urunId] = { ...t, markaId: id, markaAdi: metin(f, 'markaAdi').slice(0, 120) }; });
-      return geri({ urun: urunId, ok: 'Marka seçildi.' }, '#marka');
+      return geri({ urun: urunId, ok: 'Marka seçildi.' }, '#ozellikler');
     }
     if (eylem === 'kaydet' || eylem === 'gonder' || eylem === 'kaydet-fiyat') {
       const oz = await ozellikleriOku(t.kategoriId);
       const yeni = formdanTaslak(f, t, oz);
+      if (!yeni.markaId && u.marka && apiHazir) {
+        const markalar = await tyMarkaAra(u.marka).catch(() => [] as { id: number; ad: string }[]);
+        const tamMarka = markalar.find((m) => sade(m.ad) === sade(u.marka));
+        if (tamMarka) { yeni.markaId = tamMarka.id; yeni.markaAdi = tamMarka.ad; }
+      }
       if (eylem === 'kaydet' || eylem === 'kaydet-fiyat') {
         await envanterAyarlariGuncelle((a) => {
           a.kanallar.trendyol.ilanlar[urunId] = yeni;
@@ -180,17 +200,44 @@ if (Astro.request.method === 'GET' && depoHazir && apiHazir) {
 }
 
 const finans = await finansOku().catch(() => undefined);
-const taslak = secili ? (k.ilanlar[secili.id] ?? ilanVarsayilani(secili, finans?.hbUrunler[secili.id]?.desi)) : undefined;
-if (secili && taslak?.kategoriId) ozellikler = await ozellikleriOku(taslak.kategoriId);
+const taslak = secili ? structuredClone(k.ilanlar[secili.id] ?? ilanVarsayilani(secili, finans?.hbUrunler[secili.id]?.desi)) : undefined;
+if (secili && taslak && taslak.desi === undefined) {
+  taslak.desi = finans?.hbUrunler[secili.id]?.desi ?? tahminiDesi(secili);
+}
 let kategoriSonuclari: TyKategori[] = [];
 let markaSonuclari: { id: number; ad: string }[] = [];
+let otoMarkaEslesti = false;
+let otomatikOzellikIdleri = new Set<number>();
 const kategoriAra = q.get('kara')?.trim() ?? '';
 const markaAra = q.get('mara')?.trim() ?? '';
-if (secili && apiHazir) {
-  try {
-    if (kategoriAra) kategoriSonuclari = await tyKategoriAra(kategoriAra);
-    if (markaAra) markaSonuclari = await tyMarkaAra(markaAra);
-  } catch (e) { hatalar.push(...hataMetni(e)); }
+const otoKategoriSorgu = secili && taslak && !taslak.kategoriId && !kategoriAra ? kategoriAramaTerimi(secili) : '';
+const otoMarkaSorgu = secili && taslak && !taslak.markaId && !markaAra ? secili.marka.replace(/[®™©]/g, '').trim() : '';
+if (secili && taslak && apiHazir) {
+  const [oz, katSonuc, marSonuc] = await Promise.all([
+    taslak.kategoriId ? ozellikleriOku(taslak.kategoriId) : Promise.resolve(undefined),
+    kategoriAra || otoKategoriSorgu
+      ? tyKategoriAra(kategoriAra || otoKategoriSorgu).catch((e) => { hatalar.push(...hataMetni(e)); return [] as TyKategori[]; })
+      : Promise.resolve([] as TyKategori[]),
+    markaAra || otoMarkaSorgu
+      ? tyMarkaAra(markaAra || otoMarkaSorgu).catch((e) => { hatalar.push(...hataMetni(e)); return [] as { id: number; ad: string }[]; })
+      : Promise.resolve([] as { id: number; ad: string }[]),
+  ]);
+  ozellikler = oz;
+  kategoriSonuclari = katSonuc;
+  markaSonuclari = marSonuc;
+  if (!taslak.markaId && !markaAra && markaSonuclari.length) {
+    const tamMarka = markaSonuclari.find((m) => sade(m.ad) === sade(secili.marka));
+    if (tamMarka) {
+      taslak.markaId = tamMarka.id;
+      taslak.markaAdi = tamMarka.ad;
+      otoMarkaEslesti = true;
+    }
+  }
+  if (ozellikler) {
+    const tamamlanan = ozellikleriTamamla(taslak.ozellikler, ozellikOnerileri(secili, ozellikler));
+    taslak.ozellikler = tamamlanan.birlesik;
+    otomatikOzellikIdleri = tamamlanan.otomatikIdler;
+  }
 }
 const stokHedefi = secili ? await satilabilir(secili.id).catch(() => undefined) : undefined;
 const hazirlik = secili && taslak ? ilanIstegi(secili, taslak, k, stokHedefi ?? 0, ozellikler, {}) : undefined;
@@ -216,6 +263,7 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
   <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="indir" boyut={18} />Trendyol’dan siteye ürün çek</a>
     {!secili && <a class="btn btn--cizgi" href="#fiyat" data-ac="fiyat"><PIkon ad="etiket" boyut={18} />Fiyatlar</a>}
     {apiHazir && depoHazir && <form method="post"><button class="btn btn--cizgi" name="eylem" value="durum-yenile" type="submit"><PIkon ad="yenile" boyut={18} />Durumları yenile</button></form>}
   </div>
@@ -274,12 +322,13 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
 
     <div class="ty-adim" id="kategori">
       <h3>Trendyol kategorisi</h3>
-      <p>{taslak.kategoriAdi ? <strong>{taslak.kategoriAdi}</strong> : <span class="muted">Seçilmedi</span>}</p>
+      <p>{taslak.kategoriAdi ? <strong>{taslak.kategoriAdi}</strong> : <span class="muted">Seçilmedi — aşağıdan tek tıkla seçebilirsiniz</span>}</p>
       <form method="get" action="#kategori" class="y-toolbar">
         <input type="hidden" name="urun" value={secili.id} />
-        <label class="y-alan">Kategori ara<input name="kara" value={kategoriAra} placeholder="ör. Düdüklü Tencere" minlength="2" /></label>
+        <label class="y-alan">Kategori ara<input name="kara" value={kategoriAra || otoKategoriSorgu} placeholder="ör. Düdüklü Tencere" minlength="2" /></label>
         <button class="btn btn--cizgi" type="submit" disabled={!apiHazir}>Ara</button>
       </form>
+      {otoKategoriSorgu && kategoriSonuclari.length > 0 && <p class="y-help">“{otoKategoriSorgu}” için önerilen Trendyol kategorileri (seçmek için tıklayın):</p>}
       {kategoriAra && !kategoriSonuclari.length && <p class="y-help">Sonuç yok. Daha genel bir kelime deneyin (ör. “Tencere”).</p>}
       {kategoriSonuclari.length > 0 && <ul class="ty-secenekler">{kategoriSonuclari.map((c) => <li>
         <form method="post"><input type="hidden" name="urun" value={secili.id} /><input type="hidden" name="kategoriId" value={c.id} /><input type="hidden" name="kategoriAdi" value={c.yol} />
@@ -289,14 +338,14 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
 
     <div class="ty-adim" id="marka">
       <h3>Trendyol markası</h3>
-      <p>{taslak.markaAdi ? <strong>{taslak.markaAdi}</strong> : <span class="muted">Seçilmedi</span>}</p>
+      <p>{taslak.markaAdi ? <><strong>{taslak.markaAdi}</strong>{otoMarkaEslesti && <span class="y-chip y-chip--yesil" style="margin-left:8px">Otomatik eşleştirildi</span>}</> : <span class="muted">Seçilmedi — aşağıdaki listeden seçin veya farklı bir marka arayın</span>}</p>
       <form method="get" action="#marka" class="y-toolbar">
         <input type="hidden" name="urun" value={secili.id} />
         <label class="y-alan">Marka ara<input name="mara" value={markaAra || secili.marka} /></label>
         <button class="btn btn--cizgi" type="submit" disabled={!apiHazir}>Ara</button>
       </form>
-      {markaAra && !markaSonuclari.length && <p class="y-help">Trendyol marka listesinde bulunamadı. Satıcı panelinden marka başvurusu yapmanız gerekebilir (markanın yetkili satıcı belgesi istenir).</p>}
-      {markaSonuclari.length > 0 && <ul class="ty-secenekler">{markaSonuclari.map((m) => <li>
+      {(markaAra || (!taslak.markaId && otoMarkaSorgu)) && !markaSonuclari.length && apiHazir && <p class="y-help">“{markaAra || otoMarkaSorgu}” Trendyol marka listesinde bulunamadı. Satıcı panelinden marka tanımlama/başvurusu yapmanız veya kayıtlı başka bir marka seçmeniz gerekebilir.</p>}
+      {(!otoMarkaEslesti || !!markaAra) && markaSonuclari.length > 0 && <ul class="ty-secenekler">{markaSonuclari.map((m) => <li>
         <form method="post"><input type="hidden" name="urun" value={secili.id} /><input type="hidden" name="markaId" value={m.id} /><input type="hidden" name="markaAdi" value={m.ad} />
           <button class="ty-secenek" type="submit" name="eylem" value="marka-sec">{m.ad}</button></form>
       </li>)}</ul>}
@@ -304,6 +353,8 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
 
     <form method="post" class="ty-adim" id="ozellikler">
       <input type="hidden" name="urun" value={secili.id} />
+      <input type="hidden" name="otoMarkaId" value={taslak.markaId ?? ''} />
+      <input type="hidden" name="otoMarkaAdi" value={taslak.markaAdi ?? ''} />
       <h3>Fiyat, stok ve özellikler</h3>
       <div class="y-izgara y-izgara--2">
         <label class="y-alan">Barkod<input name="barkod" value={taslak.barkod} maxlength="40" required autocomplete="off" /><small class="muted">Kutudaki 13 haneli EAN. Sitedeki teknik özelliklerde “Barkod (EAN)” satırı varsa oradan gelir.</small></label>
@@ -318,12 +369,14 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
 
       {!taslak.kategoriId && <p class="y-help">Özellikleri görmek için önce kategori seçin.</p>}
       {taslak.kategoriId && !ozellikler && <p class="y-uyari">Kategori özellikleri Trendyol’dan okunamadı. Sayfayı yenileyin.</p>}
+      {ozellikler && otomatikOzellikIdleri.size > 0 && <p class="y-help">✨ <strong>{otomatikOzellikIdleri.size} özellik</strong> sitedeki ürün kartınızdan otomatik dolduruldu; göndermeden önce kontrol edip değiştirebilirsiniz.</p>}
       {ozellikler && ozellikAlanlari.map((grup) => grup.liste.length > 0 && <details class="ty-ozellikler" open={grup.acik}>
         <summary>{grup.baslik}</summary>
         <div class="y-izgara y-izgara--2">{grup.liste.map((o) => {
           const g = seciliDeger(o);
+          const oto = otomatikOzellikIdleri.has(o.id);
           return <div class="y-alan">
-            <span>{o.ad}{o.zorunlu && <b class="ty-zorunlu"> *</b>}</span>
+            <span>{o.ad}{o.zorunlu && <b class="ty-zorunlu"> *</b>}{oto && <small class="ty-oto-etiket">Otomatik</small>}</span>
             {o.degerler.length > 0 && (o.coklu ? <select name={'oz-' + o.id} multiple size={4}>
               {o.degerler.map((d) => <option value={d.id} selected={g?.attributeValueIds?.includes(d.id)}>{d.ad}</option>)}
             </select> : <select name={'oz-' + o.id}>
@@ -489,6 +542,7 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
   .ty-ozellikler { margin-top: 12px; }
   .ty-ozellikler > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
   .ty-zorunlu { color: #8a2d22; }
+  .ty-oto-etiket { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #eef7f0; color: #1a6636; font-size: 11px; font-weight: 600; }
   .ty-gorseller { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
   .ty-gorseller img { width: 96px; height: 96px; object-fit: contain; border: 1px solid var(--y-border); border-radius: 8px; background: #fff; }
   .ty-aciklama { max-height: 320px; overflow: auto; padding: 12px; border: 1px solid var(--y-border); border-radius: 8px; font-size: 14px; }
