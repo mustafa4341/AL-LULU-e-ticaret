@@ -9,6 +9,7 @@ import {
 } from './pazaryeri';
 import { MagazaSema, type Magaza } from './sema';
 import { arkaPlanda } from './arkaPlan';
+import { pazaryeriApiDurumu } from './pazaryeriApi';
 import type { Database, Json } from './supabase.types';
 
 type Depo = NonNullable<ReturnType<typeof supabaseIstemci>>;
@@ -231,7 +232,8 @@ export function pazaryeriAktar(
   const gelen = gelenSiparisleriDogrula(kanal, gelenler);
   return depoSirasi(() => tekrarDene(async () => {
     const { ayar, surum } = await ayarKaydiOku(sb);
-    if (!Number.isFinite(Date.parse(ayar.kanallar[kanal].stokBaslangic ?? ''))) {
+    const testModu = kaynak === 'api' && pazaryeriApiDurumu(kanal) === 'test';
+    if (!testModu && !Number.isFinite(Date.parse(ayar.kanallar[kanal].stokBaslangic ?? ''))) {
       throw new DogrulamaHatasi(['Aktarımdan önce kanalın stok başlangıç tarihini kaydedin.']);
     }
     const magaza = await magazaOku(true);
@@ -240,7 +242,7 @@ export function pazaryeriAktar(
     ]);
     const ayrilan = webAyrilanAdetleri(web, Date.now(), magaza.paytrStokIslemleri);
     const simdi = new Date().toISOString();
-    const { kayitlar, ozet } = birlestir(gelen, mevcut, magaza, ayar, kaynak, simdi, siparisNoIle, ayrilan);
+    const { kayitlar, ozet } = birlestir(gelen, mevcut, magaza, ayar, kaynak, simdi, siparisNoIle, ayrilan, testModu);
 
     const yeniAyar = structuredClone(ayar);
     const kanalAyari = yeniAyar.kanallar[kanal];

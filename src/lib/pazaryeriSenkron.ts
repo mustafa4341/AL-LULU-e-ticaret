@@ -30,13 +30,18 @@ async function stokHatasiYaz(kanal: Kanal, mesaj?: string) {
 }
 
 function cekimBaslangici(kanal: Kanal, a: KanalAyari, bitis: number) {
+  const testModu = pazaryeriApiDurumu(kanal) === 'test';
   const stokBaslangic = Date.parse(a.stokBaslangic ?? '');
-  if (!Number.isFinite(stokBaslangic) || stokBaslangic > bitis) {
+  if (!testModu && (!Number.isFinite(stokBaslangic) || stokBaslangic > bitis)) {
     throw new PazaryeriApiHatasi(`${KANALLAR[kanal]} için sayım sonrası stok başlangıç zamanı gerekli.`);
   }
   const son = Date.parse(a.sonApi ?? '');
-  const baslangic = Number.isFinite(son) ? son - 2 * 3600_000 : Math.min(stokBaslangic - 3600_000, bitis - 2 * GUN);
   const kapsam = (kanal === 'trendyol' ? 13 : 29) * GUN;
+  if (testModu && !Number.isFinite(stokBaslangic)) {
+    const bas = Number.isFinite(son) ? son - 2 * 3600_000 : bitis - 14 * GUN;
+    return Math.max(bitis - kapsam, bas);
+  }
+  const baslangic = Number.isFinite(son) ? son - 2 * 3600_000 : Math.min(stokBaslangic - 3600_000, bitis - 2 * GUN);
   if (bitis - baslangic > kapsam && bitis - stokBaslangic > kapsam) {
     throw new PazaryeriApiHatasi(`${KANALLAR[kanal]} aktarım aralığı aşıldı. Eksik dönemi satıcı panelinden karşılaştırın.`);
   }
@@ -208,14 +213,14 @@ async function stokYayimla(
 
 export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bildirim', gunlukZorla = false): Promise<SenkronSonucu> {
   const kanallar: SenkronSonucu['kanallar'] = {};
-  const bagli = KANAL_LISTESI.filter((k) => pazaryeriApiDurumu(k) !== 'kapali');
-  if (!bagli.length) return { durum: 'kapali', kanallar };
-  if (bagli.some((k) => pazaryeriApiDurumu(k) === 'test')
-    && (pazaryeriOrtam('PAZARYERI_TEST_VERITABANI') !== '1' || pazaryeriOrtam('VERCEL_ENV') === 'production'
-      || bagli.some((k) => pazaryeriApiDurumu(k) === 'canli'))) {
-    for (const kanal of bagli) kanallar[kanal] = { hata: 'Test senkronizasyonu için ayrı test veritabanı ve test kanalı ayarları gerekli.' };
-    return { durum: 'hata', kanallar };
+  for (const k of KANAL_LISTESI) {
+    if (pazaryeriApiDurumu(k) === 'eksik') {
+      kanallar[k] = { hata: `${KANALLAR[k]} API bağlantı anahtarları eksik veya hatalı biçimde.` };
+    }
   }
+  const bagli = KANAL_LISTESI.filter((k) => ['canli', 'test'].includes(pazaryeriApiDurumu(k)));
+  if (!bagli.length) return { durum: Object.keys(kanallar).length ? 'hata' : 'kapali', kanallar };
+  const canliBagli = bagli.filter((k) => pazaryeriApiDurumu(k) === 'canli');
   const sb = supabaseIstemci();
   if (!sb) throw new PazaryeriApiHatasi('Pazaryeri senkronizasyonu için Supabase bağlantısı gerekli.');
   const sahip = randomUUID();
@@ -248,21 +253,19 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
       }
     }));
 
-    if (otomatikStokYazmaAcik()) {
+    if (otomatikStokYazmaAcik() && canliBagli.length) {
       const ayar = await envanterAyarlariOku();
-      const beklenen = KANAL_LISTESI.filter((k) => bagli.includes(k) || ayar.kanallar[k].stokBaslangic || Object.keys(ayar.kanallar[k].urunler).length);
-      const uyumluOrtam = new Set(bagli.map(pazaryeriApiDurumu)).size === 1;
+      // Yalnız canlı (production) kanallar gerçek depo stoğunu paylaşır; test (SIT) kanalı siparişleri stokDisi olarak izole çalışır.
+      const beklenen = KANAL_LISTESI.filter((k) => canliBagli.includes(k) || (pazaryeriApiDurumu(k) !== 'test' && (ayar.kanallar[k].stokBaslangic || Object.keys(ayar.kanallar[k].urunler).length)));
       const aktarimTamam = (k: Kanal) => kanallar[k]?.siparis !== undefined && !ayar.kanallar[k].sonApiHata;
       const tumKanallarTamam = beklenen.every(aktarimTamam);
       // Bir kanalın siparişleri alınamadıysa ortak stok gerçekte olduğundan yüksek görünebilir: o turda stok ARTIŞI
       // hiçbir kanala gönderilmez, ama aktarımı başarılı kanallara AZALIŞ (aşırı satışı önleyen yön) yine gider.
       // Eskiden tek kanal hatası tüm kanallarda stok düşüşünü de durduruyordu (denetim AUD-013).
-      const yazilacak = uyumluOrtam ? (tumKanallarTamam ? bagli : bagli.filter(aktarimTamam)) : [];
-      if (!uyumluOrtam || yazilacak.length < bagli.length) {
-        const mesaj = !uyumluOrtam
-          ? 'Stok gönderimi durduruldu. Satış yapılan her kanalın aynı ortamda (canlı/test) olması gerekir.'
-          : 'Bu kanalın sipariş aktarımı başarısız olduğu için stoğu gönderilmedi. Diğer kanallara yalnız stok azalışları gönderiliyor.';
-        for (const kanal of bagli.filter((k) => !yazilacak.includes(k))) {
+      const yazilacak = tumKanallarTamam ? canliBagli : canliBagli.filter(aktarimTamam);
+      if (yazilacak.length < canliBagli.length) {
+        const mesaj = 'Bu kanalın sipariş aktarımı başarısız olduğu için stoğu gönderilmedi. Diğer kanallara yalnız stok azalışları gönderiliyor.';
+        for (const kanal of canliBagli.filter((k) => !yazilacak.includes(k))) {
           kanallar[kanal] = { ...kanallar[kanal], stokHata: mesaj };
           await stokHatasiYaz(kanal, mesaj).catch(() => undefined);
         }
@@ -284,7 +287,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
             await stokHatasiniKaydet(kanal, e);
           }
         }));
-        const artisEngeli = !tumKanallarTamam || hazirlar.size !== bagli.length || [...hazirlar.values()].some((h) => !h.hedefler.length) || siparisler.some((s) =>
+        const artisEngeli = !tumKanallarTamam || hazirlar.size !== canliBagli.length || [...hazirlar.values()].some((h) => !h.hedefler.length) || siparisler.some((s) =>
           eslesmeyenVar(s) || fazlaSatisVar(s) || (!s.stokDisi && s.kalemler.some((k) => k.durum === 'bilinmiyor')));
         for (const kanal of yazilacak) {
           try {

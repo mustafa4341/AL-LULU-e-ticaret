@@ -782,6 +782,7 @@ export function birlestir(
   simdi = new Date().toISOString(),
   siparisNoIle: Map<string, PazaryeriSiparisi[]> = new Map(),
   ayrilan: ReadonlyMap<string, number> = new Map(),
+  zorunluStokDisi = false,
 ): Birlesim {
   const stok = new Map(magaza.urunler.map((u) => [u.id, u.stok]));
   const ozet: BirlesimOzeti = { yeni: 0, guncellenen: 0, degismeyen: 0, stokDisi: 0, stok: new Map(), eslesmeyen: new Map(), fazlaSatis: [], durumDegisen: [], yeniIdler: [] };
@@ -817,7 +818,7 @@ export function birlestir(
     }
     const kanalAyar = ayar.kanallar[g.kanal];
     const baslangic = kanalAyar.stokBaslangic ? Date.parse(kanalAyar.stokBaslangic) : Date.parse(simdi);
-    const stokDisi = eski ? eski.stokDisi : Date.parse(g.tarih) < baslangic;
+    const stokDisi = zorunluStokDisi || (eski ? eski.stokDisi : Date.parse(g.tarih) < baslangic);
     const paketHam = g.hamDurum;
     const paketHal = durumCoz(paketHam, g.kanal);
     const gercekPaketDurumu = kaynak === 'api' && g.kanal === 'trendyol';

@@ -561,7 +561,7 @@ export async function servisKontrolCalistir(secenek: { canliTest?: boolean; site
       });
     }
 
-    if (hbHazir && !k.stokBaslangic) {
+    if (hbDurum === 'canli' && !k.stokBaslangic) {
       bulgular.push({
         siddet: 'hata',
         baslik: 'Hepsiburada stok başlangıç tarihi seçilmemiş',
