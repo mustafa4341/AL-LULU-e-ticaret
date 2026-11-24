@@ -1,0 +1,368 @@
+---
+import Yonetim from '../../layouts/Yonetim.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
+import { testEpostasiGonder } from '../../lib/bildirim';
+import { DogrulamaHatasi, magazaOku } from '../../lib/depo';
+import { metin } from '../../lib/form';
+import { otomatikIsler } from '../../lib/otomasyon';
+import { KANALLAR, KANAL_LISTESI, kanalMi, kodNormal } from '../../lib/pazaryeri';
+import { BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, pazaryeriApiDurumu, pazaryeriOrtam } from '../../lib/pazaryeriApi';
+import { envanterAyarlariGuncelle } from '../../lib/pazaryeriDepo';
+import { pazaryeriSenkron } from '../../lib/pazaryeriSenkron';
+import { servisKontrolCalistir, type ServisDurum } from '../../lib/servisKontrol';
+import { tyWebhookAktif, tyWebhookGuncelle, tyWebhookKur, tyWebhooklar } from '../../lib/trendyolApi';
+import { yTarih } from '../../lib/yonetimRapor';
+
+const yol = '/yonetim/servis-kontrol';
+const q = Astro.url.searchParams;
+const hatalar: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  try {
+    const f = await Astro.request.formData();
+    const eylem = metin(f, 'eylem');
+
+    if (eylem === 'eslesme-kaldir') {
+      const kanal = metin(f, 'kanal');
+      const urunId = metin(f, 'urunId');
+      if (!kanalMi(kanal) || !urunId) throw new DogrulamaHatasi(['Geçersiz kanal veya ürün kimliği.']);
+      let silinenKod = '';
+      await envanterAyarlariGuncelle((a) => {
+        const k = a.kanallar[kanal];
+        silinenKod = k.urunler[urunId]?.kod ?? '';
+        delete k.urunler[urunId];
+        if (silinenKod && a.eslesmeler[kodNormal(silinenKod)] === urunId) {
+          delete a.eslesmeler[kodNormal(silinenKod)];
+        }
+        k.sonStokHata = undefined;
+      });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(`${KANALLAR[kanal]} üzerindeki hatalı ürün eşleşmesi (${silinenKod || urunId}) kaldırıldı ve stok kilidi temizlendi.`)}#${kanal}`, 303);
+    }
+
+    if (eylem === 'webhook-onar') {
+      if (!['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) {
+        throw new DogrulamaHatasi(['Trendyol anlık sipariş bildirimi yalnız canlı sitede (Trendyol API anahtarlarının tanımlı olduğu sunucuda) kurulabilir.']);
+      }
+      const anahtar = bildirimAnahtari('trendyol');
+      if (!anahtar) throw new DogrulamaHatasi(['Sunucuda ZAMANLAYICI_ANAHTARI veya CRON_SECRET tanımlı olmadığı için webhook anahtarı üretilemedi.']);
+      const magaza = await magazaOku();
+      const adres = new URL(BILDIRIM_YOLU.trendyol, import.meta.env.SITE || magaza.site.url).href;
+      const mevcut = await tyWebhooklar();
+      const bizim = mevcut.find((w) => w.url.replace(/\/$/, '') === adres.replace(/\/$/, ''));
+      let id: string;
+      if (bizim) {
+        await tyWebhookGuncelle(bizim.id, adres, anahtar);
+        if (bizim.durum !== 'ACTIVE') await tyWebhookAktif(bizim.id);
+        id = bizim.id;
+      } else {
+        if (mevcut.length >= 15) throw new DogrulamaHatasi(['Trendyol en fazla 15 webhook aboneliğine izin veriyor; satıcı panelinden kullanılmayan eski bir kaydı silin.']);
+        id = await tyWebhookKur(adres, anahtar);
+      }
+      await envanterAyarlariGuncelle((a) => {
+        a.kanallar.trendyol.bildirim.id = id;
+        a.kanallar.trendyol.bildirim.kurulum = new Date().toISOString();
+      });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Trendyol anlık sipariş bildirimi (Webhook) kuruldu ve ACTIVE duruma getirildi.')}#trendyol-webhook`, 303);
+    }
+
+    if (eylem === 'test-eposta') {
+      const r = await testEpostasiGonder(metin(f, 'alici'));
+      if (!r.ok) throw new DogrulamaHatasi([`Test e-postası gönderilemedi (${r.alici}): ${r.hata ?? 'Bilinmeyen hata'}`]);
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(`Canlı test e-postası “${r.alici}” adresine başarıyla teslim edildi.`)}#smtp`, 303);
+    }
+
+    if (eylem === 'senkron-calistir') {
+      const bagli = KANAL_LISTESI.filter((k) => ['canli', 'test'].includes(pazaryeriApiDurumu(k)));
+      const notlar: string[] = [];
+      if (bagli.length) {
+        const r = await pazaryeriSenkron('panel', true);
+        for (const [k, s] of Object.entries(r.kanallar)) {
+          const ad = KANALLAR[k as keyof typeof KANALLAR];
+          if (s.hata || s.stokHata) notlar.push(`${ad}: ${[s.hata, s.stokHata].filter(Boolean).join(' ')}`);
+          else notlar.push(`${ad}: sipariş/stok eşitlendi (${s.siparis ?? 0} sipariş güncellemesi)`);
+        }
+        notlar.push(...(r.otomasyon ?? []));
+      } else {
+        notlar.push(...await otomatikIsler({ gunlukZorla: true, sureMs: 35_000 }));
+      }
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent((notlar.join(' · ') || 'Tüm otomatik kontroller çalıştırıldı ve doğrulandı.').slice(0, 1200))}`, 303);
+    }
+
+    if (eylem === 'hata-temizle') {
+      await envanterAyarlariGuncelle((a) => {
+        for (const k of KANAL_LISTESI) {
+          a.kanallar[k].sonApiHata = undefined;
+          a.kanallar[k].sonStokHata = undefined;
+        }
+      });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Kayıtlı geçmiş kanal hata uyarıları temizlendi.')}`, 303);
+    }
+
+    throw new DogrulamaHatasi(['Geçersiz tanılama işlemi.']);
+  } catch (e) {
+    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : e instanceof PazaryeriApiHatasi ? [e.message] : [e instanceof Error ? e.message : 'İşlem tamamlanamadı.']));
+  }
+}
+
+const canliTest = q.get('mod') !== 'hizli';
+const rapor = await servisKontrolCalistir({ canliTest, siteOrigin: Astro.url.origin });
+const magaza = await magazaOku().catch(() => undefined);
+const varsayilanEposta = pazaryeriOrtam('SIPARIS_BILDIRIM_EPOSTA') || magaza?.site.eposta || '';
+
+const RENK: Record<ServisDurum, 'yesil' | 'turuncu' | 'kirmizi' | 'gri'> = {
+  sorunsuz: 'yesil',
+  uyari: 'turuncu',
+  hata: 'kirmizi',
+  kapali: 'gri',
+};
+const SIDDET_RENK = { hata: 'kirmizi', uyari: 'turuncu', bilgi: 'gri' } as const;
+const SIDDET_AD = { hata: 'Kritik Sorun', uyari: 'Kontrol / Uyarı', bilgi: 'Bilgi' } as const;
+---
+<Yonetim
+  baslik="Servis ve API Tanılama Merkezi"
+  altBaslik="Veritabanı, Trendyol, Hepsiburada, Webhook, SMTP, PayTR ve zamanlayıcı servislerinin canlı bağlantı testi ve sorun tespiti."
+  aktif="ayarlar"
+  basari={q.get('ok')}
+  {hatalar}
+>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/ayarlar"><PIkon ad="ayar" boyut={18} />Ayarlar</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar"><PIkon ad="zincir" boyut={18} />Satış Kanalları</a>
+    <form method="post">
+      <button class="btn btn--cizgi" type="submit" name="eylem" value="senkron-calistir">
+        <PIkon ad="simsek" boyut={18} />Eşitlemeyi Şimdi Test Et
+      </button>
+    </form>
+    <a class="btn btn--sepet" href={yol} data-astro-prefetch="false">
+      <PIkon ad="yenile" boyut={18} />Tüm Servisleri Canlı Tara
+    </a>
+  </div>
+
+  <section class:list={['y-kart', 'skt-ozet-banner', 'skt-ozet-banner--' + rapor.genelDurum]}>
+    <div class="skt-ozet-sol">
+      <span class="skt-ozet-ikon">
+        <PIkon ad={rapor.genelDurum === 'sorunsuz' ? 'tik-daire' : rapor.genelDurum === 'hata' ? 'carpi-daire' : 'uyari'} boyut={28} />
+      </span>
+      <div>
+        <h2>
+          {rapor.genelDurum === 'sorunsuz'
+            ? 'Tüm aktif servisler ve API bağlantıları sorunsuz çalışıyor'
+            : rapor.genelDurum === 'hata'
+              ? `${rapor.hataSayisi} kritik servis/API sorunu tespit edildi`
+              : `${rapor.uyariSayisi} kontrol edilmesi gereken uyarı bulundu`}
+        </h2>
+        <p>
+          Son canlı tarama: <strong>{yTarih.format(new Date(rapor.zaman))}</strong> ·
+          Mod: <strong>{rapor.canliTest ? 'Canlı Uçtan Uca API Testi Açık' : 'Hızlı Yapılandırma Taraması'}</strong>
+        </p>
+      </div>
+    </div>
+    <div class="skt-ozet-sayaclar">
+      <div class="skt-sayac skt-sayac--yesil"><strong>{rapor.sorunsuzSayisi}</strong><span>Sorunsuz Servis</span></div>
+      <div class="skt-sayac skt-sayac--turuncu"><strong>{rapor.uyariSayisi}</strong><span>Uyarı</span></div>
+      <div class="skt-sayac skt-sayac--kirmizi"><strong>{rapor.hataSayisi}</strong><span>Hata</span></div>
+      <div class="skt-sayac skt-sayac--gri"><strong>{rapor.kapaliSayisi}</strong><span>Kapalı / Opsiyonel</span></div>
+    </div>
+  </section>
+
+  {rapor.tumBulgular.length > 0 && (
+    <section class="y-kart" id="tespitler">
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="hedef" /> Tespit Edilen Sorunlar ve Tek Tık Onarımlar ({rapor.tumBulgular.length})</h2>
+          <p class="y-kart__alt">Aşağıdaki maddeler canlı API yanıtları, veritabanı kayıtları ve ortam değişkenleri karşılaştırılarak otomatik tespit edildi.</p>
+        </div>
+        {(rapor.hataSayisi > 0 || rapor.uyariSayisi > 0) && (
+          <form method="post">
+            <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="hata-temizle">Geçmiş Uyarı Kayıtlarını Temizle</button>
+          </form>
+        )}
+      </div>
+
+      <div class="skt-bulgu-liste">
+        {rapor.tumBulgular.map((b) => (
+          <article class:list={['skt-bulgu', 'skt-bulgu--' + b.siddet]}>
+            <div class="skt-bulgu__ust">
+              <span class:list={['y-chip', 'y-chip--' + SIDDET_RENK[b.siddet]]}>{SIDDET_AD[b.siddet]}</span>
+              <span class="skt-bulgu__servis">{b.servisAd}</span>
+            </div>
+            <div class="skt-bulgu__govde">
+              <div>
+                <h3>{b.baslik}</h3>
+                <p>{b.detay}</p>
+                {b.cozum && <p class="skt-cozum"><strong>Çözüm:</strong> {b.cozum}</p>}
+              </div>
+              {b.aksiyon && (
+                <div class="skt-bulgu__aksiyon">
+                  {b.aksiyon.eylem ? (
+                    <form method="post">
+                      <input type="hidden" name="eylem" value={b.aksiyon.eylem} />
+                      {b.aksiyon.gizli && Object.entries(b.aksiyon.gizli).map(([k, v]) => <input type="hidden" name={k} value={v} />)}
+                      <button class="btn btn--sepet btn--kucuk" type="submit">{b.aksiyon.ad}</button>
+                    </form>
+                  ) : b.aksiyon.url ? (
+                    <a class="btn btn--cizgi btn--kucuk" href={b.aksiyon.url}>{b.aksiyon.ad} →</a>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )}
+
+  <div class="skt-kart-izgara">
+    {rapor.servisler.map((s) => (
+      <section class="y-kart skt-kart" id={s.id}>
+        <div class="skt-kart__bas">
+          <div class="skt-kart__baslik">
+            <span class:list={['skt-ikon', 'skt-ikon--' + s.durum]}><PIkon ad={s.ikon} boyut={20} /></span>
+            <div>
+              <h2>{s.ad}</h2>
+              {s.sonBasari && <small>Son başarılı işlem: {s.sonBasari}</small>}
+            </div>
+          </div>
+          <div class="skt-kart__sag">
+            {s.sureMs !== undefined && <span class="skt-sure">{s.sureMs} ms</span>}
+            <span class:list={['y-chip', 'y-chip--' + RENK[s.durum]]}>{s.durumEtiketi}</span>
+          </div>
+        </div>
+
+        <p class="skt-kart__ozet">{s.ozet}</p>
+
+        <dl class="skt-parametreler">
+          {s.parametreler.map((p) => (
+            <div>
+              <dt>{p.ad}</dt>
+              <dd class:list={['is-' + p.durum]}>
+                {p.durum === 'tamam' ? '✓ ' : p.durum === 'eksik' ? '✕ ' : ''}
+                {p.deger}
+              </dd>
+            </div>
+          ))}
+        </dl>
+
+        {s.id === 'smtp' && (
+          <form method="post" class="skt-test-form">
+            <input type="hidden" name="eylem" value="test-eposta" />
+            <input class="y-girdi" type="email" name="alici" value={varsayilanEposta} placeholder="Test e-postası alıcısı" required />
+            <button class="btn btn--cizgi btn--kucuk" type="submit"><PIkon ad="gonder" boyut={15} />Canlı Test E-postası Gönder</button>
+          </form>
+        )}
+
+        {s.id === 'trendyol-webhook' && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol')) && (
+          <form method="post" class="skt-test-form">
+            <input type="hidden" name="eylem" value="webhook-onar" />
+            <button class="btn btn--cizgi btn--kucuk" type="submit"><PIkon ad="simsek" boyut={15} />Webhook Aboneliğini Şimdi Kur / Yenile</button>
+          </form>
+        )}
+
+        {s.bulgular.length === 0 && s.durum === 'sorunsuz' && (
+          <p class="skt-temiz-not">✓ Yapılandırma ve canlı bağlantı denetiminde sorun bulunmadı.</p>
+        )}
+      </section>
+    ))}
+  </div>
+</Yonetim>
+
+<style>
+  .skt-ozet-banner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px 24px;
+    margin-bottom: 16px;
+  }
+  .skt-ozet-banner--sorunsuz { background: linear-gradient(135deg, #f2faf5, #fcfefd); border-color: #bfe4cc; }
+  .skt-ozet-banner--uyari { background: linear-gradient(135deg, #fffaf0, #fffdf9); border-color: #f0d7a8; }
+  .skt-ozet-banner--hata { background: linear-gradient(135deg, #fdf3f2, #fffafa); border-color: #f1c0ba; }
+
+  .skt-ozet-sol { display: flex; align-items: center; gap: 14px; flex: 1 1 360px; }
+  .skt-ozet-sol h2 { margin: 0; font-size: 19px; color: #241a12; }
+  .skt-ozet-sol p { margin: 4px 0 0; font-size: 13.5px; color: #65584b; }
+  .skt-ozet-ikon {
+    width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; flex-shrink: 0;
+    background: #fff; border: 1px solid rgba(0, 0, 0, 0.08);
+  }
+  .skt-ozet-banner--sorunsuz .skt-ozet-ikon { color: #0f7b3f; }
+  .skt-ozet-banner--uyari .skt-ozet-ikon { color: #b25e09; }
+  .skt-ozet-banner--hata .skt-ozet-ikon { color: #b42318; }
+
+  .skt-ozet-sayaclar { display: flex; flex-wrap: wrap; gap: 10px; }
+  .skt-sayac {
+    min-width: 104px; padding: 10px 14px; border-radius: 12px; background: #fff;
+    border: 1px solid #e6dccf; text-align: center;
+  }
+  .skt-sayac strong { display: block; font-size: 22px; line-height: 1.1; }
+  .skt-sayac span { display: block; font-size: 11.5px; color: #6f6255; margin-top: 3px; font-weight: 600; }
+  .skt-sayac--yesil strong { color: #0f7b3f; }
+  .skt-sayac--turuncu strong { color: #b25e09; }
+  .skt-sayac--kirmizi strong { color: #b42318; }
+  .skt-sayac--gri strong { color: #5c5044; }
+
+  .skt-bulgu-liste { display: grid; gap: 10px; margin-top: 12px; }
+  .skt-bulgu {
+    padding: 13px 16px; border-radius: 12px; border: 1px solid #e6dccf; background: #fcfaf7;
+  }
+  .skt-bulgu--hata { background: #fdf5f4; border-color: #f1c4be; }
+  .skt-bulgu--uyari { background: #fffaf1; border-color: #f0d9ad; }
+  .skt-bulgu__ust { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .skt-bulgu__servis { font-size: 12px; font-weight: 700; color: #6d5f52; }
+  .skt-bulgu__govde { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px; }
+  .skt-bulgu__govde > div { flex: 1 1 420px; }
+  .skt-bulgu h3 { margin: 0; font-size: 14.5px; color: #241a12; }
+  .skt-bulgu p { margin: 4px 0 0; font-size: 13px; color: #52463b; line-height: 1.45; }
+  .skt-cozum { color: #36281c !important; }
+  .skt-bulgu__aksiyon form { margin: 0; }
+
+  .skt-kart-izgara {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-top: 16px;
+  }
+  @media (max-width: 1024px) {
+    .skt-kart-izgara { grid-template-columns: 1fr; }
+  }
+
+  .skt-kart { display: flex; flex-direction: column; gap: 12px; }
+  .skt-kart__bas { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .skt-kart__baslik { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .skt-kart__baslik h2 { margin: 0; font-size: 15.5px; color: #241a12; }
+  .skt-kart__baslik small { display: block; font-size: 12px; color: #75685a; margin-top: 2px; }
+  .skt-kart__sag { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+  .skt-sure {
+    padding: 3px 8px; border-radius: 999px; background: #f4ece0; color: #5b4324;
+    font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+  }
+  .skt-ikon {
+    width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; flex-shrink: 0;
+    background: #f4ece0; color: #6b4c28;
+  }
+  .skt-ikon--sorunsuz { background: #e8f6ee; color: #0f7b3f; }
+  .skt-ikon--uyari { background: #fef3de; color: #b25e09; }
+  .skt-ikon--hata { background: #fdeaea; color: #b42318; }
+
+  .skt-kart__ozet { margin: 0; font-size: 13px; color: #55483c; line-height: 1.45; }
+
+  .skt-parametreler {
+    margin: 0; padding: 10px 12px; border-radius: 10px; background: #faf7f2; border: 1px solid #ebe2d5;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px;
+  }
+  .skt-parametreler div { min-width: 0; }
+  .skt-parametreler dt { font-size: 11px; color: #786a5c; font-weight: 600; }
+  .skt-parametreler dd {
+    margin: 2px 0 0; font-size: 12.5px; font-weight: 700; color: #2b2017;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .skt-parametreler dd.is-tamam { color: #0f7b3f; }
+  .skt-parametreler dd.is-eksik { color: #b42318; }
+
+  .skt-test-form {
+    display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding-top: 4px;
+  }
+  .skt-test-form .y-girdi { flex: 1 1 200px; min-height: 36px; font-size: 13px; }
+  .skt-temiz-not { margin: 0; font-size: 12.5px; color: #0f7b3f; font-weight: 600; }
+</style>

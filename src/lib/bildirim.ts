@@ -140,6 +140,59 @@ export async function epostaKayitlari(no: string): Promise<EpostaKaydi[]> {
   }));
 }
 
+/** Servis tanılama: son hatalı e-posta gönderim kayıtları */
+export async function hataliEpostalariOku(limit = 10): Promise<(EpostaKaydi & { siparisNo: string })[]> {
+  const sb = supabaseIstemci();
+  if (!sb) return [];
+  const { data, error } = await sb.from('eposta_kayitlari').select('*').eq('durum', 'hata').order('guncelleme', { ascending: false }).limit(limit);
+  if (error || !data) return [];
+  return data.map((r) => ({
+    siparisNo: r.siparis_no,
+    tur: r.tur,
+    ad: EPOSTA_TUR_ADLARI[r.tur] ?? r.tur,
+    alici: r.alici,
+    durum: r.durum,
+    deneme: r.deneme,
+    sonHata: r.son_hata ?? undefined,
+    tarih: r.guncelleme,
+  }));
+}
+
+/** Servis tanılama: SMTP sunucu bağlantısını ve uygulama şifresini canlı doğrular */
+export async function smtpDogrula(): Promise<{ ok: boolean; sureMs: number; hata?: string }> {
+  const t = eposta();
+  const bas = Date.now();
+  if (!t) return { ok: false, sureMs: 0, hata: 'SMTP_HOST veya SMTP_PAROLA tanımlı değil.' };
+  try {
+    await t.verify();
+    return { ok: true, sureMs: Date.now() - bas };
+  } catch (e) {
+    return { ok: false, sureMs: Date.now() - bas, hata: String((e as Error)?.message ?? e).slice(0, 300) };
+  }
+}
+
+/** Servis tanılama: mağaza bildirim adresine canlı test e-postası gönderir */
+export async function testEpostasiGonder(hedef?: string): Promise<{ ok: boolean; alici: string; hata?: string }> {
+  const { site } = await magazaOku();
+  const alici = (hedef?.trim() || magazaAdresi(site)).trim();
+  const t = eposta();
+  if (!t) return { ok: false, alici, hata: 'SMTP_HOST veya SMTP_PAROLA tanımlı değil.' };
+  const zaman = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'medium' });
+  try {
+    await t.sendMail({
+      from: ortam('SMTP_GONDEREN') || ortam('SMTP_KULLANICI'),
+      to: alici,
+      replyTo: ortam('EPOSTA_YANIT') || undefined,
+      subject: `${site.ad} · Servis ve E-posta Bağlantı Testi (${zaman})`,
+      text: `${site.ad} yönetim panelinden gönderilen canlı SMTP bağlantı testi başarılı.\nGönderim zamanı: ${zaman}\nAlıcı: ${alici}`,
+      html: `<div style="font-family:sans-serif;max-width:520px;padding:20px;border:1px solid #e6dccf;border-radius:12px;background:#faf7f2;color:#261c14"><h2 style="margin:0 0 10px">${site.ad} · E-posta Bağlantı Testi</h2><p style="margin:0 0 8px">Bu ileti <strong>Servis ve API Tanılama Merkezi</strong> üzerinden SMTP bağlantısını doğrulamak için gönderilmiştir.</p><p style="margin:0;color:#6e6256;font-size:13px">Zaman: ${zaman} · Alıcı: ${alici}</p></div>`,
+    });
+    return { ok: true, alici };
+  } catch (e) {
+    return { ok: false, alici, hata: String((e as Error)?.message ?? e).slice(0, 350) };
+  }
+}
+
 /** Panel: e-postayı yeniden gönder (gönderilmiş olsa bile) */
 export async function epostaYenidenGonder(no: string, tur: string, origin: string): Promise<GonderimSonucu> {
   const s = (await siparisleriOku()).find((x) => x.no === no);

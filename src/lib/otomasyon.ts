@@ -14,9 +14,9 @@ import { finansGunu } from './finans';
 import { faturaEki, finansOku, trendyolKaydet } from './finansDepo';
 import { faturaAdaylari } from './faturaMerkezi';
 import { faturaIlet } from './faturaIlet';
-import { PazaryeriApiHatasi, pazaryeriApiDurumu } from './pazaryeriApi';
+import { BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, pazaryeriApiDurumu } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriGecmiseEkle, pazaryeriSiparisiOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
-import { trendyolEkstreCek, tyBuybox, tyPaketDurumu, tySorular } from './trendyolApi';
+import { trendyolEkstreCek, tyBuybox, tyPaketDurumu, tySorular, tyWebhookAktif, tyWebhooklar } from './trendyolApi';
 import { trendyolEkstreSatirlari } from './trendyolFinans';
 import { ilanDurumlariniYenile } from './trendyolIlanIslem';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
@@ -142,6 +142,18 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
           }
         }
       } catch (e) { ozet.push(`Buybox kontrolü: ${mesaj(e)}`); }
+    }
+    // Pasife düşen Trendyol anlık sipariş bildirimi (webhook) varsa kendiliğinden yeniden aktifleştir
+    if (kaldi() > 5000 && bildirimAnahtari('trendyol')) {
+      try {
+        const hedef = `${SITE}${BILDIRIM_YOLU.trendyol}`;
+        const mevcut = await tyWebhooklar();
+        const bizim = mevcut.find((w) => w.url.replace(/\/$/, '') === hedef.replace(/\/$/, ''));
+        if (bizim && bizim.durum !== 'ACTIVE') {
+          await tyWebhookAktif(bizim.id);
+          ozet.push('Trendyol anlık sipariş bildirimi (webhook) pasiften yeniden aktifleştirildi');
+        }
+      } catch (e) { ozet.push(`Webhook kontrolü: ${mesaj(e)}`); }
     }
   }
 

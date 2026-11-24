@@ -46,23 +46,43 @@ function cekimBaslangici(kanal: Kanal, a: KanalAyari, bitis: number) {
 async function katalogStogu() {
   const magaza = await magazaOku(true);
   const ayrilan = webAyrilanAdetleri(await siparisleriOku(true), Date.now(), magaza.paytrStokIslemleri);
-  return { surum: magaza.surum, satilabilir: new Map(magaza.urunler.map((u) => [u.id, Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0))])) };
+  return {
+    surum: magaza.surum,
+    satilabilir: new Map(magaza.urunler.map((u) => [u.id, Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0))])),
+    urunAdlari: new Map(magaza.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`])),
+  };
 }
 
-function stokHedefleri(kanal: Kanal, a: KanalAyari, stoklar: ReadonlyMap<string, number>): StokKalemi[] {
+function stokHedefleri(
+  kanal: Kanal,
+  a: KanalAyari,
+  stoklar: ReadonlyMap<string, number>,
+  urunAdlari?: ReadonlyMap<string, string>,
+): { hedefler: StokKalemi[]; uyarilar: string[] } {
   const kodlar = new Set<string>();
   const hedefler: StokKalemi[] = [];
+  const uyarilar: string[] = [];
   for (const [urunId, listeleme] of Object.entries(a.urunler)) {
     const kod = listeleme.kod?.trim();
     const stok = stoklar.get(urunId);
+    const ad = urunAdlari?.get(urunId) ?? urunId;
     if (!kod && !listeleme.satista) continue;
-    if (!kod || (kanal === 'trendyol' && /[,\s]/.test(kod)) || kodlar.has(kod) || stok === undefined) {
-      throw new PazaryeriApiHatasi(`${KANALLAR[kanal]} ilanlarında eksik, tekrarlı veya geçersiz ürün kodu var.`);
+    if (!kod || (kanal === 'trendyol' && /[,\s]/.test(kod))) {
+      uyarilar.push(`${ad}: geçersiz ilan kodu (${kod || 'boş'})`);
+      continue;
+    }
+    if (kodlar.has(kod)) {
+      uyarilar.push(`${ad}: tekrarlı ilan kodu (${kod})`);
+      continue;
+    }
+    if (stok === undefined) {
+      uyarilar.push(`${urunId} (${kod}): ürün katalogda bulunamadı`);
+      continue;
     }
     kodlar.add(kod);
     hedefler.push({ urunId, kod, stok: listeleme.satista ? Math.min(20_000, kanalHedefStok(stok, a)) : 0 });
   }
-  return hedefler;
+  return { hedefler, uyarilar };
 }
 
 function bekleyenSatiriYaz(kanal: Kanal, eski: BekleyenStok | undefined, yeni: BekleyenStok | undefined) {
@@ -118,18 +138,24 @@ async function stokSonuclandir(kanal: Kanal, bekleyen: BekleyenStok, sinyal: Abo
 }
 
 async function stokHazirla(kanal: Kanal, a: KanalAyari, katalog: Awaited<ReturnType<typeof katalogStogu>>, sinyal: AbortSignal) {
-  const hedefler = stokHedefleri(kanal, a, katalog.satilabilir);
-  const ilanlar = await kanalStokOku(kanal, hedefler.map((k) => k.kod), sinyal);
-  if (hedefler.some((k) => !ilanlar.has(k.kod))) {
-    throw new PazaryeriApiHatasi(`${KANALLAR[kanal]} tarafında eşleşen ilanların tamamı doğrulanamadı. Ürün kodlarını kontrol edin.`);
+  const { hedefler: adayHedefler, uyarilar } = stokHedefleri(kanal, a, katalog.satilabilir, katalog.urunAdlari);
+  const ilanlar = adayHedefler.length ? await kanalStokOku(kanal, adayHedefler.map((k) => k.kod), sinyal) : new Map();
+  const bulunamayanlar = adayHedefler.filter((k) => !ilanlar.has(k.kod));
+  for (const b of bulunamayanlar) {
+    const ad = katalog.urunAdlari.get(b.urunId) ?? b.urunId;
+    uyarilar.push(`${ad} (kod: ${b.kod} — ${KANALLAR[kanal]} onaylı ilanlarında bulunamadı)`);
   }
-  return { katalog, hedefler, ilanlar };
+  const hedefler = adayHedefler.filter((k) => ilanlar.has(k.kod));
+  return { katalog, hedefler, ilanlar, uyarilar };
 }
 
 async function stokYayimla(
   kanal: Kanal, a: KanalAyari, hazir: Awaited<ReturnType<typeof stokHazirla>>, artisEngeli: boolean, sinyal: AbortSignal,
 ) {
-  const { katalog, hedefler, ilanlar } = hazir;
+  const { katalog, hedefler, ilanlar, uyarilar } = hazir;
+  const uyariMetni = uyarilar.length
+    ? `Atlanan eşleşme (${uyarilar.length}): ${uyarilar.slice(0, 3).join('; ')}${uyarilar.length > 3 ? '…' : ''}. Servis Tanılama ekranından düzeltin.`
+    : undefined;
   const artisAcik = !artisEngeli && pazaryeriOrtam('PAZARYERI_STOK_ARTIR') === '1';
   const degisen = hedefler.filter((k) => {
     const gercek = ilanlar.get(k.kod)!.stok;
@@ -152,13 +178,15 @@ async function stokYayimla(
   }
   if (!degisen.length) {
     const farkVar = hedefler.some((k) => ilanlar.get(k.kod)!.stok < k.stok);
-    await stokHatasiYaz(kanal, farkVar ? 'Bazı ilanlarda kanalın stoğu hedefin altında. Artış koşullarını ve satıcı panelini kontrol edin.' : undefined);
+    const mesaj = uyariMetni ?? (farkVar ? 'Bazı ilanlarda kanalın stoğu hedefin altında. Artış koşullarını ve satıcı panelini kontrol edin.' : undefined);
+    await stokHatasiYaz(kanal, mesaj);
     return 0;
   }
   const [tazeKatalog, tazeAyarlar] = await Promise.all([katalogStogu(), envanterAyarlariOku()]);
   const taze = tazeAyarlar.kanallar[kanal];
+  const tazeOnayliHedefler = stokHedefleri(kanal, taze, tazeKatalog.satilabilir).hedefler.filter((k) => ilanlar.has(k.kod));
   if (sinyal.aborted || katalog.surum !== tazeKatalog.surum || !taze.sonApi || Date.now() - Date.parse(taze.sonApi) > TAZELIK
-    || JSON.stringify(hedefler) !== JSON.stringify(stokHedefleri(kanal, taze, tazeKatalog.satilabilir))) {
+    || JSON.stringify(hedefler) !== JSON.stringify(tazeOnayliHedefler)) {
     throw new PazaryeriApiHatasi('Stok veya kanal ayarları güncellendi. Bir sonraki senkron bekleniyor.');
   }
   const bekleyen = { id: GONDERIM_BEKLENIYOR, tarih: new Date().toISOString(), kalemler: degisen };
@@ -174,7 +202,7 @@ async function stokYayimla(
     throw e;
   }
   await bekleyenSatiriYaz(kanal, bekleyen, { ...bekleyen, id });
-  await stokHatasiYaz(kanal);
+  await stokHatasiYaz(kanal, uyariMetni);
   return undefined;
 }
 
@@ -208,6 +236,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
         const gelen = await kanalSiparisAl(kanal, baslangic, bitis, sinyal);
         const sonuc = await pazaryeriAktar(kanal, gelen, 'api', (a) => {
           a.sonApi = new Date(bitis).toISOString();
+          a.sonApiHata = undefined;
           if (tetikleyen === 'zamanlayici') a.sonOtomatikApi = a.sonApi;
         });
         kanallar[kanal] = { siparis: sonuc.yeni + sonuc.guncellenen };

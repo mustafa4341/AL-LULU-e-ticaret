@@ -287,6 +287,7 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
 ---
 <Yonetim baslik={aktifGorunum === 'web' ? 'Satış Kanalları · Web Sitesi' : aktifGorunum === 'trendyol' ? 'Satış Kanalları · Trendyol' : aktifGorunum === 'hepsiburada' ? 'Satış Kanalları · Hepsiburada' : aktifGorunum === 'eslestirme' ? 'Ürün Eşleştirme' : aktifGorunum === 'fiyatlar' ? 'Kanal Fiyatları ve Kurallar' : 'Satış Kanalları'} altBaslik="Pazaryeri ve web sitesi bağlantılarınızı yönetin, stok/fiyat senkronizasyonlarını ve eşleştirmeleri tek merkezden kontrol edin." aktif="siparisler" {basari} {hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Servis ve API Tanılama</a>
     <a class="btn btn--cizgi" href="?gorunum=fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyatlar</a>
     <a class="btn btn--cizgi" href="?gorunum=eslestirme"><PIkon ad="degistir" boyut={18} />Ürün eşleştirme</a>
     {depoHazir && ayarliKanal && <form method="post"><button class="btn btn--sepet" name="eylem" value="senkron" type="submit"><PIkon ad="yenile" boyut={18} />Şimdi eşitle</button></form>}

@@ -73,6 +73,7 @@ const bulutBagli = supabaseBagliMi();
 ---
 <Yonetim baslik="Ayarlar" altBaslik="Şirket künyesi, yasal sözleşmeler, bildirim tercihleri, sistem bağlantıları ve tam veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Servis ve API Tanılama</a>
     <a class="btn btn--cizgi" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedek İndir (ZIP)</a>
     <button type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Şirket ve Yasal Bilgileri Kaydet</button>
   </div>
@@ -83,6 +84,7 @@ const bulutBagli = supabaseBagliMi();
     <a href="#bildirimler">Bildirimler</a>
     <a href="#guvenlik">Güvenlik</a>
     <a href="#yedekleme">Sistem ve Yedekleme</a>
+    <a href="/yonetim/servis-kontrol" data-astro-prefetch="false">⚡ Canlı Servis / API Tanılama</a>
   </nav>
 
   <div class="ay-iki-sutun">
@@ -262,7 +264,7 @@ const bulutBagli = supabaseBagliMi();
             <h2><PIkon ad="veritabani" /> Sistem Durumu</h2>
             <p class="y-kart__alt">Mağaza, veritabanı, pazaryeri ve ödeme servislerinin canlı bağlantı özeti.</p>
           </div>
-          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar">Kanallar</a>
+          <a class="btn btn--sepet btn--kucuk" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={15} />Canlı Test</a>
         </div>
         <ul class="y-varsayim">
           <li>

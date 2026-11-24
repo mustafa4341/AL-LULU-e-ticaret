@@ -61,6 +61,7 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 ---
 <Yonetim baslik="İş Merkezi" altBaslik={`${tarihBaslik} · Siparişler, stok, kanallar ve satışlar tek ekranda.`} aktif="ozet">
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Servis Tanılama</a>
     <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="arti" boyut={18} />Yeni ürün</a>
     <a class="btn btn--sepet" href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={18} />Bugünkü işler</a>
   </div>
