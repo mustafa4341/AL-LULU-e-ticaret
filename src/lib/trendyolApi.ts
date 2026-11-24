@@ -172,6 +172,98 @@ export async function tyOnayliUrun(barkod: string): Promise<{ stok?: number; fiy
   return undefined;
 }
 
+/* ---------------- Onaylı ilanların tam bilgisi (ürün çekme) ---------------- */
+
+export type TyIcerik = {
+  barkod: string; stokKodu?: string; anaKod?: string; baslik: string; aciklama?: string;
+  marka?: { id: number; ad: string }; kategori?: { id: number; ad: string };
+  gorseller: string[]; ozellikler: { ad: string; deger: string }[];
+  fiyat?: number; listeFiyati?: number; kdv?: number; url?: string;
+  satista: boolean; kilit?: string; arsiv: boolean;
+};
+
+function icerikSatirlari(c: Ham): TyIcerik[] {
+  const marka = nesne(c.brand), kategori = nesne(c.category);
+  const ortak = {
+    anaKod: yazi(c.productMainId), baslik: yazi(c.title) ?? 'Ürün', aciklama: yazi(c.description),
+    marka: tam(marka.id) && yazi(marka.name) ? { id: tam(marka.id)!, ad: yazi(marka.name)! } : undefined,
+    kategori: tam(kategori.id) && yazi(kategori.name) ? { id: tam(kategori.id)!, ad: yazi(kategori.name)! } : undefined,
+    gorseller: dizi(c.images).map((g) => yazi(g.url)).filter((x): x is string => !!x).slice(0, 12),
+    ozellikler: dizi(c.attributes).map((a) => ({
+      ad: yazi(a.attributeName) ?? '',
+      deger: dizi(a.attributeValues).map((v) => yazi(v.attributeValue)).filter(Boolean).join(', '),
+    })).filter((o) => o.ad && o.deger).slice(0, 40),
+  };
+  return dizi(c.variants).flatMap((v) => {
+    const barkod = yazi(v.barcode);
+    if (!barkod) return [];
+    const fiyat = nesne(v.price);
+    const para = (x: unknown) => typeof x === 'number' && Number.isFinite(x) && x >= 0 ? Math.round(x * 100) / 100 : undefined;
+    const varyantOz = dizi(v.attributes).map((a) => ({ ad: yazi(a.attributeName) ?? '', deger: yazi(a.attributeValue) ?? '' })).filter((o) => o.ad && o.deger);
+    return [{
+      ...ortak, ozellikler: [...ortak.ozellikler, ...varyantOz].slice(0, 40),
+      barkod, stokKodu: yazi(v.stockCode), fiyat: para(fiyat.salePrice), listeFiyati: para(fiyat.listPrice),
+      kdv: tam(v.vatRate), url: yazi(v.productUrl),
+      satista: v.onSale !== false && v.archived !== true && v.locked !== true && v.blacklisted !== true,
+      kilit: v.locked === true ? (yazi(v.lockReason) ?? 'Kilitli') : undefined, arsiv: v.archived === true,
+    }];
+  });
+}
+
+/** filterApprovedProducts (Ürün V2) — onaylı ilanların başlık, açıklama, görsel, marka, kategori ve özellikleri. */
+export async function tyOnayliIcerikler(barkod?: string, enFazla = 2000): Promise<TyIcerik[]> {
+  const s = sinyal(45_000);
+  const sonuc: TyIcerik[] = [];
+  for (let sayfa = 0; sayfa < 100 && sonuc.length < enFazla; sayfa++) {
+    const y = nesne(await trendyolCagir((id) => `/product/sellers/${id}/products/approved`, 'Trendyol ilan bilgileri', s, {
+      sorgu: { page: sayfa, size: 100, barcode: barkod },
+    }));
+    const icerik = dizi(y.content);
+    for (const c of icerik) sonuc.push(...icerikSatirlari(c));
+    if (!icerik.length || sayfa + 1 >= (tam(y.totalPages) ?? 0)) break;
+  }
+  return barkod ? sonuc.filter((x) => x.barkod === barkod) : sonuc;
+}
+
+/* ---------------- Anlık sipariş bildirimi (webhook) ---------------- */
+
+export type TyWebhook = { id: string; url: string; durum: string; dogrulama?: string };
+
+/** getWebhooks — kayıtlı abonelikler (en fazla 15). */
+export async function tyWebhooklar(): Promise<TyWebhook[]> {
+  const y = await trendyolCagir((id) => `/webhook/sellers/${id}/webhooks`, 'Trendyol bildirim abonelikleri', sinyal());
+  const liste = Array.isArray(y) ? y.map(nesne) : dizi(nesne(y).webhooks ?? nesne(y).content);
+  return liste.map((w) => ({
+    id: yazi(w.id) ?? '', url: yazi(w.url) ?? '', durum: yazi(w.status) ?? (w.active === false ? 'PASSIVE' : 'ACTIVE'),
+    dogrulama: yazi(w.authenticationType),
+  })).filter((w) => w.id);
+}
+
+/** createWebhook — API_KEY ile (Trendyol anahtarı "x-api-key" başlığında yollar). Adres "trendyol" kelimesi içeremez. */
+export async function tyWebhookKur(url: string, anahtar: string): Promise<string> {
+  if (/trendyol|dolap|localhost/i.test(url)) throw new PazaryeriApiHatasi('Bildirim adresi “trendyol”, “dolap” veya “localhost” içeremez.');
+  const y = nesne(await trendyolCagir((id) => `/webhook/sellers/${id}/webhooks`, 'Trendyol bildirim aboneliği', sinyal(), {
+    json: { url, authenticationType: 'API_KEY', apiKey: anahtar, subscribedStatuses: [] },
+  }));
+  const kimlik = yazi(y.id);
+  if (!kimlik) throw new PazaryeriApiHatasi('Trendyol bildirim aboneliği kimlik döndürmedi.');
+  return kimlik;
+}
+
+/** updateWebhook — mevcut aboneliğin adresini ve anahtarını yeniler. */
+export async function tyWebhookGuncelle(webhookId: string, url: string, anahtar: string) {
+  if (!/^[A-Za-z0-9-]{1,80}$/.test(webhookId)) throw new PazaryeriApiHatasi('Bildirim kimliği geçersiz.');
+  await trendyolCagir((id) => `/webhook/sellers/${id}/webhooks/${webhookId}`, 'Trendyol bildirim güncelleme', sinyal(), {
+    yontem: 'PUT', json: { url, authenticationType: 'API_KEY', apiKey: anahtar, subscribedStatuses: [] },
+  });
+}
+
+/** activate — pasife düşen (ör. sunucu hatası sonrası) aboneliği yeniden açar. */
+export async function tyWebhookAktif(webhookId: string) {
+  if (!/^[A-Za-z0-9-]{1,80}$/.test(webhookId)) throw new PazaryeriApiHatasi('Bildirim kimliği geçersiz.');
+  await trendyolCagir((id) => `/webhook/sellers/${id}/webhooks/${webhookId}/activate`, 'Trendyol bildirim aktifleştirme', sinyal(), { yontem: 'PUT' });
+}
+
 /* ---------------- Sipariş paketi: toplama, fatura ---------------- */
 
 /** updatePackage — önce Picking, sonra Invoiced (fatura numarasıyla). */

@@ -9,10 +9,12 @@ import { gonderildi, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../..
 import { siparisKargoBaglantisi } from '../../../lib/kargoTakip';
 import { formatTL } from '../../../lib/fiyat';
 import type { Siparis } from '../../../lib/sema';
-import { KANALLAR, PY_DURUM_ADLARI, PY_DURUM_RENK, kanalMi, kurusTL, type PazaryeriSiparisi } from '../../../lib/pazaryeri';
-import { pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import { KANALLAR, KANAL_LISTESI, PY_DURUM_ADLARI, PY_DURUM_RENK, kanalMi, kurusTL, type PazaryeriSiparisi } from '../../../lib/pazaryeri';
+import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { pazaryeriDurumu } from '../../../components/yonetim/pazaryeriGorunumu';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import KanalOzeti from '../../../components/yonetim/KanalOzeti.astro';
 import { kanalToplamlari } from '../../../lib/kanalOzeti';
 import SiparisSonraki from '../../../components/yonetim/SiparisSonraki.astro';
@@ -29,13 +31,17 @@ const son = p.get('bitis') ?? '';
 const secilenKanal = p.get('kanal');
 const kanal = secilenKanal === 'web' || kanalMi(secilenKanal) ? secilenKanal : 'tumu';
 const aranan = q.toLocaleLowerCase('tr');
-const [tum, finans, magaza, pazaryeri] = await Promise.all([
-  siparisleriOku(), finansOku(), magazaOku(), pazaryeriSiparisleriOku().catch(() => undefined),
+const [tum, finans, magaza, pazaryeri, envanter] = await Promise.all([
+  siparisleriOku(), finansOku(), magazaOku(), pazaryeriSiparisleriOku().catch(() => undefined), envanterAyarlariOku().catch(() => undefined),
 ]);
 const { site } = magaza;
 const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
 const urunKimlikleri = new Set(urunler.keys());
 const simdi = Date.now();
+const sorunluKanallar = envanter ? KANAL_LISTESI.filter((k) => {
+  const a = envanter.kanallar[k];
+  return a.sonApiHata || a.sonStokHata || (pazaryeriApiDurumu(k) === 'canli' && a.stokBaslangic && (!a.sonOtomatikApi || simdi - Date.parse(a.sonOtomatikApi) > 30 * 60_000));
+}) : [];
 /* Listede siparişin içeriği açıkça görünsün: ilk ürünün fotoğrafı + "1 × Ürün adı, 2 × ..." */
 function urunOzeti(s: Siparis) {
   const ilk = s.kalemler[0];
@@ -180,10 +186,15 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
   </dialog>
 
   {!pazaryeri && <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} /><span>Pazaryeri siparişleri okunamadı. <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanallarını kontrol edin</a></span></p>}
+  {pazaryeri && sorunluKanallar.length > 0 && <div class="y-uyari-satir uyari--turuncu siparis-kanal-uyari" role="status">
+    <PIkon ad="uyari" boyut={18} />
+    <span><strong>{sorunluKanallar.length} pazaryerinde eşitleme uyarısı var ({sorunluKanallar.map((k) => KANALLAR[k]).join(', ')}).</strong> Sipariş veya stok senkronizasyonu kontrol bekliyor.</span>
+    <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/siparisler/kanallar#' + sorunluKanallar[0]}>Detayı Gör →</a>
+  </div>}
 
   <div class="y-siparis-govde">
   <div class="y-siparis-ozet">
-  <KanalOzeti ozet={ozet} donem={ozetDonemi} adres={kanalAdresi} secili={kanal} aciklama="İptal ve iadeler hariç." />
+  <KanalOzeti ozet={ozet} donem={ozetDonemi} adres={kanalAdresi} secili={kanal} kompakt={true} aciklama="İptal ve iadeler hariç. Karta tıklayarak kanala göre filtreleyin." />
 
   <BilgiKutusu baslik="Sipariş işlemleri rehberi" anahtar="siparisler" acik={false}>
     <p>Web sitesinden, Trendyol'dan ve Hepsiburada'dan gelen siparişler aynı listede. Her siparişin altında <strong>hangi kanaldan geldiği</strong> yazar.</p>
@@ -261,7 +272,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
                 </div>
                 {Number.isFinite(durum.sonKargo) && <small class="y-table-note">Son kargolama {yTarih.format(durum.sonKargo)}</small>}
               </td>
-              <td class="y-sayi y-islem"><a class="y-link detay-link" href={detay} aria-label={KANALLAR[s.kanal] + ' sipariş detayı ' + s.siparisNo}>Detay</a><button class="btn btn--cizgi y-secim-ac" type="button" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded="false" aria-label={s.siparisNo + ' hızlı işlem'} hidden>İşlem</button></td>
+              <td class="y-sayi y-islem"><div class="y-row-actions"><a class="btn btn--cizgi btn--kucuk y-secim-ac" href={filtreAdresi(filtre) + '&hizli=' + i} data-astro-prefetch="false" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded={p.get('hizli') === String(i) ? 'true' : 'false'} aria-label={s.siparisNo + ' hızlı işlem'}>Hızlı işlem</a><a class="y-link detay-link" href={detay} aria-label={KANALLAR[s.kanal] + ' sipariş detayı ' + s.siparisNo}>Detay</a></div></td>
             </tr>;
           }
           const { siparis: s } = satir;
@@ -291,8 +302,8 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
               <small class:list={['y-table-note', { 'kritik-not': o.renk === 'kirmizi' }]}>Ödeme: {o.yazi}</small>
               {b.yazi !== '—' && <small class:list={['y-table-note', { 'kritik-not': b.renk === 'kirmizi' }]} title={b.baslik}>Belge: {b.yazi}</small>}
             </td>
-            <td class="y-sayi y-islem">
-              <button class="btn btn--cizgi y-secim-ac" type="button" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded="false" aria-label={s.no + ' hızlı işlem'} hidden>İşlem</button>
+            <td class="y-sayi y-islem"><div class="y-row-actions">
+              <a class="btn btn--cizgi btn--kucuk y-secim-ac" href={filtreAdresi(filtre) + '&hizli=' + i} data-astro-prefetch="false" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded={p.get('hizli') === String(i) ? 'true' : 'false'} aria-label={s.no + ' hızlı işlem'}>Hızlı işlem</a>
               <details class="y-row-menu y-row-menu--sag"><summary aria-label={s.no + ' işlemleri'}>•••</summary>
                 <div>
                   <a href={detay}>Detayı aç</a>
@@ -308,7 +319,7 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
                   {(iptalEdilebilir(s) || (gonderildi(s) && !iadeEdildi(s))) && <a href={detay + (iptalEdilebilir(s) ? '#iptal' : '#iade')}>İade / iptal işlemi</a>}
                 </div>
               </details>
-            </td>
+            </div></td>
           </tr>;
         })}</tbody>
       </table>
@@ -323,28 +334,116 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
 
     </div>
     <aside class="y-kart y-liste-secim y-siparis-secim" aria-label="Sipariş hızlı işlem">
-      <div data-panel-bos><h2><PIkon ad="simsek" /> Hızlı işlem</h2><p class="y-help">Bir siparişin İşlem düğmesini kullanın.</p></div>
+      <div data-panel-bos><h2><PIkon ad="simsek" /> Hızlı işlem paneli</h2><p class="y-help">Listeden ayrılmadan siparişin sıradaki işlemini yapmak, müşteri ve ürün detaylarını görmek için satırdaki <strong>İşlem</strong> düğmesine basın.</p></div>
       {gorunen.map((satir, i) => {
-        const s = satir.siparis;
         const web = satir.kanal === 'web';
         const detay = web ? '/yonetim/siparisler/' + satir.siparis.no : pazaryeriDetayi(satir.siparis.id);
         const no = web ? satir.siparis.no : satir.siparis.siparisNo;
         const musteri = web ? `${satir.siparis.musteri.ad} ${satir.siparis.musteri.soyad}` : satir.siparis.musteri;
         const pazarDurumu = !web && (satir.durum.hazirlanacak ? 'yeni' : satir.durum.hazirlaniyor ? 'hazirlaniyor' : satir.siparis.durum);
         const durum = web ? kargoChip(satir.siparis) : { yazi: PY_DURUM_ADLARI[pazarDurumu || satir.siparis.durum], renk: PY_DURUM_RENK[pazarDurumu || satir.siparis.durum] };
-        return <section id={'siparis-hizli-' + i} data-panel-kayit hidden>
-          <div class="y-kart__bas"><h2><PIkon ad="kutu" /> {no}</h2><button type="button" class="y-icon-button" data-panel-kapat aria-label="Hızlı işlemi kapat"><Ikon ad="kapat" boyut={17} /></button></div>
-          <p class="muted">{web ? 'Web sitesi' : KANALLAR[satir.kanal]} · {yTarih.format(new Date(s.tarih))}</p>
-          <div class="y-durumlar"><span class:list={['y-chip', 'y-chip--' + durum.renk]}>{durum.yazi === '—' && web ? odemeChip(satir.siparis).yazi : durum.yazi}</span><strong>{web ? formatTL(s.toplam) : kurusTL(s.toplam)}</strong></div>
-          <p><strong>{musteri || 'Müşteri bilgisi yok'}</strong></p>
-          {web && s.kalemler.length > 0 && <p class="y-help">{urunOzeti(satir.siparis).metin}</p>}
-          {web && siradakiDurum(satir.siparis) && <><h3>Sıradaki adım</h3><SiparisSonraki siparis={satir.siparis} kargo={site.kargo} action={detay} /></>}
-          {!web && satir.durum.uyari.map((u) => <p class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</p>)}
-          <div class="y-ust-aksiyonlar">
-            <a class="btn btn--cizgi" href={detay}>Sipariş ayrıntıları</a>
-            {web && <a class="btn btn--cizgi" href={detay + '#belgeler'}>Belgeler</a>}
-            {web && <a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + no) + '#secili'}>Fatura</a>}
+        const odeme = web ? odemeChip(satir.siparis) : undefined;
+        const stokSorunu = web && !!satir.siparis.paytr?.stokEksik && satir.siparis.durum !== 'iptal';
+        const tyToplamaUygun = !web && satir.kanal === 'trendyol' && (satir.siparis.hamDurum === 'Created' || satir.siparis.hamDurum === 'Awaiting') && !satir.durum.uyari.some((u) => u.renk === 'kirmizi');
+        const pazarKontrolGerekli = !web && satir.durum.uyari.some((u) => u.renk === 'kirmizi');
+        const faturaAdresi = '/yonetim/finans/faturalar?sec=' + encodeURIComponent(web ? 'web:' + no : satir.kanal + ':' + satir.siparis.id) + '#secili';
+        const kalemler = web
+          ? satir.siparis.kalemler.map((k) => ({
+              ad: `${k.tip === 'set' ? 'Set: ' : ''}${k.ad}`,
+              adet: k.adet,
+              kod: k.sku,
+              tutar: formatTL(k.toplam),
+              gorsel: k.tip === 'set'
+                ? magaza.setler.find((x) => x.id === k.id)?.gorsel?.src ?? urunler.get(k.parcalar[0]?.urunId ?? '')?.gorseller[0]?.src
+                : urunler.get(k.id)?.gorseller[0]?.src,
+            }))
+          : satir.siparis.kalemler.map((k) => ({
+              ad: k.ad,
+              adet: k.adet,
+              kod: k.barkod || k.stokKodu,
+              tutar: kurusTL(k.tutar),
+              gorsel: k.urunId ? urunler.get(k.urunId)?.gorseller[0]?.src : undefined,
+            }));
+        const sonGecmis = satir.siparis.gecmis.at(-1);
+        const hizliAcik = Astro.url.searchParams.get('hizli') === String(i);
+        return <section id={'siparis-hizli-' + i} data-panel-kayit hidden={!hizliAcik}>
+          <div class="y-kart__bas">
+            <h2 class="hizli-baslik"><KanalLogo kanal={satir.kanal} boyut="kucuk" /><span>{no}</span></h2>
+            <div class="hizli-ust-dugmeler">
+              <a class="y-icon-button" href={detay} title="Tam sipariş detayını aç" aria-label={no + ' detay sayfasını aç'}><PIkon ad="dis-baglanti" boyut={17} /></a>
+              <a href={filtreAdresi(filtre)} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat aria-label="Hızlı işlemi kapat"><Ikon ad="kapat" boyut={17} /></a>
+            </div>
           </div>
+          <p class="muted hizli-alt">{web ? 'Web sitesi' : KANALLAR[satir.kanal]} · {yTarih.format(new Date(satir.siparis.tarih))}{!web && satir.siparis.paketNo && satir.siparis.paketNo !== no ? ` · Paket ${satir.siparis.paketNo}` : ''}</p>
+          <div class="y-durumlar hizli-durum-seridi">
+            {odeme && <span class:list={['y-chip', 'y-chip--' + odeme.renk]}>{odeme.yazi}</span>}
+            {durum.yazi !== '—' && <span class:list={['y-chip', 'y-chip--' + durum.renk]}>{durum.yazi}</span>}
+            {stokSorunu && <span class="y-chip y-chip--kirmizi">Stok ayrılamadı</span>}
+            <strong class="hizli-tutar">{web ? formatTL(satir.siparis.toplam) : kurusTL(satir.siparis.toplam)}</strong>
+          </div>
+
+          <div class="hizli-siradaki">
+            <h3><PIkon ad="simsek" boyut={17} /> Sıradaki adım</h3>
+            {web && stokSorunu && <>
+              <p class="y-help y-yazi-kirmizi">Ödeme alındı fakat stok ayrılamadı. Hazırlamaya geçmeden önce stoğu ayırın.</p>
+              <form method="post" action={detay}><button class="btn btn--sepet hizli-ana-dugme" type="submit" name="eylem" value="stok-tamamla">Stoğu Ayır →</button></form>
+            </>}
+            {web && !stokSorunu && siradakiDurum(satir.siparis) && <SiparisSonraki siparis={satir.siparis} kargo={site.kargo} action={detay} />}
+            {web && !stokSorunu && !siradakiDurum(satir.siparis) && <p class="y-help">Bu sipariş için bekleyen hazırlık/kargo adımı yok.</p>}
+            {!web && pazarKontrolGerekli && <>
+              <div class="hizli-uyarilar">{satir.durum.uyari.map((u) => <span class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</span>)}</div>
+              <p class="y-help">Hazırlığa geçmeden önce ürün eşleştirmesini veya eksik stoğu kontrol edin.</p>
+              <a class="btn btn--sepet hizli-ana-dugme" href={detay + '#urunler'}>Ürün ve Stok Kontrolünü Aç →</a>
+            </>}
+            {!web && !pazarKontrolGerekli && tyToplamaUygun && <>
+              <p class="y-help">Trendyol’a siparişin işleme alındığını bildirin.</p>
+              <form method="post" action={detay}><button class="btn btn--sepet hizli-ana-dugme" type="submit" name="eylem" value="ty-toplama">Toplamaya Başla →</button></form>
+            </>}
+            {!web && !pazarKontrolGerekli && !tyToplamaUygun && <>
+              {satir.durum.uyari.length > 0 && <div class="hizli-uyarilar">{satir.durum.uyari.map((u) => <span class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</span>)}</div>}
+              <a class="btn btn--sepet hizli-ana-dugme" href={detay}>Sipariş ve Stok Detayını Aç →</a>
+            </>}
+          </div>
+
+          <div class="hizli-aksiyon-listesi">
+            <a class="hizli-aksiyon" href={faturaAdresi}><PIkon ad="fatura" boyut={17} /><span>Fatura / Resmi Belge</span><PIkon ad="sag" boyut={16} /></a>
+            {web && <a class="hizli-aksiyon" href={detay + '#belgeler'}><PIkon ad="belge" boyut={17} /><span>Sipariş Özeti / Paket İçi Fiş</span><PIkon ad="sag" boyut={16} /></a>}
+            {web && satir.siparis.durum !== 'iptal' && !iadeEdildi(satir.siparis) && <a class="hizli-aksiyon" href={'/yonetim/finans/etiket?no=' + encodeURIComponent(no)} target="_blank" rel="noopener"><PIkon ad="yazici" boyut={17} /><span>Hazırlık Etiketi Yazdır ↗</span><PIkon ad="sag" boyut={16} /></a>}
+            {!web && <a class="hizli-aksiyon" href={detay + '#urunler'}><PIkon ad="katman" boyut={17} /><span>Ürün Eşleştirme ve Stok</span><PIkon ad="sag" boyut={16} /></a>}
+            <a class="hizli-aksiyon" href={detay}><PIkon ad="liste" boyut={17} /><span>Tüm Sipariş Detayı ve Geçmiş</span><PIkon ad="sag" boyut={16} /></a>
+          </div>
+
+          <div class="hizli-bilgi-izgara">
+            <div class="hizli-kutu">
+              <h4><PIkon ad="kullanici" boyut={15} /> Müşteri</h4>
+              <strong>{musteri || 'Müşteri bilgisi yok'}</strong>
+              {web && <small><a class="y-link" href={'tel:' + satir.siparis.musteri.tel}>{satir.siparis.musteri.tel}</a></small>}
+              {web && satir.siparis.musteri.eposta && <small><a class="y-link" href={'mailto:' + satir.siparis.musteri.eposta}>{satir.siparis.musteri.eposta}</a></small>}
+            </div>
+            <div class="hizli-kutu">
+              <h4><PIkon ad="kargo" boyut={15} /> Teslimat</h4>
+              {web ? <small>{satir.siparis.teslimat.adres}<br /><strong>{satir.siparis.teslimat.ilce} / {satir.siparis.teslimat.il}</strong></small>
+                : <small><strong>{[satir.siparis.ilce, satir.siparis.il].filter(Boolean).join(' / ') || 'Adres satıcı panelinde'}</strong></small>}
+              {satir.siparis.kargoFirma && <small class="y-chip y-chip--gri">{satir.siparis.kargoFirma}{satir.siparis.kargoTakip ? ' · ' + satir.siparis.kargoTakip : ''}</small>}
+            </div>
+          </div>
+
+          <div class="hizli-kutu">
+            <h4><PIkon ad="kutu" boyut={15} /> Ürünler ({kalemler.length})</h4>
+            <ul class="hizli-urunler">{kalemler.map((k) => <li>
+              {k.gorsel ? <img src={k.gorsel} alt="" width="36" height="36" loading="lazy" /> : <span class="y-kalem-gorsel--yok"><Ikon ad="kutu" boyut={16} /></span>}
+              <div><strong>{k.ad}</strong><small>{k.adet} adet{k.kod ? ' · ' + k.kod : ''}</small></div>
+              <b>{k.tutar}</b>
+            </li>)}</ul>
+          </div>
+
+          {(web && (satir.siparis.teslimat.not || satir.siparis.yoneticiNotu || satir.siparis.fatura.tip === 'kurumsal') || sonGecmis) && <div class="hizli-kutu hizli-notlar">
+            <h4><PIkon ad="gecmis" boyut={15} /> Notlar ve Son İşlem</h4>
+            {web && satir.siparis.teslimat.not && <p class="hizli-not"><strong>Müşteri notu:</strong> {satir.siparis.teslimat.not}</p>}
+            {web && satir.siparis.fatura.tip === 'kurumsal' && <p class="hizli-not"><strong>Kurumsal fatura:</strong> {satir.siparis.fatura.firma}</p>}
+            {web && satir.siparis.yoneticiNotu && <p class="hizli-not"><strong>İç not:</strong> {satir.siparis.yoneticiNotu}</p>}
+            {sonGecmis && <small class="muted">Son kayıt: {yTarih.format(new Date(sonGecmis.tarih))}{sonGecmis.not ? ' · ' + sonGecmis.not : ''}</small>}
+          </div>}
         </section>;
       })}
     </aside>
@@ -388,5 +487,31 @@ const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', ka
   .detay-link { display: inline-flex; padding: 4px 6px; white-space: nowrap; }
   .sayfa-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
   .sayfa-alt .y-help { margin: 0; }
-  @media (max-width: 760px) { .detay-link { min-height: 36px; align-items: center; } }
+  .siparis-kanal-uyari { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 14px; background: var(--y-turuncu-zemin); color: var(--y-turuncu); border-color: #efd5a4; }
+  .siparis-kanal-uyari > span { flex: 1 1 280px; }
+  .hizli-baslik { display: inline-flex; align-items: center; gap: 10px; font-size: 18px !important; }
+  .hizli-ust-dugmeler { display: inline-flex; align-items: center; gap: 4px; }
+  .hizli-alt { margin: -8px 0 10px !important; font-size: 13px; }
+  .hizli-durum-seridi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px !important; }
+  .hizli-tutar { margin-left: auto; font-size: 18px; }
+  .hizli-siradaki { padding: 14px; border: 1px solid #ecd9bd; border-radius: 13px; background: #fffaf2; margin-bottom: 12px; }
+  .hizli-siradaki h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px !important; font-size: 14.5px !important; color: var(--y-gold-ink); }
+  .hizli-siradaki :global(.btn--sepet), .hizli-ana-dugme { width: 100%; }
+  .hizli-uyarilar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .hizli-aksiyon-listesi { display: grid; gap: 6px; margin-bottom: 12px; }
+  .hizli-aksiyon { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 8px 12px; border: 1px solid var(--y-border); border-radius: 11px; background: #fff; color: var(--y-ink); text-decoration: none; font-size: 14px; font-weight: 600; }
+  .hizli-aksiyon:hover { background: var(--y-surface-2); border-color: #d2b996; }
+  .hizli-aksiyon > span { flex: 1; }
+  .hizli-bilgi-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
+  .hizli-kutu { display: grid; align-content: start; gap: 4px; padding: 11px 13px; border: 1px solid var(--y-border); border-radius: 12px; background: var(--y-surface-2); margin-bottom: 10px; }
+  .hizli-bilgi-izgara .hizli-kutu { margin-bottom: 0; }
+  .hizli-kutu h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--y-muted); text-transform: uppercase; letter-spacing: .03em; }
+  .hizli-kutu small { font-size: 13px; color: var(--y-ink-2); line-height: 1.4; overflow-wrap: anywhere; }
+  .hizli-urunler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .hizli-urunler li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding-top: 6px; border-top: 1px solid var(--y-border); font-size: 13.5px; }
+  .hizli-urunler li:first-child { padding-top: 0; border-top: 0; }
+  .hizli-urunler img { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--y-border); }
+  .hizli-urunler small { display: block; color: var(--y-muted); font-size: 12px; }
+  .hizli-not { margin: 0; padding: 7px 10px; border-radius: 9px; background: #fff4e4; font-size: 13px; }
+  @media (max-width: 760px) { .detay-link { min-height: 36px; align-items: center; } .hizli-bilgi-izgara { grid-template-columns: 1fr; } }
 </style>

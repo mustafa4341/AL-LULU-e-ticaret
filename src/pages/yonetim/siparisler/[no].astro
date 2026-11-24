@@ -3,6 +3,8 @@ import FinansSiparis from '../../../components/yonetim/FinansSiparis.astro';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import SiparisSonraki from '../../../components/yonetim/SiparisSonraki.astro';
+import SiparisAdimlari from '../../../components/yonetim/SiparisAdimlari.astro';
+import { webYolculugu } from '../../../lib/siparisAdimlari';
 import Ikon from '../../../components/Ikon.astro';
 import { finansOku } from '../../../lib/finansDepo';
 import Yonetim from '../../../layouts/Yonetim.astro';
@@ -63,6 +65,8 @@ const listeToplami = s.urunlerToplami + s.kampanyaIndirimi;
 const indirimVar = s.kampanyaIndirimi + s.setIndirimi + s.sepetIndirimi > 0;
 const belgeler = finansKaydi ? finansKaydi.belgeler.filter((b) => b.siparisNo === no) : [];
 const kesilenFatura = finansKaydi?.faturalar.find((x) => x.kanal === 'web' && x.kayit === no && !x.iptal);
+/* Ayrıntılı adımlar (stok, fatura kesimi/iletimi dahil): lib/siparisAdimlari.ts */
+const yolculuk = webYolculugu(s, kesilenFatura, '/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + no) + '#secili');
 const iade = iadeEdildi(s);
 const iptal = s.durum === 'iptal';
 const kargolar = kargoFirmalari(site.kargo);
@@ -136,33 +140,53 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
   </div>
 
   {uyarilar.map((u) => <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} />{u}</p>)}
-  {s.paytr?.stokEksik && !s.paytr.test && s.durum === 'odendi' && (
-    <form method="post" class="y-ust-aksiyonlar">
-      <button type="submit" name="eylem" value="stok-tamamla" class="btn btn--sepet">Stoğu ayır</button>
-    </form>
-  )}
 
   <section class="y-kart y-durum-kart" id="kargo">
-    <div class="y-kart__bas"><h2><PIkon ad="kargo" /> Sipariş süreci</h2><a class="y-link" href="#urunler">Ürünler ve tutar</a></div>
+    <div class="y-kart__bas"><h2><PIkon ad="kargo" /> Sipariş Durumu</h2><a class="y-link" href="#urunler">Ürünler ve tutar</a></div>
     {iptal ? (
       <p class="y-iptal-bant"><strong>{s.paytr?.sonuc === 'basarisiz' ? 'Ödeme tamamlanamadı' : 'Sipariş iptal edildi'}</strong>{s.iptalNotu && <span> · {s.iptalNotu}</span>}</p>
     ) : (
-      <ol class="y-adimlar" aria-label="Sipariş adımları">
-        {adimlar.map((a, i) => <li class:list={{ 'is-tamam': a.tamam, 'is-simdi': i === simdikiAdim }}>
-          <span class="y-adimlar__nokta" aria-hidden="true">{a.tamam ? '✓' : i + 1}</span>
-          <span class="y-adimlar__ad">{a.ad}</span>
-          {a.tarih && a.tamam && <small>{yTarih.format(new Date(a.tarih))}</small>}
-        </li>)}
+      <ol class="y-surec-hatti" aria-label="Sipariş adımları">
+        {adimlar.map((a, i) => {
+          const ikonAd = i === 0 ? 'tik' : i === 1 ? 'cuzdan' : i === 2 ? 'kutu' : i === 3 ? 'kargo' : 'tik-daire';
+          return (
+            <li class:list={{ 'is-tamam': a.tamam, 'is-simdi': i === simdikiAdim }}>
+              <div class="y-surec-hatti__ust">
+                <span class="y-surec-hatti__daire" aria-hidden="true">
+                  {a.tamam ? '✓' : <PIkon ad={ikonAd} boyut={18} />}
+                </span>
+              </div>
+              <strong class="y-surec-hatti__etiket">{a.ad}</strong>
+              <small class="y-surec-hatti__tarih">{a.tarih && a.tamam ? yTarih.format(new Date(a.tarih)) : i === simdikiAdim ? 'Devam ediyor' : '—'}</small>
+            </li>
+          );
+        })}
       </ol>
     )}
-    <div class="y-durumlar">
-      <span>Ödeme <b class:list={['y-chip', 'y-chip--' + odemeRenk]}>{odemeYazi}</b></span>
-      <span>Kargo <b class:list={['y-chip', 'y-chip--' + kargoRenk]}>{kargoYazi}</b></span>
-      <span>Belge <a href="#belgeler" class:list={['y-chip', 'y-chip--' + belgeRenk]}>{belgeYazi}</a></span>
-      <strong class="y-durumlar__tutar">{formatTL(s.toplam)}</strong>
+    <div class="y-durum-serit">
+      <div><span class="muted">Ödeme</span><b class:list={['y-chip', 'y-chip--' + odemeRenk]}>{odemeYazi}</b></div>
+      <div><span class="muted">Kargo</span><b class:list={['y-chip', 'y-chip--' + kargoRenk]}>{kargoYazi}</b></div>
+      <div><span class="muted">Belge</span><a href="#belgeler" class:list={['y-chip', 'y-chip--' + belgeRenk]}>{belgeYazi}</a></div>
+      <div class="y-durum-serit__toplam"><span class="muted">Toplam Tutar</span><strong>{formatTL(s.toplam)}</strong></div>
     </div>
+    <details class="y-web-adimlar" open={yolculuk.adimlar.some((a) => a.durum === 'sorun') || undefined}>
+      <summary>Adım adım takip · {yolculuk.ilerleme.tamam}/{yolculuk.ilerleme.toplam} tamam{yolculuk.adimlar.some((a) => a.durum === 'sorun') ? ' · dikkat gereken adım var' : ''}</summary>
+      <SiparisAdimlari {yolculuk} />
+    </details>
 
-    <div class="y-siparis-sonraki"><SiparisSonraki siparis={s} kargo={site.kargo} form={forma} /></div>
+    {s.paytr?.stokEksik && !s.paytr.test && s.durum === 'odendi' ? (
+      <div class="y-siparis-sonraki y-sonraki--stok-uyari">
+        <div>
+          <strong><PIkon ad="uyari" boyut={18} /> Sıradaki işlem: Önce stoğu ayırın</strong>
+          <p class="y-help">Bu siparişin ödemesi alındı ancak ürün stoğu ayrılamadı. Stok sorunu çözülmeden hazırlık ve kargo adımlarına geçilemez.</p>
+        </div>
+        <form method="post">
+          <button type="submit" name="eylem" value="stok-tamamla" class="btn btn--sepet">Stoğu ayır</button>
+        </form>
+      </div>
+    ) : (
+      <div class="y-siparis-sonraki"><SiparisSonraki siparis={s} kargo={site.kargo} form={forma} /></div>
+    )}
     {kargo && <p class="y-shipment"><Ikon ad="kargo" boyut={16} /><strong>{kargo.firma} · {s.kargoTakip}</strong>
       <a class="y-link" href={kargo.url} target="_blank" rel="noopener">Takibi aç ↗</a>
       {takipMesaj && !iade && <a class="y-link" href={takipMesaj} target="_blank" rel="noopener">Müşteriye WhatsApp’tan gönder ↗</a>}
@@ -207,13 +231,19 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
 
   <div class="y-izgara y-izgara--2">
     <section class="y-kart">
-      <h2><PIkon ad="kullanici" /> Müşteri ve Teslimat</h2>
-      <p><strong>{s.musteri.ad} {s.musteri.soyad}</strong></p>
-      <p><a class="y-link" href={'tel:' + s.musteri.tel}>{s.musteri.tel}</a>{s.musteri.eposta && <> · <a class="y-link" href={'mailto:' + s.musteri.eposta}>{s.musteri.eposta}</a></>}</p>
-      <p>{s.teslimat.adres}<br />{s.teslimat.ilce} / {s.teslimat.il}</p>
-      {s.teslimat.not && <p class="muted">Kargo notu: {s.teslimat.not}</p>}
-      <p class="muted">e-Arşiv fatura: {kesilenFatura ? <strong>{kesilenFatura.no}</strong> : 'Kesilmedi'} · <a class="y-link" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + s.no) + '#secili'}>{kesilenFatura ? 'Faturayı görüntüle' : 'Fatura bilgileri'}</a></p>
-      <p class="muted">Fatura: {s.fatura.tip === 'kurumsal' ? [s.fatura.firma, s.fatura.vd, s.fatura.vno].filter(Boolean).join(' · ') : 'Bireysel'}{s.fatura.adres && <> · {s.fatura.adres}</>}</p>
+      <div class="y-kart__bas">
+        <h2><PIkon ad="kullanici" /> Müşteri ve Teslimat</h2>
+        <button class="btn btn--cizgi btn--kucuk" type="button" data-kopyala={`${s.musteri.ad} ${s.musteri.soyad} · ${s.teslimat.adres} ${s.teslimat.ilce}/${s.teslimat.il}`}>Adresi kopyala</button>
+      </div>
+      <dl class="musteri-bilgileri">
+        <div><dt>Müşteri</dt><dd><strong>{s.musteri.ad} {s.musteri.soyad}</strong></dd></div>
+        <div><dt>Telefon</dt><dd><a class="y-link" href={'tel:' + s.musteri.tel}>{s.musteri.tel}</a>{wa && <> · <a class="y-link" href={wa + encodeURIComponent('Merhaba, ' + s.no + ' numaralı siparişiniz hakkında yazıyoruz.')} target="_blank" rel="noopener">WhatsApp ↗</a></>}</dd></div>
+        {s.musteri.eposta && <div><dt>E-posta</dt><dd><a class="y-link" href={'mailto:' + s.musteri.eposta}>{s.musteri.eposta}</a></dd></div>}
+        <div><dt>Teslimat adresi</dt><dd>{s.teslimat.adres}<br /><strong>{s.teslimat.ilce} / {s.teslimat.il}</strong></dd></div>
+        {s.teslimat.not && <div><dt>Teslimat notu</dt><dd class="musteri-not">{s.teslimat.not}</dd></div>}
+        <div><dt>Fatura türü</dt><dd>{s.fatura.tip === 'kurumsal' ? [s.fatura.firma, s.fatura.vd, s.fatura.vno].filter(Boolean).join(' · ') : 'Bireysel'}{s.fatura.adres && <> · {s.fatura.adres}</>}</dd></div>
+        <div><dt>e-Arşiv fatura</dt><dd>{kesilenFatura ? <span class="y-chip y-chip--yesil">{kesilenFatura.no}</span> : <span class="y-chip y-chip--turuncu">Kesilmedi</span>} · <a class="y-link" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('web:' + s.no) + '#secili'}>{kesilenFatura ? 'Faturayı görüntüle' : 'Fatura bilgileri'}</a></dd></div>
+      </dl>
     </section>
     <section class="y-kart" id="urunler">
       <h2><PIkon ad="kutu" /> Ürünler ve Tutar</h2>
@@ -245,32 +275,151 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
     </section>
   </div>
 
-  <FinansSiparis siparis={s} belgeler={belgeler} />
+  <div class="y-siparis-alt-uclu">
+    <FinansSiparis siparis={s} belgeler={belgeler} />
 
-  <details class="y-kart" id="epostalar" open={epostalar.some((e) => e.durum === 'hata') || forma?.get('eylem') === 'eposta'}>
-    <summary><strong>E-postalar</strong> {epostalar.length > 0 && <span class:list={['y-chip', epostalar.some((e) => e.durum === 'hata') ? 'y-chip--kirmizi' : 'y-chip--gri']}>{epostalar.filter((e) => e.durum === 'gonderildi').length}/{epostalar.length} gönderildi</span>}</summary>
-    {!epostaAcik && <p class="muted">E-posta gönderimi kapalı: Vercel'de SMTP_PAROLA (Google uygulama şifresi) girilmemiş.</p>}
-    {epostalar.length === 0
-      ? <p class="muted">Bu sipariş için kayıtlı e-posta yok{s.musteri.eposta ? '' : ' (müşteri e-posta adresi vermemiş)'}.</p>
-      : <ul class="y-gecmis">{epostalar.map((e) => <li>
-          <span>{yTarih.format(new Date(e.tarih))}</span>
-          <span><strong>{e.ad}</strong> · {e.alici} · {e.durum === 'gonderildi' ? '✓ Gönderildi' : e.durum === 'hata' ? '✗ Gönderilemedi' : 'Gönderiliyor…'}{e.deneme > 1 && ` (${e.deneme}. deneme)`}{e.sonHata && <small class="muted"> — {e.sonHata}</small>}</span>
-        </li>)}</ul>}
-    {epostaAcik && yenidenSecenekler.length > 0 && <form method="post" class="y-sonraki">
-      <input type="hidden" name="eylem" value="eposta" />
-      <label class="y-alan">Yeniden gönder
-        <select name="epostaTur">{yenidenSecenekler.map((t) => <option value={t}>{EPOSTA_TUR_ADLARI[t]}</option>)}</select>
-      </label>
-      <button class="btn btn--cizgi" type="submit">Gönder</button>
-    </form>}
-  </details>
+    <section class="y-kart y-eposta-kart" id="epostalar">
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="gonder" /> E-postalar</h2>
+          <p class="y-kart__alt">Müşteriye gönderilen otomatik bildirimler.</p>
+        </div>
+        {epostalar.length > 0 && <span class:list={['y-chip', epostalar.some((e) => e.durum === 'hata') ? 'y-chip--kirmizi' : 'y-chip--yesil']}>{epostalar.filter((e) => e.durum === 'gonderildi').length}/{epostalar.length} gönderildi</span>}
+      </div>
+      {!epostaAcik && <p class="y-ipucu" style="margin:0 0 10px;padding:8px 10px;border-radius:8px;background:#faf7f2;border:1px solid var(--y-border)">E-posta gönderimi bu ortamda kapalı (<code>SMTP_PAROLA</code> tanımlı değil).</p>}
 
-  <details class="y-kart">
-    <summary><strong>İşlem geçmişi ve iç not</strong></summary>
-    <ul class="y-gecmis">{[...s.gecmis].reverse().map((g) => <li><span>{yTarih.format(new Date(g.tarih))}</span><span><strong>{g.islem === IADE_ISLEMI ? 'İade tamamlandı' : g.islem === 'manuel-odeme' ? 'Manuel ödeme onayı' : g.islem === 'takip-duzeltildi' ? 'Takip güncellendi' : SIPARIS_DURUM_ADLARI[g.durum]}</strong>{g.not && ' · ' + g.not}</span></li>)}</ul>
-    <form method="post" class="y-sonraki">
-      <input type="hidden" name="eylem" value="not" /><label class="y-alan">İç not (müşteri görmez)<input name="yoneticiNotu" maxlength="1000" value={s.yoneticiNotu ?? ''} /></label>
-      <button class="btn btn--cizgi" type="submit">Notu kaydet</button>
-    </form>
-  </details>
+      <ul class="y-eposta-adimlar">
+        {[
+          { tur: 'siparis-alindi', baslik: 'Sipariş Onayı', bul: epostalar.find((e) => e.tur === 'siparis-alindi') },
+          { tur: 'odeme-onaylandi', baslik: 'Ödeme Onayı', bul: epostalar.find((e) => e.tur === 'odeme-onaylandi') },
+          { tur: 'kargoya-verildi', baslik: 'Kargo Bilgisi', bul: epostalar.find((e) => e.tur === 'kargoya-verildi') },
+        ].map((satir) => {
+          const kayit = satir.bul;
+          const okDurum = kayit?.durum === 'gonderildi';
+          const hataDurum = kayit?.durum === 'hata';
+          return (
+            <li>
+              <span class:list={['y-eposta-nokta', { 'is-ok': okDurum, 'is-hata': hataDurum }]} aria-hidden="true">
+                {okDurum ? '✓' : hataDurum ? '!' : '○'}
+              </span>
+              <div class="y-eposta-bilgi">
+                <strong>{satir.baslik}</strong>
+                <small>{kayit ? yTarih.format(new Date(kayit.tarih)) + (kayit.sonHata ? ` · ${kayit.sonHata}` : '') : 'Gönderilmedi'}</small>
+              </div>
+              <span class:list={['y-chip', okDurum ? 'y-chip--yesil' : hataDurum ? 'y-chip--kirmizi' : 'y-chip--gri']}>
+                {okDurum ? 'Gönderildi' : hataDurum ? 'Hata' : 'Bekliyor'}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+
+      {epostaAcik && yenidenSecenekler.length > 0 && <form method="post" class="y-eposta-form">
+        <input type="hidden" name="eylem" value="eposta" />
+        <select name="epostaTur" aria-label="Yeniden gönderilecek e-posta">{yenidenSecenekler.map((t) => <option value={t}>{EPOSTA_TUR_ADLARI[t]}</option>)}</select>
+        <button class="btn btn--cizgi btn--kucuk" type="submit"><PIkon ad="gonder" boyut={15} />Gönder</button>
+      </form>}
+    </section>
+
+    <section class="y-kart y-gecmis-kart" id="gecmis">
+      <div class="y-kart__bas">
+        <h2><PIkon ad="gecmis" /> İşlem Geçmişi / İç Not</h2>
+        <div class="y-mini-sekmeler" role="tablist">
+          <button type="button" class="is-aktif" data-gecmis-sekme="zaman">İşlem Geçmişi</button>
+          <button type="button" data-gecmis-sekme="not">İç Not{s.yoneticiNotu ? ' •' : ''}</button>
+        </div>
+      </div>
+
+      <div data-gecmis-panel="zaman">
+        <ul class="y-zaman-cizgisi">
+          {[...s.gecmis].reverse().map((g, idx) => (
+            <li class:list={{ 'is-ilk': idx === 0 }}>
+              <span class="y-zaman-nokta" aria-hidden="true">✓</span>
+              <div class="y-zaman-icerik">
+                <strong>{g.islem === IADE_ISLEMI ? 'İade tamamlandı' : g.islem === 'manuel-odeme' ? 'Manuel ödeme onayı' : g.islem === 'takip-duzeltildi' ? 'Takip güncellendi' : SIPARIS_DURUM_ADLARI[g.durum]}</strong>
+                {g.not && <small>{g.not}</small>}
+              </div>
+              <time>{yTarih.format(new Date(g.tarih))}</time>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <form method="post" class="y-ic-not-kutusu" data-gecmis-panel="not" hidden>
+        <input type="hidden" name="eylem" value="not" />
+        <label class="y-alan">Yönetici iç notu <span class="muted">(müşteri görmez)</span>
+          <textarea name="yoneticiNotu" rows="3" maxlength="1000" placeholder="Sipariş hazırlığı, paketleme veya müşteri görüşmesi notu…">{s.yoneticiNotu ?? ''}</textarea>
+        </label>
+        <button class="btn btn--sepet btn--kucuk" type="submit"><PIkon ad="tik" boyut={15} />Notu kaydet</button>
+      </form>
+      {s.yoneticiNotu && <p class="y-mevcut-not" data-gecmis-panel="zaman"><strong>İç not:</strong> {s.yoneticiNotu}</p>}
+    </section>
+  </div>
 </Yonetim>
+<script>
+  for (const btn of document.querySelectorAll<HTMLButtonElement>('[data-gecmis-sekme]')) {
+    btn.addEventListener('click', () => {
+      const hedef = btn.dataset.gecmisSekme;
+      const kart = btn.closest('.y-gecmis-kart');
+      if (!kart || !hedef) return;
+      kart.querySelectorAll<HTMLButtonElement>('[data-gecmis-sekme]').forEach((b) => b.classList.toggle('is-aktif', b === btn));
+      kart.querySelectorAll<HTMLElement>('[data-gecmis-panel]').forEach((p) => { p.hidden = p.dataset.gecmisPanel !== hedef; });
+    });
+  }
+</script>
+<style>
+  .y-web-adimlar { margin-top: 12px; border-top: 1px solid var(--y-border); padding-top: 4px; }
+  .y-web-adimlar > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
+  .y-surec-hatti { list-style: none; margin: 10px 0 18px; padding: 6px 4px 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; text-align: center; }
+  .y-surec-hatti li { position: relative; display: grid; justify-items: center; gap: 6px; min-width: 0; }
+  .y-surec-hatti li:not(:last-child)::after { content: ''; position: absolute; top: 21px; left: calc(50% + 22px); right: calc(-50% + 22px); height: 3px; background: #dfd6c5; z-index: 0; }
+  .y-surec-hatti li.is-tamam:not(:last-child)::after { background: #1d8f4e; }
+  .y-surec-hatti__daire { position: relative; z-index: 1; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 2px solid #d5cbb8; background: #fff; color: #8c8172; font-weight: 800; font-size: 16px; }
+  .y-surec-hatti li.is-tamam .y-surec-hatti__daire { background: #1d8f4e; border-color: #1d8f4e; color: #fff; box-shadow: 0 0 0 4px #e6f5ec; }
+  .y-surec-hatti li.is-simdi .y-surec-hatti__daire { background: #fff4e5; border-color: #d97706; color: #b45309; box-shadow: 0 0 0 4px #fef3c7; }
+  .y-surec-hatti__etiket { font-size: 13.5px; color: var(--y-ink, #231f1a); }
+  .y-surec-hatti li.is-simdi .y-surec-hatti__etiket { background: #fdebd2; color: #9a3412; padding: 2px 10px; border-radius: 999px; }
+  .y-surec-hatti__tarih { font-size: 11.5px; color: var(--y-muted, #6f6559); }
+  .y-durum-serit { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; padding-top: 14px; border-top: 1px solid var(--y-border, #e5dec9); align-items: center; }
+  .y-durum-serit > div { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; border-right: 1px solid var(--y-border, #e5dec9); padding-right: 10px; }
+  .y-durum-serit > div:last-child { border-right: 0; padding-right: 0; justify-content: flex-end; }
+  .y-durum-serit__toplam strong { font-size: 20px; font-weight: 800; }
+  .y-siparis-alt-uclu { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.9fr) minmax(0, 1.05fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .y-siparis-alt-uclu > :global(.y-kart) { margin: 0; }
+  .y-eposta-adimlar { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .y-eposta-adimlar li { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 10px; border: 1px solid var(--y-border, #e5dec9); border-radius: 10px; background: #fff; }
+  .y-eposta-nokta { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #f2ede3; color: #7a6f60; font-weight: 800; font-size: 12px; }
+  .y-eposta-nokta.is-ok { background: #e3f5ea; color: #157f43; }
+  .y-eposta-nokta.is-hata { background: #fde8e8; color: #b42318; }
+  .y-eposta-bilgi { display: grid; gap: 1px; min-width: 0; }
+  .y-eposta-bilgi strong { font-size: 13.5px; }
+  .y-eposta-bilgi small { font-size: 11.5px; color: var(--y-muted, #6f6559); }
+  .y-eposta-form { display: flex; gap: 8px; margin-top: 10px; }
+  .y-eposta-form select { flex: 1; min-width: 0; }
+  .y-mini-sekmeler { display: inline-flex; gap: 4px; padding: 3px; border-radius: 9px; background: #f2ece0; }
+  .y-mini-sekmeler button { border: 0; background: transparent; padding: 5px 10px; border-radius: 7px; font-size: 12.5px; font-weight: 600; cursor: pointer; color: #5c5143; }
+  .y-mini-sekmeler button.is-aktif { background: #fff; color: #231f1a; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
+  .y-zaman-cizgisi { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+  .y-zaman-cizgisi li { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: start; }
+  .y-zaman-cizgisi li:not(:last-child)::after { content: ''; position: absolute; left: 11px; top: 24px; bottom: -12px; width: 2px; background: #ded5c3; }
+  .y-zaman-nokta { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #1d8f4e; color: #fff; font-size: 11px; font-weight: 800; }
+  .y-zaman-icerik { display: grid; gap: 2px; min-width: 0; }
+  .y-zaman-icerik strong { font-size: 13.5px; }
+  .y-zaman-icerik small { font-size: 12px; color: var(--y-muted, #6f6559); }
+  .y-zaman-cizgisi time { font-size: 11.5px; color: var(--y-muted, #6f6559); white-space: nowrap; }
+  .y-ic-not-kutusu { display: grid; gap: 8px; justify-items: start; }
+  .y-ic-not-kutusu .y-alan { width: 100%; }
+  .y-mevcut-not { margin: 10px 0 0; padding: 8px 10px; border-radius: 8px; background: #faf7f2; border: 1px solid var(--y-border); font-size: 12.5px; }
+  @media (max-width: 1180px) { .y-siparis-alt-uclu { grid-template-columns: 1fr; } .y-durum-serit { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 720px) { .y-surec-hatti { grid-template-columns: 1fr; text-align: left; gap: 10px; } .y-surec-hatti li { grid-template-columns: 42px 1fr; justify-items: start; } .y-surec-hatti li::after { display: none; } }
+  .y-sonraki--stok-uyari { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 18px; margin-top: 12px; padding: 14px 16px; border: 1px solid #f1c4be; border-radius: 13px; background: #fdf1ef; color: #7b1d14; }
+  .y-sonraki--stok-uyari strong { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; }
+  .y-sonraki--stok-uyari p { margin: 4px 0 0; color: #7b1d14; }
+  .musteri-bilgileri { display: grid; gap: 10px; margin: 0; }
+  .musteri-bilgileri > div { display: grid; grid-template-columns: 130px minmax(0, 1fr); gap: 8px 14px; align-items: baseline; padding-bottom: 8px; border-bottom: 1px solid var(--y-border); }
+  .musteri-bilgileri > div:last-child { padding-bottom: 0; border-bottom: 0; }
+  .musteri-bilgileri dt { font-size: 13px; font-weight: 650; color: var(--y-muted); }
+  .musteri-bilgileri dd { margin: 0; font-size: 14.5px; overflow-wrap: anywhere; }
+  .musteri-not { padding: 6px 10px; border-radius: 8px; background: #fff4e4; font-weight: 600; }
+  @media (max-width: 560px) { .musteri-bilgileri > div { grid-template-columns: 1fr; gap: 2px; } }
+</style>

@@ -308,8 +308,18 @@ const KanalAyarSema = z.object({
     /** Kanala en son gönderilen satış fiyatı (TL) ve zamanı — aynı fiyat 30 dk içinde yeniden gönderilmez */
     fiyat: z.number().nonnegative().optional(),
     fiyatTarih: z.string().optional(),
+    /** Ürüne özel kanal satış fiyatı (TL). Boşsa kanal fiyat kuralı veya sitedeki son fiyat uygulanır. */
+    ozelFiyat: z.number().positive().max(10_000_000).optional(),
+    /**
+     * Otomatik fiyat takibi (24.11.2026): yalnız açıkken zamanlayıcı bu ürünün kanal fiyatını hedef fiyata çeker.
+     * Eşleştirme (bağlama) fiyata dokunmaz; kapalıyken fiyat yalnız panelde "Fiyatı gönder" düğmesiyle gider.
+     */
+    fiyatTakip: z.boolean().optional(),
+    /** Kanalda en son okunan satış fiyatı (TL) ve zamanı — panelde "kanaldaki fiyat" olarak gösterilir */
+    kanalFiyat: z.number().nonnegative().optional(),
+    kanalFiyatTarih: z.string().optional(),
   })).default({}),
-  /** ESKİ (23.11.2026'dan beri kullanılmıyor): kanal fiyatı artık her zaman sitedeki fiyattır, bkz. kanalSatisFiyati. */
+  /** Kanal genel fiyat kuralı: 0 bırakılırsa sitedeki son fiyat birebir kullanılır. */
   fiyatKurali: z.object({
     yuzde: z.number().min(-50).max(300).default(0),
     ekTL: z.number().min(0).max(100_000).default(0),
@@ -317,19 +327,51 @@ const KanalAyarSema = z.object({
   }).default({}),
   /** API ile kanala gönderilen ilanlar (ürün kimliği → taslak ve onay durumu) */
   ilanlar: z.record(IlanSema).default({}),
+  /** Anlık sipariş bildirimi (webhook): kanalda kayıtlı abonelik ve son gelen bildirim */
+  bildirim: z.object({
+    id: z.string().max(120).optional(),
+    kurulum: z.string().optional(),
+    son: z.string().optional(),
+    sayi: z.number().int().min(0).default(0),
+  }).default({}),
 });
 export type KanalAyari = z.infer<typeof KanalAyarSema>;
 export type KanalIlanTaslagi = z.infer<typeof IlanSema>;
 
 /**
- * Pazaryeri satış fiyatı = müşterinin sitede ödediği son birim fiyat (TL): fiyat düşüşü (kampanya) ve sepette indirim
- * dahil; fırsat süresi bitince sepette indirim kendiliğinden düşer. Trendyol ve Hepsiburada her zaman bununla aynı tutulur.
- * Üstü çizili (liste) fiyat gönderilmez: indirim gösterimi her kanalın KENDİ önceki fiyatına dayanmalı,
- * başka kanaldaki fiyat esas alınamaz (Ticari Reklam Yön. m.14/5, RG 01.07.2026/33297).
+ * Müşterinin sitede ödediği son birim fiyat (TL): fiyat düşüşü (kampanya) ve sepette indirim dahil;
+ * fırsat süresi bitince sepette indirim kendiliğinden düşer.
  */
 export function kanalSatisFiyati(u: Pick<Urun, 'fiyat' | 'sepetteIndirim' | 'firsat'>, simdi = Date.now()): number {
   const yuzde = gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }, simdi);
   return Math.round(sepetteFiyat(u.fiyat, yuzde) * 100) / 100;
+}
+
+/**
+ * Pazaryeri hedef satış fiyatı:
+ * 1) Ürüne özel kanal fiyatı (`urunler[id].ozelFiyat` veya `ilanlar[id].fiyat`) girilmişse o fiyat kullanılır.
+ * 2) Kanal fiyat kuralı (`% fark`, `+TL ek`, `,90 yuvarlama`) girilmişse sitedeki son fiyata uygulanır.
+ * 3) Hiçbiri yoksa sitedeki son fiyat (`kanalSatisFiyati`) birebir kullanılır.
+ */
+export function kanalHedefFiyati(
+  u: Pick<Urun, 'id' | 'fiyat' | 'sepetteIndirim' | 'firsat'>,
+  kanalAyari?: Pick<KanalAyari, 'fiyatKurali' | 'urunler' | 'ilanlar'>,
+  simdi = Date.now(),
+): { hedef: number; site: number; kaynak: 'ozel' | 'kural' | 'site' } {
+  const site = kanalSatisFiyati(u, simdi);
+  const ozel = kanalAyari?.urunler?.[u.id]?.ozelFiyat ?? kanalAyari?.ilanlar?.[u.id]?.fiyat;
+  if (ozel !== undefined && ozel > 0) {
+    return { hedef: Math.round(ozel * 100) / 100, site, kaynak: 'ozel' };
+  }
+  const kural = kanalAyari?.fiyatKurali;
+  if (kural && (kural.yuzde !== 0 || kural.ekTL !== 0 || kural.yuvarla)) {
+    let hesap = site * (1 + kural.yuzde / 100) + kural.ekTL;
+    if (kural.yuvarla) {
+      hesap = Math.max(0.9, Math.floor(hesap) + 0.9);
+    }
+    return { hedef: Math.max(1, Math.round(hesap * 100) / 100), site, kaynak: 'kural' };
+  }
+  return { hedef: site, site, kaynak: 'site' };
 }
 
 export const EnvanterAyarSema = z.object({
@@ -349,7 +391,9 @@ export const EnvanterAyarSema = z.object({
     faturaYenidenDene: z.boolean().default(true),
     /** Günde bir: Trendyol hakedişini çek, ilan onaylarını yenile */
     gunlukIsler: z.boolean().default(true),
-    /** Trendyol/Hepsiburada fiyatını sitedeki fiyatla kendiliğinden aynı tut */
+    /** Günde bir: barkodu/stok kodu sitedeki ürünle aynı olan Trendyol ilanlarını bağla (stok ortak, fiyata dokunmaz) */
+    otoBagla: z.boolean().default(true),
+    /** Ana anahtar: "otomatik fiyat takibi" açık ürünlerin kanal fiyatını hedef fiyatla kendiliğinden aynı tut */
     otoFiyat: z.boolean().default(true),
     sonGunluk: z.string().optional(),
     sonCalisma: z.string().optional(),

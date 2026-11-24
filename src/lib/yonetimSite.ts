@@ -1,6 +1,6 @@
 import { ciftler, evet, liste, metin, satirlar, sayi } from './form';
 import { takipBaglantisi } from './kargoTakip';
-import { BOLUMLER, type Magaza } from './sema';
+import { BOLUMLER, SOSYAL_ADLARI, SOSYAL_AGLAR, type Magaza } from './sema';
 
 export const SITE_SEKMELERI: [string, string][] = [
   ['anasayfa', 'Ana Sayfa'], ['duyuru', 'Duyurular'], ['kargo', 'Kargo & Teslimat'],
@@ -24,6 +24,19 @@ export function siteFormu(f: FormData, m: Magaza, bolumler: string[], onizleme =
       calismaSaatleri: metin(f, 'calismaSaatleri'),
     });
     if (url && ['https:', 'http:'].includes(url.protocol)) s.url = metin(f, 'url');
+    // Sosyal medya: boş bırakılabilir; yazıldıysa https ile başlayan tam adres olmalı ("instagram.com/x" → https:// eklenir)
+    const sosyal = { ...s.sosyal };
+    for (const ag of SOSYAL_AGLAR) {
+      if (!f.has('sosyal_' + ag)) continue;
+      let v = metin(f, 'sosyal_' + ag).replace(/^http:\/\//i, 'https://');
+      if (v && !/^https:\/\//i.test(v)) v = 'https://' + v.replace(/^\/+/, '');
+      if (v && !URL.canParse(v)) {
+        if (!onizleme) throw new Error(`${SOSYAL_ADLARI[ag]} adresi geçersiz. Tam profil adresini yapıştırın (ör. https://www.instagram.com/alluluhome).`);
+        continue;
+      }
+      sosyal[ag] = v.slice(0, 300);
+    }
+    s.sosyal = sosyal;
   }
   if (bolumler.includes('duyuru')) {
     s.duyurular = satirlar(f, 'duyurular');

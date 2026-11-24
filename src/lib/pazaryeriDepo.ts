@@ -329,6 +329,21 @@ export function pazaryeriKalemIsle(id: string, beklenenSurum: number, kalemAnaht
   }));
 }
 
+/**
+ * Siparişin geçmişine panel/otomasyon işlemi yazar (ör. "Trendyol’a toplanıyor bildirildi"). Stok değişmez.
+ * Sipariş adımları (lib/siparisAdimlari.ts) bu kayıtlardan tarih alır.
+ */
+export function pazaryeriGecmiseEkle(id: string, not: string): Promise<void> {
+  const sb = yazmaDeposu();
+  if (!gecerliId(id)) throw new DogrulamaHatasi(['Sipariş numarası geçersiz.']);
+  return depoSirasi(() => tekrarDene(async () => {
+    const [{ surum }, s, magaza] = await Promise.all([ayarKaydiOku(sb), siparisOku(sb, id), magazaOku(true)]);
+    if (!s) return;
+    s.gecmis.push({ tarih: new Date().toISOString(), durum: s.durum, not: not.slice(0, 300) });
+    await pazaryeriKaydet(sb, surum, magaza, [s], new Map(), `${KANALLAR[s.kanal]} ${s.siparisNo} · ${not}`.slice(0, 200));
+  }));
+}
+
 export async function stokHareketleriOku(urunId?: string, limit = 100): Promise<StokHareketi[]> {
   const adet = Math.max(1, Math.min(500, Math.trunc(limit) || 100));
   const sb = supabaseIstemci();

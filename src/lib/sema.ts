@@ -146,6 +146,13 @@ export const TadilatSema = z.object({
 });
 export type TadilatAyarlari = z.infer<typeof TadilatSema>;
 
+export const SOSYAL_AGLAR = ['instagram', 'facebook', 'tiktok', 'youtube', 'x', 'pinterest', 'linkedin'] as const;
+export type SosyalAg = (typeof SOSYAL_AGLAR)[number];
+export const SOSYAL_ADLARI: Record<SosyalAg, string> = {
+  instagram: 'Instagram', facebook: 'Facebook', tiktok: 'TikTok', youtube: 'YouTube', x: 'X (Twitter)', pinterest: 'Pinterest', linkedin: 'LinkedIn',
+};
+const sosyalAdres = z.union([z.string().trim().url().startsWith('https://').max(300), z.literal('')]).default('');
+
 export const SiteSema = z.object({
   ad: metin.min(1),
   slogan: metin.default(''),
@@ -160,6 +167,11 @@ export const SiteSema = z.object({
   /** wa.me için: 90 ile başlayan, + olmadan */
   whatsapp: metin.regex(/^90\d{10}$/),
   calismaSaatleri: metin.default(''),
+  /** Sosyal medya hesapları (https adresi). Boş olan görünmez; dolu olanlar alt bilgide ve arama motoru kimliğinde (sameAs) yer alır. */
+  sosyal: z.object({
+    instagram: sosyalAdres, facebook: sosyalAdres, tiktok: sosyalAdres, youtube: sosyalAdres,
+    x: sosyalAdres, pinterest: sosyalAdres, linkedin: sosyalAdres,
+  }).default({}),
   satici: z.object({
     unvan: metin, adres: metin, mersis: metin, vergiDairesiNo: metin, kep: metin, etbis: metin,
   }),

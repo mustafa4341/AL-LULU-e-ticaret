@@ -2,7 +2,7 @@
  * Sitedeki ürün kartı → Trendyol ürün isteği (createProducts V2).
  * Ürünün sitedeki bilgileri tek kaynaktır; panelde yalnız Trendyol'a özel alanlar (kategori, marka, özellikler, desi) tutulur.
  */
-import { kanalSatisFiyati, type KanalAyari, type KanalIlanTaslagi } from './pazaryeri';
+import { kanalHedefFiyati, type KanalAyari, type KanalIlanTaslagi } from './pazaryeri';
 import type { Urun } from './sema';
 import type { TyOzellik, TyUrunIstegi } from './trendyolApi';
 import { markaliUrunAdi, urunGtin } from './urunKimlik';
@@ -45,8 +45,11 @@ export function ilanGorselleri(u: Urun): string[] {
   });
 }
 
-/** Trendyol fiyatı her zaman sitedeki son fiyattır (kampanya ve sepette indirim dahil); ürüne özel veya kurallı fiyat yok. */
-export const ilanFiyati = (u: Urun) => kanalSatisFiyati(u);
+/** Trendyol hedef satış fiyatı: ürüne özel fiyat veya kanal kuralı varsa onu, yoksa sitedeki son fiyatı döndürür. */
+export const ilanFiyati = (u: Urun, k?: Pick<KanalAyari, 'fiyatKurali' | 'urunler' | 'ilanlar'>, t?: Pick<KanalIlanTaslagi, 'fiyat'>) => {
+  if (t?.fiyat !== undefined && t.fiyat > 0) return Math.round(t.fiyat * 100) / 100;
+  return kanalHedefFiyati(u, k).hedef;
+};
 
 /**
  * Sitedeki teknik özelliklerden Trendyol özelliklerine öneri: etiket adı eşleşirse değer listesinde aynı adı arar,
@@ -94,7 +97,7 @@ export function ilanIstegi(
     const g = t.ozellikler.find((x) => x.attributeId === o.id);
     if (!g || (!g.attributeValueIds?.length && !g.attributeValue)) eksikler.push(`“${o.ad}” özelliği`);
   }
-  const fiyat = ilanFiyati(u);
+  const fiyat = ilanFiyati(u, _k, t);
   if (!(fiyat > 0)) eksikler.push('satış fiyatı');
   if (eksikler.length) return { eksikler };
   return {

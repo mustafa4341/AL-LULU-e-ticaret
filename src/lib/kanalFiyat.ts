@@ -1,14 +1,17 @@
 /**
- * Pazaryeri fiyatlarını sitedeki fiyatla aynı tutma ve Trendyol ilanlarını site ürünlerine barkodla bağlama.
+ * Pazaryeri fiyatları ve Trendyol ilanlarını site ürünlerine bağlama.
  *
- * Kural (mağaza sahibinin isteği, 23.11.2026): Trendyol ve Hepsiburada satış fiyatı = müşterinin alluluhome.com'da ödediği
- * son fiyat (kampanya ve sepette indirim dahil; bkz. kanalSatisFiyati). Fiyat kuralı / ürüne özel kanal fiyatı yoktur.
+ * Kural (mağaza sahibinin isteği, 24.11.2026):
+ *  • Eşleştirme (bağlama) yalnız ilanı ürüne bağlar; kanaldaki fiyata DOKUNMAZ. Stok ise ortaktır ve her zaman eşitlenir.
+ *  • Kanal fiyatı farklı olabilir: ürüne özel fiyat › kanal kuralı (%/TL) › sitedeki son fiyat (bkz. kanalHedefFiyati).
+ *  • Fiyat kanala yalnız iki yoldan gider: panelde "Fiyatı gönder" düğmesi (seçilen ürünler) ya da
+ *    ürünün "otomatik fiyat takibi" açıksa zamanlayıcı (5 dk). Takip kapalı ürünün fiyatı kendiliğinden değişmez.
  *
- * Akış: bağlı ilanların kanaldaki güncel fiyatı okunur → farklı olanlar gönderilir → gönderilen fiyat ve zamanı kaydedilir.
- * Kanal isteği sırayla uygular; aynı fiyat 30 dakika içinde yeniden gönderilmez (Trendyol aynı isteği 15 dk reddeder).
+ * Akış: ilanların kanaldaki güncel fiyatı okunur → hedeften farklı olanlar gönderilir → gönderilen fiyat ve zamanı kaydedilir.
+ * Aynı fiyat 30 dakika içinde yeniden gönderilmez (Trendyol aynı isteği 15 dk reddeder).
  */
 import { magazaOku } from './depo';
-import { KANALLAR, KANAL_LISTESI, kanalSatisFiyati, kodNormal, type Kanal } from './pazaryeri';
+import { KANALLAR, KANAL_LISTESI, kanalHedefFiyati, kodNormal, type Kanal } from './pazaryeri';
 import { PazaryeriApiHatasi, kanalFiyatGonder, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
 import { urunGtin } from './urunKimlik';
@@ -21,7 +24,7 @@ export type FiyatFarki = { urunId: string; ad: string; kod: string; kanalda?: nu
 export type KanalFiyatSonucu = {
   kanal: Kanal;
   gonderilen: FiyatFarki[];
-  /** Büyük düşüş: otomatik gönderilmedi, panelden "Fiyatları siteyle eşitle" ile gönderilir */
+  /** Büyük düşüş: otomatik gönderilmedi, panelden "Fiyatı gönder" ile gönderilir */
   onayBekleyen: FiyatFarki[];
   ayni: number;
   /** Az önce gönderildi, kanalın uygulaması bekleniyor */
@@ -30,55 +33,72 @@ export type KanalFiyatSonucu = {
   bulunamayan: string[];
   hata?: string;
 };
+export type FiyatSecenegi = {
+  /** Zamanlayıcı: yalnız otomatik fiyat takibi açık ürünler, büyük düşüş onaya kalır */
+  otomatik?: boolean;
+  kanallar?: Kanal[];
+  /** Panel düğmesi: yalnız bu ürünler (takip açık olmasa da) */
+  urunIdler?: string[];
+};
 
 const bagliKanallar = () => KANAL_LISTESI.filter((k) => ['canli', 'test'].includes(pazaryeriApiDurumu(k)));
 const yakin = (a: number | undefined, b: number) => a !== undefined && Math.abs(a - b) < 0.005;
 
-async function kanalFiyatlariniEsitle(kanal: Kanal, otomatik: boolean, simdi: number): Promise<KanalFiyatSonucu> {
+async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: number): Promise<KanalFiyatSonucu> {
   const sonuc: KanalFiyatSonucu = { kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [] };
+  const otomatik = !!s.otomatik;
   const [ayar, magaza] = await Promise.all([envanterAyarlariOku(), magazaOku(true)]);
   const k = ayar.kanallar[kanal];
   const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
-  const bagli = Object.entries(k.urunler).filter(([id, e]) => e.kod && urunler.has(id));
+  const secili = s.urunIdler ? new Set(s.urunIdler) : undefined;
+  const bagli = Object.entries(k.urunler).filter(([id, e]) => e.kod && e.satista !== false && urunler.has(id)
+    && (secili ? secili.has(id) : e.fiyatTakip === true));
   if (!bagli.length) return sonuc;
   const sinyal = AbortSignal.timeout(30_000);
   const ilanlar = await kanalStokOku(kanal, bagli.map(([, e]) => e.kod!), sinyal);
   const gonder: (FiyatKalemi & FiyatFarki)[] = [];
+  const okunan = new Map<string, number>();
   for (const [urunId, e] of bagli) {
     const u = urunler.get(urunId)!;
-    const site = kanalSatisFiyati(u, simdi);
+    const hedef = kanalHedefFiyati(u, k, simdi).hedef;
     const ilan = ilanlar.get(e.kod!);
     if (!ilan) { sonuc.bulunamayan.push(e.kod!); continue; }
+    if (ilan.fiyat !== undefined) okunan.set(urunId, ilan.fiyat);
     // Trendyol'da üstü çizili (liste) fiyat da satış fiyatına eşitlenir: başka kanalın indirimi esas alınamaz.
-    const listeFarkli = kanal === 'trendyol' && ilan.listeFiyati !== undefined && !yakin(ilan.listeFiyati, site);
-    if (yakin(ilan.fiyat, site) && !listeFarkli) { sonuc.ayni++; continue; }
-    if (yakin(e.fiyat, site) && e.fiyatTarih && simdi - Date.parse(e.fiyatTarih) < TEKRAR_BEKLE_MS) { sonuc.bekleyen++; continue; }
-    if (!(site > 0)) continue;
-    const fark: FiyatFarki = { urunId, ad: `${u.marka} ${u.kisaAd}`, kod: e.kod!, kanalda: ilan.fiyat, site };
-    if (otomatik && ilan.fiyat !== undefined && site < ilan.fiyat * (1 - OTOMATIK_EN_COK_DUSUS)) { sonuc.onayBekleyen.push(fark); continue; }
-    gonder.push({ ...fark, fiyat: site });
+    const listeFarkli = kanal === 'trendyol' && ilan.listeFiyati !== undefined && !yakin(ilan.listeFiyati, hedef);
+    if (yakin(ilan.fiyat, hedef) && !listeFarkli) { sonuc.ayni++; continue; }
+    if (yakin(e.fiyat, hedef) && e.fiyatTarih && simdi - Date.parse(e.fiyatTarih) < TEKRAR_BEKLE_MS) { sonuc.bekleyen++; continue; }
+    if (!(hedef > 0)) continue;
+    const fark: FiyatFarki = { urunId, ad: `${u.marka} ${u.kisaAd}`, kod: e.kod!, kanalda: ilan.fiyat, site: hedef };
+    if (otomatik && ilan.fiyat !== undefined && hedef < ilan.fiyat * (1 - OTOMATIK_EN_COK_DUSUS)) { sonuc.onayBekleyen.push(fark); continue; }
+    gonder.push({ ...fark, fiyat: hedef });
   }
-  if (!gonder.length) return sonuc;
-  await kanalFiyatGonder(kanal, gonder, ilanlar, sinyal);
+  if (gonder.length) await kanalFiyatGonder(kanal, gonder, ilanlar, sinyal);
   const tarih = new Date(simdi).toISOString();
-  await envanterAyarlariGuncelle((a) => {
-    const kanalAyari = a.kanallar[kanal];
-    for (const g of gonder) {
-      const e = kanalAyari.urunler[g.urunId];
-      if (e?.kod === g.kod) { e.fiyat = g.fiyat; e.fiyatTarih = tarih; }
-      const ilan = kanalAyari.ilanlar[g.urunId];
-      if (ilan?.barkod === g.kod) { ilan.sonFiyat = g.fiyat; ilan.sonFiyatTarih = tarih; }
-    }
-  });
+  if (gonder.length || okunan.size) {
+    await envanterAyarlariGuncelle((a) => {
+      const kanalAyari = a.kanallar[kanal];
+      for (const [urunId, fiyat] of okunan) {
+        const e = kanalAyari.urunler[urunId];
+        if (e) { e.kanalFiyat = fiyat; e.kanalFiyatTarih = tarih; }
+      }
+      for (const g of gonder) {
+        const e = kanalAyari.urunler[g.urunId];
+        if (e?.kod === g.kod) { e.fiyat = g.fiyat; e.fiyatTarih = tarih; }
+        const ilan = kanalAyari.ilanlar[g.urunId];
+        if (ilan?.barkod === g.kod) { ilan.sonFiyat = g.fiyat; ilan.sonFiyatTarih = tarih; }
+      }
+    });
+  }
   sonuc.gonderilen = gonder.map(({ urunId, ad, kod, kanalda, site }) => ({ urunId, ad, kod, kanalda, site }));
   return sonuc;
 }
 
-/** Bağlı tüm kanallarda fiyatları sitedeki fiyatla eşitler. Bir kanalın hatası diğerini durdurmaz. */
-export async function pazaryeriFiyatlariEsitle(secenek: { otomatik?: boolean; kanallar?: Kanal[] } = {}): Promise<KanalFiyatSonucu[]> {
+/** Bağlı kanallarda seçilen (ya da takipteki) ürünlerin fiyatını hedef fiyatla eşitler. Bir kanalın hatası diğerini durdurmaz. */
+export async function pazaryeriFiyatlariEsitle(secenek: FiyatSecenegi = {}): Promise<KanalFiyatSonucu[]> {
   const simdi = Date.now();
   const kanallar = (secenek.kanallar ?? KANAL_LISTESI).filter((k) => bagliKanallar().includes(k));
-  return Promise.all(kanallar.map((kanal) => kanalFiyatlariniEsitle(kanal, !!secenek.otomatik, simdi).catch((e) => ({
+  return Promise.all(kanallar.map((kanal) => kanalFiyatlariniEsitle(kanal, secenek, simdi).catch((e) => ({
     kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [],
     hata: e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'Fiyatlar gönderilemedi.',
   }))));
@@ -92,8 +112,8 @@ export function fiyatOzeti(sonuclar: KanalFiyatSonucu[]): string[] {
     const ad = KANALLAR[s.kanal];
     if (s.hata) { satir.push(`${ad} fiyat: ${s.hata}`); continue; }
     const degisim = (g: FiyatFarki) => yakin(g.kanalda, g.site) ? `${g.ad} üstü çizili fiyat kaldırıldı` : `${g.ad} ${para(g.kanalda)} → ${para(g.site)}`;
-    if (s.gonderilen.length) satir.push(`${ad}: ${s.gonderilen.length} ürünün fiyatı siteyle eşitlendi (${s.gonderilen.slice(0, 3).map(degisim).join('; ')}${s.gonderilen.length > 3 ? '…' : ''})`);
-    if (s.onayBekleyen.length) satir.push(`${ad}: ${s.onayBekleyen.length} üründe büyük fiyat düşüşü var, otomatik gönderilmedi. Satış kanalları sayfasından “Fiyatları siteyle eşitle”ye basın.`);
+    if (s.gonderilen.length) satir.push(`${ad}: ${s.gonderilen.length} ürünün fiyatı gönderildi (${s.gonderilen.slice(0, 3).map(degisim).join('; ')}${s.gonderilen.length > 3 ? '…' : ''})`);
+    if (s.onayBekleyen.length) satir.push(`${ad}: ${s.onayBekleyen.length} üründe büyük fiyat düşüşü var, otomatik gönderilmedi. Satış kanalları › Ürün eşleştirme'de o ürünün “Fiyatı şimdi gönder” düğmesine basın.`);
     if (s.bulunamayan.length) satir.push(`${ad}: ${s.bulunamayan.length} bağlı ilan kanalda bulunamadı (${s.bulunamayan.slice(0, 3).join(', ')}).`);
   }
   return satir;
@@ -112,9 +132,10 @@ export type IlanEslesmesi = {
 /**
  * Trendyol'daki tüm onaylı ilanları site ürünleriyle eşler: önce daha önce elle eşleştirilen kodlar,
  * sonra barkod = ürünün GTIN'i (teknik özelliklerdeki "Barkod"), sonra barkod/stok kodu = ürünün SKU'su.
- * `bagla` ise yalnız tek anlamlı yeni eşleşmeler kaydedilir; mevcut bağlantılara dokunulmaz.
+ * `bagla` ise yalnız tek anlamlı yeni eşleşmeler kaydedilir; mevcut bağlantılara ve FİYATA dokunulmaz.
+ * `yalniz` verilirse yalnız o barkodlar bağlanır.
  */
-export async function trendyolIlanlariniEsle(bagla: boolean): Promise<{ satirlar: IlanEslesmesi[]; baglanan: number }> {
+export async function trendyolIlanlariniEsle(bagla: boolean, yalniz?: string[]): Promise<{ satirlar: IlanEslesmesi[]; baglanan: number }> {
   const [ilanlar, ayar, magaza] = await Promise.all([
     trendyolTumIlanlar(AbortSignal.timeout(45_000)), envanterAyarlariOku(), magazaOku(true),
   ]);
@@ -135,7 +156,7 @@ export async function trendyolIlanlariniEsle(bagla: boolean): Promise<{ satirlar
       ?? sku.get(kodNormal(i.barkod)) ?? (i.stokKodu ? sku.get(kodNormal(i.stokKodu)) ?? gtin.get(i.stokKodu) : undefined);
     if (!urunId) return satir;
     const u = urunler.get(urunId)!;
-    Object.assign(satir, { urunId, urunAdi: `${u.marka} ${u.kisaAd}`, siteFiyat: kanalSatisFiyati(u) });
+    Object.assign(satir, { urunId, urunAdi: `${u.marka} ${u.kisaAd}`, siteFiyat: kanalHedefFiyati(u, k).hedef });
     const mevcut = k.urunler[urunId]?.kod;
     if (mevcut === i.barkod) satir.durum = 'bagli';
     else if (mevcut) { satir.durum = 'cakisma'; satir.not = `Ürün başka bir barkoda bağlı (${mevcut}).`; }
@@ -148,7 +169,7 @@ export async function trendyolIlanlariniEsle(bagla: boolean): Promise<{ satirlar
   for (const s of satirlar) if (s.durum === 'yeni' && sayac.get(s.urunId!)! > 1) { s.durum = 'cakisma'; s.not = 'Birden çok Trendyol ilanı bu ürüne uyuyor; doğru barkodu elle seçin.'; }
   const sira = { yeni: 0, cakisma: 1, yok: 2, bagli: 3 } as const;
   satirlar.sort((a, b) => sira[a.durum] - sira[b.durum] || (a.urunAdi ?? a.barkod).localeCompare(b.urunAdi ?? b.barkod, 'tr'));
-  const yeniler = satirlar.filter((s) => s.durum === 'yeni');
+  const yeniler = satirlar.filter((s) => s.durum === 'yeni' && (!yalniz || yalniz.includes(s.barkod)));
   const baglananlar = new Set<IlanEslesmesi>();
   if (bagla && yeniler.length) {
     await envanterAyarlariGuncelle((a) => {
@@ -156,9 +177,15 @@ export async function trendyolIlanlariniEsle(bagla: boolean): Promise<{ satirlar
       const kanal = a.kanallar.trendyol;
       if (kanal.bekleyenStok) throw new PazaryeriApiHatasi('Trendyol’un önceki stok işlemi onaylanınca tekrar deneyin (birkaç dakika).');
       const kullanilan = new Set(Object.values(kanal.urunler).map((e) => e.kod).filter(Boolean));
+      const tarih = new Date().toISOString();
       for (const s of yeniler) {
         if (kanal.urunler[s.urunId!]?.kod || kullanilan.has(s.barkod)) continue;
-        kanal.urunler[s.urunId!] = { ...kanal.urunler[s.urunId!], kod: s.barkod, satista: true };
+        // Yalnız bağlantı: fiyat takibi kapalı başlar, Trendyol'daki fiyat olduğu gibi kalır.
+        kanal.urunler[s.urunId!] = {
+          ...kanal.urunler[s.urunId!], kod: s.barkod, satista: true, fiyatTakip: false,
+          ...(s.kanalFiyat !== undefined ? { kanalFiyat: s.kanalFiyat, kanalFiyatTarih: tarih } : {}),
+        };
+        a.eslesmeler[kodNormal(s.barkod)] = s.urunId!;
         kullanilan.add(s.barkod);
         baglananlar.add(s);
       }

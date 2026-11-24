@@ -50,10 +50,11 @@ if (Astro.request.method === 'POST' && hazir) {
         <>
           {hata && <p class="y-bildirim y-bildirim--hata" role="alert">{hata}</p>}
           <div class="y-alan">
-            <label for="parola">Parola</label>
-            <input id="parola" name="parola" type="password" autocomplete="current-password" required autofocus maxlength="200" />
+            <label for="parola">Yönetici Parolası</label>
+            <input id="parola" name="parola" type="password" autocomplete="current-password" required autofocus maxlength="200" placeholder="••••••••••••" />
           </div>
-          <button class="btn btn--sepet btn--block" type="submit">Giriş yap</button>
+          <button class="btn btn--sepet btn--block" type="submit">Yönetim Paneline Giriş Yap</button>
+          <p class="muted" style="margin:8px 0 0;font-size:.78rem;text-align:center">Güvenlik koruması aktif · 5 hatalı denemede 15 dakika erişim kilidi uygulanır.</p>
         </>
       )}
     </form>

@@ -3,9 +3,17 @@ import Yonetim from '../../layouts/Yonetim.astro';
 import PIkon from '../../components/yonetim/PIkon.astro';
 import { DogrulamaHatasi, magazaGuncelle, magazaOku, supabaseBagliMi } from '../../lib/depo';
 import { metin, sayi } from '../../lib/form';
+import { paytrAyari } from '../../lib/paytr';
+import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
+import { envanterAyarlariOku } from '../../lib/pazaryeriDepo';
+import { yTarih } from '../../lib/yonetimRapor';
 import { bosYasalBilgi } from '../../lib/yonetimSite';
 
-const mevcut = (await magazaOku()).site;
+const [magaza, envAyar] = await Promise.all([
+  magazaOku(),
+  envanterAyarlariOku().catch(() => undefined),
+]);
+const mevcut = magaza.site;
 let satici = mevcut.satici;
 let iade = mevcut.iadeGun;
 let hatalar: string[] = [];
@@ -26,29 +34,126 @@ if (Astro.request.method === 'POST') {
   }
 }
 const alanlar = [
-  ['unvan', 'Ticari unvan'], ['adres', 'Açık adres'], ['mersis', 'MERSİS no'],
-  ['vergiDairesiNo', 'Vergi dairesi ve numarası'], ['kep', 'KEP adresi'], ['etbis', 'ETBİS kayıt no'],
+  ['unvan', 'Ticari unvan', 'Sözleşmelerde, fatura ve sipariş belgelerinde satıcı unvanı olarak görünür.'],
+  ['adres', 'Açık adres', 'Mesafeli satış sözleşmesi ve iade/tebligat adresi.'],
+  ['mersis', 'MERSİS no', '16 haneli merkezi sicil numarası (yoksa boş bırakılabilir).'],
+  ['vergiDairesiNo', 'Vergi dairesi ve numarası', 'Örn. Başkent VD · 1234567890'],
+  ['kep', 'KEP adresi', 'Kayıtlı Elektronik Posta adresi (isteğe bağlı).'],
+  ['etbis', 'ETBİS kayıt no', 'Elektronik Ticaret Bilgi Sistemi numarası (isteğe bağlı).'],
 ] as const;
 const eksik = alanlar.slice(0, 4).filter(([id]) => bosYasalBilgi(satici[id])).map(([, ad]) => ad);
+const tyDurum = pazaryeriApiDurumu('trendyol');
+const hbDurum = pazaryeriApiDurumu('hepsiburada');
+const tySonApi = envAyar?.kanallar.trendyol.sonApi;
+const hbSonApi = envAyar?.kanallar.hepsiburada.sonApi;
+const paytr = paytrAyari();
+const smtpHazir = Boolean((process.env.SMTP_PAROLA ?? (import.meta.env as Record<string, string | undefined>).SMTP_PAROLA)?.trim());
 ---
-<Yonetim baslik="Ayarlar" altBaslik="Yasal bilgiler, bağlantı durumu ve veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
-  <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button>
+<Yonetim baslik="Ayarlar" altBaslik="Şirket ve yasal bilgiler, sistem/servis bağlantı durumları ve tam veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
+  <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Yasal Bilgileri Kaydet</button>
+
   <form method="post" id="yasal-form" class="y-kart" data-editor>
-    <h2><PIkon ad="terazi" /> Yasal Bilgiler</h2>
-    {eksik.length > 0 && <p class="y-help">Boş bıraktığınız alanlar ({eksik.join(', ')}) sitede, sözleşmelerde ve belgelerde hiç gösterilmez.</p>}
+    <div class="y-kart__bas">
+      <div>
+        <h2><PIkon ad="terazi" /> 1. Şirket ve Yasal Bilgiler</h2>
+        <p class="y-kart__alt">Mesafeli Satış Sözleşmesi, Ön Bilgilendirme Formu, Sipariş Belgeleri ve site alt bilgisinde kullanılan resmî satıcı bilgileri.</p>
+      </div>
+      <span class:list={['y-chip', eksik.length === 0 ? 'y-chip--yesil' : 'y-chip--turuncu']}>
+        {eksik.length === 0 ? 'Temel yasal bilgiler tam' : `${eksik.length} alan eksik`}
+      </span>
+    </div>
+    {eksik.length > 0 && (
+      <div class="y-veri-not" style="margin-bottom:14px">
+        <PIkon ad="bilgi" boyut={18} />
+        <p>
+          <strong>Henüz doldurulmamış alanlar: {eksik.join(', ')}</strong>
+          Boş bıraktığınız veya örnek değer içeren alanlar müşteriye gösterilen sözleşmelerde ve sipariş belgelerinde otomatik gizlenir.
+        </p>
+      </div>
+    )}
     <div class="y-izgara y-izgara--2">
-      {alanlar.map(([id, ad]) => <label class="y-alan">{ad}<input name={id} value={satici[id]} /></label>)}
-      <label class="y-alan">Cayma ve iade süresi (gün)<input name="iadeGun" type="number" min="14" max="365" required value={iade} /><small class="muted">Yasal en az süre 14 gündür.</small></label>
+      {alanlar.map(([id, ad, ipucu]) => (
+        <label class="y-alan">
+          {ad}
+          <input name={id} value={satici[id]} />
+          <small class="muted">{ipucu}</small>
+        </label>
+      ))}
+      <label class="y-alan">
+        Cayma ve iade süresi (gün)
+        <input name="iadeGun" type="number" min="14" max="365" required value={iade} />
+        <small class="muted">Mesafeli Sözleşmeler Yönetmeliği m.9 uyarınca yasal en az süre 14 gündür.</small>
+      </label>
     </div>
     <p class="y-form-state" data-kayit-durum role="status"></p>
   </form>
-  <details class="y-kart">
-    <summary><PIkon ad="kilit" /> Bağlantı ve erişim</summary>
-    <p class="muted">{supabaseBagliMi() ? 'Depo yapılandırması · Supabase' : 'Depo yapılandırması · Yerel dosya'}</p>
-    <p class="muted">Yönetim işlemleri oturum gerektirir.</p>
-  </details>
-  <section class="y-kart">
-    <div class="y-kart__bas"><h2><PIkon ad="veritabani" /> Veri yedeği</h2><a class="btn btn--cizgi" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedeği indir (ZIP)</a></div>
-    <p class="y-help">Mağaza, sipariş ve finans kayıtlarının arşivini indirin.</p>
-  </section>
+
+  <div class="y-iki-sutun" style="margin-top:16px">
+    <section class="y-kart">
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="kilit" /> 2. Sistem ve Servis Bağlantıları</h2>
+          <p class="y-kart__alt">Veritabanı, pazaryeri API servisleri, e-posta ve ödeme altyapısının çalışma durumu.</p>
+        </div>
+        <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar">Kanalları yönet</a>
+      </div>
+      <ul class="y-varsayim">
+        <li>
+          <PIkon ad="veritabani" />
+          <span>Veritabanı ve Depo<small>{supabaseBagliMi() ? 'Bulut veritabanı ve görsel deposu aktif' : 'Yerel JSON veri deposu kullanılıyor'}</small></span>
+          <span class:list={['y-chip', supabaseBagliMi() ? 'y-chip--yesil' : 'y-chip--turuncu']}>{supabaseBagliMi() ? 'Supabase Bağlı' : 'Yerel Dosya'}</span>
+        </li>
+        <li>
+          <PIkon ad="zincir" />
+          <span>
+            Trendyol API
+            <small>{tySonApi ? `Son başarılı bağlantı: ${yTarih.format(new Date(tySonApi))}` : 'Henüz API çekimi kaydı yok'}</small>
+          </span>
+          <span class:list={['y-chip', tyDurum === 'canli' ? 'y-chip--yesil' : tyDurum === 'test' || tySonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
+            {tyDurum === 'canli' ? 'Canlı Bağlı' : tyDurum === 'test' ? 'Test Ortamı' : tySonApi ? 'Canlı Sunucuda Aktif (Yerel .env Yok)' : 'Bağlı Değil'}
+          </span>
+        </li>
+        <li>
+          <PIkon ad="zincir" />
+          <span>
+            Hepsiburada API
+            <small>{hbSonApi ? `Son başarılı bağlantı: ${yTarih.format(new Date(hbSonApi))}` : 'Kimlik bilgileri girildiğinde aktif olur'}</small>
+          </span>
+          <span class:list={['y-chip', hbDurum === 'canli' ? 'y-chip--yesil' : hbDurum === 'test' || hbSonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
+            {hbDurum === 'canli' ? 'Canlı Bağlı' : hbDurum === 'test' ? 'Test Ortamı' : hbSonApi ? 'Canlı Sunucuda Aktif' : 'Bekliyor'}
+          </span>
+        </li>
+        <li>
+          <PIkon ad="gonder" />
+          <span>E-posta Gönderimi (SMTP)<small>Sipariş onayı, kargo takip ve e-Arşiv fatura iletimi</small></span>
+          <span class:list={['y-chip', smtpHazir ? 'y-chip--yesil' : 'y-chip--gri']}>{smtpHazir ? 'Aktif' : 'Ayarlanmadı'}</span>
+        </li>
+        <li>
+          <PIkon ad="cuzdan" />
+          <span>Kartlı Ödeme (PayTR)<small>Havale/EFT her zaman açıktır; PayTR kartlı ödemeyi açar</small></span>
+          <span class:list={['y-chip', paytr ? (paytr.test ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--gri']}>
+            {paytr ? (paytr.test ? 'Test Modu' : 'Canlı Aktif') : 'Kapalı (Yalnız Havale/EFT)'}
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <section class="y-kart">
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="veritabani" /> 3. Veri Yedeği ve Arşiv</h2>
+          <p class="y-kart__alt">Tüm mağaza kataloğu, siparişler, pazaryeri kayıtları ve finans/fatura arşivini tek pakette indirin.</p>
+        </div>
+        <a class="btn btn--sepet" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedeği İndir (ZIP)</a>
+      </div>
+      <div class="y-veri-not">
+        <PIkon ad="bilgi" boyut={18} />
+        <p>
+          <strong>ZIP yedeğinde neler bulunur?</strong>
+          Ürünler, setler, kategoriler, mağaza görünüm ayarları (<code>magaza.json</code>), web siparişleri (<code>siparisler.json</code>), müşteri değerlendirmeleri (<code>yorumlar.json</code>), pazaryeri siparişleri ve eşleştirmeleri, finans/gider kayıtları ve yüklenen fatura/fiş ekleri.
+        </p>
+      </div>
+      <p class="y-help" style="margin-top:10px">Önemli katalog veya fiyat güncellemelerinden önce ve her ay sonunda bir yedek indirip bilgisayarınızda saklamanız önerilir.</p>
+    </section>
+  </div>
 </Yonetim>

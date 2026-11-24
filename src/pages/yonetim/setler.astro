@@ -49,80 +49,168 @@ const s = taslak ?? (yeni ? BOS_SET : m.setler.find((x) => x.id === secim));
 const engeller = s && !yeni ? k.setEngelleri(s) : [];
 const DURUM_RENGI: Record<string, string> = { yayinda: 'yesil', taslak: 'gri', gizli: 'turuncu' };
 const vitrinDisi = m.setler.filter((x) => x.durum === 'yayinda' && k.setEngelleri(x).length > 0).length;
+const setSatilabilirAdet = (setKaydi: UrunSeti) => {
+  if (!setKaydi.kalemler.length) return 0;
+  const adetler = setKaydi.kalemler.map((kalem) => {
+    const u = m.urunler.find((x) => x.id === kalem.urunId);
+    if (!u || u.durum !== 'yayinda' || kalem.adet <= 0) return 0;
+    return Math.floor(u.stok / kalem.adet);
+  });
+  return Math.max(0, Math.min(...adetler));
+};
+const seciliSetFiyat = s && !yeni ? k.setFiyati(s) : undefined;
+const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
 ---
-<Yonetim baslik={s ? yeni ? "Yeni Set" : s.ad || "Seti Düzenle" : "Setler"} altBaslik={s ? undefined : 'Birlikte satılan ürün setlerini ve set indirimlerini yönetin.'} aktif="setler" basari={basari} hatalar={hatalar}>
+<Yonetim baslik={s ? yeni ? "Yeni Set" : s.ad || "Seti Düzenle" : "Setler"} altBaslik={s ? 'Set bileşenlerini, indirim kuralını ve vitrin görünümünü yapılandırın.' : 'Birlikte satılan ürün setlerini, satılabilir stok adetlerini ve set indirimlerini yönetin.'} aktif="setler" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     {s ? <><a class="btn btn--cizgi" href="/yonetim/setler"><PIkon ad="ok-sol" boyut={18} />Setlere dön</a><button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="set-onizleme" aria-expanded="false"><PIkon ad="goz" boyut={18} />Önizle</button><button type="submit" form="set-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button></> : <a href="?duzenle=yeni" class="btn btn--sepet"><PIkon ad="arti" boyut={18} />Yeni set</a>}
   </div>
   {s ? <div class="y-editor-duzen" data-editor-duzen>
       <form method="post" enctype="multipart/form-data" id="set-form" class="y-editor-form y-kart" data-editor data-onizleme-form="set">
         <input type="hidden" name="id" value={s.id} />
-        {engeller.length > 0 && <p class="y-uyari">{engeller.join(" ")}</p>}
+        {engeller.length > 0 && <div class="y-uyari-kutu" style="background:#fef2f2;border:1px solid #fecaca;color:#991b1b;padding:12px 14px;border-radius:10px;margin-bottom:14px">
+          <strong>Bu set şu an vitrinde satışa kapalı:</strong> {engeller.join(" ")}
+        </div>}
+
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="set" /> Temel set bilgileri</h2>
+            <p class="y-kart__alt">Set kendi başına stok tutmaz; içindeki ürünlerin stoklarına göre satılabilir adet otomatik hesaplanır.</p>
+          </div>
+          {!yeni && (
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+              <span class:list={['y-chip', seciliSatilabilir > 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']}>
+                Satılabilir: {seciliSatilabilir} set
+              </span>
+              {seciliSetFiyat && (
+                <span class="y-chip y-chip--altin">
+                  Set fiyatı: {formatTL(seciliSetFiyat.fiyat)} ({formatTL(seciliSetFiyat.kazanc)} kazanç)
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
         <div class="y-izgara y-izgara--2" style="margin-top:8px">
           <div class="y-alan"><label>Set adı</label><input name="ad" value={s.ad} required placeholder="Örn. Vitaquick + Buhar Aparatı Seti" /></div>
-          <div class="y-alan"><label>Durum</label><select name="durum">{[['yayinda', 'Yayında'], ['taslak', 'Taslak'], ['gizli', 'Gizli']].map(([v, a]) => <option value={v} selected={s.durum === v}>{a}</option>)}</select></div>
+          <div class="y-alan">
+            <label>Yayın durumu</label>
+            <select name="durum">
+              <option value="yayinda" selected={s.durum === 'yayinda'}>Yayında (Tüm ürünleri stoktaysa müşteriye açık)</option>
+              <option value="taslak" selected={s.durum === 'taslak'}>Taslak (Yalnız panelde hazırlık aşamasında)</option>
+              <option value="gizli" selected={s.durum === 'gizli'}>Gizli (Mağaza listelerinde görünmez)</option>
+            </select>
+          </div>
         </div>
-        <div class="y-alan" style="margin-top:10px"><label>Açıklama</label><input name="aciklama" value={s.aciklama} /></div>
-        <div class="y-alan" style="margin-top:10px">
-          <span class="y-etiket">Setteki ürünler</span>
+        <div class="y-alan" style="margin-top:10px"><label>Kısa açıklama <span class="y-ipucu">(Set kartında ve detayında müşteriye avantajı anlatır)</span></label><input name="aciklama" value={s.aciklama} placeholder="Örn. Düdüklü tencere ve orijinal buhar aparatı bir arada avantajlı fiyatla." /></div>
+
+        <div class="y-alan" style="margin-top:14px">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap">
+            <span class="y-etiket">Setteki ürünler (en az 2 ürün)</span>
+            <small class="muted">Her ürünün birim fiyatı ve mevcut depo stoğu yanında gösterilir.</small>
+          </div>
           <div class="y-tekrar">
             {s.kalemler.map((x) => (
               <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-                <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat} selected={u.id === x.urunId}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
+                <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat} selected={u.id === x.urunId}>{u.kisaAd} — {formatTL(u.fiyat)} (Stok: {u.stok}{u.durum !== 'yayinda' ? ' · ' + YAYIN_ADLARI[u.durum] : ''})</option>)}</select>
                 <input class="y-girdi" name="kalem_adet" type="number" step="1" min="1" value={x.adet} aria-label="Adet" />
               </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div>
             ))}
             <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-              <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat}>{u.kisaAd} — {formatTL(u.fiyat)}</option>)}</select>
+              <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat}>{u.kisaAd} — {formatTL(u.fiyat)} (Stok: {u.stok}{u.durum !== 'yayinda' ? ' · ' + YAYIN_ADLARI[u.durum] : ''})</option>)}</select>
               <input class="y-girdi" name="kalem_adet" inputmode="numeric" value="1" aria-label="Adet" />
             </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div></template>
-            <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Ürün ekle</button>
+            <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Sete ürün ekle</button>
           </div>
-        </div>
-        <div class="y-izgara y-izgara--3" style="margin-top:10px">
-          <div class="y-alan"><label>İndirim türü</label><select name="fiyat_tip">
-            <option value="kalem" selected={s.fiyatlama.tip === 'kalem'}>Belirli ürüne % indirim (önerilen)</option>
-            <option value="yuzde" selected={s.fiyatlama.tip === 'yuzde'}>Tüm sete % indirim</option>
-            <option value="sabit" selected={s.fiyatlama.tip === 'sabit'}>Sabit set fiyatı (TL)</option>
-          </select></div>
-          <div class="y-alan"><label>Değer (% ya da TL)</label><input name="deger" inputmode="numeric" value={s.fiyatlama.tip === 'sabit' ? s.fiyatlama.fiyat : s.fiyatlama.oran} /></div>
-          <div class="y-alan" data-kalem-hedef><label>İndirimli ürün</label><select name="kalem_hedef"><option value="">Son ürün</option>{m.urunler.map((u) => <option value={u.id} selected={s.fiyatlama.tip === 'kalem' && s.fiyatlama.urunId === u.id}>{u.kisaAd}</option>)}</select></div>
-        </div>
-        <div class="y-alan" style="margin-top:10px"><label>Rozet <span class="y-ipucu">(isteğe bağlı)</span></label><input name="rozet" value={s.rozet ?? ''} placeholder="Set fırsatı" /></div>
-        <div class="y-izgara y-izgara--2" style="margin-top:10px">
-          <div class="y-alan"><label>Set görseli <span class="y-ipucu">(yoksa ürün görselleri yan yana gösterilir)</span></label>
-            {s.gorsel && <img src={s.gorsel.src} alt="" style="width:90px;height:110px;object-fit:contain;border:1px solid var(--line);border-radius:8px;background:#fff" />}
-            <input type="file" name="gorsel" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif" data-gorsel-sec />
-            {s.gorsel && <label class="y-secim"><input type="checkbox" name="gorsel_kaldir" />Görseli kaldır</label>}
-          </div>
-          <label class="y-secim" style="align-self:end"><input type="checkbox" name="oneCikan" checked={s.oneCikan} />Ana sayfada göster</label>
         </div>
 
-    <output class="y-set-ozet" data-set-toplam aria-live="polite"></output>
-    <p class="y-ipucu">Yüzde indirimi tüm sete uygulandığında sonuç bir alt 10 TL basamağına yuvarlanır.</p>
-    <p data-kayit-durum class="y-form-state" role="status"></p>
-    {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><button type="submit" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu set silinsin mi?">Seti sil</button></details>}
-    </form>
+        <div class="y-izgara y-izgara--3" style="margin-top:14px">
+          <div class="y-alan"><label>İndirim hesaplama yöntemi</label><select name="fiyat_tip">
+            <option value="kalem" selected={s.fiyatlama.tip === 'kalem'}>Belirli ürüne % indirim (önerilen)</option>
+            <option value="yuzde" selected={s.fiyatlama.tip === 'yuzde'}>Tüm sete % indirim (10 TL’ye yuvarlanır)</option>
+            <option value="sabit" selected={s.fiyatlama.tip === 'sabit'}>Sabit set fiyatı (TL)</option>
+          </select></div>
+          <div class="y-alan"><label>İndirim oranı (%) veya sabit fiyat (TL)</label><input name="deger" inputmode="numeric" value={s.fiyatlama.tip === 'sabit' ? s.fiyatlama.fiyat : s.fiyatlama.oran} /></div>
+          <div class="y-alan" data-kalem-hedef><label>İndirim uygulanacak ürün <span class="y-ipucu">(Belirli ürüne % seçiliyse)</span></label><select name="kalem_hedef"><option value="">Setteki son ürüne uygula</option>{m.urunler.map((u) => <option value={u.id} selected={s.fiyatlama.tip === 'kalem' && s.fiyatlama.urunId === u.id}>{u.kisaAd}</option>)}</select></div>
+        </div>
+
+        <output class="y-set-ozet" data-set-toplam aria-live="polite" style="display:block;margin-top:10px;padding:12px 14px;background:var(--y-surface-2,#faf7f2);border:1px solid var(--y-border,#e5dec9);border-radius:10px;font-weight:600"></output>
+        <p class="y-ipucu" style="margin-top:6px">Yüzde indirimi tüm sete uygulandığında sonuç müşteriye temiz görünmesi için bir alt 10 TL basamağına yuvarlanır.</p>
+
+        <div class="y-izgara y-izgara--2" style="margin-top:14px">
+          <div class="y-alan"><label>Vitrin rozeti <span class="y-ipucu">(isteğe bağlı, örn. "Set fırsatı", "Birlikte %15 avantaj")</span></label><input name="rozet" value={s.rozet ?? ''} placeholder="Set fırsatı" /></div>
+          <div class="y-alan" style="justify-content:end">
+            <label class="y-secim" style="padding:10px 12px;border:1px solid var(--y-border,#e5dec9);border-radius:10px;background:#fff">
+              <input type="checkbox" name="oneCikan" checked={s.oneCikan} />
+              <span><strong>Ana sayfada öne çıkar</strong> <small class="muted" style="display:block">Ana sayfadaki “Setler & Fırsatlar” vitrininde gösterilir.</small></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="y-alan" style="margin-top:14px">
+          <label>Özel set görseli <span class="y-ipucu">(isteğe bağlı — yüklenmezse setteki ürünlerin fotoğrafları vitrinde yan yana gösterilir)</span></label>
+          <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px">
+            {s.gorsel ? (
+              <img src={s.gorsel.src} alt="" style="width:96px;height:96px;object-fit:contain;border:1px solid var(--line);border-radius:10px;background:#fff;padding:4px" />
+            ) : (
+              <div style="padding:10px 14px;border:1px dashed var(--y-border,#d6cbb5);border-radius:10px;background:#faf8f4;font-size:.85rem;color:#6b6154">
+                Özel görsel yok · Ürün fotoğrafları otomatik yan yana birleştirilir
+              </div>
+            )}
+            <div style="display:grid;gap:6px">
+              <input type="file" name="gorsel" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif" data-gorsel-sec />
+              {s.gorsel && <label class="y-secim"><input type="checkbox" name="gorsel_kaldir" />Mevcut özel görseli kaldır (ürün fotoğraflarına dön)</label>}
+            </div>
+          </div>
+        </div>
+
+        <p data-kayit-durum class="y-form-state" role="status"></p>
+        {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><p class="y-ipucu" style="margin-bottom:8px">Seti silmek içindeki tekil ürünleri silmez; yalnızca birlikte satış paketini kaldırır.</p><button type="submit" class="btn btn--tehlike" name="eylem" value="sil" formnovalidate data-onayla="Bu set silinsin mi?">Seti sil</button></details>}
+      </form>
     <Onizleme id="set-onizleme" tur="set" kayit={s.id} />
   </div> : <>
     <div class="y-metrics y-metrics--finans">
       <div class="y-metric"><PIkon ad="set" /><span>Toplam set</span><strong>{m.setler.length}</strong><small>Katalogdaki set kayıtları</small></div>
-      <div class="y-metric y-metric--yesil"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.setler.filter((x) => x.durum === 'yayinda').length - vitrinDisi}</strong><small>Müşteri görüyor</small></div>
-      <div class="y-metric"><PIkon ad="kalem" /><span>Taslak / gizli</span><strong>{m.setler.filter((x) => x.durum !== 'yayinda').length}</strong><small>Yayın dışı</small></div>
-      <div class:list={['y-metric', { 'y-metric--kirmizi': vitrinDisi > 0 }]}><PIkon ad="uyari" /><span>Vitrin dışında</span><strong>{vitrinDisi}</strong><small>Yayında ama bir ürünü satılamıyor</small></div>
+      <div class="y-metric y-metric--yesil"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.setler.filter((x) => x.durum === 'yayinda').length - vitrinDisi}</strong><small>Müşteri görüyor ve alabilir</small></div>
+      <div class="y-metric"><PIkon ad="kalem" /><span>Taslak / gizli</span><strong>{m.setler.filter((x) => x.durum !== 'yayinda').length}</strong><small>Hazırlık veya yayın dışı</small></div>
+      <div class:list={['y-metric', { 'y-metric--kirmizi': vitrinDisi > 0 }]}><PIkon ad="uyari" /><span>Vitrin dışında</span><strong>{vitrinDisi}</strong><small>Yayında ama bileşen stoğu/durumu eksik</small></div>
     </div>
     {m.setler.length ? <section class="y-kart">
-      <div class="y-kart__bas"><div><h2><PIkon ad="set" /> Set listesi</h2><p class="y-kart__alt">Set fiyatı, ayrı ayrı alındığındaki tutar ve müşterinin kazancı.</p></div></div>
-      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Set</th><th>Ürünler</th><th class="y-sayi">Ayrı ayrı</th><th class="y-sayi">Set fiyatı</th><th class="y-sayi">Tasarruf</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
-      {m.setler.map((x) => { const f = k.setFiyati(x); const engel = x.durum === "yayinda" && k.setEngelleri(x).length > 0; const gorsel = x.gorsel?.src ?? f.dokum[0]?.urun.gorseller[0]?.src; return <tr>
-        <td data-etiket="Set"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{gorsel && <img src={gorsel} alt="" loading="lazy" />}</span><span><a class="y-tablo-urun__ad" href={"?duzenle=" + x.id}>{x.ad}</a>{x.rozet && <small class="y-table-note">{x.rozet}</small>}</span></div></td>
-        <td data-etiket="Ürünler" class="y-urunler">{f.dokum.map((d) => d.adet + " × " + d.urun.kisaAd).join(", ")}</td>
-        <td data-etiket="Ayrı ayrı" class="y-sayi y-nowrap"><s class="muted">{formatTL(f.ayriAyri)}</s></td>
-        <td data-etiket="Set fiyatı" class="y-sayi y-nowrap"><strong>{formatTL(f.fiyat)}</strong></td>
-        <td data-etiket="Tasarruf" class="y-sayi y-nowrap"><span class="y-chip y-chip--yesil">{formatTL(f.kazanc)}</span></td>
-        <td data-etiket="Durum"><span class:list={['y-chip', engel ? 'y-chip--kirmizi' : 'y-chip--' + (DURUM_RENGI[x.durum] ?? 'gri')]}>{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</span></td>
-        <td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={"?duzenle=" + x.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
-      </tr>; })}
+      <div class="y-kart__bas"><div><h2><PIkon ad="set" /> Set listesi</h2><p class="y-kart__alt">Set fiyatı, ayrı ayrı alındığındaki tutar, müşteri kazancı ve bileşen stoklarına göre satılabilir set adedi.</p></div></div>
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Set</th><th>Bileşen ürünler</th><th class="y-sayi">Satılabilir</th><th class="y-sayi">Ayrı ayrı</th><th class="y-sayi">Set fiyatı</th><th class="y-sayi">Tasarruf</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
+      {m.setler.map((x) => {
+        const f = k.setFiyati(x);
+        const setEngelListesi = k.setEngelleri(x);
+        const engel = x.durum === "yayinda" && setEngelListesi.length > 0;
+        const satilabilir = setSatilabilirAdet(x);
+        const gorsel = x.gorsel?.src ?? f.dokum[0]?.urun.gorseller[0]?.src;
+        return <tr>
+          <td data-etiket="Set">
+            <div class="y-tablo-urun">
+              <span class="y-tablo-urun__gorsel">{gorsel && <img src={gorsel} alt="" loading="lazy" />}</span>
+              <span>
+                <a class="y-tablo-urun__ad" href={"?duzenle=" + x.id}>{x.ad}</a>
+                <small class="y-table-note">
+                  {x.rozet && <span>{x.rozet}</span>}
+                  {x.oneCikan && <span>{x.rozet ? ' · ' : ''}Ana sayfada</span>}
+                </small>
+              </span>
+            </div>
+          </td>
+          <td data-etiket="Bileşen ürünler" class="y-urunler">
+            <div>{f.dokum.map((d) => d.adet + " × " + d.urun.kisaAd).join(", ")}</div>
+            {engel && <small class="y-table-note" style="color:#991b1b">{setEngelListesi.join(' · ')}</small>}
+          </td>
+          <td data-etiket="Satılabilir" class="y-sayi y-nowrap">
+            <span class:list={['y-chip', satilabilir > 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']}>{satilabilir} set</span>
+          </td>
+          <td data-etiket="Ayrı ayrı" class="y-sayi y-nowrap"><s class="muted">{formatTL(f.ayriAyri)}</s></td>
+          <td data-etiket="Set fiyatı" class="y-sayi y-nowrap"><strong>{formatTL(f.fiyat)}</strong></td>
+          <td data-etiket="Tasarruf" class="y-sayi y-nowrap"><span class="y-chip y-chip--yesil">{formatTL(f.kazanc)}</span></td>
+          <td data-etiket="Durum"><span class:list={['y-chip', engel ? 'y-chip--kirmizi' : 'y-chip--' + (DURUM_RENGI[x.durum] ?? 'gri')]}>{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</span></td>
+          <td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={"?duzenle=" + x.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
+        </tr>;
+      })}
       </tbody></table></div>
     </section> : <p class="y-bos-satir"><PIkon ad="set" boyut={20} />Henüz set yok. “Yeni set” ile ilk setinizi oluşturun.</p>}
   </>}

@@ -56,9 +56,10 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 .y-panel .y-icon-button { min-width: 44px; min-height: 44px; border-radius: 12px; color: var(--y-ink-2); }
 .y-panel .y-icon-button:hover { background: var(--y-soft); }
 .y-kirinti { min-width: 0; flex: 1 1 auto; }
-.y-kirinti ol { display: flex; align-items: center; gap: 4px; margin: 0; padding: 0; list-style: none; overflow: hidden; white-space: nowrap; font-size: 14.5px; }
-.y-kirinti li { display: inline-flex; align-items: center; min-width: 0; color: var(--y-muted); }
-.y-kirinti li + li::before { content: '/'; padding-inline: 8px; color: #c2b3a1; }
+.y-kirinti ol { display: flex; align-items: center; gap: 0; margin: 0; padding: 0; list-style: none; overflow: hidden; white-space: nowrap; font-size: 14.5px; }
+.y-kirinti li { display: inline-flex; align-items: center; min-width: 0; flex: none; color: var(--y-muted); }
+.y-kirinti li:last-child { flex: 0 1 auto; min-width: 0; }
+.y-kirinti li + li::before { content: '/'; margin-inline: 8px; color: #c2b3a1; flex: none; }
 .y-kirinti a { color: var(--y-muted); text-decoration: none; border-radius: 6px; padding: 4px 2px; }
 .y-kirinti a:hover { color: var(--y-ink); text-decoration: underline; text-underline-offset: 3px; }
 .y-kirinti [aria-current] { color: var(--y-ink); font-weight: 650; overflow: hidden; text-overflow: ellipsis; }
@@ -195,8 +196,9 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 .y-panel .y-ikon-kare { display: inline-grid; place-items: center; }
 .y-panel .y-kart__bas p, .y-panel .y-kart > p.y-help:first-of-type { margin: 2px 0 0; }
 .y-panel .y-kart__alt { margin: 3px 0 0; color: var(--y-muted); font-size: 14px; font-weight: 450; }
-.y-panel .y-kart__bas > a.y-link, .y-panel .y-tumu { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--y-gold-ink); font-size: 14.5px; font-weight: 650; text-decoration: none; }
+.y-panel .y-kart__bas > a.y-link, .y-panel .y-tumu { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; color: var(--y-gold-ink); font-size: 14.5px; font-weight: 650; text-decoration: none; white-space: nowrap; }
 .y-panel .y-kart__bas > a.y-link::after, .y-panel .y-tumu::after { content: '→'; transition: transform .15s; }
+.y-panel .y-kart__bas > a.y-link[target="_blank"]::after { content: '↗'; }
 .y-panel .y-kart__bas > a.y-link:hover, .y-panel .y-tumu:hover { text-decoration: underline; text-underline-offset: 4px; }
 .y-panel .y-kart__bas > a.y-link:hover::after, .y-panel .y-tumu:hover::after { transform: translateX(3px); }
 .y-panel details.y-kart > summary { display: flex; align-items: center; gap: 12px; min-height: 48px; font-size: 16.5px; font-weight: 700; color: var(--y-ink); }
@@ -231,12 +233,14 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 .y-panel .btn[disabled], .y-panel .btn:disabled { opacity: .5; box-shadow: none; }
 
 /* ---------- Form alanları ---------- */
-.y-panel .y-alan { gap: 7px; min-width: 0; }
+.y-panel .y-alan { gap: 7px; min-width: 0; align-content: start; }
 .y-panel .y-alan > label, .y-panel .y-alan > .y-etiket, .y-panel label.y-alan { font-size: 14px; font-weight: 650; color: var(--y-ink-2); }
 .y-panel .y-girdi, .y-panel .y-alan :is(input:not([type="checkbox"], [type="radio"], [type="file"]), select, textarea), .y-panel .y-toolbar :is(input:not([type="checkbox"], [type="radio"]), select) {
   min-height: 46px; padding: 10px 13px; max-width: 100%; border: 1px solid var(--y-border-strong); border-radius: 11px; background-color: #fff; color: var(--y-ink); font: 500 15px/1.4 Inter, sans-serif;
   transition: border-color .15s, box-shadow .15s;
 }
+.y-panel .y-alan select:not([multiple]) { height: 46px; }
+.y-panel .y-alan select[multiple] { background-image: none; padding-right: 13px; min-height: 110px; }
 .y-panel .y-alan textarea { min-height: 96px; }
 .y-panel .y-alan select, .y-panel select.y-girdi, .y-panel .y-toolbar select { padding-right: 36px; background-position: right 13px center; }
 .y-panel .y-girdi:hover, .y-panel .y-alan :is(input, select, textarea):hover { border-color: #c8b399; }
@@ -427,24 +431,26 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 .y-liste-secim .y-sonraki { margin-bottom: 14px; }
 .y-liste-secim .y-sonraki .y-alan { max-width: none; }
 .y-liste-secim .y-ust-aksiyonlar { margin-top: 14px; }
-.y-panel .y-secim-ac, .y-panel .y-siparis-secim { display: none; }
+.y-panel .y-secim-ac { display: inline-flex; }
+.y-panel .y-siparis-secim { display: none; }
+.y-panel .y-liste-detay:has([data-panel-kayit]:not([hidden])) .y-siparis-secim { display: block; }
 .y-panel .y-siparis-tablo .y-islem { width: auto; white-space: nowrap; }
 .y-siparis-sec-kutusu { display: inline-grid; place-items: center; cursor: pointer; }
 
-@media (min-width: 1200px) {
-  .y-liste-detay:is([data-panel-hazir], :has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr) minmax(300px, 32%); }
+@media (min-width: 1100px) {
+  .y-liste-detay:is([data-panel-hazir], :has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr) minmax(330px, 34%); }
   .y-panel .y-liste-secim { position: sticky; top: calc(var(--y-top-height) + 18px); }
-  .y-panel .y-liste-detay[data-panel-hazir] .y-siparis-secim { display: block; }
+  .y-panel .y-liste-detay:has([data-panel-kayit]:not([hidden])) .y-siparis-secim { display: block; }
   .y-panel .y-secim-ac:not([hidden]) { display: inline-flex; }
   .y-panel .y-liste-detay[data-panel-hazir] .y-siparis-tablo .detay-link { display: none; }
-  .y-panel .y-liste-detay[data-panel-hazir] .y-siparis-tablo :is(td, th):nth-child(4) { max-width: 130px; }
+  .y-panel .y-liste-detay:has([data-panel-kayit]:not([hidden])) .y-siparis-tablo :is(td, th):nth-child(4) { max-width: 150px; }
   .y-ilan-duzen { grid-template-columns: minmax(0, 1fr) minmax(300px, 32%); }
   .y-ilan-duzen > aside { position: sticky; top: calc(var(--y-top-height) + 18px); }
 }
-/* Orta genişlikte boş hızlı işlem paneli tabloyu daraltmasın: bir kayıt açılınca görünür */
-@media (min-width: 1200px) and (max-width: 1699px) {
-  .y-panel .y-liste-detay[data-panel-hazir]:not(:has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
-  .y-panel .y-liste-detay[data-panel-hazir]:not(:has([data-panel-kayit]:not([hidden]))) .y-liste-secim { display: none; }
+/* Boş hızlı işlem paneli sipariş tablosunu daraltmasın: bir kayıt açılınca görünür */
+@media (min-width: 1100px) {
+  .y-panel .y-liste-detay:has(.y-siparis-secim):not(:has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
+  .y-panel .y-liste-detay:has(.y-siparis-secim):not(:has([data-panel-kayit]:not([hidden]))) .y-siparis-secim { display: none; }
 }
 @media (max-width: 1199px) {
   .y-urun-secim:has([data-panel-bos]:not([hidden])) { display: none; }

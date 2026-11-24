@@ -10,22 +10,23 @@ interface Props {
   adres: (kanal: string) => string;
   secili?: string;
   aciklama?: string;
+  kompakt?: boolean;
 }
-const { ozet, donem, adres, secili, aciklama = 'İptal ve iadeler hariç. Karta dokunursanız o kanalın siparişleri açılır.' } = Astro.props;
+const { ozet, donem, adres, secili, aciklama = 'İptal ve iadeler hariç. Karta dokunursanız o kanalın siparişleri açılır.', kompakt = false } = Astro.props;
 ---
-<section class="kanal-ozet" aria-label={'Satışlar kanala göre · ' + donem}>
+<section class:list={['kanal-ozet', { 'kanal-ozet--kompakt': kompakt }]} aria-label={'Satışlar kanala göre · ' + donem}>
   <div class="kanal-ozet__bas"><strong>Satışlar · {donem}</strong><span>{aciklama}</span></div>
   <div class="kanal-ozet__kartlar">
+    <a href={adres('tumu')} class:list={['kanal-karti', 'kanal-karti--toplam', { 'is-secili': secili === 'tumu' }]} aria-current={secili === 'tumu' ? 'true' : undefined}>
+      <span class="kanal-karti__ad">Tüm kanallar</span>
+      <strong>{kurusTL(ozet.toplam.kurus)}</strong>
+      <small>{ozet.toplam.adet} sipariş</small>
+    </a>
     {ozet.kanallar.map((k) => <a href={adres(k.kanal)} class:list={['kanal-karti', 'kanal-karti--' + k.kanal, { 'is-secili': secili === k.kanal }]} aria-current={secili === k.kanal ? 'true' : undefined}>
       <span class="kanal-karti__ad">{k.ad}</span>
       <strong>{kurusTL(k.kurus)}</strong>
       <small>{k.adet} sipariş</small>
     </a>)}
-    <a href={adres('tumu')} class:list={['kanal-karti', 'kanal-karti--toplam', { 'is-secili': secili === 'tumu' }]}>
-      <span class="kanal-karti__ad">Hepsi birlikte</span>
-      <strong>{kurusTL(ozet.toplam.kurus)}</strong>
-      <small>{ozet.toplam.adet} sipariş</small>
-    </a>
   </div>
 </section>
 
@@ -47,6 +48,9 @@ const { ozet, donem, adres, secili, aciklama = 'İptal ve iadeler hariç. Karta 
   .kanal-karti--toplam { background: #30291f; border-color: #30291f; border-left-color: #e0be6a; color: #fff9ea; }
   .kanal-karti--toplam:hover { background: #3a3226; }
   .kanal-karti--toplam .kanal-karti__ad, .kanal-karti--toplam small { color: #e9dcc0; }
+  .kanal-ozet--kompakt .kanal-karti { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 10px; padding: 9px 12px; }
+  .kanal-ozet--kompakt .kanal-karti strong { font-size: 15.5px; margin-left: auto; }
+  .kanal-ozet--kompakt .kanal-karti small { width: 100%; font-size: 12px; }
   @media (max-width: 760px) { .kanal-ozet__kartlar { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
   /* Kanal etiketi (listelerde) — renk tek başına anlam taşımaz, ad her zaman yazılı */

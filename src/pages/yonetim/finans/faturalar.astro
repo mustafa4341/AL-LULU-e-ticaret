@@ -79,21 +79,21 @@ if (Astro.request.method === 'POST') {
 }
 
 const { adaylar } = await veriOku();
-const durum = ['kesilecek', 'kesildi', 'tumu'].includes(q.get('durum') ?? '') ? q.get('durum')! : 'kesilecek';
+const durum = ['kesilecek', 'iletilecek', 'kesildi', 'tumu'].includes(q.get('durum') ?? '') ? q.get('durum')! : 'kesilecek';
 const kanal = (['web', 'trendyol', 'hepsiburada'] as const).find((k) => k === q.get('kanal'));
 const kesilecek = adaylar.filter((a) => !a.fatura);
 const iletilecek = adaylar.filter((a) => a.fatura && (a.fatura.iletim.durum === 'bekliyor' || a.fatura.iletim.durum === 'hata'));
 const liste = adaylar
-  .filter((a) => (durum === 'kesilecek' ? !a.fatura : durum === 'kesildi' ? !!a.fatura : true) && (!kanal || a.kanal === kanal))
+  .filter((a) => (durum === 'kesilecek' ? !a.fatura : durum === 'iletilecek' ? Boolean(a.fatura && (a.fatura.iletim.durum === 'bekliyor' || a.fatura.iletim.durum === 'hata')) : durum === 'kesildi' ? !!a.fatura : true) && (!kanal || a.kanal === kanal))
   .slice(0, 300);
 const secili = adaylar.find((a) => a.anahtar === q.get('sec'));
 const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
 const tarih = (t: string) => yTarih.format(new Date(t));
 const filtre = (ek: Record<string, string | undefined>) => yol + '?' + new URLSearchParams(Object.entries({ durum, kanal, ...ek }).filter(([, v]) => v) as [string, string][]);
 const ILETIM: Record<FaturaKaydi['iletim']['durum'], [string, string]> = {
-  bekliyor: ['Müşteriye iletilmedi', 'turuncu'], hata: ['İletim hatası', 'kirmizi'], gonderildi: ['İletildi', 'yesil'], elle: ['Elle iletildi', 'yesil'], yok: ['—', 'gri'],
+  bekliyor: ['2. Aşama · İletim bekliyor', 'turuncu'], hata: ['2. Aşama · İletim hatası', 'kirmizi'], gonderildi: ['3. Aşama · İletildi', 'yesil'], elle: ['3. Aşama · Elle iletildi', 'yesil'], yok: ['2. Aşama · Kaydedildi', 'gri'],
 };
-const kanalRengi: Record<FaturaKanali, string> = { web: 'gri', trendyol: 'turuncu', hepsiburada: 'gri' };
+
 const iletimAciklamasi = (k: FaturaKanali) => k === 'trendyol' ? (tyBagli ? 'Trendyol’a otomatik yükle' : 'Trendyol bağlantısı yok; satıcı panelinden yükleyin')
   : k === 'web' ? 'Müşteriye e-postayla gönder' : 'Hepsiburada’ya satıcı panelinden siz yükleyeceksiniz';
 const bugun = finansGunu();
@@ -117,12 +117,12 @@ const bugun = finansGunu();
 
   <div class="y-metrics y-metrics--finans">
     <a class="y-metric y-metric--kirmizi" href={filtre({ durum: 'kesilecek' })}><PIkon ad="fatura" /><span>Faturası kesilecek</span><strong>{kesilecek.length}</strong><small>GİB'de düzenlenip kaydedilecek</small></a>
-    <a class="y-metric y-metric--turuncu" href={filtre({ durum: 'kesildi' })}><PIkon ad="gonder" /><span>Müşteriye iletilecek</span><strong>{iletilecek.length}</strong><small>Kaydedildi, iletim bekliyor</small></a>
+    <a class="y-metric y-metric--turuncu" href={filtre({ durum: 'iletilecek' })}><PIkon ad="gonder" /><span>2. Müşteriye / kanala iletilecek</span><strong>{iletilecek.length}</strong><small>Panelde kayıtlı, iletim bekliyor</small></a>
     <div class="y-metric"><PIkon ad="tik-daire" /><span>Bu ay kesilen</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong></div>
   </div>
 
   <nav class="y-sekmeler" aria-label="Fatura filtresi">
-    {[['kesilecek', 'Kesilecek'], ['kesildi', 'Kesildi'], ['tumu', 'Tümü']].map(([id, ad]) => <a href={filtre({ durum: id })} aria-current={durum === id ? 'page' : undefined}>{ad}</a>)}
+    {[['kesilecek', `Kesilecek (${kesilecek.length})`], ['iletilecek', `İletilecek (${iletilecek.length})`], ['kesildi', 'Kaydedilenler'], ['tumu', `Tümü (${adaylar.length})`]].map(([id, ad]) => <a href={filtre({ durum: id })} aria-current={durum === id ? 'page' : undefined}>{ad}</a>)}
     <span class="fm-ayrac"></span>
     <a href={filtre({ kanal: undefined })} aria-current={!kanal ? 'page' : undefined}>Tüm kanallar</a>
     {(['web', 'trendyol', 'hepsiburada'] as const).map((k) => <a href={filtre({ kanal: k })} aria-current={kanal === k ? 'page' : undefined}>{FATURA_KANAL_ADLARI[k]}</a>)}

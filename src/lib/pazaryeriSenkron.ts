@@ -177,7 +177,7 @@ async function stokYayimla(
   return undefined;
 }
 
-export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici', gunlukZorla = false): Promise<SenkronSonucu> {
+export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bildirim', gunlukZorla = false): Promise<SenkronSonucu> {
   const kanallar: SenkronSonucu['kanallar'] = {};
   const bagli = KANAL_LISTESI.filter((k) => pazaryeriApiDurumu(k) !== 'kapali');
   if (!bagli.length) return { durum: 'kapali', kanallar };

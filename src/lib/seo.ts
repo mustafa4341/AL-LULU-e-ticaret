@@ -63,6 +63,8 @@ export function magazaVerisi(site: SiteAyarlari): Record<string, unknown>[] {
       ...(!bosYasalBilgi(site.satici.adres) ? { address: { '@type': 'PostalAddress', streetAddress: site.satici.adres, addressCountry: 'TR' } } : {}),
       ...(!bosYasalBilgi(site.satici.vergiDairesiNo) && /\d{10,11}/.test(site.satici.vergiDairesiNo) ? { taxID: site.satici.vergiDairesiNo.match(/\d{10,11}/)![0] } : {}),
       contactPoint: [iletisim, ...(site.kurumsalEposta ? [{ '@type': 'ContactPoint', contactType: 'sales', email: site.kurumsalEposta, availableLanguage: 'tr' }] : [])],
+      // Panelde girilen sosyal medya hesapları: Google'a "bu hesaplar bu mağazanın" bilgisi
+      ...(() => { const sameAs = Object.values(site.sosyal ?? {}).filter((x) => /^https:\/\//.test(x)); return sameAs.length ? { sameAs } : {}; })(),
       hasMerchantReturnPolicy: {
         '@type': 'MerchantReturnPolicy', applicableCountry: 'TR',
         returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow', merchantReturnDays: site.iadeGun,

@@ -4,6 +4,7 @@ import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import { metin, liste } from '../../../lib/form';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+import { envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
 import { tyIadeOnayla, tyIadeler, type TyIade } from '../../../lib/trendyolApi';
 import { yTarih } from '../../../lib/yonetimRapor';
 
@@ -11,6 +12,8 @@ const yol = '/yonetim/siparisler/trendyol-iade-soru';
 const q = Astro.url.searchParams;
 const api = pazaryeriApiDurumu('trendyol');
 const apiHazir = api === 'canli' || api === 'test';
+const envAyar = !apiHazir ? await envanterAyarlariOku().catch(() => undefined) : undefined;
+const tySonApi = envAyar?.kanallar.trendyol.sonApi ?? envAyar?.kanallar.trendyol.sonOtomatikApi;
 const hatalar: string[] = [];
 const hata = (e: unknown) => e instanceof PazaryeriApiHatasi ? e.message : 'Trendyol’a ulaşılamadı. Biraz sonra tekrar deneyin.';
 
@@ -56,7 +59,17 @@ const acikIadeler = iadeSirasi.filter((x) => x.bekleyen > 0);
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
   </div>
-  {!apiHazir && <p class="y-uyari-satir" role="status">Trendyol bağlantısı kurulmamış.</p>}
+  {!apiHazir && (tySonApi ? (
+    <div class="y-veri-not" role="status" style="margin-bottom:14px">
+      <PIkon ad="bilgi" boyut={18} />
+      <p>
+        <strong>Canlı sunucuda (Vercel) Trendyol bağlantısı aktif</strong>
+        Son başarılı bağlantı: <strong>{yTarih.format(new Date(tySonApi))}</strong>. Bu bilgisayardan (localhost) anlık Trendyol iade listesini çekmek ve onaylamak için Vercel'deki <code>TRENDYOL_*</code> anahtarlarını yerel <code>.env</code> dosyanıza ekleyebilir veya canlı yönetim panelini kullanabilirsiniz.
+      </p>
+    </div>
+  ) : (
+    <p class="y-uyari-satir" role="status">Trendyol bağlantısı kurulmamış.</p>
+  ))}
 
     <p class="y-uyari">Hasarlı, eksik veya kullanılmış ürünler için Trendyol satıcı panelinden fotoğraflı ret talebi açın. Trendyol, 48 saat içinde işlem yapılmayan iadeyi otomatik kabul eder.</p>
     {iadeler.length === 0 && apiHazir && hatalar.length === 0 && <p class="y-kart muted">Son 30 günde iade yok.</p>}

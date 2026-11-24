@@ -37,7 +37,7 @@ const menu: [MenuBolumu, string, string, PanelIkonAdi][] = [
 ];
 const yol = Astro.url.pathname;
 const arama = Astro.url.searchParams;
-const satisKanallari = ['/yonetim/siparisler/kanallar', '/yonetim/siparisler/trendyol-urunler', '/yonetim/siparisler/trendyol-iade-soru'].includes(yol);
+const satisKanallari = ['/yonetim/siparisler/kanallar', '/yonetim/siparisler/trendyol-urunler', '/yonetim/siparisler/trendyol-ilanlar', '/yonetim/siparisler/trendyol-iade-soru'].includes(yol);
 const urunAlt = aktif === 'setler' || aktif === 'kategoriler' || aktif === 'yorumlar';
 const bolum = satisKanallari ? 'kanallar' : urunAlt ? 'urunler' : aktif;
 const bolumMenu = menu.find(([id]) => id === bolum);
@@ -47,8 +47,25 @@ const mobilAdlar = { ozet: 'İşler', siparisler: 'Siparişler', urunler: 'Ürü
 const altMenu: Partial<Record<MenuBolumu, [string, string, string?][]>> = {
   ozet: [['Bugünkü işler', '/yonetim/isler']],
   urunler: [['Tüm ürünler', '/yonetim/urunler'], ['Setler', '/yonetim/setler'], ['Kategoriler', '/yonetim/kategoriler'], ['Değerlendirmeler', '/yonetim/yorumlar']],
-  kanallar: [['Kanal durumu', '/yonetim/siparisler/kanallar'], ['Ürün eşleştirme', '/yonetim/siparisler/kanallar#eslestirmeler'], ['Trendyol ürünleri', '/yonetim/siparisler/trendyol-urunler', 'trendyol'], ['Trendyol iadeleri', '/yonetim/siparisler/trendyol-iade-soru', 'trendyol']],
-  finans: [['Genel bakış', '/yonetim/finans'], ['Faturalar', '/yonetim/finans/faturalar'], ['Trendyol hakedişi', '/yonetim/finans?sekme=trendyol', 'trendyol'], ['Hepsiburada', '/yonetim/finans/hepsiburada', 'hepsiburada'], ['Raporlar', '/yonetim/finans?sekme=raporlar']],
+  kanallar: [
+    ['Genel durum', '/yonetim/siparisler/kanallar'],
+    ['Ürün eşleştirme', '/yonetim/siparisler/kanallar?gorunum=eslestirme'],
+    ['Fiyat ve kurallar', '/yonetim/siparisler/kanallar?gorunum=fiyatlar'],
+    ['Trendyol ürünleri', '/yonetim/siparisler/trendyol-urunler', 'trendyol'],
+    ['Trendyol ilanları', '/yonetim/siparisler/trendyol-ilanlar', 'trendyol'],
+    ['Trendyol iadeleri', '/yonetim/siparisler/trendyol-iade-soru', 'trendyol'],
+    ['Hepsiburada ürünleri', '/yonetim/siparisler/kanallar?gorunum=hepsiburada', 'hepsiburada'],
+  ],
+  finans: [['Genel bakış', '/yonetim/finans'], ['Giderler', '/yonetim/finans?sekme=giderler'], ['Sipariş belgeleri', '/yonetim/finans?sekme=belgeler'], ['Faturalar', '/yonetim/finans/faturalar'], ['Trendyol hakedişi', '/yonetim/finans?sekme=trendyol', 'trendyol'], ['Hepsiburada', '/yonetim/finans/hepsiburada', 'hepsiburada'], ['Raporlar', '/yonetim/finans?sekme=raporlar']],
+  site: [
+    ['Ana sayfa düzeni', '/yonetim/site-duzeni'],
+    ['Kampanya ve duyurular', '/yonetim/site-duzeni?bolum=duyuru'],
+    ['Fiyat sunumu önizleme', '/yonetim/fiyat-onizleme'],
+    ['Kargo ve teslimat', '/yonetim/site-duzeni?bolum=kargo'],
+    ['İletişim ve WhatsApp', '/yonetim/site-duzeni?bolum=iletisim'],
+    ['Sık sorulan sorular', '/yonetim/site-duzeni?bolum=sss'],
+    ['Bakım modu', '/yonetim/site-duzeni?bolum=tadilat'],
+  ],
 };
 /* Bulunulan alt sayfa: önce adres + sorgu tam eşleşmesi, yoksa sorgusuz adres (finans sekmeleri hariç) */
 const altAdresi = (adres: string) => {
@@ -57,7 +74,7 @@ const altAdresi = (adres: string) => {
 };
 const altlar = (bolum && altMenu[bolum]) || [];
 const secili = altlar.find(([, adres]) => !adres.includes('#') && altAdresi(adres).sorgu && altAdresi(adres).yolKismi === yol && altAdresi(adres).sorgu === Astro.url.search)
-  ?? altlar.find(([, adres]) => !adres.includes('#') && !altAdresi(adres).sorgu && adres === yol && !arama.has('sekme'));
+  ?? altlar.find(([, adres]) => !adres.includes('#') && !altAdresi(adres).sorgu && adres === yol && !arama.has('sekme') && !arama.has('gorunum') && !arama.has('bolum'));
 /* Konum çubuğu: Panel / Bölüm / Alt sayfa / Başlık (tekrar eden adlar atlanır) */
 const kirinti: [string, string][] = [['Panel', '/yonetim']];
 if (bolumMenu) kirinti.push([bolumMenu[1], bolumMenu[2]]);

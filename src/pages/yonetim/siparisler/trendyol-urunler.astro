@@ -2,7 +2,7 @@
 import Yonetim from '../../../layouts/Yonetim.astro';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
-import { DogrulamaHatasi, magazaOku, siparisleriOku, supabaseBagliMi, webAyrilanAdetleri } from '../../../lib/depo';
+import { DogrulamaHatasi, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../lib/depo';
 import { finansOku } from '../../../lib/finansDepo';
 import { liste, metin } from '../../../lib/form';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle } from '../../../lib/kanalFiyat';
@@ -19,8 +19,9 @@ const q = Astro.url.searchParams;
 const hatalar: string[] = [];
 const api = pazaryeriApiDurumu('trendyol');
 const apiHazir = api === 'canli' || api === 'test';
-const depoHazir = supabaseBagliMi() && await pazaryeriHazirMi();
-const magaza = await magazaOku(true);
+const depoHazir = await pazaryeriHazirMi();
+const [magaza, webSiparisleri] = await Promise.all([magazaOku(true), siparisleriOku(true).catch(() => [])]);
+const ayrilanMap = webAyrilanAdetleri(webSiparisleri, Date.now(), magaza.paytrStokIslemleri);
 const urunler = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
 const secili = urunler.find((u) => u.id === q.get('urun'));
 const geri = (ek: Record<string, string>, capa = '') => Astro.redirect(yol + '?' + new URLSearchParams(ek) + capa, 303);
@@ -44,12 +45,15 @@ const taslakAl = (urunId: string, desi?: number): KanalIlanTaslagi => {
 const formdanTaslak = (f: FormData, t: KanalIlanTaslagi, oz: TyOzellik[] | undefined): KanalIlanTaslagi => {
   const desi = ondalik(metin(f, 'desi'));
   if (desi !== undefined && (Number.isNaN(desi) || desi <= 0 || desi > 10_000)) throw new DogrulamaHatasi(['Desi 0’dan büyük bir sayı olmalı (ör. 4 veya 4,5).']);
+  const ozelFiyat = ondalik(metin(f, 'ozelFiyat'));
+  if (ozelFiyat !== undefined && (Number.isNaN(ozelFiyat) || ozelFiyat <= 0 || ozelFiyat > 10_000_000)) {
+    throw new DogrulamaHatasi(['Trendyol özel satış fiyatı 0’dan büyük geçerli bir TL tutarı olmalı (site/kural fiyatını kullanmak için boş bırakın).']);
+  }
   const kdv = Number(metin(f, 'kdv'));
   if (![0, 1, 10, 20].includes(kdv)) throw new DogrulamaHatasi(['KDV oranını seçin.']);
   const yeni: KanalIlanTaslagi = {
     ...t, barkod: metin(f, 'barkod').replace(/\s/g, '').slice(0, 40), stokKodu: metin(f, 'stokKodu').slice(0, 100),
-    // Ürüne özel Trendyol fiyatı yok: fiyat her zaman sitedeki son fiyattır (eski kayıttaki özel fiyat temizlenir).
-    anaKod: metin(f, 'anaKod').slice(0, 40), baslik: metin(f, 'baslik').slice(0, 100), desi, kdv, fiyat: undefined,
+    anaKod: metin(f, 'anaKod').slice(0, 40), baslik: metin(f, 'baslik').slice(0, 100), desi, kdv, fiyat: ozelFiyat,
   };
   if (oz) {
     yeni.ozellikler = [];
@@ -63,23 +67,36 @@ const formdanTaslak = (f: FormData, t: KanalIlanTaslagi, oz: TyOzellik[] | undef
   return yeni;
 };
 const satilabilir = async (urunId: string) => {
-  const web = await siparisleriOku(true);
-  const ayrilan = webAyrilanAdetleri(web, Date.now(), magaza.paytrStokIslemleri);
   const u = urunler.find((x) => x.id === urunId)!;
-  return kanalHedefStok(Math.max(0, u.stok - (ayrilan.get(urunId) ?? 0)), k);
+  return kanalHedefStok(Math.max(0, u.stok - (ayrilanMap.get(urunId) ?? 0)), k);
 };
+const urunHedefStok = (u: (typeof urunler)[number]) => kanalHedefStok(Math.max(0, u.stok - (ayrilanMap.get(u.id) ?? 0)), k);
 
 if (Astro.request.method === 'POST') {
   try {
     if (!depoHazir) throw new DogrulamaHatasi(['Kanal ayarları kullanılamıyor. Veritabanı bağlantısını kontrol edin.']);
-    if (!apiHazir) throw new DogrulamaHatasi(['Trendyol bağlantısı kurulmadan işlem yapılamaz.']);
     const f = await Astro.request.formData();
     const eylem = metin(f, 'eylem');
+    if (eylem === 'fiyat-kurali') {
+      const otoFiyat = f.get('otoFiyat') === 'on';
+      const yuzde = Number(String(f.get('yuzde') ?? '0').replace(',', '.'));
+      const ekTL = Number(String(f.get('ekTL') ?? '0').replace(',', '.'));
+      const yuvarla = f.get('yuvarla') === 'on';
+      if (!Number.isFinite(yuzde) || !Number.isFinite(ekTL) || yuzde < -50 || yuzde > 300 || ekTL < 0 || ekTL > 100_000) {
+        throw new DogrulamaHatasi(['Yüzde farkı -%50 ile +%300, ek tutar 0 ile 100.000 TL arasında olmalı.']);
+      }
+      await envanterAyarlariGuncelle((a) => {
+        a.otomasyon.otoFiyat = otoFiyat;
+        a.kanallar.trendyol.fiyatKurali = { yuzde, ekTL, yuvarla };
+      });
+      return geri({ ok: 'Trendyol fiyat kuralı ve otomatik eşitleme tercihi kaydedildi.' }, '#fiyat');
+    }
+    if (!apiHazir && !['kaydet', 'taslak-sil'].includes(eylem)) throw new DogrulamaHatasi(['Bu işlem için bu sunucuda Trendyol API anahtarlarının tanımlı olması gerekir.']);
     if (eylem === 'fiyat-gonder') {
       const [r] = await pazaryeriFiyatlariEsitle({ kanallar: ['trendyol'] });
       if (r?.hata) throw new DogrulamaHatasi([r.hata]);
       const ozet = fiyatOzeti(r ? [r] : []).join(' ');
-      return geri({ ok: r?.gonderilen.length ? ozet + ' Trendyol birkaç dakika içinde uygular.' : `Trendyol fiyatları siteyle aynı (${r?.ayni ?? 0} bağlı ürün).${ozet ? ' ' + ozet : ''}` }, '#fiyat');
+      return geri({ ok: r?.gonderilen.length ? ozet + ' Trendyol birkaç dakika içinde uygular.' : `Takipteki ürünlerin Trendyol fiyatı hedefle aynı (${r?.ayni ?? 0} ürün). Takipte olmayan bir ürünün fiyatını göndermek için o ürünü açıp “Fiyatı şimdi gönder”e basın.${ozet ? ' ' + ozet : ''}` }, '#fiyat');
     }
     if (eylem === 'durum-yenile') {
       const notlar = await ilanDurumlariniYenile(undefined, 12);
@@ -105,12 +122,22 @@ if (Astro.request.method === 'POST') {
       await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.ilanlar[urunId] = { ...t, markaId: id, markaAdi: metin(f, 'markaAdi').slice(0, 120) }; });
       return geri({ urun: urunId, ok: 'Marka seçildi.' }, '#marka');
     }
-    if (eylem === 'kaydet' || eylem === 'gonder') {
+    if (eylem === 'kaydet' || eylem === 'gonder' || eylem === 'kaydet-fiyat') {
       const oz = await ozellikleriOku(t.kategoriId);
       const yeni = formdanTaslak(f, t, oz);
-      if (eylem === 'kaydet') {
-        await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.ilanlar[urunId] = yeni; });
-        return geri({ urun: urunId, ok: 'Taslak kaydedildi.' }, '#ilan');
+      if (eylem === 'kaydet' || eylem === 'kaydet-fiyat') {
+        await envanterAyarlariGuncelle((a) => {
+          a.kanallar.trendyol.ilanlar[urunId] = yeni;
+          if (a.kanallar.trendyol.urunler[urunId]) a.kanallar.trendyol.urunler[urunId].ozelFiyat = yeni.fiyat;
+        });
+        if (eylem === 'kaydet-fiyat') {
+          if (!apiHazir) throw new DogrulamaHatasi(['Kaydedildi; fiyat göndermek için bu sunucuda Trendyol bağlantısı gerekir.']);
+          if (!k.urunler[urunId]?.kod) throw new DogrulamaHatasi(['Kaydedildi; ürün henüz bir Trendyol ilanına bağlı değil, fiyat gönderilemedi.']);
+          const [r] = await pazaryeriFiyatlariEsitle({ kanallar: ['trendyol'], urunIdler: [urunId] });
+          if (r?.hata) throw new DogrulamaHatasi(['Kaydedildi ama fiyat gönderilemedi: ' + r.hata]);
+          return geri({ urun: urunId, ok: r?.gonderilen.length ? 'Kaydedildi. ' + fiyatOzeti([r]).join(' ') + ' Trendyol birkaç dakika içinde uygular.' : 'Kaydedildi. Trendyol fiyatı zaten hedefle aynı.' }, '#ilan');
+        }
+        return geri({ urun: urunId, ok: t.durum === 'onaylandi' ? 'Kaydedildi. Fiyat Trendyol’a gitmedi; göndermek için “Kaydet ve fiyatı şimdi gönder”e basın.' : 'Taslak kaydedildi.' }, '#ilan');
       }
       if (ilanBekliyor(t)) throw new DogrulamaHatasi(['Bu ürün zaten gönderildi, Trendyol’un yanıtı bekleniyor. “Durumları yenile”ye basın.']);
       if (Object.entries(k.urunler).some(([id, x]) => id !== urunId && x.kod === yeni.barkod)) throw new DogrulamaHatasi(['Bu barkod Trendyol’da başka bir ürüne bağlı.']);
@@ -193,7 +220,17 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
     {apiHazir && depoHazir && <form method="post"><button class="btn btn--cizgi" name="eylem" value="durum-yenile" type="submit"><PIkon ad="yenile" boyut={18} />Durumları yenile</button></form>}
   </div>
 
-  {!apiHazir && <p class="y-uyari-satir" role="status">Trendyol bağlantısı kurulmamış. Satış kanalları sayfasındaki “Mağazayı bağlama” adımlarını izleyin.</p>}
+  {!apiHazir && (k.sonApi || k.sonOtomatikApi ? (
+    <div class="y-veri-not" role="status" style="margin-bottom:14px">
+      <PIkon ad="bilgi" boyut={18} />
+      <p>
+        <strong>Canlı sunucuda (Vercel) Trendyol bağlantısı aktif</strong>
+        Son başarılı bağlantı: <strong>{yTarih.format(new Date((k.sonApi ?? k.sonOtomatikApi)!))}</strong>. Otomatik sipariş, stok ve fiyat eşitlemesi canlı sunucuda çalışıyor. Bu bilgisayardan (localhost) anlık API gönderimi yapmak için Vercel'deki <code>TRENDYOL_*</code> anahtarlarını yerel <code>.env</code> dosyanıza da ekleyebilirsiniz (taslak ve fiyat kuralı kaydı yerel ortamda da açıktır).
+      </p>
+    </div>
+  ) : (
+    <p class="y-uyari-satir" role="status">Trendyol bağlantısı kurulmamış. Satış kanalları sayfasındaki “Mağazayı bağlama” adımlarını izleyin.</p>
+  ))}
   {api === 'test' && <p class="y-uyari-satir" role="status">Test ortamına bağlısınız. Gönderilen ürünler canlı mağazada görünmez.</p>}
 
   {!secili && <div class="y-metrics y-metrics--finans">
@@ -205,8 +242,35 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
   {secili && taslak && <div class="y-ilan-duzen" id="ilan">
   <section class="y-kart">
     <div class="y-kart__bas"><h2><PIkon ad="kalem" /> İlan bilgileri · {secili.marka} {secili.kisaAd}</h2><span class:list={['y-chip', 'y-chip--' + DURUM[taslak.durum][1]]}>{DURUM[taslak.durum][0]}</span></div>
-    {taslak.mesajlar.length > 0 && <div class="y-uyari" role="alert"><strong>Trendyol’un notu:</strong><ul>{taslak.mesajlar.map((m) => <li>{m}</li>)}</ul></div>}
-    {taslak.gonderim && <p class="y-help">Gönderim: {yTarih.format(new Date(taslak.gonderim))}{taslak.kontrol ? ' · Son kontrol: ' + yTarih.format(new Date(taslak.kontrol)) : ''}</p>}
+    <ol class="ty-hazirlik-adimlari" aria-label="İlan hazırlık aşamaları">
+      <li class:list={{ 'is-tamam': !!taslak.kategoriId }}>
+        <a href="#kategori">
+          <span class="ty-hazirlik-no">{taslak.kategoriId ? '✓' : '1'}</span>
+          <div><strong>Kategori</strong><small>{taslak.kategoriAdi || 'Seçilmedi'}</small></div>
+        </a>
+      </li>
+      <li class:list={{ 'is-tamam': !!taslak.markaId }}>
+        <a href="#marka">
+          <span class="ty-hazirlik-no">{taslak.markaId ? '✓' : '2'}</span>
+          <div><strong>Marka</strong><small>{taslak.markaAdi || 'Seçilmedi'}</small></div>
+        </a>
+      </li>
+      <li class:list={{ 'is-tamam': !!hazirlik && hazirlik.eksikler.length === 0 }}>
+        <a href="#ozellikler">
+          <span class="ty-hazirlik-no">{hazirlik && hazirlik.eksikler.length === 0 ? '✓' : '3'}</span>
+          <div><strong>İlan Bilgileri ve Özellikler</strong><small>{hazirlik && hazirlik.eksikler.length > 0 ? `${hazirlik.eksikler.length} eksik alan` : 'Tamamlandı'}</small></div>
+        </a>
+      </li>
+    </ol>
+    {hazirlik && hazirlik.eksikler.length > 0 && taslak.durum !== 'onaylandi' && <div class="y-uyari ty-eksik-kutu" role="status">
+      <div>
+        <strong>İlan henüz gönderime hazır değil ({hazirlik.eksikler.length} eksik):</strong>
+        <span> {hazirlik.eksikler.join(' · ')}</span>
+      </div>
+      <a class="btn btn--cizgi btn--kucuk" href={!taslak.kategoriId ? '#kategori' : !taslak.markaId ? '#marka' : '#ozellikler'}>Eksik alana git →</a>
+    </div>}
+    {taslak.mesajlar.length > 0 && <div class="y-uyari ty-ret-kutu" role="alert"><strong>Trendyol’un ret / hata notu:</strong><ul>{taslak.mesajlar.map((m) => <li>{m}</li>)}</ul></div>}
+    {taslak.gonderim && <p class="y-help">Son gönderim: {yTarih.format(new Date(taslak.gonderim))}{taslak.kontrol ? ' · Son kontrol: ' + yTarih.format(new Date(taslak.kontrol)) : ''}</p>}
 
     <div class="ty-adim" id="kategori">
       <h3>Trendyol kategorisi</h3>
@@ -248,7 +312,7 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
         <label class="y-alan">Başlık (en fazla 100 karakter)<input name="baslik" value={taslak.baslik} maxlength="100" required /></label>
         <label class="y-alan">Desi<input name="desi" inputmode="decimal" value={taslak.desi === undefined ? '' : String(taslak.desi).replace('.', ',')} placeholder="ör. 4" required /><small class="muted">En × boy × yükseklik (cm) ÷ 3000. Kargo ücreti buna göre kesilir.</small></label>
         <label class="y-alan">KDV<select name="kdv">{[20, 10, 1, 0].map((o) => <option value={o} selected={o === taslak.kdv}>%{o}</option>)}</select></label>
-        <div class="y-alan"><span>Trendyol fiyatı</span><strong>{para(ilanFiyati(secili))}</strong><small class="muted">Sitedeki son fiyatla aynı (sepette indirim dahil). Değiştirmek için ürünün site fiyatını değiştirin; Trendyol’a kendiliğinden gider.</small></div>
+        <label class="y-alan">Trendyol özel satış fiyatı (TL, isteğe bağlı)<input name="ozelFiyat" inputmode="decimal" value={(taslak.fiyat ?? k.urunler[secili.id]?.ozelFiyat) !== undefined ? String(taslak.fiyat ?? k.urunler[secili.id]?.ozelFiyat).replace('.', ',') : ''} placeholder={`Site/kural fiyatı: ${para(ilanFiyati(secili, k))}`} /><small class="muted">Boş bırakırsanız sitedeki son fiyat (veya genel Trendyol kuralı) uygulanır: şu an <strong>{para(ilanFiyati(secili, k, taslak))}</strong>.</small></label>
         <div class="y-alan"><span>Gönderilecek stok</span><strong>{stokHedefi ?? '—'} adet</strong><small class="muted">Depodaki satılabilir stok − {k.guvenlikPayi} güvenlik payı. Sonra otomatik eşitlenir.</small></div>
       </div>
 
@@ -260,10 +324,12 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
           const g = seciliDeger(o);
           return <div class="y-alan">
             <span>{o.ad}{o.zorunlu && <b class="ty-zorunlu"> *</b>}</span>
-            {o.degerler.length > 0 && <select name={'oz-' + o.id} multiple={o.coklu} size={o.coklu ? 4 : undefined}>
-              {!o.coklu && <option value="">{o.ozelDeger ? '— Listeden seçin ya da aşağıya yazın —' : '— Seçin —'}</option>}
+            {o.degerler.length > 0 && (o.coklu ? <select name={'oz-' + o.id} multiple size={4}>
               {o.degerler.map((d) => <option value={d.id} selected={g?.attributeValueIds?.includes(d.id)}>{d.ad}</option>)}
-            </select>}
+            </select> : <select name={'oz-' + o.id}>
+              <option value="">{o.ozelDeger ? '— Listeden seçin ya da aşağıya yazın —' : '— Seçin —'}</option>
+              {o.degerler.map((d) => <option value={d.id} selected={g?.attributeValueIds?.includes(d.id)}>{d.ad}</option>)}
+            </select>)}
             {(o.ozelDeger || !o.degerler.length) && <input name={'ozm-' + o.id} value={g?.attributeValue ?? ''} placeholder={o.degerler.length ? 'veya kendiniz yazın' : 'Değer yazın'} maxlength="400" />}
           </div>;
         })}</div>
@@ -280,7 +346,13 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
       {hazirlik && hazirlik.eksikler.length > 0 && taslak.durum !== 'onaylandi' && <p class="y-uyari">Göndermeden önce tamamlanacak: {hazirlik.eksikler.join(', ')}.</p>}
       {hazirlik?.istek && taslak.durum !== 'onaylandi' && <p class="y-help">Hazır: {para(hazirlik.istek.salePrice)} · {hazirlik.istek.quantity} adet · {hazirlik.istek.images.length} görsel · {hazirlik.istek.attributes.length} özellik.</p>}
       {taslak.durum === 'onaylandi'
-        ? <p class="y-help">Ürün Trendyol’da onaylı ve “Ürün eşleştirmeleri”ne bağlandı. Stok ve fiyat buradan gider; başlık, açıklama ve görseli Trendyol satıcı panelinden değiştirin.</p>
+        ? <>
+            <p class="y-help">Ürün Trendyol’da onaylı ve “Ürün eşleştirmeleri”ne bağlı. Stok ortak depodan otomatik gider. Fiyat yalnız aşağıdaki düğmeyle (ya da ürüne otomatik fiyat takibi açtıysanız kendiliğinden) gider. Başlık, açıklama ve görseli Trendyol satıcı panelinden değiştirin.</p>
+            <div class="y-modal__alt">
+              <button class="btn btn--cizgi" type="submit" name="eylem" value="kaydet" disabled={!depoHazir}>Özel fiyatı kaydet</button>
+              <button class="btn btn--sepet" type="submit" name="eylem" value="kaydet-fiyat" disabled={!depoHazir || !apiHazir}>Kaydet ve fiyatı şimdi gönder</button>
+            </div>
+          </>
         : <div class="y-modal__alt">
             <button class="btn btn--cizgi" type="submit" name="eylem" value="kaydet" disabled={!depoHazir}>Kaydet</button>
             <button class="btn btn--sepet" type="submit" name="eylem" value="gonder" disabled={!depoHazir || !apiHazir || ilanBekliyor(taslak)}>{taslak.durum === 'reddedildi' || taslak.durum === 'hata' ? 'Düzeltip yeniden gönder' : 'Kaydet ve Trendyol’a gönder'}</button>
@@ -292,18 +364,48 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
     <h2><PIkon ad="grafik" /> Trendyol ilan özeti</h2>
     {gorseller[0] && <img src={gorseller[0]} alt="" width="260" height="180" loading="lazy" decoding="async" />}
     <p><strong>{taslak.baslik || [secili.marka, secili.kisaAd].join(' ')}</strong></p>
-    <dl class="y-money-lines y-money-lines--kucuk"><div><dt>İlan fiyatı</dt><dd>{para(ilanFiyati(secili))}</dd></div><div><dt>Hedef stok</dt><dd>{stokHedefi ?? '—'}</dd></div><div><dt>Görseller</dt><dd>{gorseller.length}</dd></div></dl>
-    <p class="y-help">Değerler son kayda göre gösterilir.</p>
+    <dl class="y-money-lines y-money-lines--kucuk">
+      <div><dt>İlan fiyatı</dt><dd>{para(ilanFiyati(secili, k, taslak))}</dd></div>
+      <div><dt>Hedef stok</dt><dd>{stokHedefi ?? '—'} adet</dd></div>
+      <div><dt>İlan durumu</dt><dd><span class:list={['y-chip', 'y-chip--' + DURUM[taslak.durum][1]]}>{DURUM[taslak.durum][0]}</span></dd></div>
+      <div><dt>Görseller</dt><dd>{gorseller.length} hazır</dd></div>
+    </dl>
+    <div class="ty-kontrol-kutu">
+      <h3>Gönderim kontrolü</h3>
+      <ul class="ty-kontrol-listesi">
+        <li><span>Trendyol kategorisi</span><b class:list={['y-chip', taslak.kategoriId ? 'y-chip--yesil' : 'y-chip--turuncu']}>{taslak.kategoriId ? 'Tamam' : 'Eksik'}</b></li>
+        <li><span>Trendyol markası</span><b class:list={['y-chip', taslak.markaId ? 'y-chip--yesil' : 'y-chip--turuncu']}>{taslak.markaId ? 'Tamam' : 'Eksik'}</b></li>
+        <li><span>Barkod ve desi</span><b class:list={['y-chip', taslak.barkod && taslak.desi ? 'y-chip--yesil' : 'y-chip--turuncu']}>{taslak.barkod && taslak.desi ? 'Tamam' : 'Eksik'}</b></li>
+        <li><span>Zorunlu özellikler</span><b class:list={['y-chip', !hazirlik?.eksikler.some((x) => x.includes('özelliği')) && taslak.kategoriId ? 'y-chip--yesil' : 'y-chip--turuncu']}>{!taslak.kategoriId ? 'Kategori seçin' : !hazirlik?.eksikler.some((x) => x.includes('özelliği')) ? 'Tamam' : 'Eksik var'}</b></li>
+        <li><span>Ürün fotoğrafları</span><b class:list={['y-chip', gorseller.length > 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']}>{gorseller.length > 0 ? 'Hazır' : 'Eksik'}</b></li>
+      </ul>
+    </div>
+    <p class="y-help">Bu önizleme taslak verilerine göredir; Trendyol onayı gönderimden sonra kesinleşir.</p>
     <a class="btn btn--cizgi" href={yol + '#liste'}>Ürün kataloğuna dön</a>
   </aside>
   </div>}
 
   <details class="y-kart" id="fiyat" open={q.has('ok') && !secili}>
-    <summary><strong>Trendyol fiyatları</strong></summary>
-    <p class="y-help">Trendyol fiyatı her zaman sitedeki son fiyatla aynıdır: sitede fiyatı düşürdüğünüzde ya da sepette indirim verdiğinizde Trendyol’daki fiyat da 5 dakika içinde aynı olur. Bu yalnız sitedeki bir ürüne bağlı ilanlarda çalışır (Satış kanalları › Trendyol ilanları).</p>
-    <p class="y-help">Trendyol’da üstü çizili eski fiyat gösterilmez. Yönetmelik, indirimin her satış kanalının kendi önceki fiyatına dayanmasını istiyor; indirim Trendyol’da düşük fiyat olarak görünür.</p>
+    <summary><strong>Trendyol fiyatları ve fiyat kuralı</strong></summary>
+    <p class="y-help">Trendyol fiyatını ister sitedeki son fiyatla birebir aynı tutun (%0 ve +0 TL), ister komisyon/kargo farkı için genel bir yüzde/TL kuralı belirleyin. Tek bir ürüne özel fiyat vermek için o ürünün ilan düzenleyicisindeki “Trendyol özel satış fiyatı” alanını kullanabilirsiniz.</p>
+    <form method="post" class="y-izgara" style="margin:10px 0;padding:12px;border:1px solid var(--y-border);border-radius:10px;background:var(--y-surface-2,#faf7f2)">
+      <input type="hidden" name="eylem" value="fiyat-kurali" />
+      <label class="y-secim">
+        <input type="checkbox" name="otoFiyat" checked={ayar.otomasyon.otoFiyat} disabled={!depoHazir} />
+        <span><strong>Otomatik fiyat takibi çalışsın</strong> <small class="muted">(Yalnız “Otomatik fiyat takibi” açık ürünler 5 dakika içinde hedef fiyata çekilir; diğer ürünlerin Trendyol fiyatı siz göndermedikçe değişmez)</small></span>
+      </label>
+      <div class="y-izgara y-izgara--3">
+        <label class="y-alan">Yüzde fark (%)<input name="yuzde" inputmode="decimal" value={k.fiyatKurali.yuzde} disabled={!depoHazir} /><small class="muted">0 = siteyle aynı</small></label>
+        <label class="y-alan">Ek tutar (+TL)<input name="ekTL" inputmode="decimal" value={k.fiyatKurali.ekTL} disabled={!depoHazir} /><small class="muted">0 = ek tutar yok</small></label>
+        <label class="y-secim" style="align-self:center"><input type="checkbox" name="yuvarla" checked={k.fiyatKurali.yuvarla} disabled={!depoHazir} /> Sonucu ,90 TL’ye yuvarla</label>
+      </div>
+      <div class="y-modal__alt">
+        <button class="btn btn--cizgi btn--kucuk" type="submit" disabled={!depoHazir}>Fiyat kuralını kaydet</button>
+      </div>
+    </form>
     <form method="post" class="y-modal__alt">
-      <button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-gonder" disabled={!depoHazir || !apiHazir}>Fiyatları şimdi siteyle eşitle</button>
+      <button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-gonder" disabled={!depoHazir || !apiHazir}>Takipteki ürünlerin fiyatını şimdi gönder</button>
+      <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar?eslestirme=trendyol#eslestirme-trendyol">Ürün seçip fiyat gönder / takibi aç</a>
     </form>
   </details>
 
@@ -314,18 +416,20 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
       <select class="y-girdi" aria-label="Trendyol ilan durumu" data-ty-durum><option value="">Tüm ilan durumları</option>{Object.entries(DURUM).map(([id, [ad]]) => <option value={id}>{ad}</option>)}<option value="elle">Bağlı (elle)</option><option value="gonderilmedi">Gönderilmedi</option></select>
     </div>
     <p class="y-help" role="status" data-ty-bos hidden>Bu filtreye uyan ürün yok.</p>
-    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-      <thead><tr><th>Ürün</th><th class="y-sayi">Site fiyatı</th><th class="y-sayi">Trendyol fiyatı</th><th>Trendyol durumu</th><th></th></tr></thead>
+    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo ty-katalog-tablo">
+      <thead><tr><th>Ürün / Barkod</th><th>Trendyol kategorisi</th><th class="y-sayi">Satış fiyatı</th><th class="y-sayi">Stok</th><th>İlan durumu</th><th class="y-islem">İşlem</th></tr></thead>
       <tbody>{urunler.map((u) => {
         const [ad, renk] = satirDurumu(u.id);
         const t = k.ilanlar[u.id];
         const kod = t?.barkod || k.urunler[u.id]?.kod;
-        return <tr class:list={{ 'is-secili': u.id === secili?.id }} data-ty-kayit={t?.durum ?? (kod ? 'elle' : 'gonderilmedi')} data-ty-aranan={[u.ad, u.marka, u.kisaAd, u.sku, kod ?? ''].join(' ')}>
-          <td data-etiket="Ürün"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" decoding="async" />}</span><span><strong>{u.marka} {u.kisaAd}</strong><small class="y-table-note">{[u.sku, kod].filter(Boolean).join(' · ')}</small>{u.durum !== 'yayinda' && <small class="y-table-note">Sitede {u.durum === 'taslak' ? 'taslak' : 'gizli'}</small>}</span></div></td>
-          <td data-etiket="Site fiyatı" class="y-sayi y-nowrap">{para(u.fiyat)}{ilanFiyati(u) !== u.fiyat && <small class="y-table-note">Sepette {para(ilanFiyati(u))}</small>}</td>
-          <td data-etiket="Trendyol fiyatı" class="y-sayi y-nowrap">{para(ilanFiyati(u))}{(() => { const son = k.urunler[u.id]?.fiyat ?? t?.sonFiyat; return son !== undefined && son !== ilanFiyati(u) && <small class="y-table-note">Son gönderilen {para(son)}</small>; })()}</td>
-          <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + renk]}>{ad}</span>{t?.mesajlar.length ? <small class="y-table-note">{t.mesajlar[0]}</small> : null}</td>
-          <td><a class="btn btn--cizgi" href={`${yol}?urun=${encodeURIComponent(u.id)}#ilan`}>{t?.durum === 'onaylandi' ? 'Görüntüle' : t ? 'Devam et' : 'Hazırla'}</a></td>
+        const sonTarih = t?.kontrol ?? t?.gonderim ?? k.urunler[u.id]?.tarih;
+        return <tr class:list={{ 'is-secili': u.id === secili?.id }} data-ty-kayit={t?.durum ?? (kod ? 'elle' : 'gonderilmedi')} data-ty-aranan={[u.ad, u.marka, u.kisaAd, u.sku, kod ?? '', t?.kategoriAdi ?? ''].join(' ')}>
+          <td data-etiket="Ürün" class="ty-hucre-urun"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" decoding="async" />}</span><span><strong>{u.marka} {u.kisaAd}</strong><small class="y-table-note">{[u.sku, kod && kod !== u.sku ? `Barkod: ${kod}` : undefined].filter(Boolean).join(' · ')}</small>{u.durum !== 'yayinda' && <small class="y-table-note y-yazi-turuncu">Sitede {u.durum === 'taslak' ? 'taslak' : 'gizli'}</small>}</span></div></td>
+          <td data-etiket="Kategori" class="ty-hucre-kategori">{t?.kategoriAdi ? <span>{t.kategoriAdi}</span> : <span class="muted">Seçilmedi</span>}</td>
+          <td data-etiket="Satış fiyatı" class="y-sayi y-nowrap"><strong>{para(ilanFiyati(u, k, t))}</strong>{(t?.fiyat ?? k.urunler[u.id]?.ozelFiyat) !== undefined ? <small class="y-table-note">Özel fiyat (Site: {para(u.fiyat)})</small> : ilanFiyati(u, k, t) !== u.fiyat && <small class="y-table-note">Site liste: {para(u.fiyat)}</small>}{(() => { const son = k.urunler[u.id]?.fiyat ?? t?.sonFiyat; return son !== undefined && son !== ilanFiyati(u, k, t) && <small class="y-table-note">Son gönderilen {para(son)}</small>; })()}</td>
+          <td data-etiket="Stok" class="y-sayi y-nowrap"><strong>{urunHedefStok(u)} adet</strong><small class="y-table-note">Depo: {u.stok}</small></td>
+          <td data-etiket="Durum" class="ty-hucre-durum"><span class:list={['y-chip', 'y-chip--' + renk]}>{ad}</span>{t?.mesajlar.length ? <small class="y-table-note y-yazi-kirmizi">{t.mesajlar[0]}</small> : null}{sonTarih && <small class="y-table-note">Son işlem: {yTarih.format(new Date(sonTarih))}</small>}</td>
+          <td data-etiket="İşlem" class="y-islem y-nowrap"><a class="btn btn--cizgi btn--kucuk" href={`${yol}?urun=${encodeURIComponent(u.id)}#ilan`}>{t?.durum === 'onaylandi' ? 'Görüntüle' : t ? 'Düzenle' : 'Hazırla'}</a></td>
         </tr>;
       })}</tbody>
     </table></div>
@@ -357,6 +461,25 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
 <style>
   .ty-vitrin img { width: 100%; max-height: 250px; object-fit: contain; background: #f3ecdf; border-radius: 9px; margin-bottom: 10px; }
   .ty-vitrin .btn { margin-top: 10px; }
+  .ty-hazirlik-adimlari { list-style: none; margin: 0 0 14px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .ty-hazirlik-adimlari li a { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--y-border); border-radius: 12px; background: var(--y-surface-2); color: inherit; text-decoration: none; min-width: 0; }
+  .ty-hazirlik-adimlari li a:hover { border-color: #d2b996; }
+  .ty-hazirlik-adimlari li.is-tamam a { background: #f0f8f2; border-color: #cfe7d7; }
+  .ty-hazirlik-no { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e8dcc8; color: #5b4324; font-weight: 800; font-size: 13px; }
+  .ty-hazirlik-adimlari li.is-tamam .ty-hazirlik-no { background: var(--y-yesil); color: #fff; }
+  .ty-hazirlik-adimlari div { min-width: 0; display: grid; }
+  .ty-hazirlik-adimlari strong { font-size: 13.5px; }
+  .ty-hazirlik-adimlari small { color: var(--y-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ty-eksik-kutu { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 14px; margin-bottom: 12px; }
+  .ty-ret-kutu { border-color: #f1c4be !important; background: #fdf1ef !important; color: #7b1d14 !important; margin-bottom: 12px; }
+  .ty-kontrol-kutu { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--y-border); }
+  .ty-kontrol-listesi { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 7px; font-size: 13.5px; }
+  .ty-kontrol-listesi li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .ty-katalog-tablo :is(.ty-hucre-urun, .ty-hucre-kategori, .ty-hucre-durum, small.y-table-note) { white-space: normal; overflow-wrap: anywhere; }
+  .ty-katalog-tablo .ty-hucre-kategori { max-width: 220px; font-size: 13.5px; color: var(--y-ink-2); }
+  .ty-katalog-tablo .ty-hucre-durum { max-width: 240px; }
+  .ty-katalog-tablo .y-islem { width: 1%; }
+  @media (max-width: 760px) { .ty-hazirlik-adimlari { grid-template-columns: 1fr; } }
   #fiyat[open] > summary { margin-bottom: 10px; }
   h3 { font-size: 15px; margin: 0 0 6px; }
   .ty-adim { border-top: 1px solid var(--y-border); padding-block: 14px; scroll-margin-top: 5rem; }

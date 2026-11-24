@@ -1,0 +1,65 @@
+---
+/**
+ * Sipariş yolculuğu: alındı → stok → hazırlık → fatura → kargo → teslim. Her adım tarih ve sıradaki işin düğmesiyle.
+ * Veri lib/siparisAdimlari.ts'den gelir (kayıtlardan hesaplanır).
+ */
+import type { SiparisYolculugu } from '../../lib/siparisAdimlari';
+import { yTarih } from '../../lib/yonetimRapor';
+
+interface Props { yolculuk: SiparisYolculugu }
+const { yolculuk } = Astro.props;
+const { adimlar, kapanis, ilerleme } = yolculuk;
+const IKON = { tamam: '✓', simdi: '●', bekliyor: '', sorun: '!', atlandi: '–' } as const;
+const DURUM_ADI = { tamam: 'tamamlandı', simdi: 'sıradaki iş', bekliyor: 'bekliyor', sorun: 'dikkat gerekiyor', atlandi: 'gerekmedi' } as const;
+const tarihYaz = (t?: string) => { const z = Date.parse(t ?? ''); return Number.isFinite(z) ? yTarih.format(z) : undefined; };
+const yuzde = ilerleme.toplam ? Math.round((ilerleme.tamam / ilerleme.toplam) * 100) : 0;
+---
+<div class="sy">
+  <div class="sy__bas">
+    <strong>Sipariş adımları</strong>
+    <span class="sy__sayac">{ilerleme.tamam}/{ilerleme.toplam} adım tamam</span>
+    <span class="sy__cubuk" aria-hidden="true"><span style={`width:${yuzde}%`}></span></span>
+  </div>
+  <ol class="sy__liste" aria-label="Sipariş adımları">
+    {adimlar.map((a, i) => <li class:list={['sy__adim', 'sy__adim--' + a.durum]} aria-current={a.durum === 'simdi' ? 'step' : undefined}>
+      <span class="sy__nokta" aria-hidden="true">{IKON[a.durum] || i + 1}</span>
+      <div class="sy__govde">
+        <span class="sy__ad">{a.ad}<span class="sr-only"> ({DURUM_ADI[a.durum]})</span></span>
+        {a.durum === 'tamam' && tarihYaz(a.tarih) && <small class="sy__tarih">{tarihYaz(a.tarih)}</small>}
+        {a.aciklama && <small class="sy__not">{a.aciklama}</small>}
+        {a.eylem && (a.durum === 'simdi' || a.durum === 'sorun' || a.durum === 'bekliyor' || a.durum === 'tamam') && <a class:list={['sy__eylem', { 'is-birincil': a.durum === 'simdi' || a.durum === 'sorun' }]} href={a.eylem.href}>{a.eylem.etiket} →</a>}
+      </div>
+    </li>)}
+  </ol>
+  {kapanis && <p class:list={['sy__kapanis', 'sy__kapanis--' + kapanis.renk]} role="status"><strong>{kapanis.ad}</strong>{kapanis.aciklama && <span> · {kapanis.aciklama}</span>}</p>}
+</div>
+
+<style>
+  .sy { display: grid; gap: 10px; margin: 0 0 14px; }
+  .sy__bas { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; }
+  .sy__bas > strong { font-size: 15.5px; }
+  .sy__sayac { color: var(--y-muted, #6b6154); font-size: 13px; font-weight: 600; }
+  .sy__cubuk { flex: 1 1 140px; max-width: 260px; height: 7px; border-radius: 99px; background: #efe6d2; overflow: hidden; }
+  .sy__cubuk span { display: block; height: 100%; background: #0a7f3f; border-radius: inherit; }
+  .sy__liste { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 190px), 1fr)); gap: 8px; counter-reset: sy; }
+  .sy__adim { display: flex; gap: 9px; align-items: flex-start; padding: 10px 11px; border: 1px solid var(--y-border, #e5dec9); border-radius: 11px; background: #fff; min-width: 0; }
+  .sy__nokta { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #efe6d2; color: #6b4c14; font-size: 12.5px; font-weight: 800; }
+  .sy__govde { display: grid; gap: 2px; min-width: 0; }
+  .sy__ad { font-size: 13.5px; font-weight: 700; color: #291e11; line-height: 1.3; }
+  .sy__tarih { font-size: 12px; color: #1f5133; font-weight: 600; }
+  .sy__not { font-size: 12px; color: var(--y-muted, #6b6154); line-height: 1.35; overflow-wrap: anywhere; }
+  .sy__eylem { font-size: 12.5px; font-weight: 700; color: var(--y-accent, #8a5a1c); text-decoration: none; margin-top: 2px; }
+  .sy__eylem.is-birincil { display: inline-block; justify-self: start; padding: 4px 9px; border-radius: 7px; background: #aa812e; color: #fff; }
+  .sy__adim--tamam { background: #f3faf5; border-color: #cfe8d7; }
+  .sy__adim--tamam .sy__nokta { background: #0a7f3f; color: #fff; }
+  .sy__adim--simdi { border-color: #aa812e; box-shadow: 0 0 0 1px #aa812e inset; }
+  .sy__adim--simdi .sy__nokta { background: #aa812e; color: #fff; }
+  .sy__adim--sorun { background: #fdf1ef; border-color: #f1c4be; }
+  .sy__adim--sorun .sy__nokta { background: #b3261e; color: #fff; }
+  .sy__adim--atlandi { opacity: .6; }
+  .sy__adim--atlandi .sy__ad { text-decoration: line-through; text-decoration-color: #b9ad97; }
+  .sy__kapanis { margin: 0; padding: 10px 12px; border-radius: 10px; font-size: 14px; border: 1px solid var(--y-border, #e5dec9); background: #f6f2ea; }
+  .sy__kapanis--kirmizi { background: #fdf1ef; border-color: #f1c4be; color: #7b1d14; }
+  .sy__kapanis--turuncu { background: #fff6e6; border-color: #e9d5a4; color: #7a4f05; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+</style>

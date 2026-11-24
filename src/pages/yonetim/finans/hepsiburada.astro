@@ -174,8 +174,9 @@ const bugun = finansGunu();
       <label class="y-alan">Hedeflediğiniz net kâr (TL, isteğe bağlı)<input name="hedef" inputmode="decimal" value={hedefGirdi} placeholder="ör. 150" /></label>
       <div class="y-modal__alt">
         <button class="btn btn--sepet" type="submit"><PIkon ad="hedef" boyut={18} />Hesapla</button>
-        {secili && <button class="btn btn--cizgi" type="submit" formmethod="post" name="eylem" value="urun-kaydet"><PIkon ad="tik" boyut={18} />Bu ürün için kaydet</button>}
+        {secili && <button class="btn btn--cizgi" type="submit" formmethod="post" name="eylem" value="urun-kaydet"><PIkon ad="tik" boyut={18} />Desi ve maliyeti bu ürün için kaydet</button>}
       </div>
+      <p class="y-help" style="margin:4px 0 0">Buradaki satış fiyatı yalnızca kârlılık simülasyonu içindir; mağaza vitrin fiyatını değiştirmez. “Kaydet” düğmesi ürünün desi, kategori, KDV ve alış maliyetini sonraki hesaplamalar için saklar.</p>
     </form>
   </section>
 
@@ -195,16 +196,19 @@ const bugun = finansGunu();
         <div class="y-sonuc-kutu"><PIkon ad="hedef" boyut={18} /><span>Başabaş fiyatı</span><strong>{basaBas !== undefined ? finansPara(basaBas) : '—'}</strong><small>Zarar etmemek için en düşük fiyat</small></div>
         <div class="y-sonuc-kutu"><PIkon ad="trend" boyut={18} /><span>Hedef kâr için fiyat</span><strong>{hedef !== undefined ? finansPara(hedef) : '—'}</strong><small>{hedef !== undefined ? finansPara(tlKurus(hedefGirdi)!) + ' net kâr için' : 'Hedef net kârı girin'}</small></div>
       </div>
-      <h3>Kesinti dökümü</h3>
+      <h3>1. Hepsiburada kesintileri ve hesabınıza yatacak hakediş</h3>
       <dl class="y-hesap">
-        <div><dt>Müşterinin ödediği <small>KDV dahil</small></dt><dd>{finansPara(hesap.kdvHaricSatis + hesap.satisKdv)}</dd></div>
+        <div><dt>Müşterinin ödediği satış fiyatı <small>KDV dahil</small></dt><dd>{finansPara(hesap.kdvHaricSatis + hesap.satisKdv)}</dd></div>
         {hesap.kalemler.map((k) => <div class="eksi"><dt>{k.ad} <small>{finansPara(k.net)} + %20 KDV</small></dt><dd>−{finansPara(k.net + k.kdv)}</dd></div>)}
         <div class="eksi"><dt>E-ticaret stopajı <small>{yuzde(ayar.stopajBp)}, KDV hariç satış üzerinden; yıllık vergiden düşülür</small></dt><dd>−{finansPara(hesap.stopaj)}</dd></div>
-        <div class="sonuc"><dt>Hesabınıza yatacak <small>teslimattan sonra {ODEME_VADESI_IS_GUNU} iş günü (bugün teslim edilse ≈ {gunTr(vadeOrnegi.toISOString().slice(0, 10))})</small></dt><dd>{finansPara(hesap.hesabaYatan)}</dd></div>
+        <div class="sonuc"><dt>Hesabınıza yatacak (Hakediş) <small>teslimattan sonra {ODEME_VADESI_IS_GUNU} iş günü (bugün teslim edilse ≈ {gunTr(vadeOrnegi.toISOString().slice(0, 10))})</small></dt><dd>{finansPara(hesap.hesabaYatan)}</dd></div>
+      </dl>
+      <h3>2. Vergi ve alış maliyeti sonrası net kâr</h3>
+      <dl class="y-hesap">
         <div class="alt"><dt>Devlete ödenecek KDV farkı <small>satış KDV'si − kesintilerin KDV'si; ürün alışındaki KDV ayrıca düşülür</small></dt><dd>{finansPara(hesap.kdvFarki)}</dd></div>
         {hesap.netKar !== undefined
-          ? <div class="sonuc"><dt>Net kâr <small>KDV hariç satış − kesintiler − alış maliyeti{hesap.marj !== undefined ? ' · marj %' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : ''}</small></dt><dd class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</dd></div>
-          : <div class="alt"><dt>Net kâr</dt><dd>Alış maliyeti girilmedi</dd></div>}
+          ? <div class="sonuc"><dt>Tahmini net kâr <small>KDV hariç satış − kesintiler − alış maliyeti{hesap.marj !== undefined ? ' · marj %' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : ''}</small></dt><dd class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</dd></div>
+          : <div class="alt"><dt>Tahmini net kâr</dt><dd>Hesaplamak için ürün alış maliyetini girin</dd></div>}
       </dl>
       <details class="y-block-gap"><summary>Bu satışta olası Hepsiburada cezaları</summary>
         <ul class="y-task-list">{hesap.cezalar.map((c) => <li><span>{c.ad}</span><span>{finansPara(c.tutar)}</span></li>)}</ul>

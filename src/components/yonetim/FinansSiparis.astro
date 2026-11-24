@@ -20,37 +20,81 @@ const ACIKLAMA: Record<BelgeTuru, string> = {
 const mevcut = Object.fromEntries(belgeler.filter(belgeGecerli).map((b) => [b.tur, b.belgeNo ?? 'kayıtlı'])) as Partial<Record<BelgeTuru, string>>;
 const durumSinifi = (d: Belge['durum']) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyor' ? 'turuncu' : d === 'iptal' ? 'gri' : 'yesil';
 const sirali = [...belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturma));
+const mevcutBelge = Object.fromEntries(sirali.filter(belgeGecerli).map((b) => [b.tur, b])) as Partial<Record<BelgeTuru, Belge>>;
+const etiketAdres = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new URLSearchParams({ no: s.no, bicim, ...(tur ? { tur } : {}) });
 ---
-{!s.paytr?.test && <section class="y-kart" id="belgeler">
+{!s.paytr?.test && <section class="y-kart y-belge-kart" id="belgeler">
   <div class="y-kart__bas">
-    <h2><PIkon ad="belge" /> Belgeler</h2>
-    <button class="btn btn--cizgi" type="button" data-y-dialog="belge-olustur"><Ikon ad="belge" boyut={16} />Belge Oluştur</button>
+    <div>
+      <h2><PIkon ad="belge" /> Belgeler ve Koli Etiketleri</h2>
+      <p class="y-kart__alt">Koli içi fiş, paket dışı barkodlu adres etiketi ve sipariş belgeleri.</p>
+    </div>
+    <button class="btn btn--sepet btn--kucuk" type="button" data-y-dialog="belge-olustur"><PIkon ad="arti" boyut={15} />Belge Oluştur</button>
   </div>
-  {sirali.length === 0 && <p class="muted">Bu sipariş için henüz belge hazırlanmadı.</p>}
-  {sirali.length > 0 && <ul class="y-belge-listesi">
-    {sirali.map((b) => <li class:list={{ 'is-iptal': b.durum === 'iptal' }}>
-      <span class="y-belge-listesi__ad">
-        <strong>{BELGE_TURLERI[b.tur]}</strong>
-        <small class="muted">{b.belgeNo ?? 'Numarasız eski kayıt'} · {yTarih.format(new Date(b.olusturma))}{b.fiyatGizle ? ' · fiyatsız' : ''}</small>
-      </span>
-      <span class:list={['y-chip', 'y-chip--' + durumSinifi(b.durum)]}>{BELGE_DURUMLARI[b.durum]}</span>
-      <span class="y-belge-listesi__is">
-        {['duzenlendi', 'gonderildi', 'iptal'].includes(b.durum) && <>
-          <a class="y-link" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Görüntüle</a>
-          <a class="y-link" href={'/yonetim/finans/belge?id=' + b.id}>İndir</a>
-        </>}
-        {b.durum === 'duzenlendi' && <form method="post" action="/yonetim/finans/belge">
-          <input type="hidden" name="id" value={b.id} /><input type="hidden" name="geri" value={geri} />
-          <button class="y-icon-button y-link" type="submit" name="islem" value="gonderildi">Gönderildi</button>
-        </form>}
-        {b.durum === 'hata' && <form method="post" action="/yonetim/finans/belge">
-          <input type="hidden" name="no" value={s.no} /><input type="hidden" name="tur" value={b.tur} /><input type="hidden" name="geri" value={geri} />
-          <input type="hidden" name="indir" value="0" />
-          <button class="btn btn--cizgi" type="submit" name="islem" value="olustur">Yeniden dene</button>
-        </form>}
-      </span>
-    </li>)}
-  </ul>}
+
+  <div class="y-belge-tablo">
+    {(['ozet', 'fis', 'paket', 'iade'] as BelgeTuru[]).filter((t) => !iptal || t === 'iade').map((t) => {
+      const kayit = mevcutBelge[t];
+      return (
+        <div class="y-belge-satir">
+          <span class="y-pdf-rozet" aria-hidden="true">PDF</span>
+          <div class="y-belge-satir__bilgi">
+            <strong>{BELGE_TURLERI[t]}</strong>
+            <small>{ACIKLAMA[t]}{kayit ? ` · ${kayit.belgeNo ?? ''} (${yTarih.format(new Date(kayit.olusturma))})` : ''}</small>
+          </div>
+          <span class:list={['y-chip', kayit ? 'y-chip--' + durumSinifi(kayit.durum) : 'y-chip--gri']}>
+            {kayit ? BELGE_DURUMLARI[kayit.durum] : 'Hazırlanmadı'}
+          </span>
+          <div class="y-belge-satir__aksiyon">
+            {kayit && ['duzenlendi', 'gonderildi', 'iptal'].includes(kayit.durum) ? (
+              <>
+                <a class="y-ikon-aksiyon" href={'/yonetim/finans/belge?id=' + kayit.id} title="PDF İndir" aria-label={BELGE_TURLERI[t] + ' indir'}><PIkon ad="indir" boyut={16} /></a>
+                <a class="y-ikon-aksiyon" href={'/yonetim/finans/belge?goster=1&id=' + kayit.id} target="_blank" rel="noopener" title="Önizle / Yazdır" aria-label={BELGE_TURLERI[t] + ' görüntüle'}><PIkon ad="goz" boyut={16} /></a>
+              </>
+            ) : (
+              <form method="post" action="/yonetim/finans/belge">
+                <input type="hidden" name="no" value={s.no} />
+                <input type="hidden" name="tur" value={t} />
+                <input type="hidden" name="geri" value={geri + '#belgeler'} />
+                <input type="hidden" name="indir" value="0" />
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="islem" value="olustur">Oluştur</button>
+              </form>
+            )}
+          </div>
+        </div>
+      );
+    })}
+
+    {!iptal && !iadeEdildi(s) && (
+      <div class="y-belge-satir y-belge-satir--etiket">
+        <span class="y-pdf-rozet y-pdf-rozet--etiket" aria-hidden="true">ETK</span>
+        <div class="y-belge-satir__bilgi">
+          <strong>Koli Dışı Hazırlık Etiketi & Toplama Listesi</strong>
+          <small>Kargo kolisinin dışına yapıştırılan alıcı adres/barkod etiketi ve depo toplama fişi.</small>
+        </div>
+        <div class="y-belge-etiket-butonlar">
+          <a class="btn btn--cizgi btn--kucuk" href={etiketAdres('etiket')} target="_blank" rel="noopener" title="Termal veya küçük etiket yazıcısı için">10×15 Etiket</a>
+          <a class="btn btn--cizgi btn--kucuk" href={etiketAdres('a4')} target="_blank" rel="noopener" title="Standart A4 yazıcı için">A4 Etiket</a>
+          <a class="btn btn--cizgi btn--kucuk" href={etiketAdres('a4', 'toplama')} target="_blank" rel="noopener" title="Depoda ürünleri toplarken kontrol listesi">Toplama</a>
+        </div>
+      </div>
+    )}
+  </div>
+
+  {sirali.some((b) => b.durum === 'iptal' || b.durum === 'hata') && (
+    <details style="margin-top:10px;font-size:.82rem">
+      <summary class="muted" style="cursor:pointer">Eski / iptal edilen belge sürümleri ({sirali.length})</summary>
+      <ul class="y-belge-listesi" style="margin-top:6px">
+        {sirali.map((b) => (
+          <li class:list={{ 'is-iptal': b.durum === 'iptal' }}>
+            <span><strong>{BELGE_TURLERI[b.tur]}</strong> · {b.belgeNo ?? '—'}</span>
+            <span class:list={['y-chip', 'y-chip--' + durumSinifi(b.durum)]}>{BELGE_DURUMLARI[b.durum]}</span>
+            {['duzenlendi', 'gonderildi', 'iptal'].includes(b.durum) && <a class="y-link" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Aç</a>}
+          </li>
+        ))}
+      </ul>
+    </details>
+  )}
 
   <dialog class="y-modal y-modal--genis" id="belge-olustur" aria-labelledby="belge-olustur-baslik">
     <div class="y-modal__bas">
@@ -97,3 +141,20 @@ const sirali = [...belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturm
     </div>
   </dialog>
 </section>}
+<style>
+  .y-belge-tablo { display: grid; gap: 8px; }
+  .y-belge-satir { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--y-border, #e5dec9); border-radius: 10px; background: #fff; }
+  .y-belge-satir--etiket { grid-template-columns: 36px minmax(0, 1fr) auto; background: #faf7f2; }
+  .y-pdf-rozet { display: grid; place-items: center; width: 34px; height: 38px; border-radius: 8px; background: #fdf0ee; border: 1px solid #f5c6c0; color: #b42318; font-size: 10px; font-weight: 800; letter-spacing: .03em; }
+  .y-pdf-rozet--etiket { background: #f3ecdf; border-color: #decba8; color: #6b4c14; }
+  .y-belge-satir__bilgi { min-width: 0; display: grid; gap: 2px; }
+  .y-belge-satir__bilgi strong { font-size: 13.5px; color: var(--y-ink, #231f1a); }
+  .y-belge-satir__bilgi small { font-size: 12px; color: var(--y-muted, #6f6559); line-height: 1.35; }
+  .y-belge-satir__aksiyon, .y-belge-etiket-butonlar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .y-ikon-aksiyon { display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--y-border, #e5dec9); background: #faf8f4; color: var(--y-ink, #231f1a); text-decoration: none; }
+  .y-ikon-aksiyon:hover { border-color: #aa812e; background: #fff; }
+  @media (max-width: 680px) {
+    .y-belge-satir, .y-belge-satir--etiket { grid-template-columns: 36px minmax(0, 1fr); }
+    .y-belge-satir > .y-chip, .y-belge-satir__aksiyon, .y-belge-etiket-butonlar { grid-column: 2; justify-self: start; }
+  }
+</style>

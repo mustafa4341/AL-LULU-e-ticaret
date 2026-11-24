@@ -13,7 +13,7 @@ import PIkon from '../../components/yonetim/PIkon.astro';
 import KanalLogo from '../../components/yonetim/KanalLogo.astro';
 import { panelIsleriniOku } from '../../lib/panelIsleri';
 
-const { siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, isler, pazarHazirlanacak } = await panelIsleriniOku();
+const { magaza, siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, isler, pazarHazirlanacak } = await panelIsleriniOku();
 const bugun = finansGunu();
 const bugunRapor = raporla(finans, siparisler, bugun, bugun);
 const ayRapor = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
@@ -25,16 +25,30 @@ const tarihBaslik = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'nu
 const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade edildi', 'gri'] : s.durum === 'iptal' ? ['İptal', 'gri']
   : s.durum === 'odeme-bekliyor' ? ['Ödeme bekleniyor', 'turuncu'] : s.durum === 'odendi' ? ['Hazırlanacak', 'turuncu']
   : s.durum === 'hazirlaniyor' ? ['Kargoya verilecek', 'turuncu'] : s.durum === 'kargoda' ? ['Kargoda', 'yesil'] : ['Teslim edildi', 'yesil'];
-/* Son siparişler: üç kanal birlikte, en yeni 8 */
+const katalogUrun = (id?: string) => id ? magaza.urunler.find((u) => u.id === id) : undefined;
+/* Sıradaki / güncel siparişler: üç kanal birlikte, en yeni 8 (iki ayrı uzun liste yerine tek birleşik liste) */
 const sonSiparisler = [
-  ...siparisler.slice(0, 8).map((s) => { const [d, r] = durumYazi(s); return {
-    tarih: s.tarih, no: s.no, url: '/yonetim/siparisler/' + s.no, kanal: 'web', kanalAd: 'Web sitesi',
-    musteri: `${s.musteri.ad} ${s.musteri.soyad}`, tutar: formatTL(s.toplam), durum: d!, renk: r!,
-  }; }),
-  ...pazar.slice(0, 8).map((s) => ({
-    tarih: s.tarih, no: s.siparisNo, url: '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(s.id), kanal: s.kanal, kanalAd: KANALLAR[s.kanal],
-    musteri: s.musteri ?? '—', tutar: kurusTL(s.toplam), durum: PY_DURUM_ADLARI[s.durum], renk: PY_DURUM_RENK[s.durum],
-  })),
+  ...siparisler.slice(0, 8).map((s) => {
+    const [d, r] = durumYazi(s);
+    const ilk = s.kalemler[0];
+    const u = katalogUrun(ilk?.tip === 'set' ? ilk.parcalar[0]?.urunId : ilk?.id);
+    const urunMetni = s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join(', ');
+    return {
+      tarih: s.tarih, no: s.no, url: '/yonetim/siparisler/' + s.no, kanal: 'web', kanalAd: 'Web sitesi',
+      musteri: `${s.musteri.ad} ${s.musteri.soyad}`, tutar: formatTL(s.toplam), durum: d!, renk: r!,
+      gorsel: u?.gorseller[0]?.src, urunMetni,
+    };
+  }),
+  ...pazar.slice(0, 8).map((s) => {
+    const ilk = s.kalemler[0];
+    const u = katalogUrun(ilk?.urunId);
+    const urunMetni = s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join(', ');
+    return {
+      tarih: s.tarih, no: s.siparisNo, url: '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(s.id), kanal: s.kanal, kanalAd: KANALLAR[s.kanal],
+      musteri: s.musteri ?? '—', tutar: kurusTL(s.toplam), durum: PY_DURUM_ADLARI[s.durum], renk: PY_DURUM_RENK[s.durum],
+      gorsel: u?.gorseller[0]?.src, urunMetni,
+    };
+  }),
 ].sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih)).slice(0, 8);
 const ayBaslangici = bugun.slice(0, 7) + '-01';
 const satisAdresi = (baslangic: string, kanal = 'tumu') => '/yonetim/siparisler?' + new URLSearchParams({ durum: 'tumu', kanal, baslangic, bitis: bugun });
@@ -68,7 +82,7 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 
   <div class="y-merkez-izgara">
     <section class="y-kart">
-      <div class="y-kart__bas"><h2><PIkon ad="pano" /> Görev kuyruğu</h2><a class="y-link" href="/yonetim/isler">Tümünü gör</a></div>
+      <div class="y-kart__bas"><h2><PIkon ad="pano" /> Görev kuyruğu</h2><a class="y-link" href="/yonetim/isler">Tüm işleri gör</a></div>
       {isler.length === 0 ? <p class="y-bos-satir"><PIkon ad="tik-daire" boyut={20} />Bekleyen iş yok. Her şey yolunda.</p> : <ul class="y-satir-liste">
         {isler.slice(0, 5).map((x) => <li><a href={x.url}>
           <i class:list={['y-ton-nokta', 'y-ton-nokta--' + x.ton]} aria-hidden="true"></i>
@@ -76,6 +90,7 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
           <b class:list={['y-chip', 'y-chip--' + x.ton]}>{x.sayi}</b>
         </a></li>)}
       </ul>}
+      {isler.length > 5 && <p class="y-kart-dipnot">+{isler.length - 5} görev daha · <a class="y-link" href="/yonetim/isler">Tüm işleri gör</a></p>}
       <p class="y-kart-dipnot"><PIkon ad="veritabani" boyut={16} />
         Veri yedeği: {yedekGun === undefined ? 'henüz alınmadı' : yedekGun === 0 ? 'bugün alındı' : yedekGun + ' gün önce alındı'} ·
         <a class="y-link" href="/yonetim/yedek">Yedek indir (ZIP)</a>
@@ -92,7 +107,10 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
         {KANAL_LISTESI.map((k) => {
           const son = envanter.kanallar[k].sonApi;
           const api = pazaryeriApiDurumu(k);
-          const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi'] : api === 'kapali' || api === 'eksik' ? ['Kurulum bekliyor', 'gri'] : kanalGecikti.includes(k) ? [son ? 'Eşitleme gecikti' : 'İlk eşitleme bekleniyor', 'turuncu'] : api === 'test' ? ['Test', 'gri'] : !son ? ['İlk çekim bekleniyor', 'turuncu'] : ['Bağlı', 'yesil'];
+          const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi']
+            : (api === 'kapali' || api === 'eksik') ? (son ? ['Canlıda bağlı', 'yesil'] : ['Kurulum bekliyor', 'gri'])
+            : kanalGecikti.includes(k) ? [son ? 'Eşitleme gecikti' : 'İlk eşitleme bekleniyor', 'turuncu']
+            : api === 'test' ? ['Test', 'gri'] : !son ? ['İlk çekim bekleniyor', 'turuncu'] : ['Bağlı', 'yesil'];
           return <li><a href={'/yonetim/siparisler/kanallar#' + k}>
             <KanalLogo kanal={k} />
             <span class="y-satir__ana"><strong>{KANALLAR[k]}</strong><small>Son çekim: {son ? yTarih.format(new Date(son)) : 'henüz yok'}</small></span>
@@ -138,11 +156,15 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
   </section>
 
   <section class="y-kart">
-    <div class="y-kart__bas"><h2><PIkon ad="gecmis" /> Güncel sipariş akışı</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu">Tüm siparişler</a></div>
+    <div class="y-kart__bas"><h2><PIkon ad="gecmis" /> Sıradaki ve güncel sipariş akışı</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu">Tüm siparişler</a></div>
     {sonSiparisler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-      <thead><tr><th>Sipariş no</th><th>Kanal</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Durum</th><th>Tarih</th><th class="y-islem"><span class="visually-hidden">Aç</span></th></tr></thead>
+      <thead><tr><th>Sipariş no</th><th>Ürün</th><th>Kanal</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Durum</th><th>Tarih</th><th class="y-islem"><span class="visually-hidden">Aç</span></th></tr></thead>
       <tbody>{sonSiparisler.map((s) => <tr>
         <td data-etiket="Sipariş" class="y-nowrap y-siparis-no"><a class="y-link" href={s.url}><strong>{s.no}</strong></a></td>
+        <td data-etiket="Ürün"><a class="y-urun-ozet" href={s.url} title={s.urunMetni}>
+          {s.gorsel ? <img src={s.gorsel} alt="" width="36" height="36" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel--yok" aria-hidden="true"><PIkon ad="kutu" boyut={18} /></span>}
+          <span>{s.urunMetni}</span>
+        </a></td>
         <td data-etiket="Kanal"><span class:list={['kanal-etiket', 'kanal-etiket--' + s.kanal]}>{s.kanalAd}</span></td>
         <td data-etiket="Müşteri">{s.musteri}</td>
         <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{s.tutar}</strong></td>

@@ -1,3 +1,4 @@
+import { createHmac } from 'node:crypto';
 import { KANALLAR, hepsiburadaSatirlari, tarihOku, trendyolPaketi, type GelenSiparis, type Kanal } from './pazaryeri';
 
 export const pazaryeriOrtam = (ad: string) =>
@@ -27,6 +28,20 @@ function apiAyari(kanal: Kanal): ApiAyari {
 
 export const pazaryeriApiDurumu = (kanal: Kanal) => apiAyari(kanal).durum;
 export const otomatikStokYazmaAcik = () => pazaryeriOrtam('PAZARYERI_STOK_YAZ') === '1';
+
+/**
+ * Anlık sipariş bildirimi (webhook) anahtarı: kanal "x-api-key" başlığında geri yollar.
+ * Ayrı bir ortam değişkeni gerekmez; sunucudaki zamanlayıcı sırrından kanal adına türetilir (HMAC-SHA256).
+ * Sır yoksa bildirim kapalıdır.
+ */
+export function bildirimAnahtari(kanal: Kanal): string | undefined {
+  const sir = [pazaryeriOrtam('PAZARYERI_BILDIRIM_ANAHTARI'), pazaryeriOrtam('ZAMANLAYICI_ANAHTARI'), pazaryeriOrtam('CRON_SECRET')]
+    .find((x): x is string => !!x && x.length >= 32);
+  if (!sir) return undefined;
+  return createHmac('sha256', sir).update('kanal-bildirim:' + kanal).digest('base64url').slice(0, 40);
+}
+/** Kanalın bildirim göndereceği adres. Trendyol kuralı: adres "trendyol", "dolap", "localhost" içeremez. */
+export const BILDIRIM_YOLU: Record<Kanal, string> = { trendyol: '/api/kanal-bildirim/ty', hepsiburada: '/api/kanal-bildirim/hb' };
 
 export class PazaryeriApiHatasi extends Error {
   constructor(mesaj: string, readonly status?: number) { super(mesaj); }

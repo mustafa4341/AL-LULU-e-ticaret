@@ -50,38 +50,101 @@ const listeK = [...m.kategoriler].sort((a, b) => a.sira - b.sira);
 const yeni = secim === 'yeni';
 const k = aday ?? (yeni ? { id: 'yeni', ad: '', aciklama: '', ikon: 'kutu', sira: (listeK.at(-1)?.sira ?? 0) + 1, menudeGoster: true, anaSayfadaGoster: true, yakindaGoster: false } as Kategori : listeK.find((k) => k.id === secim));
 const ikonlar = [['duduklu','Düdüklü tencere'],['tencere','Tencere'],['tava','Tava'],['kasik','Mutfak gereci'],['kutu','Kutu'],['kase','Sofra'],['ates','Ocak'],['hediye','Hediye'],['yildiz','Yıldız'],['ev','Ev']];
+const seciliKategoriUrunleri = k && !yeni ? m.urunler.filter((u) => u.kategoriler.includes(k.id)) : [];
 ---
-<Yonetim baslik={k ? yeni ? 'Yeni Kategori' : k.ad : 'Kategoriler'} altBaslik={k ? undefined : 'Mağaza menüsündeki ve ana sayfadaki kategorileri, sıralarını ve görünürlüklerini yönetin.'} aktif="kategoriler" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
+<Yonetim baslik={k ? yeni ? 'Yeni Kategori' : k.ad : 'Kategoriler'} altBaslik={k ? 'Kategorinin mağaza menüsündeki, ana sayfadaki ve boş durumdaki görünürlüğünü düzenleyin.' : 'Mağaza menüsündeki ve ana sayfadaki kategorileri, sıralarını ve görünürlüklerini yönetin.'} aktif="kategoriler" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     {k ? <><a class="btn btn--cizgi" href="/yonetim/kategoriler"><PIkon ad="ok-sol" boyut={18} />Kategorilere dön</a><button type="submit" form="kategori-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button></> : <a href="?duzenle=yeni" class="btn btn--sepet"><PIkon ad="arti" boyut={18} />Yeni kategori</a>}
   </div>
   {k ? <form method="post" id="kategori-form" class="y-kart" data-editor>
     <input type="hidden" name="id" value={yeni ? 'yeni' : k.id} />
+    <div class="y-kart__bas">
+      <div>
+        <h2><PIkon ad="kategori" /> Kategori bilgileri</h2>
+        <p class="y-kart__alt">Kategori adı, ikonu, menü sırası ve müşteriye gösterilen açıklama metni.</p>
+      </div>
+      {!yeni && (
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class:list={['y-chip', seciliKategoriUrunleri.length > 0 ? 'y-chip--yesil' : 'y-chip--gri']}>
+            {seciliKategoriUrunleri.length} ürün bağlı
+          </span>
+          <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/urunler?kategori=${encodeURIComponent(k.id)}`}>Ürünleri gör</a>
+        </div>
+      )}
+    </div>
     <div class="y-izgara y-izgara--3">
-      <label class="y-alan">Kategori adı<input name="ad" value={k.ad} required /></label>
-      <label class="y-alan">İkon<select name="ikon">{!ikonlar.some(([v]) => v === k.ikon) && <option selected value={k.ikon}>{k.ikon}</option>}{ikonlar.map(([id, ad]) => <option value={id} selected={k.ikon === id}>{ad}</option>)}</select></label>
-      <label class="y-alan">Sıra<input name="sira" type="number" min="0" value={k.sira} required /></label>
+      <label class="y-alan">Kategori adı<input name="ad" value={k.ad} required placeholder="Örn. Düdüklü Tencereler" /></label>
+      <label class="y-alan">Vitrin ikonu<select name="ikon">{!ikonlar.some(([v]) => v === k.ikon) && <option selected value={k.ikon}>{k.ikon}</option>}{ikonlar.map(([id, ad]) => <option value={id} selected={k.ikon === id}>{ad}</option>)}</select></label>
+      <label class="y-alan">Sıra numarası<input name="sira" type="number" min="0" value={k.sira} required /></label>
     </div>
-    <label class="y-alan y-block-gap">Açıklama<input name="aciklama" value={k.aciklama} /></label>
-    <div class="y-secimler y-block-gap">
-      <label class="y-secim"><input type="checkbox" name="menudeGoster" checked={k.menudeGoster} />Menüde göster</label>
-      <label class="y-secim"><input type="checkbox" name="anaSayfadaGoster" checked={k.anaSayfadaGoster} />Ana sayfada göster</label>
-      <label class="y-secim"><input type="checkbox" name="yakindaGoster" checked={k.yakindaGoster} />Boşsa “Yakında” göster</label>
+    <label class="y-alan y-block-gap">Kategori açıklaması <span class="y-ipucu">(Kategori sayfasında ve kartında müşteriye gösterilir)</span><input name="aciklama" value={k.aciklama} placeholder="Örn. Alman üretimi Fissler düdüklü tencere koleksiyonu." /></label>
+
+    <div class="y-alan y-block-gap">
+      <span class="y-etiket">Görünürlük ve boş kategori davranışı</span>
+      <div class="y-izgara y-izgara--3" style="margin-top:6px">
+        <label class="y-secim" style="padding:12px;border:1px solid var(--y-border,#e5dec9);border-radius:10px;background:#fff;align-items:flex-start">
+          <input type="checkbox" name="menudeGoster" checked={k.menudeGoster} />
+          <span><strong>Menüde göster</strong><small class="muted" style="display:block;margin-top:2px">Sitenin üst gezinme menüsünde yer alır.</small></span>
+        </label>
+        <label class="y-secim" style="padding:12px;border:1px solid var(--y-border,#e5dec9);border-radius:10px;background:#fff;align-items:flex-start">
+          <input type="checkbox" name="anaSayfadaGoster" checked={k.anaSayfadaGoster} />
+          <span><strong>Ana sayfada göster</strong><small class="muted" style="display:block;margin-top:2px">Ana sayfadaki kategori vitrininde listelenir.</small></span>
+        </label>
+        <label class="y-secim" style="padding:12px;border:1px solid var(--y-border,#e5dec9);border-radius:10px;background:#fff;align-items:flex-start">
+          <input type="checkbox" name="yakindaGoster" checked={k.yakindaGoster} />
+          <span><strong>Boşsa “Yakında” göster</strong><small class="muted" style="display:block;margin-top:2px">İçinde yayında ürün yokken gizlemek yerine “Yakında” etiketiyle gösterir.</small></span>
+        </label>
+      </div>
     </div>
+
     <p class="y-form-state" data-kayit-durum role="status"></p>
-    {!yeni && <details class="y-danger"><summary>Tehlikeli işlemler</summary><button class="btn btn--tehlike" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu kategori silinsin mi?">Kategoriyi sil</button></details>}
+    {!yeni && (
+      <details class="y-danger">
+        <summary>Tehlikeli işlemler</summary>
+        {seciliKategoriUrunleri.length > 0 ? (
+          <p class="y-ipucu" style="margin-bottom:8px;color:#991b1b">
+            Bu kategoride şu an <strong>{seciliKategoriUrunleri.length} ürün</strong> bulunuyor. Kategoriyi silebilmek için önce bu ürünleri başka bir kategoriye taşımanız gerekir.
+          </p>
+        ) : (
+          <p class="y-ipucu" style="margin-bottom:8px">Bu kategoride bağlı ürün yok; güvenle silebilirsiniz.</p>
+        )}
+        <button class="btn btn--tehlike" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu kategori silinsin mi?">Kategoriyi sil</button>
+      </details>
+    )}
   </form> : listeK.length ? <form method="post" class="y-kategori-siralama y-kart" data-editor>
     <input type="hidden" name="eylem" value="sirala" />
-    <div class="y-kart__bas"><div><h2><PIkon ad="kategori" /> Kategori listesi</h2><p class="y-kart__alt">Sırayı oklarla ya da sürükleyerek değiştirin, ardından “Sırayı kaydet”e basın.</p></div></div>
-    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Sıra</th><th>Kategori</th><th>Ürün</th><th>Menü</th><th>Ana sayfa</th><th>Ürün yokken</th><th>İşlem</th></tr></thead>
-      <tbody data-sirala>{listeK.map((k, i) => (
-        <tr data-sira-satir>
-          <td data-etiket="Sıra"><input type="hidden" name="siraId" value={k.id} /><span data-sira-no>{i + 1}</span> <button type="button" class="y-icon-button" data-sira="yukari" aria-label={k.ad + ' yukarı'}><Ikon ad="yukari" boyut={14} /></button><button type="button" class="y-icon-button" data-sira="asagi" aria-label={k.ad + ' aşağı'}><Ikon ad="asagi" boyut={14} /></button></td>
-          <td data-etiket="Kategori"><span class="y-tablo-urun"><span class="y-ikon-kare"><PIkon ad={k.ikon} boyut={20} /></span><a class="y-tablo-urun__ad" href={'?duzenle=' + k.id}>{k.ad}</a></span></td><td data-etiket="Ürün"><strong>{m.urunler.filter((u) => u.kategoriler.includes(k.id)).length}</strong> ürün</td>
-          <td data-etiket="Menü"><span class:list={['y-chip', k.menudeGoster ? 'y-chip--yesil' : 'y-chip--gri']}>{k.menudeGoster ? 'Açık' : 'Kapalı'}</span></td><td data-etiket="Ana sayfa"><span class:list={['y-chip', k.anaSayfadaGoster ? 'y-chip--yesil' : 'y-chip--gri']}>{k.anaSayfadaGoster ? 'Açık' : 'Kapalı'}</span></td>
-          <td data-etiket="Ürün yokken"><span class:list={['y-chip', k.yakindaGoster ? 'y-chip--turuncu' : 'y-chip--gri']}>{k.yakindaGoster ? 'Yakında' : 'Gizli'}</span></td><td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={'?duzenle=' + k.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
-        </tr>
-      ))}</tbody></table></div>
-    <div class="y-ust-aksiyonlar y-block-gap"><button type="submit" class="btn btn--cizgi" data-sira-kaydet hidden>Sırayı kaydet</button><span data-kayit-durum class="y-form-state" role="status"></span></div>
+    <div class="y-kart__bas">
+      <div>
+        <h2><PIkon ad="kategori" /> Kategori listesi ({listeK.length})</h2>
+        <p class="y-kart__alt">Sırayı oklarla ya da sürükleyerek değiştirin, ardından <strong>“Sırayı kaydet”</strong> düğmesine basın.</p>
+      </div>
+      <div class="y-ust-aksiyonlar">
+        <span data-kayit-durum class="y-form-state" role="status"></span>
+        <button type="submit" class="btn btn--sepet" data-sira-kaydet hidden><PIkon ad="tik" boyut={18} />Sırayı kaydet</button>
+      </div>
+    </div>
+    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo"><thead><tr><th>Sıra</th><th>Kategori</th><th>Bağlı ürün</th><th>Üst menü</th><th>Ana sayfa</th><th>Ürün yokken</th><th>İşlem</th></tr></thead>
+      <tbody data-sirala>{listeK.map((k, i) => {
+        const urunSayisi = m.urunler.filter((u) => u.kategoriler.includes(k.id)).length;
+        return (
+          <tr data-sira-satir>
+            <td data-etiket="Sıra" class="y-nowrap"><input type="hidden" name="siraId" value={k.id} /><span data-sira-no style="display:inline-block;min-width:20px;font-weight:700">{i + 1}</span> <button type="button" class="y-icon-button" data-sira="yukari" aria-label={k.ad + ' yukarı'}><Ikon ad="yukari" boyut={14} /></button><button type="button" class="y-icon-button" data-sira="asagi" aria-label={k.ad + ' aşağı'}><Ikon ad="asagi" boyut={14} /></button></td>
+            <td data-etiket="Kategori">
+              <div class="y-tablo-urun">
+                <span class="y-ikon-kare"><PIkon ad={k.ikon} boyut={20} /></span>
+                <span>
+                  <a class="y-tablo-urun__ad" href={'?duzenle=' + k.id}>{k.ad}</a>
+                  {k.aciklama && <small class="y-table-note">{k.aciklama}</small>}
+                </span>
+              </div>
+            </td>
+            <td data-etiket="Bağlı ürün"><strong>{urunSayisi}</strong> ürün</td>
+            <td data-etiket="Üst menü"><span class:list={['y-chip', k.menudeGoster ? 'y-chip--yesil' : 'y-chip--gri']}>{k.menudeGoster ? 'Açık' : 'Kapalı'}</span></td>
+            <td data-etiket="Ana sayfa"><span class:list={['y-chip', k.anaSayfadaGoster ? 'y-chip--yesil' : 'y-chip--gri']}>{k.anaSayfadaGoster ? 'Açık' : 'Kapalı'}</span></td>
+            <td data-etiket="Ürün yokken"><span class:list={['y-chip', k.yakindaGoster ? 'y-chip--turuncu' : 'y-chip--gri']}>{k.yakindaGoster ? 'Yakında' : 'Gizli'}</span></td>
+            <td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={'?duzenle=' + k.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
+          </tr>
+        );
+      })}</tbody></table></div>
   </form> : <p class="y-kart muted">Henüz kategori yok.</p>}
 </Yonetim>

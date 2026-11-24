@@ -5,14 +5,16 @@ import PIkon from '../../../../components/yonetim/PIkon.astro';
 import Yonetim from '../../../../layouts/Yonetim.astro';
 import { pazaryeriDurumu } from '../../../../components/yonetim/pazaryeriGorunumu';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../../lib/depo';
+import { finansOku } from '../../../../lib/finansDepo';
 import { evet, metin } from '../../../../lib/form';
 import { KANALLAR, PY_DURUM_ADLARI, PY_DURUM_RENK, STOK_AKTIF, kalemIadeBekliyor, kurusTL, type PazaryeriSiparisi } from '../../../../lib/pazaryeri';
-import { pazaryeriKalemIsle, pazaryeriSiparisiOku } from '../../../../lib/pazaryeriDepo';
+import { pazaryeriGecmiseEkle, pazaryeriKalemIsle, pazaryeriSiparisiOku } from '../../../../lib/pazaryeriDepo';
 import { urunGtin } from '../../../../lib/urunKimlik';
 import { yTarih } from '../../../../lib/yonetimRapor';
-import BilgiKutusu from '../../../../components/yonetim/BilgiKutusu.astro';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
 import { tyFaturaLinki, tyKargoEtiketi, tyOrtakEtiketVar, tyPaketDurumu } from '../../../../lib/trendyolApi';
+import SiparisAdimlari from '../../../../components/yonetim/SiparisAdimlari.astro';
+import { pazaryeriYolculugu } from '../../../../lib/siparisAdimlari';
 
 const id = Astro.params.id ?? '';
 const siparisler = '/yonetim/siparisler';
@@ -40,11 +42,13 @@ if (kayit && Astro.request.method === 'POST') {
       try {
         if (tur === 'ty-toplama') {
           await tyPaketDurumu(kayit.paketNo, satirlar, 'Picking');
+          await pazaryeriGecmiseEkle(id, 'Panelden Trendyol’a “toplanıyor” bildirildi').catch(() => undefined);
           mesaj = 'Trendyol’a “toplanıyor” bildirildi. Müşteri artık siparişi iptal edemez; durum birkaç dakika içinde buraya gelir.';
         } else if (tur === 'ty-fatura-no') {
           const no = metin(f, 'faturaNo').toUpperCase();
           if (!/^[A-Z0-9]{3}20\d{2}\d{9}$/.test(no)) throw new DogrulamaHatasi(['Fatura numarası 16 karakter olmalı: 3 harf/rakam + yıl + 9 rakam (ör. ABC2026000000123).']);
           await tyPaketDurumu(kayit.paketNo, satirlar, 'Invoiced', no);
+          await pazaryeriGecmiseEkle(id, `Panelden Trendyol’a “faturalandı” bildirildi (${no})`).catch(() => undefined);
           mesaj = 'Trendyol’a “faturalandı” bildirildi.';
         } else if (tur === 'ty-etiket') {
           if (!kayit.kargoTakip) throw new DogrulamaHatasi(['Kargo takip numarası henüz oluşmadı. Önce “Toplamaya başla”ya basın.']);
@@ -55,6 +59,7 @@ if (kayit && Astro.request.method === 'POST') {
           } });
         } else if (tur === 'ty-fatura-link') {
           await tyFaturaLinki(kayit.paketNo, metin(f, 'link'), metin(f, 'faturaNo') || undefined);
+          await pazaryeriGecmiseEkle(id, 'Fatura bağlantısı Trendyol’a gönderildi').catch(() => undefined);
           mesaj = 'Fatura bağlantısı Trendyol’a gönderildi; müşteri siparişinde görür.';
         } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
       } catch (e) {
@@ -94,7 +99,7 @@ if (kayit && Astro.request.method === 'POST') {
 }
 
 const KANAL_PANELI = { trendyol: 'https://partner.trendyol.com/account/login', hepsiburada: 'https://merchant.hepsiburada.com/' };
-const [magaza, webSiparisleri] = kayit ? await Promise.all([magazaOku(), siparisleriOku()]) : [undefined, []];
+const [magaza, webSiparisleri, finansKaydi] = kayit ? await Promise.all([magazaOku(), siparisleriOku(), finansOku().catch(() => undefined)]) : [undefined, [], undefined];
 const ayrilan = webAyrilanAdetleri(webSiparisleri, Date.now(), magaza?.paytrStokIslemleri);
 const urunler = new Map((magaza?.urunler ?? []).map((u) => [u.id, u]));
 const urunSecenekleri = [...urunler.values()].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
@@ -104,13 +109,22 @@ const tarihYaz = (tarih?: string) => {
   return Number.isFinite(zaman) ? yTarih.format(zaman) : undefined;
 };
 const s = kayit;
+const kesilenFatura = s && finansKaydi ? finansKaydi.faturalar.find((x) => x.kanal === s.kanal && x.kayit === s.id && !x.iptal) : undefined;
+const faturaAdresi = s ? '/yonetim/finans/faturalar?sec=' + encodeURIComponent(s.kanal + ':' + s.id) + '#secili' : '/yonetim/finans/faturalar';
 const uyari = s ? pazaryeriDurumu(s, Date.now(), new Set(urunler.keys())).uyari : [];
 const kent = [s?.ilce, s?.il].filter(Boolean).join(' / ');
 /* Sipariş yolculuğu: Alındı → Hazırlanıyor → Kargoda → Teslim (iptal/iade ayrı gösterilir) */
 const ADIMLAR = ['Alındı', 'Hazırlanıyor', 'Kargoda', 'Teslim edildi'] as const;
+/* Ayrıntılı adımlar (stok, fatura, kargo kodu dahil): lib/siparisAdimlari.ts */
+const yolculuk = s ? pazaryeriYolculugu(s, kesilenFatura, faturaAdresi) : undefined;
+/* Şablonda "<=" + şablon metni Astro derleyicisini bozuyor: hesap burada yapılır */
+const sonKargoYazi = s && ['onay-bekliyor', 'yeni', 'bilinmiyor', 'hazirlaniyor'].includes(s.durum) ? tarihYaz(s.sonKargoTarihi) : undefined;
 const tyIslemAcik = !!s && s.kanal === 'trendyol' && !!s.paketNo && !s.stokDisi && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))
   && !['Cancelled', 'UnSupplied', 'Returned'].includes(s.hamDurum);
-const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
+const adimSirasi = s ? ({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyor: 1, kargoda: 2, 'teslim-edildi': 3 } as Record<string, number>)[s.durum] : undefined;
+const eslesmeyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && STOK_AKTIF.has(k.durum) && !k.urunId && k.stok === 'yok').length : 0;
+const eksikStokAdet = s ? s.kalemler.filter((k) => !s.stokDisi && STOK_AKTIF.has(k.durum) && k.eksik > 0).reduce((n, k) => n + k.eksik, 0) : 0;
+const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId && kalemIadeBekliyor(k)).length : 0;
 ---
 <Yonetim baslik={s ? 'Sipariş ' + s.siparisNo : 'Pazaryeri siparişi'} altBaslik={s ? `${KANALLAR[s.kanal]} · ${tarihYaz(s.tarih) ?? 'Tarih belirtilmemiş'}` : undefined} aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
   {s && <KanalLogo slot="baslik-onu" kanal={s.kanal} boyut="buyuk" />}
@@ -121,74 +135,81 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
 
   {s ? <>
     {uyari.map((u) => <p class:list={['y-uyari-satir', { 'uyari--turuncu': u.renk === 'turuncu' }]}><Ikon ad="kalkan" boyut={16} />{u.yazi}</p>)}
-    {adimSirasi !== undefined ? <ol class="yolculuk" aria-label="Sipariş aşaması">
-      {ADIMLAR.map((ad, i) => <li class:list={{ 'is-gecti': i < adimSirasi, 'is-simdi': i === adimSirasi }} aria-current={i === adimSirasi ? 'step' : undefined}><span>{i < adimSirasi ? '✓' : i + 1}</span>{ad}</li>)}
-    </ol> : <p class="y-uyari-satir uyari--turuncu" role="status">Bu sipariş {PY_DURUM_ADLARI[s.durum].toLocaleLowerCase('tr')} durumunda.</p>}
-    <BilgiKutusu baslik={`Bu sipariş ${KANALLAR[s.kanal]}'dan geldi — ne yapmalıyım?`} anahtar={'py-detay-' + s.kanal} acik={uyari.length > 0}>
-      <ul>
-        <li><strong>{tyIslemAcik ? 'Kargo, iptal ve para iadesi' : 'Kargolama, fatura, iptal ve para iadesi'}</strong> {KANALLAR[s.kanal]} satıcı panelinde yapılır (sağ üstteki düğme). Durum buraya kendiliğinden gelir.{tyIslemAcik && ' Toplama ve fatura bildirimi bu sayfadan yapılabilir.'}</li>
-        <li>Burada yalnız <strong>stok</strong> işlenir: sipariş gelince ürün stoktan düştü, iptal olursa geri eklenir.</li>
-        <li>Kırmızı “eşleşme bekliyor” görürseniz aşağıdan doğru ürünü seçin; stok o zaman düşer.</li>
-        <li>İade size ulaşınca ürünü kontrol edin ve aşağıda “satılabilir” ya da “satılamaz” deyin.</li>
-      </ul>
-    </BilgiKutusu>
+
     <section class="y-kart y-durum-kart" aria-labelledby="siparis-baslik">
-      <h2 id="siparis-baslik"><PIkon ad="kutu" /> Sipariş özeti</h2>
-      <div class="y-durumlar">
-        <span>Kanal durumu <strong class:list={['y-chip', 'y-chip--' + PY_DURUM_RENK[s.durum]]}>{PY_DURUM_ADLARI[s.durum]}</strong></span>
-        {s.stokDisi && <span class="y-chip y-chip--gri">Stok takibi başlangıcından önce</span>}
-        <strong class="y-durumlar__tutar">{kurusTL(s.toplam)}</strong>
+      <div class="y-kart__bas">
+        <h2 id="siparis-baslik"><PIkon ad="kargo" /> Sipariş Süreci ({KANALLAR[s.kanal]})</h2>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+          <span class:list={['y-chip', 'y-chip--' + PY_DURUM_RENK[s.durum]]}>{PY_DURUM_ADLARI[s.durum]}</span>
+          {s.stokDisi && <span class="y-chip y-chip--gri">Stok başlangıcından önce</span>}
+        </div>
       </div>
-      <dl class="siparis-bilgileri">
-        <div><dt>Sipariş no</dt><dd>{s.siparisNo} <button type="button" class="y-icon-button" data-kopyala={s.siparisNo}>Kopyala</button></dd></div>
-        {s.paketNo && s.paketNo !== s.siparisNo && <div><dt>Paket no</dt><dd>{s.paketNo}</dd></div>}
-        {s.musteri && <div><dt>Müşteri</dt><dd>{s.musteri}</dd></div>}
-        {kent && <div><dt>Teslimat ili / ilçesi</dt><dd>{kent}</dd></div>}
-        {s.kargoFirma && <div><dt>Kargo firması</dt><dd>{s.kargoFirma}</dd></div>}
-        {s.kargoTakip && <div><dt>Kargo takip no</dt><dd>{s.kargoTakip} <button type="button" class="y-icon-button" data-kopyala={s.kargoTakip}>Kopyala</button></dd></div>}
-        {(adimSirasi ?? 9) <= 1 && tarihYaz(s.sonKargoTarihi) && <div><dt>Son kargolama</dt><dd>{tarihYaz(s.sonKargoTarihi)}</dd></div>}
-        {tarihYaz(s.sonAktarim) && <div><dt>Son kayıt güncellemesi</dt><dd>{tarihYaz(s.sonAktarim)} · {s.kaynak === 'api' ? 'API' : 'Dosya'}</dd></div>}
-      </dl>
-      {s.kanal === 'hepsiburada' && <p><a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('hepsiburada:' + s.id) + '#secili'}>Fatura bilgileri</a></p>}
-      <p class="y-help">{tyIslemAcik ?'Toplama ve fatura bildirimini aşağıdan yapabilirsiniz. Kargo, iptal ve ödeme iadesi Trendyol satıcı panelinde yapılır.' : `Gönderi, fatura, iptal ve ödeme iadesi işlemlerini ${KANALLAR[s.kanal]} satıcı panelinde yapın.`}</p>
+
+      {adimSirasi !== undefined ? (
+        <ol class="y-py-hat" aria-label="Sipariş aşaması">
+          {ADIMLAR.map((ad, i) => {
+            const gecti = i < adimSirasi;
+            const simdiAdim = i === adimSirasi;
+            const ikonAd = i === 0 ? 'tik' : i === 1 ? 'kutu' : i === 2 ? 'kargo' : 'tik-daire';
+            return (
+              <li class:list={{ 'is-gecti': gecti, 'is-simdi': simdiAdim }} aria-current={simdiAdim ? 'step' : undefined}>
+                <span class="y-py-hat__daire" aria-hidden="true">
+                  {gecti ? '✓' : <PIkon ad={ikonAd} boyut={18} />}
+                </span>
+                <strong class="y-py-hat__etiket">{ad}</strong>
+                <small class="y-py-hat__alt">{i === 0 ? (tarihYaz(s.tarih) ?? '') : simdiAdim ? 'Aktif aşama' : gecti ? 'Tamamlandı' : '—'}</small>
+              </li>
+            );
+          })}
+        </ol>
+      ) : (
+        <p class="y-uyari-satir uyari--turuncu" role="status" style="margin-bottom:12px">Bu sipariş <strong>{PY_DURUM_ADLARI[s.durum]}</strong> durumunda.</p>
+      )}
+
+      <div class="y-py-ozet-serit">
+        <div>
+          <span class="muted">Paket / Sipariş No</span>
+          <strong>{s.paketNo && s.paketNo !== s.siparisNo ? `${s.siparisNo} (${s.paketNo})` : s.siparisNo} <button type="button" class="y-icon-button" data-kopyala={s.siparisNo}>Kopyala</button></strong>
+        </div>
+        <div>
+          <span class="muted">Müşteri ve İl/İlçe</span>
+          <strong>{s.musteri || '—'}{kent ? ` · ${kent}` : ''}</strong>
+        </div>
+        <div>
+          <span class="muted">Kargo Bilgisi</span>
+          <strong>
+            {s.kargoFirma || 'Atanmadı'}{s.kargoTakip ? ` · ${s.kargoTakip}` : ''}
+            {s.kargoTakip && <button type="button" class="y-icon-button" data-kopyala={s.kargoTakip}>Kopyala</button>}
+          </strong>
+        </div>
+        <div>
+          <span class="muted">Fatura</span>
+          <a href={faturaAdresi} class:list={['y-chip', kesilenFatura ? (kesilenFatura.iletim.durum === 'hata' ? 'y-chip--kirmizi' : kesilenFatura.iletim.durum === 'bekliyor' ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--turuncu']}>
+            {kesilenFatura ? `${kesilenFatura.no} · ${kesilenFatura.iletim.durum === 'hata' ? 'İletim hatası' : kesilenFatura.iletim.durum === 'bekliyor' ? (s.kanal === 'hepsiburada' ? 'HB’ye yüklenecek' : 'İletilecek') : 'İletildi'}` : 'Kesilecek'}
+          </a>
+        </div>
+        <div>
+          <span class="muted">Son Güncelleme</span>
+          <strong>{tarihYaz(s.sonAktarim) ?? '—'}{sonKargoYazi ? ' · Son kargo: ' + sonKargoYazi : ''}</strong>
+        </div>
+        <div class="y-py-ozet-serit__tutar">
+          <span class="muted">Toplam Tutar</span>
+          <strong>{kurusTL(s.toplam)}</strong>
+        </div>
+      </div>
+      {yolculuk && <details class="y-py-adimlar" open={yolculuk.adimlar.some((a) => a.durum === 'sorun') || !!yolculuk.kapanis || undefined}>
+        <summary>Adım adım takip · {yolculuk.ilerleme.tamam}/{yolculuk.ilerleme.toplam} tamam{yolculuk.adimlar.some((a) => a.durum === 'sorun') ? ' · dikkat gereken adım var' : ''}</summary>
+        <SiparisAdimlari {yolculuk} />
+      </details>}
     </section>
 
-    {tyIslemAcik && <section class="y-kart" id="trendyol-islem" aria-labelledby="ty-islem-baslik">
-      <h2 id="ty-islem-baslik"><PIkon ad="simsek" /> Trendyol işlemleri</h2>
-      <p class="y-help">Paket durumu: <strong>{s.hamDurum || '—'}</strong>. Sıra: önce “Toplamaya başla”, sonra fatura. Trendyol kargo etiketini paket “toplanıyor” olunca oluşturur.</p>
-      <div class="ty-islemler">
-        {(s.hamDurum === 'Created' || s.hamDurum === 'Awaiting') && <form method="post">
-          <button class="btn btn--sepet" type="submit" name="eylem" value="ty-toplama">Toplamaya başla</button>
-          <small class="muted">Trendyol’a “sipariş işleme alındı” bildirilir.</small>
-        </form>}
-        {s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) && (tyOrtakEtiketVar(s.kargoFirma) ? <form method="post" data-indirme>
-          <button class="btn btn--cizgi" type="submit" name="eylem" value="ty-etiket">Kargo etiketini indir (ZPL)</button>
-          <small class="muted">Termal etiket yazıcısı (Zebra vb.) içindir. Normal yazıcıda etiketi Trendyol satıcı panelinden yazdırın.</small>
-        </form> : <div class="ty-etiket">
-          <a class="btn btn--sepet" href={Astro.url.pathname + '/etiket'} target="_blank" rel="noopener">Kargo etiketini yazdır</a>
-          <small class="muted">{s.kargoFirma || 'Kargo'} · takip no {s.kargoTakip}. Barkodlu etiket açılır; normal yazıcıda A4’e ya da 10×10 cm etiket yazıcısına basılır. Paketin üstüne yapıştırın, kargo görevlisi barkodu okutur.</small>
-        </div>)}
-        <p><a class="btn btn--cizgi" href={'/yonetim/finans/faturalar?sec=' + encodeURIComponent('trendyol:' + s.id) + '#secili'}>Fatura bilgileri ve faturayı yükle</a>
-          <small class="muted"> GİB portalına yazılacak bilgiler hazır; kestiğiniz PDF oradan Trendyol’a yüklenir.</small></p>
-        <details>
-          <summary>Fatura bağlantısı veya fatura numarası ile bildir</summary>
-          <form method="post" class="y-izgara">
-            <input type="hidden" name="eylem" value="ty-fatura-link" />
-            <label class="y-alan">e-Arşiv/e-Fatura bağlantısı<input type="url" name="link" placeholder="https://..." required /><small class="muted">10 yıl açık kalacak bir adres olmalı (yasal zorunluluk).</small></label>
-            <label class="y-alan">Fatura numarası (isteğe bağlı)<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" /></label>
-            <button class="btn btn--cizgi" type="submit">Bağlantıyı gönder</button>
-          </form>
-          {s.hamDurum === 'Picking' && <form method="post" class="y-izgara">
-            <input type="hidden" name="eylem" value="ty-fatura-no" />
-            <label class="y-alan">Yalnız fatura numarasını bildir<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" required /></label>
-            <button class="btn btn--cizgi" type="submit">“Faturalandı” olarak işaretle</button>
-          </form>}
-        </details>
-      </div>
-    </section>}
-
     <section class="y-kart" id="urunler" aria-labelledby="urunler-baslik">
-      <h2 id="urunler-baslik"><PIkon ad="katman" /> Ürünler ve stok</h2>
+      <div class="y-kart__bas">
+        <h2 id="urunler-baslik"><PIkon ad="katman" /> Ürünler ve stok kontrolü</h2>
+        {(eslesmeyenAdet > 0 || eksikStokAdet > 0)
+          ? <span class="y-chip y-chip--kirmizi">{[eslesmeyenAdet > 0 && `${eslesmeyenAdet} ürün eşleşme bekliyor`, eksikStokAdet > 0 && `${eksikStokAdet} adet stok açığı var`].filter(Boolean).join(' · ')}</span>
+          : <span class="y-chip y-chip--yesil">Stok eşleşmesi tamam</span>}
+      </div>
       <ul class="y-siparis-kalem-liste y-siparis-kalem-liste--gorselli">
         {s.kalemler.map((k) => {
           const u = k.urunId ? urunler.get(k.urunId) : undefined;
@@ -206,10 +227,10 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
               {u && <small>Mağaza ürünü <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>{u.kisaAd}</a> · Kullanılabilir stok {kullanilabilir(u)}</small>}
               <div class="kalem-durumlari">
                 <span class:list={['y-chip', 'y-chip--' + PY_DURUM_RENK[k.durum]]} title={k.hamDurum ?? s.hamDurum}>{PY_DURUM_ADLARI[k.durum]}</span>
-                {eslestir && <span class="y-chip y-chip--kirmizi">Eşleşme bekliyor</span>}
+                {eslestir && <span class="y-chip y-chip--kirmizi">Eşleşme bekliyor (stok henüz ayrılmadı)</span>}
                 {!s.stokDisi && k.urunId && !u && <span class="y-chip y-chip--kirmizi">Bağlı ürün kaydı bulunamadı</span>}
                 {k.stok === 'dusuldu' && k.dusulen > 0 && <span class="y-chip y-chip--yesil">{k.dusulen} adet stoktan düşüldü</span>}
-                {stokAktif && k.eksik > 0 && <span class="y-chip y-chip--kirmizi">{k.eksik} adet eksik</span>}
+                {stokAktif && k.eksik > 0 && <span class="y-chip y-chip--kirmizi">{k.eksik} adet stok eksik</span>}
                 {k.stok === 'geri-alindi' && <span class="y-chip y-chip--gri">Stoğa geri alındı</span>}
                 {k.stok === 'hasarli' && <span class="y-chip y-chip--gri">Satılamaz kaydedildi</span>}
               </div>
@@ -225,63 +246,252 @@ const adimSirasi = s ?({ 'onay-bekliyor': 0, yeni: 0, bilinmiyor: 0, hazirlaniyo
                   {urunSecenekleri.map((u) => <option value={u.id}>{[...new Set([u.kisaAd, u.sku, urunGtin(u), `Stok ${kullanilabilir(u)}`].filter(Boolean))].join(' · ')}</option>)}
                 </select>
               </label>
-              <button type="submit" class="btn btn--cizgi">Eşleştir ve stok ayır</button>
+              <button type="submit" class="btn btn--sepet">Eşleştir ve bu sipariş için stok ayır</button>
             </form>}
             {stokTamamla && <form method="post" class="y-sonraki kalem-islem">
               <input type="hidden" name="eylem" value="stogu-tamamla" />
               <input type="hidden" name="surum" value={s.surum} />
               <input type="hidden" name="kalem" value={k.anahtar} />
-              {kullanilabilir(u) > 0 ? <button type="submit" class="btn btn--cizgi">Mevcut stoktan ayır</button>
-                : <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>Ürün stok kaydını aç</a>}
+              {kullanilabilir(u) > 0 ? <button type="submit" class="btn btn--sepet">Mevcut stoktan ayır ({kullanilabilir(u)} adet uygun)</button>
+                : <a class="btn btn--cizgi" href={'/yonetim/urunler/' + encodeURIComponent(u.id) + '?bolum=fiyat'}>Ürün stok kaydını aç</a>}
             </form>}
             {iadeKontrol && <form method="post" class="y-sonraki kalem-islem">
               <input type="hidden" name="eylem" value="iade" />
               <input type="hidden" name="surum" value={s.surum} />
               <input type="hidden" name="kalem" value={k.anahtar} />
-              <label class="y-alan">İade kontrol sonucu
+              <label class="y-alan">Fiziksel iade kontrol sonucu
                 <select name="iade-karari" required>
                   <option value="">Sonuç seçin</option>
-                  {u && <option value="satilabilir">Satılabilir, {k.dusulen} adedi stoğa ekle</option>}
-                  <option value="satilamaz">Satılamaz, stoğa ekleme</option>
+                  {u && <option value="satilabilir">Satılabilir · {k.dusulen} adedi stoğa geri ekle</option>}
+                  <option value="satilamaz">Satılamaz / hasarlı · stoğa ekleme</option>
                 </select>
               </label>
-              <label class="y-secim"><input type="checkbox" name="iade-onay" required />Ürün depoya ulaştı ve kontrol edildi.</label>
-              <button type="submit" class="btn btn--cizgi">İade kontrolünü kaydet</button>
+              <label class="y-secim"><input type="checkbox" name="iade-onay" required />Ürün depoya fiziksel olarak ulaştı ve kontrol edildi.</label>
+              <button type="submit" class="btn btn--sepet">Fiziksel kontrol sonucunu kaydet</button>
             </form>}
           </li>;
         })}
       </ul>
     </section>
 
-    {(s.gecmis.length > 0 || s.not) && <details class="y-kart">
-      <summary><strong>İşlem geçmişi</strong></summary>
-      {s.not && <p>{s.not}</p>}
-      <ul class="y-gecmis">{[...s.gecmis].reverse().map((g) => <li><span>{tarihYaz(g.tarih)}</span><span><strong>{PY_DURUM_ADLARI[g.durum]}</strong>{g.not && ' · ' + g.not}</span></li>)}</ul>
-    </details>}
+    {s.kanal === 'trendyol' && (
+      <div class="y-py-alt-ikili">
+        <section class="y-kart" id="fatura-ozet-ty">
+          <div class="y-kart__bas">
+            <h2><PIkon ad="fatura" /> Fatura Durumu</h2>
+            <span class:list={['y-chip', kesilenFatura ? 'y-chip--yesil' : 'y-chip--turuncu']}>{kesilenFatura ? 'Fatura Kayıtlı' : 'Fatura Kesilecek'}</span>
+          </div>
+          {kesilenFatura ? (
+            <div style="display:grid;gap:8px">
+              <p style="margin:0"><strong>{kesilenFatura.no}</strong> · {kesilenFatura.tarih}</p>
+              <p class="y-help" style="margin:0">İletim durumu: <strong>{kesilenFatura.iletim.durum === 'gonderildi' ? 'Trendyol’a yüklendi' : kesilenFatura.iletim.durum === 'elle' ? 'Elle iletildi' : 'Trendyol’a iletilecek'}</strong></p>
+            </div>
+          ) : (
+            <p class="y-help" style="margin:0">GİB e-Arşiv Portalı’nda kestiğiniz faturayı Faturalar ekranından kaydettiğinizde Trendyol’a otomatik yüklenir.</p>
+          )}
+          <div style="margin-top:12px">
+            <a class="btn btn--cizgi btn--kucuk" href={faturaAdresi}><PIkon ad="fatura" boyut={16} />{kesilenFatura ? 'Faturayı Görüntüle / Gönder' : 'Fatura Bilgilerini Aç ve Kaydet'}</a>
+          </div>
+        </section>
+
+        <section class="y-kart" id="trendyol-islem" aria-labelledby="ty-islem-baslik">
+          <div class="y-kart__bas">
+            <h2 id="ty-islem-baslik"><KanalLogo kanal="trendyol" /> Trendyol İşlemleri</h2>
+            <span class="y-chip y-chip--gri">Paket: {s.hamDurum || '—'}</span>
+          </div>
+          {(eslesmeyenAdet > 0 || eksikStokAdet > 0) && <p class="y-uyari">Bu siparişte {eslesmeyenAdet > 0 ? `${eslesmeyenAdet} eşleşmeyen ürün` : ''}{eslesmeyenAdet > 0 && eksikStokAdet > 0 ? ' ve ' : ''}{eksikStokAdet > 0 ? `${eksikStokAdet} adet stok açığı` : ''} var. Önce yukarıdan ürün eşleştirmesini tamamlayın.</p>}
+          <div class="y-kanal-aksiyon-kutular">
+            {tyIslemAcik && (s.hamDurum === 'Created' || s.hamDurum === 'Awaiting') ? (
+              <form method="post" class="y-aksiyon-karo">
+                <button class="y-aksiyon-karo__ic" type="submit" name="eylem" value="ty-toplama">
+                  <PIkon ad="kutu" boyut={22} />
+                  <strong>Toplamaya Başla</strong>
+                  <small>Kargo barkodu oluştur</small>
+                </button>
+              </form>
+            ) : (
+              <a class="y-aksiyon-karo" href={KANAL_PANELI.trendyol} target="_blank" rel="noreferrer noopener">
+                <PIkon ad="kargo" boyut={22} />
+                <strong>Kargo & Paket Durumu</strong>
+                <small>Trendyol panelinde gör ↗</small>
+              </a>
+            )}
+
+            {tyIslemAcik && s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) ? (
+              tyOrtakEtiketVar(s.kargoFirma) ? (
+                <form method="post" data-indirme class="y-aksiyon-karo">
+                  <button class="y-aksiyon-karo__ic" type="submit" name="eylem" value="ty-etiket">
+                    <PIkon ad="indir" boyut={22} />
+                    <strong>ZPL Etiket İndir</strong>
+                    <small>Termal yazıcı barkodu</small>
+                  </button>
+                </form>
+              ) : (
+                <a class="y-aksiyon-karo" href={Astro.url.pathname + '/etiket'} target="_blank" rel="noopener">
+                  <PIkon ad="belge" boyut={22} />
+                  <strong>Kargo Etiketi Yazdır</strong>
+                  <small>{s.kargoFirma || 'Kargo'} barkodu</small>
+                </a>
+              )
+            ) : (
+              <a class="y-aksiyon-karo" href={faturaAdresi}>
+                <PIkon ad="fatura" boyut={22} />
+                <strong>Fatura Yükle / Bildir</strong>
+                <small>{kesilenFatura ? 'Kayıtlı faturayı gör' : 'GİB faturasını kaydet'}</small>
+              </a>
+            )}
+
+            <a class="y-aksiyon-karo" href="/yonetim/siparisler/trendyol-iade-soru">
+              <PIkon ad="iade" boyut={22} />
+              <strong>İade Talepleri</strong>
+              <small>Trendyol iadelerini yönet</small>
+            </a>
+
+            <a class="y-aksiyon-karo" href="/yonetim/finans?sekme=trendyol">
+              <PIkon ad="banka" boyut={22} />
+              <strong>Trendyol Hakedişi</strong>
+              <small>Komisyon ve ödeme takibi</small>
+            </a>
+          </div>
+
+          {tyIslemAcik && (
+            <details style="margin-top:10px">
+              <summary style="cursor:pointer;font-weight:600;font-size:.86rem">Harici fatura bağlantısı veya numarası ile bildir</summary>
+              <div style="display:grid;gap:10px;margin-top:10px">
+                <form method="post" class="y-izgara y-izgara--2">
+                  <input type="hidden" name="eylem" value="ty-fatura-link" />
+                  <label class="y-alan">e-Arşiv bağlantısı<input type="url" name="link" placeholder="https://..." required /></label>
+                  <label class="y-alan">Fatura no (isteğe bağlı)<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" /></label>
+                  <div><button class="btn btn--cizgi btn--kucuk" type="submit">Bağlantıyı gönder</button></div>
+                </form>
+                {s.hamDurum === 'Picking' && <form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+                  <input type="hidden" name="eylem" value="ty-fatura-no" />
+                  <label class="y-alan" style="flex:1">Yalnız fatura numarası bildir<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" required /></label>
+                  <button class="btn btn--cizgi btn--kucuk" type="submit">“Faturalandı” işaretle</button>
+                </form>}
+              </div>
+            </details>
+          )}
+        </section>
+      </div>
+    )}
+
+    {s.kanal === 'hepsiburada' && (
+      <div class="y-py-alt-ikili">
+        <section class="y-kart" id="fatura-ozet-hb">
+          <div class="y-kart__bas">
+            <h2><PIkon ad="fatura" /> Fatura Durumu</h2>
+            <span class:list={['y-chip', kesilenFatura ? (kesilenFatura.iletim.durum === 'bekliyor' ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--turuncu']}>
+              {kesilenFatura ? (kesilenFatura.iletim.durum === 'bekliyor' ? 'HB’ye Elle Yüklenecek' : 'Fatura Tamamlandı') : 'Fatura Kesilecek'}
+            </span>
+          </div>
+          {kesilenFatura ? (
+            <div style="display:grid;gap:6px">
+              <p style="margin:0"><strong>Fatura No:</strong> {kesilenFatura.no} · <strong>Tarih:</strong> {kesilenFatura.tarih}</p>
+              <p class="y-help" style="margin:0">Hepsiburada PDF faturaları satıcı paneline elle yüklenir; ardından Faturalar ekranında “Hepsiburada’ya yükledim” olarak işaretlenir.</p>
+            </div>
+          ) : (
+            <p class="y-help" style="margin:0">GİB e-Arşiv Portalı için hazır alıcı/kalem bilgilerini açıp faturayı kaydedin; ardından PDF’i Hepsiburada satıcı paneline yükleyin.</p>
+          )}
+          <div style="margin-top:12px">
+            <a class="btn btn--cizgi btn--kucuk" href={faturaAdresi}><PIkon ad="fatura" boyut={16} />{kesilenFatura ? 'Faturayı Görüntüle / Yükledim İşaretle' : 'Fatura Bilgilerini Aç ve Kaydet'}</a>
+          </div>
+        </section>
+
+        <section class="y-kart" id="hepsiburada-islem" aria-labelledby="hb-islem-baslik">
+          <div class="y-kart__bas">
+            <h2 id="hb-islem-baslik"><KanalLogo kanal="hepsiburada" /> Hepsiburada İşlemleri</h2>
+            <span class="y-chip y-chip--gri">Kanal kodu: {s.hamDurum || '—'}</span>
+          </div>
+          {iadeBekleyenAdet > 0 && <p class="y-uyari">Bu siparişte <strong>{iadeBekleyenAdet} ürün kalemi</strong> için fiziksel iade kontrolü bekleniyor.</p>}
+          <div class="y-kanal-aksiyon-kutular">
+            <a class="y-aksiyon-karo" href={KANAL_PANELI.hepsiburada} target="_blank" rel="noreferrer noopener">
+              <PIkon ad="kargo" boyut={22} />
+              <strong>Kargo & Etiket İşlemleri</strong>
+              <small>Hepsiburada panelini aç ↗</small>
+            </a>
+            <a class="y-aksiyon-karo" href={faturaAdresi}>
+              <PIkon ad="fatura" boyut={22} />
+              <strong>Fatura Yükle / Güncelle</strong>
+              <small>{kesilenFatura ? kesilenFatura.no : 'Fatura kaydı oluştur'}</small>
+            </a>
+            <a class="y-aksiyon-karo" href={iadeBekleyenAdet > 0 ? '#urunler' : '/yonetim/siparisler/kanallar?gorunum=hepsiburada'}>
+              <PIkon ad="iade" boyut={22} />
+              <strong>{iadeBekleyenAdet > 0 ? `İade Kontrolü (${iadeBekleyenAdet})` : 'Ürün & Stok Eşleştirme'}</strong>
+              <small>{iadeBekleyenAdet > 0 ? 'Satılabilir / hasarlı seç' : 'HB stok kodlarını yönet'}</small>
+            </a>
+            <a class="y-aksiyon-karo" href={'/yonetim/finans/hepsiburada' + (s.kalemler[0]?.urunId ? '?urun=' + encodeURIComponent(s.kalemler[0].urunId) : '') + '#hesap'}>
+              <PIkon ad="grafik" boyut={22} />
+              <strong>Kâr & Hakediş Hesabı</strong>
+              <small>Komisyon ve net kârı gör</small>
+            </a>
+          </div>
+        </section>
+      </div>
+    )}
+
+    <section class="y-kart">
+      <div class="y-kart__bas">
+        <h2><PIkon ad="gecmis" /> İşlem Geçmişi</h2>
+        {s.not && <span class="y-chip y-chip--gri">{s.not}</span>}
+      </div>
+      {s.gecmis.length > 0 ? (
+        <div class="y-tablo-kap y-tablo-kap--kart">
+          <table class="y-tablo">
+            <thead><tr><th>Tarih ve Saat</th><th>İşlem / Durum</th><th>Açıklama</th><th>Kaynak</th></tr></thead>
+            <tbody>
+              {[...s.gecmis].reverse().map((g) => (
+                <tr>
+                  <td data-etiket="Tarih" class="y-nowrap">{tarihYaz(g.tarih) ?? '—'}</td>
+                  <td data-etiket="İşlem"><strong>{PY_DURUM_ADLARI[g.durum]}</strong></td>
+                  <td data-etiket="Açıklama">{g.not || `Sipariş durumu: ${PY_DURUM_ADLARI[g.durum]}`}</td>
+                  <td data-etiket="Kaynak"><KanalLogo kanal={s.kanal} boyut="kucuk" ad /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <p class="muted" style="margin:0">Sipariş {KANALLAR[s.kanal]} kanalından alındı ({tarihYaz(s.tarih) ?? '—'}).</p>
+      )}
+    </section>
   </> : <div class="y-kart y-bos" role="alert"><p>Pazaryeri siparişi okunamadı.</p><a class="y-link" href={Astro.url.pathname}>Yeniden dene</a></div>}
 </Yonetim>
 
 <style>
-  .siparis-bilgileri { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 10px 18px; margin: 0; }
-  .siparis-bilgileri div { min-width: 0; }
-  .siparis-bilgileri dt { font-size: .8rem; color: #6b6154; }
-  .siparis-bilgileri dd { margin: 0; font-size: .94rem; font-weight: 600; overflow-wrap: anywhere; }
-  .siparis-bilgileri .y-icon-button { height: auto; margin-left: 4px; padding: 3px 5px; font-size: .8rem; }
-  .ty-islemler { display: grid; gap: 14px; }
-  .ty-islemler form, .ty-etiket { display: grid; gap: 8px; justify-items: start; }
-  .ty-islemler details > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
+  .y-py-adimlar { margin-top: 14px; border-top: 1px solid var(--y-border); padding-top: 4px; }
+  .y-py-adimlar > summary { cursor: pointer; font-weight: 700; min-height: 44px; padding-block: 10px; }
+  .y-py-hat { list-style: none; margin: 10px 0 18px; padding: 6px 4px 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; text-align: center; }
+  .y-py-hat li { position: relative; display: grid; justify-items: center; gap: 6px; min-width: 0; }
+  .y-py-hat li:not(:last-child)::after { content: ''; position: absolute; top: 21px; left: calc(50% + 22px); right: calc(-50% + 22px); height: 3px; background: #dfd6c5; z-index: 0; }
+  .y-py-hat li.is-gecti:not(:last-child)::after { background: #1d8f4e; }
+  .y-py-hat__daire { position: relative; z-index: 1; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 2px solid #d5cbb8; background: #fff; color: #8c8172; font-weight: 800; font-size: 16px; }
+  .y-py-hat li.is-gecti .y-py-hat__daire { background: #1d8f4e; border-color: #1d8f4e; color: #fff; box-shadow: 0 0 0 4px #e6f5ec; }
+  .y-py-hat li.is-simdi .y-py-hat__daire { background: #fff4e5; border-color: #d97706; color: #b45309; box-shadow: 0 0 0 4px #fef3c7; }
+  .y-py-hat__etiket { font-size: 13.5px; color: var(--y-ink, #231f1a); }
+  .y-py-hat li.is-simdi .y-py-hat__etiket { background: #fdebd2; color: #9a3412; padding: 2px 12px; border-radius: 999px; }
+  .y-py-hat__alt { font-size: 11.5px; color: var(--y-muted, #6f6559); }
+  .y-py-ozet-serit { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; padding-top: 14px; border-top: 1px solid var(--y-border, #e5dec9); align-items: start; }
+  .y-py-ozet-serit > div { display: grid; gap: 3px; min-width: 0; border-right: 1px solid var(--y-border, #e5dec9); padding-right: 10px; }
+  .y-py-ozet-serit > div:last-child { border-right: 0; padding-right: 0; }
+  .y-py-ozet-serit span.muted { font-size: 12px; }
+  .y-py-ozet-serit strong { font-size: 13.5px; overflow-wrap: anywhere; }
+  .y-py-ozet-serit__tutar strong { font-size: 19px; font-weight: 800; }
+  .y-py-ozet-serit .y-icon-button { height: auto; padding: 2px 6px; font-size: 11px; margin-left: 4px; }
+  .y-py-alt-ikili { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.35fr); gap: 16px; align-items: start; }
+  .y-py-alt-ikili > .y-kart { margin: 0; }
+  .y-kanal-aksiyon-kutular { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .y-aksiyon-karo, .y-aksiyon-karo__ic { display: grid; justify-items: center; text-align: center; gap: 5px; padding: 14px 10px; border: 1px solid var(--y-border, #e5dec9); border-radius: 12px; background: #faf8f4; color: var(--y-ink, #231f1a); text-decoration: none; cursor: pointer; font: inherit; width: 100%; }
+  .y-aksiyon-karo form&, form.y-aksiyon-karo { padding: 0; border: 0; background: none; }
+  .y-aksiyon-karo:hover, .y-aksiyon-karo__ic:hover { border-color: #aa812e; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.05); }
+  .y-aksiyon-karo strong, .y-aksiyon-karo__ic strong { font-size: 13px; line-height: 1.25; }
+  .y-aksiyon-karo small, .y-aksiyon-karo__ic small { font-size: 11.5px; color: var(--y-muted, #6f6559); line-height: 1.25; }
+  @media (max-width: 1180px) { .y-py-ozet-serit { grid-template-columns: repeat(3, minmax(0, 1fr)); } .y-py-alt-ikili { grid-template-columns: 1fr; } .y-kanal-aksiyon-kutular { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 640px) { .y-py-hat { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; } .y-py-hat li::after { display: none; } .y-py-ozet-serit { grid-template-columns: 1fr 1fr; } }
   .kalem-durumlari { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
   .kalem-durumlari .y-chip { white-space: normal; }
   .kalem-islem { grid-column: 2 / -1; border-top: 1px solid var(--y-border); padding-top: 9px; }
   .kalem-islem .y-secim { max-width: 100%; }
   .uyari--turuncu { background: var(--y-turuncu-zemin); color: var(--y-turuncu); border-color: #e9d5a4; }
-  .yolculuk { list-style: none; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin: 0 0 12px; padding: 0; }
-  .yolculuk li { display: flex; align-items: center; gap: 7px; padding: 9px 10px; border-radius: 9px; background: #fff; border: 1px solid var(--y-border); color: var(--ink-3); font-size: 13px; font-weight: 600; min-width: 0; }
-  .yolculuk span { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; background: #efe6d2; color: #6b4c14; font-size: 12px; font-weight: 800; }
-  .yolculuk .is-gecti { color: #1f5133; background: #f3faf5; border-color: #cfe8d7; }
-  .yolculuk .is-gecti span { background: #0a7f3f; color: #fff; }
-  .yolculuk .is-simdi { color: #291e11; border-color: #aa812e; box-shadow: 0 0 0 1px #aa812e inset; }
-  .yolculuk .is-simdi span { background: #aa812e; color: #fff; }
-  @media (max-width: 640px) { .yolculuk { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (max-width: 640px) { .kalem-islem { grid-column: 1 / -1; } }
 </style>

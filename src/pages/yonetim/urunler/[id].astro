@@ -2,13 +2,15 @@
 import Yonetim from '../../../layouts/Yonetim.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import Ikon from '../../../components/Ikon.astro';
-import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku, siparisleriOku } from '../../../lib/depo';
+import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
 import { benzersizKod, evet, istegeBagli, liste, metin, sayi } from '../../../lib/form';
 import { fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
 import { Katalog } from '../../../lib/katalog';
 import type { IkonAdi, Urun } from '../../../lib/sema';
 import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri, yayinEksikleri } from '../../../lib/yonetimUrun';
+import { KANALLAR, KANAL_LISTESI, bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
+import { envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
 import Onizleme from '../../../components/yonetim/Onizleme.astro';
 import Sekmeler from '../../../components/yonetim/Sekmeler.astro';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
@@ -124,10 +126,19 @@ const digerUrunler = m.urunler.filter((x) => x.id !== u.id);
 const tamamlayiciGruplar = [...m.kategoriler].sort((a,b) => a.sira - b.sira)
   .map((k) => ({ ad: k.ad, urunler: digerUrunler.filter((x) => x.kategoriler[0] === k.id) })).filter((k) => k.urunler.length);
 const gecmis = [...(kayitli?.fiyatGecmisi ?? [])].reverse();
-const siparisler = await siparisleriOku();
+const [siparisler, envanter] = await Promise.all([siparisleriOku(), envanterAyarlariOku().catch(() => bosAyarlar())]);
+const ayrilanStok = u.id ? (webAyrilanAdetleri(siparisler, Date.now(), m.paytrStokIslemleri).get(u.id) ?? 0) : 0;
+const satilabilirStok = Math.max(0, u.stok - ayrilanStok);
+const urunEsik = u.id ? kritikEsik(envanter, u.id) : envanter.kritikVarsayilan;
+const stokDurumRengi = u.stok === 0 ? 'y-chip--kirmizi' : u.stok <= urunEsik ? 'y-chip--turuncu' : 'y-chip--yesil';
+const stokDurumYazisi = u.stok === 0 ? 'Tükendi (Stokta yok)' : u.stok <= urunEsik ? `Kritik stok (≤${urunEsik} adet)` : 'Satışa uygun';
+const bagliKanallar = u.id ? KANAL_LISTESI.filter((kn) => envanter.kanallar[kn].urunler[u.id]?.kod) : [];
 const urunSatis = kayitli ? urunBazliSatislar(m, siparisler).find((x) => x.urun.id === kayitli.id) : undefined;
 const tarihBicim = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 const eksikBilgiler = yayinEksikleri(u);
+const temelTamam = Boolean(u.marka.trim() && u.ad.trim() && u.kategoriler.length > 0);
+const fiyatTamam = u.fiyat > 1;
+const fotoTamam = u.gorseller.length > 0;
 
 
 ---
@@ -171,6 +182,26 @@ const eksikBilgiler = yayinEksikleri(u);
         <p>Emin olmadığınız bir şey varsa <em>Taslak kaydet</em> deyin: müşteri görmez, sonra tamamlarsınız.</p>
       </BilgiKutusu>
       <Sekmeler secenekler={[["genel", "Genel Bilgiler"], ["fiyat", "Fiyat ve Stok"], ["fotograf", "Fotoğraflar"], ["satis", "Satış İçeriği"], ["detay", "Detaylar"], ["gelismis", "Gelişmiş"]]} />
+      {yeni && <ol class="urun-adim-cubugu" aria-label="Yeni ürün oluşturma adımları">
+        <li class:list={{ 'is-tamam': temelTamam }}>
+          <button type="button" data-adim-ac="genel">
+            <span class="urun-adim-no">{temelTamam ? '✓' : '1'}</span>
+            <div><strong>Temel bilgiler</strong><small>{temelTamam ? 'Marka, ad ve kategori hazır' : 'Ürün kimliği'}</small></div>
+          </button>
+        </li>
+        <li class:list={{ 'is-tamam': fiyatTamam }}>
+          <button type="button" data-adim-ac="fiyat">
+            <span class="urun-adim-no">{fiyatTamam ? '✓' : '2'}</span>
+            <div><strong>Fiyat ve stok</strong><small>{fiyatTamam ? formatTL(u.fiyat) : 'Satışa hazırlık'}</small></div>
+          </button>
+        </li>
+        <li class:list={{ 'is-tamam': fotoTamam }}>
+          <button type="button" data-adim-ac="fotograf">
+            <span class="urun-adim-no">{fotoTamam ? '✓' : '3'}</span>
+            <div><strong>Fotoğraflar</strong><small>{fotoTamam ? `${u.gorseller.length} fotoğraf` : 'Yayın öncesi görsel'}</small></div>
+          </button>
+        </li>
+      </ol>}
       <!-- 1. TEMEL BİLGİLER -->
       <section class="y-kart" id="bolum-temel" data-bolum="genel">
         <h2><PIkon ad="belge" /> Temel Bilgiler</h2>
@@ -180,10 +211,11 @@ const eksikBilgiler = yayinEksikleri(u);
           <div class="y-alan">
             <span class="y-etiket">Yayın Durumu </span>
             <select name="durum" aria-label="Yayın durumu">
-              <option value="taslak" selected={u.durum === "taslak"}>Taslak</option>
-              <option value="yayinda" selected={u.durum === "yayinda"}>Yayında</option>
-              <option value="gizli" selected={u.durum === "gizli"}>Gizli</option>
+              <option value="taslak" selected={u.durum === "taslak"}>Taslak (Müşteri görmez · hazırlık aşaması)</option>
+              <option value="yayinda" selected={u.durum === "yayinda"}>Yayında (Müşteriler sitede görür ve satın alabilir)</option>
+              <option value="gizli" selected={u.durum === "gizli"}>Gizli (Müşteriye kapalı · bağlantıdan da satın alınamaz)</option>
             </select>
+            <small class="y-ipucu">Ürünü sitede yayına almak pazaryerlerinde otomatik ilan açmaz. Trendyol ilanı Satış Kanalları ekranından ayrıca kontrol edilerek gönderilir.</small>
           </div>
 
           <div class="y-izgara y-izgara--2">
@@ -226,8 +258,8 @@ const eksikBilgiler = yayinEksikleri(u);
           </div>
 
           <div class="y-otomatik-adres">
-            <span>🔗 <strong>Otomatik Sayfa Adresi:</strong> <code data-demo-url>/urun/{u.id || 'marka-urun-adi'}</code></span>
-            <span class="y-ipucu">Sizin adres girmenize gerek yoktur; yazdığınız marka ve ürün adından otomatik oluşturulur.</span>
+            <span><PIkon ad="zincir" boyut={16} /> <strong>Otomatik Sayfa Adresi:</strong> <code data-url-onizleme data-demo-url>/urun/{u.id || 'marka-urun-adi'}</code></span>
+            <span class="y-ipucu">Sizin adres girmenize gerek yoktur; yazdığınız marka ve ürün adından otomatik oluşturulur. Kayıtlı ürünlerde mevcut bağlantıların bozulmaması için sabit kalır.</span>
           </div>
 
           <div class="y-alan">
@@ -352,8 +384,8 @@ const eksikBilgiler = yayinEksikleri(u);
                     <span>{tarihBicim.format(new Date(g.tarih))}</span>
                     <span>
                       <strong>{formatTL(g.fiyat)}</strong>
-                      {fark < 0 && <small style="color:var(--yesil);margin-left:6px">(📉 {formatTL(fark)})</small>}
-                      {fark > 0 && <small style="color:var(--danger);margin-left:6px">(📈 +{formatTL(fark)})</small>}
+                      {fark < 0 && <span class="y-chip y-chip--yesil" style="margin-left:6px">{formatTL(fark)}</span>}
+                      {fark > 0 && <span class="y-chip y-chip--kirmizi" style="margin-left:6px">+{formatTL(fark)}</span>}
                     </span>
                   </li>
                 );
@@ -364,10 +396,8 @@ const eksikBilgiler = yayinEksikleri(u);
       </section>
 
       <!-- 3. FIRSAT ÜRÜNÜ -->
-      <section class="y-kart" id="bolum-firsat" data-bolum="satis" hidden style="border-color:#F3B8C0">
-        <div class="y-kart-ust-etiket" style="color:var(--flas)">Adım 3 · Fırsat Vitrini & Canlı Geri Sayım Sayacı</div>
-        <h2><PIkon ad="simsek" /> Fırsat Ürünü ve Geri Sayım Sayacı</h2>
-
+      <section class="y-kart" id="bolum-firsat" data-bolum="satis" hidden>
+        <h2><PIkon ad="simsek" /> Kampanya ve Geri Sayım Sayacı</h2>
 
         <label class="y-secim">
           <input
@@ -375,48 +405,64 @@ const eksikBilgiler = yayinEksikleri(u);
             name="firsat"
             checked={!!u.firsat}
             data-firsat-girdi
-            data-alan-ipucu="Fırsat Ürünü: İşaretlendiği anda hem ürün kartında hem ürün sayfasının en üstünde kırmızı yıldırım ikonlu 'Fırsat' rozeti ve geri sayım sayacı açılır."
+            data-alan-ipucu="Fırsat Ürünü: İşaretlendiği anda hem ürün kartında hem ürün sayfasının en üstünde yıldırım ikonlu 'Fırsat' rozeti ve geri sayım sayacı açılır."
             data-hedef-eleman="firsat"
           />
           <span><strong>Bu ürünü fırsat ürünü olarak işaretle</strong> (Sağdaki önizlemede hemen görebilirsiniz)</span>
         </label>
 
+        <div class="rozet-sablon-onizleme" aria-label="Rozet şablonu örnekleri">
+          <span class="rozet-ornek rozet-ornek--firsat">⚡ Fırsat · Bordo</span>
+          <span class="rozet-ornek rozet-ornek--flas">⚡ Flaş İndirim · Mercan</span>
+          <span class="rozet-ornek rozet-ornek--ozel">★ Özel Seçim · Şampanya</span>
+        </div>
+
         <div class="y-izgara y-izgara--2" style="margin-top:10px">
           <div class="y-alan"><label for="firsat-stil">Rozet şablonu</label>
-<select id="firsat-stil" name="firsat_stil">
-<option value="firsat" selected={u.firsat?.stil === "firsat"}>Fırsat · bordo</option>
-<option value="flas" selected={u.firsat?.stil === "flas"}>Flaş indirim · mercan</option>
-<option value="ozel" selected={u.firsat?.stil === "ozel"}>Özel seçim · şampanya</option>
-</select></div>
-<div class="y-alan">
+            <select id="firsat-stil" name="firsat_stil">
+              <option value="firsat" selected={u.firsat?.stil === "firsat"}>Fırsat · bordo</option>
+              <option value="flas" selected={u.firsat?.stil === "flas"}>Flaş indirim · mercan</option>
+              <option value="ozel" selected={u.firsat?.stil === "ozel"}>Özel seçim · şampanya</option>
+            </select>
+          </div>
+          <div class="y-alan">
             <label for="firsat_etiket">Fırsat Etiketi </label>
             <input
               id="firsat_etiket"
               name="firsat_etiket"
               value={u.firsat?.etiket ?? ''}
               placeholder="Fırsat Ürünü (veya Flaş Fırsat)"
-              data-alan-ipucu="Fırsat Etiketi: Kırmızı yıldırım ikonunun yanında ve ürün kartının sol üst damgasında yazacak metindir (boşsa 'Fırsat Ürünü' yazar)."
+              data-alan-ipucu="Fırsat Etiketi: Yıldırım ikonunun yanında ve ürün kartının sol üst damgasında yazacak metindir (boşsa 'Fırsat Ürünü' yazar)."
               data-hedef-eleman="firsat"
             />
           </div>
           <div class="y-alan">
-            <label for="firsat_bitis">Bitiş Tarihi & Saati (Türkiye saati) </label>
+            <label for="firsat_bitis">Bitiş Tarihi & Saati (Türkiye saati · GMT+3) </label>
             <input
               id="firsat_bitis"
               name="firsat_bitis"
               type="datetime-local"
               value={istanbulaYerel(u.firsat?.bitis)}
-              data-alan-ipucu="Fırsat Bitiş Saati: Seçtiğiniz tarihe kadar kırmızı rozetin içinde beyaz kutuda canlı geri sayım (saat:dakika:saniye) çalışır. Boş bırakırsanız süresiz fırsat rozeti görünür."
+              data-alan-ipucu="Fırsat Bitiş Saati: Seçtiğiniz tarihe kadar rozetin içinde canlı geri sayım (saat:dakika:saniye) çalışır. Boş bırakırsanız süresiz fırsat rozeti görünür."
               data-hedef-eleman="firsat"
             />
           </div>
         </div>
+        <p class="y-bilgi-satiri"><PIkon ad="bilgi" boyut={16} /><span>Kampanya süresi dolduğunda geri sayım sayacı ve fırsat rozeti müşteri sitesinde kendiliğinden gizlenir; ürün normal satış fiyatıyla yayında kalır. İndirim ima eden şablonları yalnız gerçek fiyat indirimi olan ürünlerde kullanın.</span></p>
       </section>
 
       <!-- 4. STOK VE SATIŞ TAKİBİ -->
       <section class="y-kart" id="bolum-stok" data-bolum="fiyat" hidden>
-        <h2><PIkon ad="katman" /> Stok ve Model Kodu</h2>
+        <div class="y-kart__bas">
+          <h2><PIkon ad="katman" /> Stok, Satılabilirlik ve Model Kodu</h2>
+          <span class:list={['y-chip', stokDurumRengi]}>{stokDurumYazisi}</span>
+        </div>
 
+        <div class="y-mini-ozet" style="margin-bottom:14px">
+          <div><PIkon ad="kutu" boyut={18} /><strong>{u.stok} adet</strong><span>Depodaki mevcut stok</span></div>
+          <div class="y-mini-ozet--turuncu"><PIkon ad="saat" boyut={18} /><strong>{ayrilanStok} adet</strong><span>Siparişlere ayrılan (web)</span></div>
+          <div class:list={[satilabilirStok === 0 ? 'y-mini-ozet--kirmizi' : 'y-mini-ozet--yesil']}><PIkon ad="tik-daire" boyut={18} /><strong>{satilabilirStok} adet</strong><span>Satılabilir stok</span></div>
+        </div>
 
         <div class="y-izgara y-izgara--3">
           <div class="y-alan">
@@ -467,35 +513,41 @@ const eksikBilgiler = yayinEksikleri(u);
 
       <!-- 5. GÖRSELLER -->
       <section class="y-kart" id="bolum-gorsel" data-bolum="fotograf" hidden>
-        <h2><PIkon ad="resim" /> Görseller</h2>
-
+        <div class="y-kart__bas">
+          <h2><PIkon ad="resim" /> Ürün Fotoğrafları</h2>
+          <span class="y-chip y-chip--gri">{u.gorseller.length} kayıtlı fotoğraf</span>
+        </div>
 
         {u.gorseller.length > 0 && (
           <div class="y-gorseller" data-gorsel-sirala style="margin-bottom:12px">
             {u.gorseller.map((g, i) => (
               <div class:list={['y-gorsel', { 'y-gorsel--ana': i === 0 }]}>
                 <img src={g.src} alt="" loading="lazy" />
-                <button type="button" class="y-link" data-ana-foto>Ana fotoğraf yap</button>
+                <div class="y-gorsel-ust">
+                  {i === 0 ? <span class="y-chip y-chip--yesil">Ana fotoğraf</span> : <button type="button" class="y-link" data-ana-foto>Ana fotoğraf yap</button>}
+                </div>
                 <input type="hidden" name="gorsel_src" value={g.src} />
                 <label class="y-ipucu">Sıra<input type="number" class="y-girdi" name="gorsel_sira" value={i + 1} min="1" /></label>
-                <input type="text" class="y-girdi" name="gorsel_alt" value={g.alt} placeholder="Görsel açıklaması" aria-label="Görsel açıklaması" />
-                <label class="y-secim"><input type="checkbox" name="gorsel_sil" value={g.src} />Sil</label>
+                <input type="text" class="y-girdi" name="gorsel_alt" value={g.alt} placeholder="Görsel açıklaması (alternatif metin)" aria-label="Görsel açıklaması" />
+                <label class="y-secim y-secim--kompakt"><input type="checkbox" name="gorsel_sil" value={g.src} />Kaydedince sil</label>
               </div>
             ))}
           </div>
         )}
         <label class="y-yukle" data-dosya-birak>
           <Ikon ad="arti" boyut={28} />
-          Fotoğraf seçin veya buraya bırakın
+          <strong>Fotoğraf seçin veya sürükleyip buraya bırakın</strong>
+          <small class="muted">Desteklenen türler: JPG, PNG, WebP, AVIF, HEIC · Büyük fotoğraflar tarayıcıda 2000 px’e otomatik küçültülür (tek seferde toplam en fazla 4 MB).</small>
           <input type="file" name="yeni_gorsel" accept="image/jpeg,image/png,image/webp,image/avif,image/gif,image/heic,image/heif" multiple data-gorsel-sec data-hedef-eleman="galeri" />
         </label>
         <input type="hidden" name="yeniAnaFoto" value="" />
         <div class="y-onizlemeler" data-gorsel-onizleme></div>
+        <p class="y-bilgi-satiri"><PIkon ad="bilgi" boyut={16} /><span>İlk sıradaki fotoğraf vitrin ve ürün sayfasında <strong>Ana fotoğraf</strong> olarak gösterilir. Ana fotoğrafı silerseniz sıradaki ilk fotoğraf otomatik ana fotoğraf olur. Sitedeki fotoğraf değişiklikleri onaylı Trendyol ilanına kendiliğinden gönderilmez.</span></p>
       </section>
 
       <!-- 6. ROZETLER VE VİTRİN -->
       <section class="y-kart" id="bolum-rozet" data-bolum="satis" hidden>
-        <h2><PIkon ad="yildiz" /> Rozetler, Garanti ve Hediye</h2>
+        <h2><PIkon ad="yildiz" /> Güvence Rozetleri, Garanti ve Vitrin Görünürlüğü</h2>
 
 
         <div class="y-izgara y-izgara--2">
@@ -564,6 +616,7 @@ const eksikBilgiler = yayinEksikleri(u);
             <input id="oncelik" name="oncelik" inputmode="numeric" value={u.oncelik} />
           </div>
         </div>
+        <p class="y-bilgi-satiri"><PIkon ad="bilgi" boyut={16} /><span><strong>Görünürlük kuralları:</strong> Taslak veya gizli ürünler “Öne çıkan” olarak işaretlense bile yayına alınana kadar müşteri vitrininde görünmez. “En Çok Satan” damgası sitedeki satış eşiğine ulaşıldığında otomatik veya diğer kanallardaki gerçek satışlarınıza dayanarak buradan elle açılır.</span></p>
       </section>
 
       <!-- 7. ÖNE ÇIKAN BİLGİLER & FAYDALAR -->
@@ -662,8 +715,8 @@ const eksikBilgiler = yayinEksikleri(u);
 
       <!-- 8. PİŞİRME SÜRELERİ VE TEKNİK ÖZELLİKLER -->
       <section class="y-kart" id="bolum-pisirme" data-bolum="detay" hidden>
-        <details data-pisirme open={u.pisirme.length > 0 || u.kategoriler.some((id) => /duduklu|tencere/.test(id))}>
-          <summary>Pişirme süreleri</summary>
+        <details class="kanal-bolum" data-pisirme open={u.pisirme.length > 0 || u.kategoriler.some((id) => /duduklu|tencere/.test(id))} style="margin-top:0;margin-bottom:18px">
+          <summary>Pişirme süreleri tablosu <span class="y-chip y-chip--gri">{u.pisirme.length ? `${u.pisirme.length} yemek kayıtlı` : 'Düdüklü tencere / pişirme ürünlerine özel'}</span></summary>
 
         <div class="y-tekrar">
           {u.pisirme.map((x) => (
@@ -703,7 +756,7 @@ const eksikBilgiler = yayinEksikleri(u);
 
         </details>
         <h2><PIkon ad="ayarlar-cubuk" /> Teknik özellikler ve kutu içeriği</h2>
-        <p class="y-help">Ürün kutusundaki barkodu “Barkod (EAN)”, doğrulanmış üretici model kodunu “MPN” satırı olarak ekleyin. Bu alanlar ürün akışında kullanılır.</p>
+        <p class="y-help">Ürün kutusundaki barkodu “Barkod (EAN)”, doğrulanmış üretici model kodunu “MPN” satırı olarak ekleyin. Boş bırakılan satırlar müşteri sayfasında gösterilmez. Buradaki teknik özellikler ve kutu içeriği Trendyol ilan açıklamasını da otomatik besler.</p>
         <div class="y-tekrar">
           {u.teknik.map(([e, d]) => (
             <div class="y-tekrar__satir">
@@ -783,28 +836,89 @@ const eksikBilgiler = yayinEksikleri(u);
         <hr style="border:0;border-top:1px solid var(--line);margin:20px 0" />
       </section>
       <section class="y-kart" data-bolum="gelismis" hidden>
-                <h2><PIkon ad="buyutec" /> Arama görünümü ve iç notlar</h2>
-        <p class="y-ipucu">Sayfa başlığı ürün adı ve markadan, arama açıklaması kısa açıklamadan oluşturulur.</p>
-        <p class="y-block-gap"><strong>{u.marka} {u.ad} · {m.site.ad}</strong></p>
-        {u.ozet && <p class="muted">{u.ozet}</p>}
+        <div class="y-kart__bas">
+          <h2><PIkon ad="buyutec" /> Arama motorlarında görünüm (Otomatik SEO önizlemesi)</h2>
+          <span class="y-chip y-chip--gri">Otomatik oluşturulur</span>
+        </div>
+        <p class="y-help">Arama motoru başlığı ve açıklaması ürünün markasından, tam adından ve kısa açıklamasından otomatik üretilir; ayrıca SEO alanı kaydetmenize gerek yoktur.</p>
+        <div class="seo-onizleme-kutu">
+          <small>alluluhome.com › urun › {u.id || 'marka-urun-adi'}</small>
+          <strong>{u.marka} {u.ad || 'Ürün Adı'} | {m.site.ad}</strong>
+          <p>{u.ozet || 'Kısa açıklama girildiğinde arama motoru özeti burada görünür.'}</p>
+        </div>
+        <dl class="y-money-lines y-money-lines--kucuk" style="margin-top:12px">
+          <div><dt>Otomatik sayfa adresi</dt><dd><code>/urun/{u.id || 'marka-urun-adi'}</code></dd></div>
+          <div><dt>Mağazada görünürlük</dt><dd><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{u.durum === 'yayinda' ? 'Yayında' : u.durum === 'gizli' ? 'Gizli' : 'Taslak'}</span></dd></div>
+          <div><dt>Kayıtlı fotoğraf sayısı</dt><dd>{u.gorseller.length} adet</dd></div>
+          {bagliKanallar.length > 0 && <div><dt>Bağlı pazaryerleri</dt><dd>{bagliKanallar.map((kn) => KANALLAR[kn]).join(', ')}</dd></div>}
+        </dl>
+        <p class="y-bilgi-satiri"><PIkon ad="bilgi" boyut={16} /><span>Bu önizleme arama motorlarına sunulan meta etiketlerini gösterir; Google ve diğer arama motorları arama sorgusuna göre farklı başlık veya özet metni gösterebilir.</span></p>
+      </section>
 
-        <textarea class="y-girdi" name="dogrula" rows="3" style="width:100%" placeholder="Örn. Fatura kodu kutuyla teyit edilecek">{u.dogrula.join('\n')}</textarea>
+      <section class="y-kart" data-bolum="gelismis" hidden>
+        <h2><PIkon ad="belge" /> Yönetici iç notları</h2>
+        <div class="y-alan">
+          <label for="dogrula-not">İç kontrol notları (Müşteriler ve pazaryerleri görmez)</label>
+          <textarea id="dogrula-not" class="y-girdi" name="dogrula" rows="3" style="width:100%" placeholder="Örn. Fatura kodu kutuyla teyit edilecek">{u.dogrula.join('\n')}</textarea>
+          <small class="y-ipucu">Bu notlar yalnız yönetim panelinde saklanır; müşteri sitesine veya Trendyol/Hepsiburada ilanlarına gönderilmez.</small>
+        </div>
       </section>
 
       <p class="y-form-state" data-kayit-durum role="status"></p>
-      {!yeni && <details class="y-kart" data-bolum="gelismis" hidden>
-        <summary>Tehlikeli işlemler</summary>
-        <button class="btn btn--tehlike btn--kucuk" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün kalıcı olarak silinsin mi?">Ürünü sil</button>
+      {!yeni && <details class="y-kart y-danger" data-bolum="gelismis" hidden>
+        <summary>Tehlikeli işlemler · Ürünü kalıcı olarak sil</summary>
+        <p class="y-help">Ürünü sildiğinizde katalog kaydı ve yüklü ürün fotoğrafları kalıcı olarak silinir. Geçmiş sipariş kayıtlarındaki ürün adı ve tutarlar bozulmaz.</p>
+        {bagliKanallar.length > 0 && <p class="y-uyari">Dikkat: Bu ürün <strong>{bagliKanallar.map((kn) => KANALLAR[kn]).join(' ve ')}</strong> eşleştirmelerine bağlı. Silmeden önce pazaryeri stok bağlantısını kontrol edin.</p>}
+        <button class="btn btn--tehlike btn--kucuk" type="submit" name="eylem" value="sil" formnovalidate data-onayla="Bu ürün ve fotoğrafları KALICI olarak silinsin mi?">Ürünü kalıcı olarak sil</button>
       </details>}
     </form>
     <aside class="y-kart y-urun-editor-ozet" aria-label={yeni ? 'Yayınlama kontrolü' : 'Ürün özeti'}>
-      <h2><PIkon ad="goz" /> {yeni ? 'Yayınlama kontrolü' : 'Mağaza kartı'}</h2>
+      <h2><PIkon ad="goz" /> {yeni ? 'Ürün oluşturma rehberi' : 'Mağaza kartı'}</h2>
       {u.gorseller[0] && <img src={u.gorseller[0].src} alt="" width="280" height="200" decoding="async" />}
       {u.ad && <p><strong>{u.marka} {u.kisaAd || u.ad}</strong></p>}
-      {!yeni && <dl class="y-money-lines y-money-lines--kucuk"><div><dt>Satış fiyatı</dt><dd>{u.fiyat > 1 ? formatTL(u.fiyat) : 'Girilmedi'}</dd></div><div><dt>Depo stoku</dt><dd>{u.stok} adet</dd></div></dl>}
-      {eksikBilgiler.length > 0 ? <><p class="y-help">Yayın için gerekenler</p><ul>{eksikBilgiler.map((x) => <li>{x}</li>)}</ul></> : <p class="y-help">Yayın için gerekli bilgiler tamam.</p>}
-      <p class="y-help">Formdaki değişiklikleri görmek için Önizle’yi açın.</p>
+      <ul class="urun-kontrol-listesi">
+        <li><button type="button" class="y-link" data-adim-ac="genel">1. Temel bilgiler</button><span class:list={['y-chip', temelTamam ? 'y-chip--yesil' : 'y-chip--turuncu']}>{temelTamam ? 'Tamam' : 'Eksik'}</span></li>
+        <li><button type="button" class="y-link" data-adim-ac="fiyat">2. Fiyat ve stok</button><span class:list={['y-chip', fiyatTamam ? 'y-chip--yesil' : 'y-chip--turuncu']}>{fiyatTamam ? formatTL(u.fiyat) : 'Girilmedi'}</span></li>
+        <li><button type="button" class="y-link" data-adim-ac="fotograf">3. Fotoğraflar</button><span class:list={['y-chip', fotoTamam ? 'y-chip--yesil' : 'y-chip--turuncu']}>{fotoTamam ? `${u.gorseller.length} hazır` : 'Eksik'}</span></li>
+      </ul>
+      {!yeni && <dl class="y-money-lines y-money-lines--kucuk"><div><dt>Depo / Satılabilir</dt><dd>{u.stok} / {satilabilirStok} adet</dd></div>{bagliKanallar.length > 0 && <div><dt>Bağlı kanallar</dt><dd>{bagliKanallar.map((kn) => KANALLAR[kn]).join(', ')}</dd></div>}</dl>}
+      {eksikBilgiler.length > 0 ? <><p class="y-help">Yayın için tamamlanacaklar:</p><ul>{eksikBilgiler.map((x) => <li>{x}</li>)}</ul></> : <p class="y-help">Yayın için gerekli tüm zorunlu bilgiler tamam.</p>}
+      <p class="y-help">Kaydedilmemiş değişiklikleri müşteri görünümünde incelemek için sağ üstten <strong>Önizle</strong>’yi açın.</p>
     </aside>
     <Onizleme id="urun-onizleme" tur="urun" kayit={u.id} />
   </div>
 </Yonetim>
+<script>
+  for (const b of document.querySelectorAll<HTMLElement>('[data-adim-ac]')) {
+    b.addEventListener('click', () => {
+      const hedef = b.dataset.adimAc;
+      const sekme = hedef ? document.querySelector<HTMLButtonElement>(`[data-sekme="${hedef}"]`) : null;
+      sekme?.click();
+      sekme?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+  }
+</script>
+<style>
+  .urun-adim-cubugu { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .urun-adim-cubugu button { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--y-border); border-radius: 13px; background: #fff; color: inherit; font: inherit; text-align: left; cursor: pointer; box-shadow: var(--y-shadow); }
+  .urun-adim-cubugu button:hover { border-color: #d2b996; }
+  .urun-adim-cubugu li.is-tamam button { background: #f0f8f2; border-color: #cfe7d7; }
+  .urun-adim-no { flex: none; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--y-gold-soft); color: var(--y-gold-ink); font-weight: 800; font-size: 13.5px; }
+  .urun-adim-cubugu li.is-tamam .urun-adim-no { background: var(--y-yesil); color: #fff; }
+  .urun-adim-cubugu div { display: grid; min-width: 0; }
+  .urun-adim-cubugu strong { font-size: 14px; }
+  .urun-adim-cubugu small { color: var(--y-muted); font-size: 12.5px; }
+  .rozet-sablon-onizleme { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .rozet-ornek { display: inline-flex; align-items: center; gap: 5px; padding: 5px 12px; border-radius: 999px; font-size: 12.5px; font-weight: 750; }
+  .rozet-ornek--firsat { background: #7b1d26; color: #fff; }
+  .rozet-ornek--flas { background: #d9482b; color: #fff; }
+  .rozet-ornek--ozel { background: #f3e3c3; color: #4d3513; border: 1px solid #dcc08e; }
+  .seo-onizleme-kutu { padding: 14px 16px; border: 1px solid var(--y-border); border-radius: 13px; background: var(--y-surface-2); display: grid; gap: 4px; }
+  .seo-onizleme-kutu small { color: #3c6e47; font-size: 13px; }
+  .seo-onizleme-kutu strong { color: #1a0dab; font-size: 17px; font-weight: 650; }
+  .seo-onizleme-kutu p { margin: 0; color: #4d5156; font-size: 14px; line-height: 1.45; }
+  .urun-kontrol-listesi { list-style: none; margin: 10px 0 !important; padding: 0 !important; display: grid; gap: 8px; }
+  .urun-kontrol-listesi li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-bottom: 6px; border-bottom: 1px solid var(--y-border); font-size: 13.5px; }
+  .urun-kontrol-listesi button { background: none; border: 0; padding: 0; font: inherit; cursor: pointer; text-align: left; }
+  @media (max-width: 760px) { .urun-adim-cubugu { grid-template-columns: 1fr; } }
+</style>
