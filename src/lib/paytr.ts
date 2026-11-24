@@ -1,5 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
+import { TAKSIT_ACIK } from './taksit';
 import type { Siparis } from './sema';
 
 const ayar = (ad: string) => process.env[ad] ?? (import.meta.env as Record<string, string | undefined>)[ad];
@@ -42,7 +43,7 @@ export async function paytrFormUrl(a: PaytrAyari, siparis: Siparis, ip: string):
   const teslimat = siparis.teslimat;
   const govde = new URLSearchParams({
     merchant_id: a.id, user_ip: kullaniciIp, merchant_oid: odeme.ref, email: eposta,
-    payment_amount: kurus, user_basket: sepetKod, no_installment: '1', max_installment: '0',
+    payment_amount: kurus, user_basket: sepetKod, no_installment: TAKSIT_ACIK ? '0' : '1', max_installment: '0',
     currency: 'TL', test_mode: test, debug_on: '0', timeout_limit: String(PAYTR_SURE_DK), lang: 'tr',
     user_name: Array.from(`${siparis.musteri.ad} ${siparis.musteri.soyad}`).slice(0, 60).join(''),
     user_address: Array.from(`${teslimat.il} / ${teslimat.ilce}, ${teslimat.adres}`).slice(0, 400).join(''),

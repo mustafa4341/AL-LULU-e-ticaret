@@ -71,12 +71,17 @@ export async function faturaGonder(s: Siparis, faturaNo: string, ek: { dosyaAdi:
   if (!s.musteri.eposta) return 'kapali';
   const { site } = await magazaOku();
   const takipUrl = new URL(`/siparis/${s.no}?t=${s.token}`, origin).href;
-  return epostaGonder(s.musteri.eposta, faturaEpostasi(s, site, faturaNo, takipUrl, ek), { no: s.no, tur: 'fatura', zorla });
+  // Tekrar engeli fatura numarasına göre: ilk fatura iptal edilip düzeltilmiş fatura kesilince o da müşteriye gider.
+  return epostaGonder(s.musteri.eposta, faturaEpostasi(s, site, faturaNo, takipUrl, ek), { no: s.no, tur: 'fatura', zorla, ek: faturaNo });
 }
 
 export type GonderimSonucu = 'gonderildi' | 'zaten-gonderildi' | 'hata' | 'kapali';
 
-interface Kayit { no: string; tur: string; zorla?: boolean }
+interface Kayit {
+  no: string; tur: string; zorla?: boolean;
+  /** Aynı siparişte aynı türden birden çok e-posta olabiliyorsa (ör. düzeltilmiş fatura) tekrar engeli anahtarına eklenir */
+  ek?: string;
+}
 
 /**
  * Tek bir e-posta gönderir. Kayıt verilirse Supabase'te aynı e-postanın ikinci kez gitmesi engellenir
@@ -86,7 +91,7 @@ async function epostaGonder(kime: string, e: Eposta, kayit?: Kayit, yanit?: stri
   const t = eposta();
   if (!t) return 'kapali';
   const sb = kayit ? supabaseIstemci() : null;
-  const anahtar = kayit ? `${kayit.tur}:${kayit.no}` : '';
+  const anahtar = kayit ? `${kayit.tur}:${kayit.no}${kayit.ek ? ':' + kayit.ek.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 60) : ''}` : '';
   if (sb && kayit) {
     const { data, error } = await sb.rpc('eposta_gonderim_al', {
       p_anahtar: anahtar, p_siparis_no: kayit.no, p_tur: kayit.tur, p_alici: kime, p_zorla: !!kayit.zorla,
@@ -102,7 +107,7 @@ async function epostaGonder(kime: string, e: Eposta, kayit?: Kayit, yanit?: stri
       from: ortam('SMTP_GONDEREN') || ortam('SMTP_KULLANICI'),
       to: kime,
       replyTo: yanit || ortam('EPOSTA_YANIT') || undefined,
-      subject: e.konu, text: e.metin, html: e.html,
+      subject: e.konu.replace(/[\r\n\t]+/g, ' ').trim().slice(0, 250), text: e.metin, html: e.html, // konu satırına satır sonu girmesin
       attachments: e.ekler?.map((x) => ({ filename: x.dosyaAdi, content: x.icerik, contentType: x.tur.startsWith('text/') ? `${x.tur}; charset=utf-8` : x.tur })),
     });
     mesajId = bilgi.messageId ?? null;
@@ -200,12 +205,13 @@ export async function siparisAlindi(
   ]);
 }
 
-export async function durumDegisti(s: Siparis, site: SiteAyarlari, takipUrl: string): Promise<void> {
+/** zorla: aynı durumun e-postası daha önce gittiyse de yeniden gönderilir (ör. kargo takip numarası düzeltildi) */
+export async function durumDegisti(s: Siparis, site: SiteAyarlari, takipUrl: string, zorla = false): Promise<void> {
   const durum = SIPARIS_DURUM_ADLARI[s.durum];
   const ek = s.durum === 'kargoda' && s.kargoTakip ? ` Kargo takip no: ${s.kargoTakip}.` : '';
   const ePosta = (EPOSTA_GIDEN_DURUMLAR as readonly string[]).includes(s.durum) ? durumEpostasi(s, site, takipUrl, await gorselGetir()) : undefined;
   await Promise.all([
     smsGonder(s.musteri.tel, `${site.ad}: ${s.no} numaralı siparişinizin durumu: ${durum}.${ek} Takip: ${takipUrl}`),
-    s.musteri.eposta && ePosta ? epostaGonder(s.musteri.eposta, ePosta, { no: s.no, tur: `durum-${s.durum}` }) : Promise.resolve(),
+    s.musteri.eposta && ePosta ? epostaGonder(s.musteri.eposta, ePosta, { no: s.no, tur: `durum-${s.durum}`, zorla }) : Promise.resolve(),
   ]);
 }

@@ -33,7 +33,7 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     }
   }
 
-  const yonetici = oturumGecerli(ctx.cookies.get(CEREZ)?.value);
+  const yonetici = await oturumGecerli(ctx.cookies.get(CEREZ)?.value);
   ctx.locals.yonetici = yonetici;
 
   // Gizli giriş adresi (YONETIM_GIRIS_YOLU): giriş sayfası yalnızca bu adreste açılır.
@@ -89,6 +89,10 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     yanit.headers.set('X-Robots-Tag', 'noindex');
   }
   ortakBasliklar(yanit);
+  // Panelde dışarıdan betik yüklenmez (GTM vb. yok): yalnız kendi betiklerimiz çalışabilir (denetim AUD-025)
+  if (panel && yanit.headers.get('Content-Security-Policy') === VARSAYILAN_CSP) {
+    yanit.headers.set('Content-Security-Policy', VARSAYILAN_CSP + "; script-src 'self' 'unsafe-inline'; form-action 'self'");
+  }
   if (yol === '/odeme/sonuc') {
     // PayTR ödeme bitince bu sayfayı kendi çerçevesinin içinde açar: yalnızca PayTR ve kendi sitemiz çerçeveleyebilir
     yanit.headers.delete('X-Frame-Options');
@@ -106,12 +110,15 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
 
 /** Tüm yanıtlar: tıklama tuzağı (başka sitenin sayfamızı çerçeve içinde göstermesi), tür karışıklığı ve gereksiz tarayıcı izinlerine karşı.
  *  Çerçeve izni yalnızca kendi sitemize: paneldeki canlı önizleme mağaza sayfalarını iframe içinde açar. */
+const VARSAYILAN_CSP = "frame-ancestors 'self'; base-uri 'self'; object-src 'none'";
 function ortakBasliklar(yanit: Response) {
   const h = yanit.headers;
   h.set('X-Content-Type-Options', 'nosniff');
   h.set('Referrer-Policy', 'strict-origin-when-cross-origin');
   h.set('X-Frame-Options', 'SAMEORIGIN');
-  if (!h.has('Content-Security-Policy')) h.set('Content-Security-Policy', "frame-ancestors 'self'; base-uri 'self'; object-src 'none'");
+  // HTTPS zorunlu (tarayıcı 180 gün boyunca siteye yalnız HTTPS ile gider). Alt alan adları etkilenmez. — denetim AUD-025
+  h.set('Strict-Transport-Security', 'max-age=15552000');
+  if (!h.has('Content-Security-Policy')) h.set('Content-Security-Policy', VARSAYILAN_CSP);
   h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=()');
 }
 

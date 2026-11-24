@@ -1,0 +1,81 @@
+---
+/**
+ * Yazdırılabilir toplama listesi: seçilen siparişlerin ürünleri birleşik (depoda tek tur), altında sipariş bazında içerik.
+ * ?id=web:NO&id=trendyol-123 … (en fazla 60 sipariş)
+ */
+import { magazaOku, siparisleriOku } from '../../../../lib/depo';
+import { hazirlikListesi, toplamaListesi } from '../../../../lib/hazirlik';
+import { pazaryeriSiparisleriOku } from '../../../../lib/pazaryeriDepo';
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+const idler = [...new Set(Astro.url.searchParams.getAll('id'))].slice(0, 60);
+const [magaza, web, py] = await Promise.all([magazaOku(), siparisleriOku().catch(() => []), pazaryeriSiparisleriOku().catch(() => [])]);
+const secili = hazirlikListesi(web, py, magaza).filter((x) => idler.includes(x.anahtar));
+const satirlar = toplamaListesi(secili);
+const tarih = new Date().toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'medium', timeStyle: 'short' });
+const KANAL = { web: 'Web', trendyol: 'Trendyol', hepsiburada: 'Hepsiburada' } as const;
+const toplam = satirlar.reduce((t, x) => t + x.adet, 0);
+---
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Toplama listesi · {secili.length} sipariş</title>
+  <style is:inline>
+    @page { size: A4; margin: 12mm; }
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3efe6; color: #111; font: 14px/1.4 Arial, Helvetica, sans-serif; }
+    main { max-width: 900px; margin: 0 auto; padding: 16px; background: #fff; }
+    .arac { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: 900px; margin: 0 auto; padding: 12px 16px; }
+    .dugme { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #30291f; background: #30291f; color: #fff; font: 600 15px Arial, sans-serif; cursor: pointer; }
+    h1 { font-size: 20px; margin: 0 0 2px; }
+    .alt { color: #555; margin: 0 0 14px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border-bottom: 1px solid #ccc; padding: 7px 6px; text-align: left; vertical-align: middle; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .4px; color: #444; border-bottom: 2px solid #111; }
+    .kutu { width: 22px; height: 22px; border: 2px solid #111; border-radius: 3px; display: inline-block; }
+    .adet { font-size: 22px; font-weight: 800; text-align: center; width: 64px; }
+    .gorsel { width: 52px; } .gorsel img { width: 46px; height: 46px; object-fit: contain; display: block; }
+    .kod { font: 12px "Courier New", monospace; color: #333; }
+    .sip { font-size: 12px; color: #333; }
+    h2 { font-size: 16px; margin: 24px 0 8px; border-top: 2px solid #111; padding-top: 12px; }
+    .siparis { border: 1px solid #bbb; border-radius: 6px; padding: 8px 10px; margin: 0 0 8px; break-inside: avoid; }
+    .siparis b { font-size: 14px; }
+    .siparis ul { margin: 4px 0 0; padding-left: 0; list-style: none; }
+    .siparis li { display: flex; gap: 8px; align-items: center; padding: 2px 0; }
+    .siparis .kutu { width: 16px; height: 16px; }
+    .bos { padding: 24px; background: #fff7e6; border: 1px solid #e9d5a4; border-radius: 10px; }
+    @media print { body { background: #fff; } .arac { display: none; } main { padding: 0; max-width: none; } }
+  </style>
+</head>
+<body>
+  <div class="arac"><button class="dugme" type="button" data-yazdir>Yazdır</button><span>Seçilen {secili.length} sipariş · {toplam} ürün</span></div>
+  <main>
+    {!secili.length ? <p class="bos">Seçilen siparişler artık hazırlanacaklar arasında değil (kargolanmış ya da iptal edilmiş olabilir). Listeyi yenileyip yeniden seçin.</p> : <>
+      <h1>Ürün Toplama Listesi</h1>
+      <p class="alt">{tarih} · {secili.length} sipariş · {satirlar.length} çeşit · toplam {toplam} adet</p>
+      <table>
+        <thead><tr><th></th><th></th><th>Ürün</th><th>Barkod / SKU</th><th style="text-align:center">Adet</th><th>Siparişler</th></tr></thead>
+        <tbody>{satirlar.map((x) => <tr>
+          <td><span class="kutu"></span></td>
+          <td class="gorsel">{x.gorsel && <img src={x.gorsel} alt="" />}</td>
+          <td><strong>{x.ad}</strong>{!x.urunId && <div class="sip">Sitedeki ürünle eşleşmedi</div>}</td>
+          <td class="kod">{x.barkod ?? '—'}{x.sku && x.sku !== x.barkod && <div>{x.sku}</div>}</td>
+          <td class="adet">{x.adet}</td>
+          <td class="sip">{x.siparisler.map((s) => `${KANAL[s.kanal]} ${s.no}${s.adet > 1 ? ' ×' + s.adet : ''}`).join(', ')}</td>
+        </tr>)}</tbody>
+      </table>
+      <h2>Sipariş içerikleri (paketleme kontrolü)</h2>
+      {secili.map((s) => <div class="siparis">
+        <b>{KANAL[s.kanal]} · {s.no}</b>{s.musteri && <span> · {s.musteri}</span>}{s.yer && <span> · {s.yer}</span>}
+        <ul>{s.kalemler.map((k) => <li><span class="kutu"></span>{k.adet} × {k.ad}{k.barkod && <span class="kod"> · {k.barkod}</span>}</li>)}</ul>
+      </div>)}
+    </>}
+  </main>
+  <script>document.querySelector('[data-yazdir]')?.addEventListener('click', () => window.print());</script>
+</body>
+</html>

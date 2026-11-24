@@ -12,15 +12,16 @@
  */
 import { magazaOku } from './depo';
 import { KANALLAR, KANAL_LISTESI, kanalHedefFiyati, kodNormal, type Kanal } from './pazaryeri';
-import { PazaryeriApiHatasi, kanalFiyatGonder, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
+import { PazaryeriApiHatasi, kanalFiyatGonder, kanalFiyatSonucu, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
+import { finansOku } from './finansDepo';
 import { urunGtin } from './urunKimlik';
 
 const TEKRAR_BEKLE_MS = 30 * 60_000;
 /** Otomatik çalışmada kanal fiyatının yarısından fazla düşüş gönderilmez (sitede yazım hatası olabilir); panelden onaylanır. */
 const OTOMATIK_EN_COK_DUSUS = 0.5;
 
-export type FiyatFarki = { urunId: string; ad: string; kod: string; kanalda?: number; site: number };
+export type FiyatFarki = { urunId: string; ad: string; kod: string; kanalda?: number; site: number; neden?: string };
 export type KanalFiyatSonucu = {
   kanal: Kanal;
   gonderilen: FiyatFarki[];
@@ -31,6 +32,8 @@ export type KanalFiyatSonucu = {
   bekleyen: number;
   /** Bağlı ama kanalda bulunamayan ilan kodları */
   bulunamayan: string[];
+  /** Kanalın reddettiği önceki fiyat gönderimleri (Trendyol toplu istek sonucu) */
+  reddedilen: { ad: string; kod: string; sebep: string }[];
   hata?: string;
 };
 export type FiyatSecenegi = {
@@ -45,9 +48,14 @@ const bagliKanallar = () => KANAL_LISTESI.filter((k) => ['canli', 'test'].includ
 const yakin = (a: number | undefined, b: number) => a !== undefined && Math.abs(a - b) < 0.005;
 
 async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: number): Promise<KanalFiyatSonucu> {
-  const sonuc: KanalFiyatSonucu = { kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [] };
+  const sonuc: KanalFiyatSonucu = { kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [], reddedilen: [] };
   const otomatik = !!s.otomatik;
-  const [ayar, magaza] = await Promise.all([envanterAyarlariOku(), magazaOku(true)]);
+  const [ayar, magaza, maliyetler] = await Promise.all([
+    envanterAyarlariOku(), magazaOku(true),
+    // Alış maliyeti (KDV hariç, kuruş): Finans › Hepsiburada hesaplayıcısında ürün için girilen. Okunamazsa sınır uygulanmaz.
+    finansOku().then((f) => f.hbUrunler, () => ({} as Record<string, { maliyet?: number }>)),
+  ]);
+  await fiyatSonuclariniOku(kanal, ayar.kanallar[kanal], new Map(magaza.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`])), sonuc);
   const k = ayar.kanallar[kanal];
   const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
   const secili = s.urunIdler ? new Set(s.urunIdler) : undefined;
@@ -70,10 +78,13 @@ async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: num
     if (yakin(e.fiyat, hedef) && e.fiyatTarih && simdi - Date.parse(e.fiyatTarih) < TEKRAR_BEKLE_MS) { sonuc.bekleyen++; continue; }
     if (!(hedef > 0)) continue;
     const fark: FiyatFarki = { urunId, ad: `${u.marka} ${u.kisaAd}`, kod: e.kod!, kanalda: ilan.fiyat, site: hedef };
-    if (otomatik && ilan.fiyat !== undefined && hedef < ilan.fiyat * (1 - OTOMATIK_EN_COK_DUSUS)) { sonuc.onayBekleyen.push(fark); continue; }
+    if (otomatik && ilan.fiyat !== undefined && hedef < ilan.fiyat * (1 - OTOMATIK_EN_COK_DUSUS)) { sonuc.onayBekleyen.push({ ...fark, neden: 'büyük düşüş' }); continue; }
+    // Zararına otomatik satış olmasın: KDV dahil hedef fiyat, KDV hariç alış maliyetinin altındaysa gönderilmez (denetim AUD-014)
+    const maliyet = maliyetler[urunId]?.maliyet;
+    if (otomatik && maliyet && hedef * 100 < maliyet) { sonuc.onayBekleyen.push({ ...fark, neden: 'alış maliyetinin altında' }); continue; }
     gonder.push({ ...fark, fiyat: hedef });
   }
-  if (gonder.length) await kanalFiyatGonder(kanal, gonder, ilanlar, sinyal);
+  const istekId = gonder.length ? await kanalFiyatGonder(kanal, gonder, ilanlar, sinyal) : undefined;
   const tarih = new Date(simdi).toISOString();
   if (gonder.length || okunan.size) {
     await envanterAyarlariGuncelle((a) => {
@@ -84,7 +95,7 @@ async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: num
       }
       for (const g of gonder) {
         const e = kanalAyari.urunler[g.urunId];
-        if (e?.kod === g.kod) { e.fiyat = g.fiyat; e.fiyatTarih = tarih; }
+        if (e?.kod === g.kod) { e.fiyat = g.fiyat; e.fiyatTarih = tarih; e.fiyatIstek = istekId; e.fiyatHata = undefined; }
         const ilan = kanalAyari.ilanlar[g.urunId];
         if (ilan?.barkod === g.kod) { ilan.sonFiyat = g.fiyat; ilan.sonFiyatTarih = tarih; }
       }
@@ -94,12 +105,39 @@ async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: num
   return sonuc;
 }
 
+/**
+ * Önceki fiyat gönderimlerinin sonucunu okur (en fazla 3 farklı istek). Reddedilenler ürün kaydına "fiyatHata" olarak yazılır
+ * ve panelde/otomatik iş günlüğünde görünür; eskiden ret sessizce yutulup 30 dakikada bir aynı fiyat yeniden deneniyordu.
+ */
+async function fiyatSonuclariniOku(kanal: Kanal, k: { urunler: Record<string, { kod?: string; fiyatIstek?: string; fiyatTarih?: string }> }, adlar: Map<string, string>, sonuc: KanalFiyatSonucu) {
+  const simdi = Date.now();
+  const istekler = [...new Set(Object.values(k.urunler)
+    .filter((e) => e.fiyatIstek && e.fiyatTarih && simdi - Date.parse(e.fiyatTarih) > 60_000)
+    .map((e) => e.fiyatIstek!))].slice(0, 3);
+  if (!istekler.length) return;
+  const sonuclar = await Promise.all(istekler.map((id) =>
+    kanalFiyatSonucu(kanal, id, AbortSignal.timeout(8000)).then((r) => [id, r] as const, () => undefined)));
+  const biten = sonuclar.filter((x): x is NonNullable<typeof x> => !!x && !x[1].bekliyor);
+  if (!biten.length) return;
+  await envanterAyarlariGuncelle((a) => {
+    for (const [id, r] of biten) {
+      for (const [urunId, e] of Object.entries(a.kanallar[kanal].urunler)) {
+        if (e.fiyatIstek !== id) continue;
+        const red = r.reddedilen.find((x) => x.kod === e.kod);
+        e.fiyatIstek = undefined;
+        e.fiyatHata = red?.sebep;
+        if (red) sonuc.reddedilen.push({ ad: adlar.get(urunId) ?? urunId, kod: red.kod, sebep: red.sebep });
+      }
+    }
+  });
+}
+
 /** Bağlı kanallarda seçilen (ya da takipteki) ürünlerin fiyatını hedef fiyatla eşitler. Bir kanalın hatası diğerini durdurmaz. */
 export async function pazaryeriFiyatlariEsitle(secenek: FiyatSecenegi = {}): Promise<KanalFiyatSonucu[]> {
   const simdi = Date.now();
   const kanallar = (secenek.kanallar ?? KANAL_LISTESI).filter((k) => bagliKanallar().includes(k));
   return Promise.all(kanallar.map((kanal) => kanalFiyatlariniEsitle(kanal, secenek, simdi).catch((e) => ({
-    kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [],
+    kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [], reddedilen: [],
     hata: e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'Fiyatlar gönderilemedi.',
   }))));
 }
@@ -113,7 +151,8 @@ export function fiyatOzeti(sonuclar: KanalFiyatSonucu[]): string[] {
     if (s.hata) { satir.push(`${ad} fiyat: ${s.hata}`); continue; }
     const degisim = (g: FiyatFarki) => yakin(g.kanalda, g.site) ? `${g.ad} üstü çizili fiyat kaldırıldı` : `${g.ad} ${para(g.kanalda)} → ${para(g.site)}`;
     if (s.gonderilen.length) satir.push(`${ad}: ${s.gonderilen.length} ürünün fiyatı gönderildi (${s.gonderilen.slice(0, 3).map(degisim).join('; ')}${s.gonderilen.length > 3 ? '…' : ''})`);
-    if (s.onayBekleyen.length) satir.push(`${ad}: ${s.onayBekleyen.length} üründe büyük fiyat düşüşü var, otomatik gönderilmedi. Satış kanalları › Ürün eşleştirme'de o ürünün “Fiyatı şimdi gönder” düğmesine basın.`);
+    if (s.onayBekleyen.length) satir.push(`${ad}: ${s.onayBekleyen.length} üründe fiyat otomatik gönderilmedi (${s.onayBekleyen.slice(0, 3).map((g) => `${g.ad}: ${g.neden ?? 'onay gerekli'}`).join('; ')}). Kontrol edip Satış kanalları › Ürün eşleştirme'de “Fiyatı şimdi gönder” düğmesine basın.`);
+    if (s.reddedilen.length) satir.push(`${ad} ${s.reddedilen.length} ürünün fiyatını kabul etmedi (${s.reddedilen.slice(0, 3).map((r) => `${r.ad}: ${r.sebep}`).join('; ')}).`);
     if (s.bulunamayan.length) satir.push(`${ad}: ${s.bulunamayan.length} bağlı ilan kanalda bulunamadı (${s.bulunamayan.slice(0, 3).join(', ')}).`);
   }
   return satir;

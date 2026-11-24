@@ -1,0 +1,150 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../../lib/depo';
+import { metin } from '../../../lib/form';
+import { envanterAyarlariGuncelle, envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
+import { TopluDegisiklikSema, topluOnizle, type TopluOnizleme } from '../../../lib/topluGuncelleme';
+import { csvOku, excelOku } from '../../../lib/trendyolDosya';
+import { fiyatUygula } from '../../../lib/urunIslem';
+import { z } from 'astro/zod';
+
+/**
+ * Excel / CSV ile toplu fiyat ve stok: indir → değiştir → yükle → önizle → onayla.
+ * Stok değişikliği ortak stoktur: Trendyol/Hepsiburada stoğuna 5 dakika içinde yansır.
+ */
+const hatalar: string[] = [];
+let onizleme: TopluOnizleme | undefined;
+let basari = Astro.url.searchParams.get('ok') ?? undefined;
+const tl = (n: number | null | undefined) => n === null || n === undefined ? 'yok (site/kural fiyatı)' : n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' TL';
+
+if (Astro.request.method === 'POST') {
+  try {
+    const f = await Astro.request.formData();
+    const eylem = metin(f, 'eylem');
+    if (eylem === 'onizle') {
+      const dosya = f.get('dosya');
+      if (!(dosya instanceof File) || !dosya.size) throw new DogrulamaHatasi(['Excel (.xlsx) ya da CSV dosyası seçin.']);
+      if (dosya.size > 3 * 1024 * 1024) throw new DogrulamaHatasi(['Dosya 3 MB’tan büyük olamaz.']);
+      const veri = Buffer.from(await dosya.arrayBuffer());
+      const ad = dosya.name.toLowerCase();
+      const tablo = ad.endsWith('.xlsx') ? excelOku(veri) : ad.endsWith('.csv') || ad.endsWith('.txt') ? csvOku(veri.toString('utf8').replace(/^﻿/, '')) : undefined;
+      if (!tablo) throw new DogrulamaHatasi(['Yalnız .xlsx veya .csv dosyası yüklenebilir.']);
+      const [m, a] = await Promise.all([magazaOku(true), envanterAyarlariOku()]);
+      try { onizleme = topluOnizle(tablo.map((r) => r.map((x) => String(x ?? ''))), m, a); }
+      catch (e) { throw new DogrulamaHatasi([e instanceof Error ? e.message : 'Dosya okunamadı.']); }
+    } else if (eylem === 'uygula') {
+      let ham: unknown;
+      try { ham = JSON.parse(metin(f, 'degisiklikler')); } catch { throw new DogrulamaHatasi(['Önizleme bozuldu; dosyayı yeniden yükleyin.']); }
+      const sonuc = z.array(TopluDegisiklikSema).max(5000).safeParse(ham);
+      if (!sonuc.success || !sonuc.data.length) throw new DogrulamaHatasi(['Uygulanacak değişiklik yok; dosyayı yeniden yükleyin.']);
+      const liste = sonuc.data;
+      const atlanan: string[] = [];
+      let urunSayisi = 0;
+      // 1) Site fiyatı ve depo stoğu (tek kayıt, stok defterine "Toplu güncelleme" sebebiyle yazılır)
+      const magazaDegisimi = liste.filter((d) => d.fiyat || d.stok);
+      if (magazaDegisimi.length) {
+        await magazaGuncelle((m) => {
+          atlanan.length = 0; urunSayisi = 0; // çakışmada tekrar çalışabilir
+          for (const d of magazaDegisimi) {
+            const u = m.urunler.find((x) => x.id === d.urunId);
+            if (!u) { atlanan.push(`${d.ad}: ürün silinmiş`); continue; }
+            if ((d.fiyat && u.fiyat !== d.fiyat.eski) || (d.stok && u.stok !== d.stok.eski)) { atlanan.push(`${d.ad}: dosya yüklendikten sonra panelde değişti`); continue; }
+            if (d.fiyat) fiyatUygula(u, d.fiyat.yeni);
+            if (d.stok) u.stok = d.stok.yeni;
+            urunSayisi++;
+          }
+        }, `Toplu güncelleme (Excel): ${magazaDegisimi.length} ürün`);
+      }
+      // 2) Kanal özel fiyatları (yalnız ilana bağlı ürünler)
+      const kanalDegisimi = liste.filter((d) => d.trendyol || d.hepsiburada);
+      let kanalSayisi = 0;
+      if (kanalDegisimi.length) {
+        await envanterAyarlariGuncelle((a) => {
+          kanalSayisi = 0;
+          for (const d of kanalDegisimi) for (const kanal of ['trendyol', 'hepsiburada'] as const) {
+            const c = d[kanal];
+            if (!c) continue;
+            const e = a.kanallar[kanal].urunler[d.urunId];
+            if (!e?.kod || (e.ozelFiyat ?? null) !== c.eski) { atlanan.push(`${d.ad}: ${kanal === 'trendyol' ? 'Trendyol' : 'Hepsiburada'} özel fiyatı arada değişti ya da ilan bağı kalktı`); continue; }
+            e.ozelFiyat = c.yeni ?? undefined;
+            const ilan = a.kanallar[kanal].ilanlar[d.urunId];
+            if (ilan) ilan.fiyat = c.yeni ?? undefined;
+            kanalSayisi++;
+          }
+        });
+      }
+      const parcalar = [
+        urunSayisi ? `${urunSayisi} ürünün site fiyatı/stoğu güncellendi (stok değişiklikleri 5 dakika içinde Trendyol/Hepsiburada’ya yansır).` : '',
+        kanalSayisi ? `${kanalSayisi} kanal özel fiyatı kaydedildi (kanala göndermek için Satış kanalları › Ürün eşleştirme’de “Fiyatı gönder” ya da otomatik takip).` : '',
+        atlanan.length ? `Atlanan ${atlanan.length}: ${atlanan.slice(0, 5).join(' · ')}${atlanan.length > 5 ? '…' : ''}` : '',
+      ].filter(Boolean);
+      if (!urunSayisi && !kanalSayisi) throw new DogrulamaHatasi(parcalar.length ? parcalar : ['Hiçbir değişiklik uygulanmadı.']);
+      return Astro.redirect('/yonetim/urunler/toplu?ok=' + encodeURIComponent(parcalar.join(' ').slice(0, 1200)), 303);
+    } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
+  } catch (e) {
+    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : [e instanceof Error ? e.message : 'İşlem tamamlanamadı.']));
+  }
+}
+---
+<Yonetim baslik="Toplu Fiyat ve Stok" altBaslik="Tüm ürünleri Excel’e indirin, fiyat ve stokları değiştirip yükleyin; önce ne değişeceğini görür, sonra onaylarsınız." aktif="urunler" {basari} {hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/urunler"><PIkon ad="ok-sol" boyut={18} />Ürünler</a>
+  </div>
+
+  {!onizleme && <div class="tg-izgara">
+    <section class="y-kart">
+      <h2><PIkon ad="indir" /> 1. Şablonu indirin</h2>
+      <p class="y-help">Tüm ürünler güncel fiyat, stok ve kanal özel fiyatlarıyla gelir. Yalnız değiştirmek istediğiniz hücreleri düzeltin; diğerlerine dokunmayın.</p>
+      <div class="tg-dugmeler">
+        <a class="btn btn--sepet" href="/yonetim/urunler/toplu-indir" data-astro-prefetch="false"><PIkon ad="indir" boyut={18} />Excel (.xlsx) indir</a>
+        <a class="btn btn--cizgi" href="/yonetim/urunler/toplu-indir?bicim=csv" data-astro-prefetch="false">CSV indir</a>
+      </div>
+      <ul class="tg-kurallar">
+        <li><strong>Satış fiyatı:</strong> tam TL (ör. 12999). Fiyat geçmişi ve indirim kuralları korunur.</li>
+        <li><strong>Depo stoğu:</strong> elinizdeki gerçek adet. Trendyol/Hepsiburada stoğu buna göre otomatik güncellenir.</li>
+        <li><strong>Trendyol / Hepsiburada özel fiyatı:</strong> boş = değişmez, <code>0</code> = özel fiyatı kaldır. Yalnız o kanala bağlı ürünlerde geçerli; kanala göndermek ayrı düğmedir.</li>
+        <li>Ürün “Ürün kodu”, “SKU” ya da “Barkod” sütunundan tanınır. Satır silmek ürünü silmez.</li>
+      </ul>
+    </section>
+    <section class="y-kart">
+      <h2><PIkon ad="yukle" /> 2. Değiştirdiğiniz dosyayı yükleyin</h2>
+      <form method="post" enctype="multipart/form-data" class="tg-yukle">
+        <input type="hidden" name="eylem" value="onizle" />
+        <label class="y-alan">Excel (.xlsx) ya da CSV dosyası<input type="file" name="dosya" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" required /></label>
+        <button class="btn btn--sepet" type="submit"><PIkon ad="goz" boyut={18} />Önizle (henüz kaydetmez)</button>
+      </form>
+    </section>
+  </div>}
+
+  {onizleme && <section class="y-kart">
+    <div class="y-kart__bas"><h2><PIkon ad="goz" /> Önizleme</h2><a class="btn btn--cizgi btn--kucuk" href="/yonetim/urunler/toplu">Vazgeç / başka dosya</a></div>
+    <p class="y-help">{onizleme.okunan} satır okundu · <strong>{onizleme.degisiklikler.length} üründe değişiklik</strong> · {onizleme.ayni} ürün aynı{onizleme.hatalar.length ? ` · ${onizleme.hatalar.length} satırda sorun` : ''}</p>
+    {onizleme.hatalar.length > 0 && <details class="y-uyari" open={!onizleme.degisiklikler.length}><summary>{onizleme.hatalar.length} satır atlanacak (ayrıntı)</summary><ul>{onizleme.hatalar.slice(0, 100).map((h) => <li>{h}</li>)}</ul></details>}
+    {onizleme.degisiklikler.length > 0 ? <>
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+        <thead><tr><th>Ürün</th><th class="y-sayi">Satış fiyatı</th><th class="y-sayi">Depo stoğu</th><th>Kanal özel fiyatı</th></tr></thead>
+        <tbody>{onizleme.degisiklikler.map((d) => <tr class:list={{ 'tg-uyari': !!d.uyari }}>
+          <td data-etiket="Ürün"><a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(d.urunId)} target="_blank">{d.ad}</a>{d.uyari && <small class="y-table-note y-yazi-kirmizi">⚠ {d.uyari}</small>}</td>
+          <td data-etiket="Satış fiyatı" class="y-sayi y-nowrap">{d.fiyat ? <>{tl(d.fiyat.eski)} → <strong>{tl(d.fiyat.yeni)}</strong></> : <span class="muted">—</span>}</td>
+          <td data-etiket="Depo stoğu" class="y-sayi y-nowrap">{d.stok ? <>{d.stok.eski} → <strong>{d.stok.yeni}</strong></> : <span class="muted">—</span>}</td>
+          <td data-etiket="Kanal özel fiyatı">{[d.trendyol && `Trendyol: ${tl(d.trendyol.eski)} → ${tl(d.trendyol.yeni)}`, d.hepsiburada && `Hepsiburada: ${tl(d.hepsiburada.eski)} → ${tl(d.hepsiburada.yeni)}`].filter(Boolean).join(' · ') || <span class="muted">—</span>}</td>
+        </tr>)}</tbody>
+      </table></div>
+      <form method="post" class="tg-onay">
+        <input type="hidden" name="eylem" value="uygula" />
+        <input type="hidden" name="degisiklikler" value={JSON.stringify(onizleme.degisiklikler)} />
+        <label class="y-secim"><input type="checkbox" required /> Değişiklikleri kontrol ettim{onizleme.degisiklikler.some((d) => d.uyari) ? ' (⚠ işaretli büyük fiyat değişiklikleri dahil)' : ''}.</label>
+        <button class="btn btn--sepet" type="submit"><PIkon ad="tik" boyut={18} />{onizleme.degisiklikler.length} ürünü güncelle</button>
+      </form>
+    </> : <p class="y-bos">Uygulanacak değişiklik yok.</p>}
+  </section>}
+</Yonetim>
+<style>
+  .tg-izgara { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 14px; align-items: start; }
+  .tg-dugmeler { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+  .tg-kurallar { margin: 8px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; font-size: 14px; line-height: 1.5; }
+  .tg-yukle { display: grid; gap: 10px; justify-items: start; }
+  .tg-onay { display: grid; gap: 10px; justify-items: start; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--y-border); }
+  tr.tg-uyari { background: #fdf6f4; }
+</style>

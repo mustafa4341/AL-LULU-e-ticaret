@@ -718,7 +718,8 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
   .y-baglanti-uyari span { display: none; }
   .y-panel .y-brand { font-size: .7rem; gap: 4px; }
   .y-panel .y-brand img { width: 22px; }
-  .y-panel .y-workspace { padding: 18px 12px; }
+  /* Alt boşluk mobil alt çubuğun yüksekliği kadar kalır; yoksa sayfanın en alttaki düğmeleri çubuğun altında kalıyordu (denetim AUD-020) */
+  .y-panel .y-workspace { padding: 18px 12px calc(var(--y-bottom-height) + 20px); }
   .y-panel .y-kart { padding: 16px; }
   .y-panel .y-kart__bas { flex-wrap: wrap; }
   .y-panel .y-toolbar select { max-width: 100%; }
@@ -733,7 +734,11 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 @media (max-width: 760px) {
   .y-siparis-sec-kutusu { width: 44px; height: 44px; }
   .y-siparis-sec-kutusu input { width: 17px; height: 17px; }
-  .y-panel .y-tablo-kap--kart .y-siparis-tablo td.y-sec { top: 5px; right: 48px; }
+  .y-panel .y-tablo-kap--kart .y-siparis-tablo td.y-sec { top: 5px; right: 4px; }
+  /* İşlem düğmeleri kartın altında tam satır: sağ üstte seçim kutusunun üstüne binmesin (denetim AUD-020) */
+  .y-panel .y-tablo-kap--kart .y-siparis-tablo td.y-islem { position: static; grid-column: 1 / -1; width: auto; }
+  .y-panel .y-tablo-kap--kart .y-siparis-tablo td.y-islem .y-row-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .y-panel .y-tablo-kap--kart .y-siparis-tablo :is(td:first-child[data-etiket], td.y-siparis-no) { padding-right: 52px; }
   .y-panel .y-tablo-kap--kart .y-tablo tr { border-radius: 14px; }
 }
 

@@ -88,7 +88,16 @@ const { gtm } = Astro.props;
     kutu.querySelector<HTMLElement>('[data-cerez-tercihler]')!.hidden = !tercihlerle;
     kutu.querySelector<HTMLElement>('[data-cerez-kaydet]')!.hidden = !tercihlerle;
     kutu.querySelector<HTMLElement>('[data-cerez-yonet]')!.hidden = tercihlerle;
+    // Klavye kullanıcısı için odak pencereye taşınır; Escape kapatır (karar verilmediyse bir sonraki sayfada yine sorulur — AUD-036)
+    oncekiOdak = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (tercihlerle) kutucuk?.focus(); else kutu.querySelector<HTMLElement>('[data-cerez-red]')?.focus({ preventScroll: true });
   }
+  let oncekiOdak: HTMLElement | null = null;
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !kutu || kutu.hidden) return;
+    kutu.hidden = true;
+    oncekiOdak?.focus({ preventScroll: true });
+  });
 
   if (kutu && gtm) {
     const t = oku();

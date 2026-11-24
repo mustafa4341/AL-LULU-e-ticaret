@@ -1,0 +1,233 @@
+---
+import Yonetim from '../../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../../components/yonetim/PIkon.astro';
+import { DogrulamaHatasi, magazaOku, siparisleriOku } from '../../../../lib/depo';
+import { metin } from '../../../../lib/form';
+import { hazirlikListesi } from '../../../../lib/hazirlik';
+import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
+import { pazaryeriGecmiseEkle, pazaryeriSiparisiOku, pazaryeriSiparisleriOku } from '../../../../lib/pazaryeriDepo';
+import { tyPaketDurumu } from '../../../../lib/trendyolApi';
+import { siparisDurumGuncelle } from '../../../../lib/urunIslem';
+
+/**
+ * Barkodla paketleme: siparişteki her ürünün barkodu okutulur (USB/Bluetooth barkod okuyucu klavye gibi yazar
+ * ya da telefon kamerası). Yanlış ürün veya fazla adet uyarı verir. Hepsi tamamlanınca:
+ *  • Web: "Hazırlanıyor"a geçer · Trendyol: "toplanıyor" bildirilir (isteğe bağlı) · tüm kanallar: geçmişe not düşülür.
+ */
+const yol = '/yonetim/siparisler/hazirlik/paketle';
+const id = Astro.url.searchParams.get('id') ?? '';
+const hatalar: string[] = [];
+
+if (Astro.request.method === 'POST') {
+  try {
+    const f = await Astro.request.formData();
+    const anahtar = metin(f, 'id');
+    const sayi = Number(metin(f, 'sayi'));
+    const bildir = f.get('tyBildir') === 'on';
+    const not = `Barkodla paketlendi (${Number.isSafeInteger(sayi) && sayi > 0 ? sayi : 'tüm'} ürün kontrol edildi)`;
+    let mesaj: string;
+    if (anahtar.startsWith('web:')) {
+      const no = anahtar.slice(4);
+      const s = (await siparisleriOku(true)).find((x) => x.no === no);
+      if (!s) throw new DogrulamaHatasi(['Sipariş bulunamadı.']);
+      if (s.durum === 'odendi') {
+        await siparisDurumGuncelle({ no, eylem: 'durum', durum: 'hazirlaniyor', origin: Astro.url.origin });
+        mesaj = `${no} paketlendi ve “Hazırlanıyor”a alındı. Kargoya verince takip numarasını siparişte girin.`;
+      } else if (s.durum === 'hazirlaniyor') mesaj = `${no} paketlendi. Kargoya verince takip numarasını siparişte girin.`;
+      else throw new DogrulamaHatasi(['Bu sipariş artık hazırlık aşamasında değil.']);
+    } else {
+      const s = await pazaryeriSiparisiOku(anahtar);
+      if (!s) throw new DogrulamaHatasi(['Pazaryeri siparişi bulunamadı.']);
+      let tyNot = '';
+      if (bildir && s.kanal === 'trendyol' && s.paketNo && s.hamDurum === 'Created' && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) {
+        const satirlar = s.kalemler.filter((k) => k.satirId && /^\d+$/.test(k.satirId)).map((k) => ({ lineId: Number(k.satirId), quantity: k.adet }));
+        try {
+          await tyPaketDurumu(s.paketNo, satirlar, 'Picking');
+          await pazaryeriGecmiseEkle(s.id, 'Panelden Trendyol’a “toplanıyor” bildirildi').catch(() => undefined);
+          tyNot = ' Trendyol’a “toplanıyor” bildirildi; kargo kodu birkaç dakika içinde gelir.';
+        } catch (e) {
+          tyNot = ' Trendyol’a bildirilemedi: ' + (e instanceof PazaryeriApiHatasi ? e.message : 'bağlantı hatası') + ' Sipariş sayfasından “Toplamaya başla”yı deneyin.';
+        }
+      }
+      await pazaryeriGecmiseEkle(s.id, not);
+      mesaj = `${s.siparisNo} paketlendi.${tyNot}`;
+    }
+    const sonraki = metin(f, 'sonraki');
+    return Astro.redirect((sonraki ? `${yol}?id=${encodeURIComponent(sonraki)}&` : '/yonetim/siparisler/hazirlik?') + 'ok=' + encodeURIComponent(mesaj), 303);
+  } catch (e) {
+    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : [e instanceof Error ? e.message : 'İşlem tamamlanamadı.']));
+  }
+}
+
+const [magaza, web, py] = await Promise.all([magazaOku(), siparisleriOku().catch(() => []), pazaryeriSiparisleriOku().catch(() => [])]);
+const liste = hazirlikListesi(web, py, magaza);
+const indeks = liste.findIndex((x) => x.anahtar === id);
+const s = liste[indeks];
+const sonraki = liste.slice(indeks + 1).find((x) => !x.sorun) ?? liste.find((x, i) => i !== indeks && !x.sorun);
+const pyKayit = s && s.kanal !== 'web' ? py.find((x) => x.id === s.anahtar) : undefined;
+const tyBildirilebilir = s?.kanal === 'trendyol' && pyKayit?.hamDurum === 'Created' && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+const toplamAdet = s ? s.kalemler.reduce((t, k) => t + k.adet, 0) : 0;
+const veri = s ? JSON.stringify(s.kalemler.map((k) => ({ kodlar: k.kodlar, adet: k.adet }))) : '[]';
+---
+<Yonetim baslik={s ? 'Paketle · ' + s.no : 'Barkodla paketleme'} altBaslik="Ürünlerin barkodunu okutun; hepsi doğru olunca paketi tamamlayın." aktif="siparisler" basari={Astro.url.searchParams.get('ok')} {hatalar}>
+  {s && <KanalLogo slot="baslik-onu" kanal={s.kanal} boyut="buyuk" />}
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/hazirlik"><PIkon ad="ok-sol" boyut={18} />Hazırlık listesi</a>
+    {s && <a class="btn btn--cizgi" href={s.href}>Siparişi aç</a>}
+  </div>
+
+  {!s ? <div class="y-kart y-bos"><p>Bu sipariş hazırlanacaklar arasında değil (kargolanmış, iptal edilmiş ya da henüz onaylanmamış olabilir).</p><a class="btn btn--cizgi" href="/yonetim/siparisler/hazirlik">Hazırlık listesine dön</a></div> : <>
+    {s.sorun && <p class="y-uyari-satir" role="alert"><PIkon ad="uyari" boyut={18} />{s.sorun}. Önce <a class="y-link" href={s.href}>siparişte</a> düzeltin; eşleşmeyen ürün okutulamaz.</p>}
+    <section class="y-kart pk" data-paket={veri}>
+      <div class="y-kart__bas">
+        <h2><PIkon ad="barkod" /> {s.musteri ?? s.no}{s.yer && <small class="muted"> · {s.yer}</small>}</h2>
+        <strong class="pk-ilerleme" data-pk-ilerleme>0 / {toplamAdet}</strong>
+      </div>
+      <div class="pk-okut">
+        <label class="y-alan">Barkodu okutun ya da yazıp Enter’a basın
+          <input data-pk-girdi inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Barkod okuyucuyla okutun…" autofocus />
+        </label>
+        <button class="btn btn--cizgi" type="button" data-pk-kamera hidden><PIkon ad="goz" boyut={18} />Kamerayla okut</button>
+      </div>
+      <video class="pk-video" data-pk-video playsinline muted hidden></video>
+      <p class="pk-durum" data-pk-durum role="status" aria-live="assertive">Hazır. İlk ürünü okutun.</p>
+      <ul class="pk-liste">
+        {s.kalemler.map((k, i) => <li data-pk-kalem={i}>
+          <span class="pk-gorsel">{k.gorsel && <img src={k.gorsel} alt="" width="52" height="52" loading="lazy" />}</span>
+          <span class="pk-ad"><strong>{k.ad}</strong><small class="muted">{k.barkod ? 'Barkod ' + k.barkod : 'Barkodu yok'}{k.sku && k.sku !== k.barkod ? ' · SKU ' + k.sku : ''}</small></span>
+          <span class="pk-sayi"><b data-pk-sayi>0</b> / {k.adet}</span>
+          <button class="btn btn--cizgi btn--kucuk" type="button" data-pk-elle={i} title="Barkodu okunmayan ürünü elle say">+1 elle</button>
+        </li>)}
+      </ul>
+      <form method="post" class="pk-bitir">
+        <input type="hidden" name="id" value={s.anahtar} />
+        <input type="hidden" name="sayi" value={toplamAdet} />
+        {sonraki && <input type="hidden" name="sonraki" value={sonraki.anahtar} data-pk-sonraki />}
+        {tyBildirilebilir && <label class="y-secim"><input type="checkbox" name="tyBildir" checked /> Trendyol’a “toplanıyor” bildir (kargo kodu oluşur, müşteri iptal edemez)</label>}
+        <div class="pk-dugmeler">
+          <button class="btn btn--sepet" type="submit" data-pk-bitir disabled><PIkon ad="paket-tik" boyut={18} />Paketi tamamla{sonraki ? ' ve sıradakine geç' : ''}</button>
+          <button class="btn btn--cizgi" type="button" data-pk-sifirla>Sayımı sıfırla</button>
+        </div>
+        <small class="muted" data-pk-bitir-not>Tüm ürünler okutulunca açılır.</small>
+      </form>
+    </section>
+  </>}
+</Yonetim>
+<script>
+  const kok = document.querySelector<HTMLElement>('[data-paket]');
+  if (kok) {
+    type Kalem = { kodlar: string[]; adet: number };
+    const kalemler = JSON.parse(kok.dataset.paket ?? '[]') as Kalem[];
+    const sayac = kalemler.map(() => 0);
+    const toplam = kalemler.reduce((t, k) => t + k.adet, 0);
+    const girdi = kok.querySelector<HTMLInputElement>('[data-pk-girdi]')!;
+    const durum = kok.querySelector<HTMLElement>('[data-pk-durum]')!;
+    const ilerleme = kok.querySelector<HTMLElement>('[data-pk-ilerleme]')!;
+    const bitir = kok.querySelector<HTMLButtonElement>('[data-pk-bitir]')!;
+    const bitirNot = kok.querySelector<HTMLElement>('[data-pk-bitir-not]');
+    // Sunucudaki kodNormal ile aynı: büyük harf, boşluk/tire/alt çizgi/eğik çizgi/nokta yok
+    const normal = (v: string) => v.trim().toUpperCase().replace(/[\s\-_/.]/g, '');
+    let ses: AudioContext | undefined;
+    const bip = (iyi: boolean) => {
+      try {
+        ses ??= new AudioContext();
+        const o = ses.createOscillator(); const g = ses.createGain();
+        o.frequency.value = iyi ? 880 : 220; o.type = iyi ? 'sine' : 'square'; g.gain.value = 0.08;
+        o.connect(g).connect(ses.destination); o.start(); o.stop(ses.currentTime + (iyi ? 0.12 : 0.35));
+      } catch { /* ses yok */ }
+      if (!iyi) navigator.vibrate?.([120, 60, 120]);
+    };
+    const ciz = (vurgu?: number, hata = false) => {
+      kalemler.forEach((k, i) => {
+        const li = kok.querySelector<HTMLElement>(`[data-pk-kalem="${i}"]`)!;
+        li.querySelector('[data-pk-sayi]')!.textContent = String(sayac[i]);
+        li.classList.toggle('is-tamam', sayac[i] === k.adet);
+        li.classList.toggle('is-vurgu', vurgu === i && !hata);
+        li.classList.toggle('is-hata', vurgu === i && hata);
+      });
+      const okunan = sayac.reduce((t, x) => t + x, 0);
+      ilerleme.textContent = `${okunan} / ${toplam}`;
+      const tamam = sayac.every((x, i) => x === kalemler[i]!.adet);
+      bitir.disabled = !tamam;
+      if (bitirNot) bitirNot.textContent = tamam ? 'Hepsi doğru. Paketi kapatıp tamamlayın.' : 'Tüm ürünler okutulunca açılır.';
+      if (tamam) { durum.textContent = '✓ Tüm ürünler doğru. Paketi tamamlayabilirsiniz.'; durum.dataset.ton = 'iyi'; }
+    };
+    const isle = (ham: string) => {
+      const kod = normal(ham);
+      if (!kod) return;
+      const adaylar = kalemler.map((k, i) => ({ k, i })).filter(({ k }) => k.kodlar.includes(kod));
+      if (!adaylar.length) { durum.textContent = `✗ ${ham} bu siparişte yok! Ürünü kontrol edin.`; durum.dataset.ton = 'hata'; bip(false); ciz(); return; }
+      const bos = adaylar.find(({ k, i }) => sayac[i]! < k.adet);
+      if (!bos) { durum.textContent = `✗ Fazla ürün: ${ham} zaten tamam.`; durum.dataset.ton = 'hata'; bip(false); ciz(adaylar[0]!.i, true); return; }
+      sayac[bos.i]!++;
+      durum.textContent = `✓ Okundu (${sayac[bos.i]}/${bos.k.adet})`; durum.dataset.ton = 'iyi';
+      bip(true); ciz(bos.i);
+    };
+    girdi.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      isle(girdi.value); girdi.value = '';
+    });
+    kok.querySelectorAll<HTMLButtonElement>('[data-pk-elle]').forEach((b) => b.addEventListener('click', () => {
+      const i = Number(b.dataset.pkElle);
+      if (sayac[i]! >= kalemler[i]!.adet) { durum.textContent = 'Bu ürün zaten tamam.'; durum.dataset.ton = 'hata'; bip(false); return; }
+      if (!confirm('Barkodu okutulamayan ürünü elle sayıyorsunuz. Ürünü gözle kontrol ettiniz mi?')) return;
+      sayac[i]!++; bip(true); ciz(i); girdi.focus();
+    }));
+    kok.querySelector('[data-pk-sifirla]')?.addEventListener('click', () => { sayac.fill(0); durum.textContent = 'Sayım sıfırlandı.'; delete durum.dataset.ton; ciz(); girdi.focus(); });
+    // Kamera: tarayıcı barkod okumayı destekliyorsa (Android Chrome vb.)
+    const kameraDugme = kok.querySelector<HTMLButtonElement>('[data-pk-kamera]');
+    const video = kok.querySelector<HTMLVideoElement>('[data-pk-video]');
+    const Dedektor = (window as unknown as { BarcodeDetector?: new (o: { formats: string[] }) => { detect: (v: HTMLVideoElement) => Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    if (Dedektor && kameraDugme && video && navigator.mediaDevices?.getUserMedia) {
+      kameraDugme.hidden = false;
+      let akis: MediaStream | undefined;
+      let son = ''; let sonZaman = 0;
+      kameraDugme.addEventListener('click', async () => {
+        if (akis) { akis.getTracks().forEach((t) => t.stop()); akis = undefined; video.hidden = true; kameraDugme.lastChild!.textContent = 'Kamerayla okut'; return; }
+        try {
+          akis = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          video.srcObject = akis; video.hidden = false; await video.play();
+          kameraDugme.lastChild!.textContent = 'Kamerayı kapat';
+          const dedektor = new Dedektor({ formats: ['ean_13', 'ean_8', 'code_128', 'code_39', 'upc_a', 'upc_e', 'itf', 'qr_code'] });
+          const tara = async () => {
+            if (!akis) return;
+            try {
+              for (const b of await dedektor.detect(video)) {
+                if (b.rawValue === son && Date.now() - sonZaman < 1500) continue;
+                son = b.rawValue; sonZaman = Date.now(); isle(b.rawValue);
+              }
+            } catch { /* kare okunamadı */ }
+            setTimeout(tara, 250);
+          };
+          tara();
+        } catch { durum.textContent = 'Kameraya izin verilmedi. Barkod okuyucu ya da elle yazma kullanın.'; durum.dataset.ton = 'hata'; }
+      });
+    }
+    ciz();
+  }
+</script>
+<style>
+  .pk-okut { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+  .pk-okut .y-alan { flex: 1 1 280px; }
+  .pk-okut input { font-size: 20px; min-height: 52px; letter-spacing: .5px; }
+  .pk-video { width: 100%; max-width: 420px; border-radius: 12px; margin-top: 10px; background: #000; }
+  .pk-ilerleme { font-size: 22px; }
+  .pk-durum { margin: 12px 0; padding: 12px 14px; border-radius: 10px; background: var(--y-bg); font-size: 16px; font-weight: 700; }
+  .pk-durum[data-ton="iyi"] { background: #eaf6ee; color: #155c34; }
+  .pk-durum[data-ton="hata"] { background: #fdecec; color: #8a1c1c; }
+  .pk-liste { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .pk-liste li { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto auto; gap: 10px; align-items: center; padding: 10px; border: 1px solid var(--y-border); border-radius: 12px; background: #fff; transition: background .2s, border-color .2s; }
+  .pk-liste li.is-tamam { background: #f0f8f2; border-color: #b8dfc4; }
+  .pk-liste li.is-vurgu { box-shadow: 0 0 0 3px #0a7f3f inset; }
+  .pk-liste li.is-hata { box-shadow: 0 0 0 3px #b3261e inset; }
+  .pk-gorsel img { width: 52px; height: 52px; object-fit: contain; border-radius: 8px; border: 1px solid var(--y-border); background: #fff; }
+  .pk-ad { display: grid; min-width: 0; }
+  .pk-ad strong { overflow-wrap: anywhere; }
+  .pk-sayi { font-size: 18px; white-space: nowrap; }
+  .pk-sayi b { font-size: 24px; }
+  .pk-bitir { display: grid; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--y-border); }
+  .pk-dugmeler { display: flex; flex-wrap: wrap; gap: 8px; }
+  @media (max-width: 640px) { .pk-liste li { grid-template-columns: 48px minmax(0, 1fr) auto; } .pk-liste li .btn { grid-column: 2 / -1; justify-self: start; } }
+</style>

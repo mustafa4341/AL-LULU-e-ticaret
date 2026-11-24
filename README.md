@@ -2,6 +2,12 @@
 
 Mobil öncelikli e-ticaret sitesi ve yönetim paneli. [Astro](https://astro.build) ile sunucuda çalışır: panelde yaptığınız her değişiklik (fiyat, görsel, indirim, ürün…) sitede **anında** görünür.
 
+> **Güncel mimari (24.11.2026):** Canlıda Vercel (sunucu bölgesi `hnd1` Tokyo, `vercel.json`) + Supabase (Tokyo, `ap-northeast-1`).
+> Ürünler, siparişler, sözleşmeler, pazaryeri kayıtları **ve finans** (fatura/gider/belge; `medya_dosyalari` içinde `_finans/…`) Supabase'te tutulur;
+> `veri/` klasörü yalnız yerel geliştirme kopyasıdır. İndirimde "önceki fiyat" yürürlükteki yönetmelik gereği **10 gün** (`lib/fiyat.ts`
+> `YASAL_INDIRIM_GUN`), başka satış kanalındaki fiyat esas alınamaz. Aşağıdaki bazı bölümler bu tarihten önce yazıldı; çelişkide bu not geçerlidir.
+> Denetim düzeltmeleri ve bekleyen veritabanı değişiklikleri: `supabase/migrations/20261124*.sql`.
+
 ## Çalıştırma (kendi bilgisayarınızda)
 
 ```bash
@@ -32,8 +38,8 @@ Taslak ürünler sadece siz giriş yapmışken sitede görünür ("Örnek" etike
 
 ## İndirimler nasıl çalışır?
 
-1. **Fiyat düşüşünü indirim olarak göstermek** (üstü çizili eski fiyat, kırmızı fiyat, "Son 30 günün en düşük fiyatı"): Eski fiyat **elle girilmez**; sistem fiyat geçmişinden otomatik hesaplar. Bu yasal kuraldır: eski fiyat, son 30 günde sitede gerçekten uygulanan en düşük fiyat olmalıdır.
-   - Örnek: Vitaquick'i 14.000 TL'den 13.000 TL'ye indirimli göstermek için ürün en az 30 gün boyunca gerçekten 14.000 TL'den satışta olmalı. Sonra fiyatı 13.000 yapıp "indirim olarak göster" kutusunu işaretlersiniz.
+1. **Fiyat düşüşünü indirim olarak göstermek** (üstü çizili eski fiyat, kırmızı fiyat, "Son 30 günün en düşük fiyatı"): Eski fiyat **elle girilmez**; sistem fiyat geçmişinden otomatik hesaplar. Bu yasal kuraldır: eski fiyat, indirimden önceki 10 günde bu sitede gerçekten uygulanan en düşük fiyat olmalıdır (RG 01.07.2026/33297, yürürlük 01.08.2026).
+   - Örnek: Vitaquick'i 14.000 TL'den 13.000 TL'ye indirimli göstermek için ürün indirimden önceki 10 gün boyunca bu sitede gerçekten 14.000 TL'den satışta olmalı. Sonra fiyatı 13.000 yapıp "indirim olarak göster" kutusunu işaretlersiniz.
    - Panel, kaydetmeden önce sitede ne görüneceğini önizler.
 2. **Sepette indirim** (Trendyol'daki yeşil "Sepette %10 İndirim"): Hemen kullanılabilir, tamamen yasal. Ürün kartında yeşil "Sepette X TL" görünür, sepette otomatik düşer.
 3. **Set indirimi:** Ayrı ayrı toplam ile set fiyatı arasındaki fark, gerçek kazanç olarak gösterilir.

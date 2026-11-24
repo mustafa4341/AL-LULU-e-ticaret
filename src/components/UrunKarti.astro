@@ -52,7 +52,7 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
   </a>
   {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} stil={rozet.damgaStil} />}
   <div class="kart__govde">
-    <h3 class="kart__ad"><a href={`/urun/${urun.id}`}><strong lang="en">{urun.marka}</strong> {urun.ad}</a></h3>
+    <h3 class="kart__ad"><a href={`/urun/${urun.id}`} data-astro-prefetch><strong>{urun.marka}</strong> {urun.ad}</a></h3>
     {bilgi.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} boyut="kucuk" />}
     {!bilgi.firsat && rozet.kucuk.length > 0 && <p class="kart__bilgi"><Ikon ad="kalkan" boyut={14} />{rozet.kucuk[0]}</p>}
     <Fiyat bilgi={bilgi} boyut="kucuk" />

@@ -126,7 +126,10 @@ export function satisHesabi(g: HesapGirdisi) {
  */
 export function hedefFiyat(g: Omit<HesapGirdisi, 'fiyat'>, hedefKar: number): number | undefined {
   if (g.maliyet === undefined) return undefined;
-  const pay = hedefKar + (kargoUcreti(g.kargoFirmasi, g.desi) ?? 0) + g.islemBedeli + g.hizmetBedeli + g.maliyet;
+  // Kargo ücreti tabloda yoksa fiyat hesaplanmaz (eskiden 0 TL sayılıp gerçekte zarar ettiren fiyat çıkıyordu — denetim AUD-024)
+  const kargo = kargoUcreti(g.kargoFirmasi, g.desi);
+  if (kargo === undefined) return undefined;
+  const pay = hedefKar + kargo + g.islemBedeli + g.hizmetBedeli + g.maliyet;
   const payda = 100 / (100 + g.urunKdv) - g.oranBp / 10_000;
   if (payda <= 0) return undefined;
   let fiyat = Math.ceil(pay / payda / 100) * 100;

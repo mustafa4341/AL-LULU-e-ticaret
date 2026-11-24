@@ -81,17 +81,18 @@ async function stokSonuclandir(kanal: Kanal, bekleyen: BekleyenStok, sinyal: Abo
     try {
       sonuc = await kanalStokSonucu(kanal, bekleyen.id, bekleyen.kalemler, sinyal);
     } catch (e) {
-      // Trendyol 4 saatten eski kuyruk sonuçlarını kaldırır.
-      if (!(kanal === 'trendyol' && gecenSure > 4 * 3600_000 + 5 * 60_000 && e instanceof PazaryeriApiHatasi && e.status === 404)) throw e;
+      // Trendyol 4 saatten eski kuyruk sonuçlarını kaldırır; 6 saattir sonuç okunamıyorsa da ilan adetlerine bakılır.
+      const eskiKuyruk = kanal === 'trendyol' && gecenSure > 4 * 3600_000 + 5 * 60_000 && e instanceof PazaryeriApiHatasi && e.status === 404;
+      if (!eskiKuyruk && gecenSure < 6 * 3600_000) throw e;
     }
   }
   if (!sonuc) {
     if (gecenSure < 10 * 60_000) throw new PazaryeriApiHatasi('Stok isteği için takip numarası alınamadı. Satıcı panelindeki stokları kontrol edin.');
+    // Gönderimin kanala ulaştığı doğrulanamadı (zaman aşımı, 5xx…). Kanalda hedefe ulaşmış ilanlar tamam sayılır; kalanlar
+    // bekleme kaydı kapatılıp bir sonraki turda kanalın GÜNCEL adedine göre yeniden planlanır.
+    // Eskiden bu durumda kayıt hiç kapanmıyor, o kanala stok gönderimi sonsuza dek duruyordu (denetim AUD-013).
     const ilanlar = await kanalStokOku(kanal, bekleyen.kalemler.map((k) => k.kod), sinyal);
-    if (!bekleyen.kalemler.every((k) => ilanlar.get(k.kod)?.stok === k.stok)) {
-      throw new PazaryeriApiHatasi('Önceki stok güncellemesi kanal üzerinden doğrulanamadı. Yeni gönderim için mevcut ilan adetlerini kontrol edin.');
-    }
-    sonuc = { bekliyor: false, basarili: new Set(bekleyen.kalemler.map((k) => k.kod)) };
+    sonuc = { bekliyor: false, basarili: new Set(bekleyen.kalemler.filter((k) => ilanlar.get(k.kod)?.stok === k.stok).map((k) => k.kod)) };
   }
   if (sonuc.bekliyor) return undefined;
   await kanalAyariYaz(kanal, (a) => {
@@ -107,11 +108,11 @@ async function stokSonuclandir(kanal: Kanal, bekleyen: BekleyenStok, sinyal: Abo
     }
     delete a.bekleyenStok;
     a.sonStokHata = sonuc.basarili.size < bekleyen.kalemler.length
-      ? `${bekleyen.kalemler.length - sonuc.basarili.size} ilan için stok güncellemesi doğrulanamadı. Satıcı panelini kontrol edin.`
+      ? `${bekleyen.kalemler.length - sonuc.basarili.size} ilan için stok güncellemesi doğrulanamadı; bir sonraki eşitlemede güncel adede göre yeniden gönderilecek.`
       : undefined;
   });
   if (sonuc.basarili.size < bekleyen.kalemler.length) {
-    throw new PazaryeriApiHatasi(`${bekleyen.kalemler.length - sonuc.basarili.size} ilan için stok güncellemesi doğrulanamadı. Satıcı panelini kontrol edin.`);
+    throw new PazaryeriApiHatasi(`${bekleyen.kalemler.length - sonuc.basarili.size} ilan için stok güncellemesi doğrulanamadı; bir sonraki eşitlemede güncel adede göre yeniden gönderilecek.`);
   }
   return sonuc.basarili.size;
 }
@@ -222,14 +223,22 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
       const ayar = await envanterAyarlariOku();
       const beklenen = KANAL_LISTESI.filter((k) => bagli.includes(k) || ayar.kanallar[k].stokBaslangic || Object.keys(ayar.kanallar[k].urunler).length);
       const uyumluOrtam = new Set(bagli.map(pazaryeriApiDurumu)).size === 1;
-      const yazabilir = uyumluOrtam && beklenen.every((k) => kanallar[k]?.siparis !== undefined && !ayar.kanallar[k].sonApiHata);
-      if (!yazabilir) {
-        const mesaj = 'Stok gönderimi durduruldu. Satış yapılan her kanalın aynı ortamda ve sipariş aktarımının başarılı olması gerekir.';
-        for (const kanal of bagli) {
+      const aktarimTamam = (k: Kanal) => kanallar[k]?.siparis !== undefined && !ayar.kanallar[k].sonApiHata;
+      const tumKanallarTamam = beklenen.every(aktarimTamam);
+      // Bir kanalın siparişleri alınamadıysa ortak stok gerçekte olduğundan yüksek görünebilir: o turda stok ARTIŞI
+      // hiçbir kanala gönderilmez, ama aktarımı başarılı kanallara AZALIŞ (aşırı satışı önleyen yön) yine gider.
+      // Eskiden tek kanal hatası tüm kanallarda stok düşüşünü de durduruyordu (denetim AUD-013).
+      const yazilacak = uyumluOrtam ? (tumKanallarTamam ? bagli : bagli.filter(aktarimTamam)) : [];
+      if (!uyumluOrtam || yazilacak.length < bagli.length) {
+        const mesaj = !uyumluOrtam
+          ? 'Stok gönderimi durduruldu. Satış yapılan her kanalın aynı ortamda (canlı/test) olması gerekir.'
+          : 'Bu kanalın sipariş aktarımı başarısız olduğu için stoğu gönderilmedi. Diğer kanallara yalnız stok azalışları gönderiliyor.';
+        for (const kanal of bagli.filter((k) => !yazilacak.includes(k))) {
           kanallar[kanal] = { ...kanallar[kanal], stokHata: mesaj };
           await stokHatasiYaz(kanal, mesaj).catch(() => undefined);
         }
-      } else {
+      }
+      if (yazilacak.length) {
         const [siparisler, katalog] = await Promise.all([pazaryeriSiparisleriOku(), katalogStogu()]);
         const hazirlar = new Map<Kanal, Awaited<ReturnType<typeof stokHazirla>>>();
         const stokHatasiniKaydet = async (kanal: Kanal, e: unknown) => {
@@ -237,7 +246,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
           kanallar[kanal] = { ...kanallar[kanal], stokHata };
           await stokHatasiYaz(kanal, stokHata).catch(() => undefined);
         };
-        await Promise.all(bagli.map(async (kanal) => {
+        await Promise.all(yazilacak.map(async (kanal) => {
           const a = ayar.kanallar[kanal];
           if (a.bekleyenStok) return;
           try {
@@ -246,9 +255,9 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
             await stokHatasiniKaydet(kanal, e);
           }
         }));
-        const artisEngeli = hazirlar.size !== bagli.length || [...hazirlar.values()].some((h) => !h.hedefler.length) || siparisler.some((s) =>
+        const artisEngeli = !tumKanallarTamam || hazirlar.size !== bagli.length || [...hazirlar.values()].some((h) => !h.hedefler.length) || siparisler.some((s) =>
           eslesmeyenVar(s) || fazlaSatisVar(s) || (!s.stokDisi && s.kalemler.some((k) => k.durum === 'bilinmiyor')));
-        for (const kanal of bagli) {
+        for (const kanal of yazilacak) {
           try {
             const a = ayar.kanallar[kanal];
             const hazir = hazirlar.get(kanal);

@@ -27,3 +27,11 @@ Thumbs.db
 
 # Eksikler ve yol haritası (yalnız bu bilgisayarda)
 eksikler/
+
+# Yerel çalışma dosyaları (herkese açık depoya gitmesin — denetim AUD-032)
+ornek-veri/
+alluluhome yönetim ekran/
+PANEL-ARAYUZ-HARITASI.md
+ornek-kargo-barkodu.svg
+/servis kontrolleri.txt
+/diğer yapılacaklar*.txt

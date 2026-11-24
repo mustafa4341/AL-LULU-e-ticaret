@@ -33,7 +33,10 @@ if (bilgi && !hata && tyOrtakEtiketVar(bilgi.kargoFirma)) hata = `Bu paket ${bil
 
 const magaza = bilgi && !hata ? await magazaOku() : undefined;
 const satici = magaza?.site.satici;
-const barkod = bilgi?.kargoTakip && !hata ? code128Svg(bilgi.kargoTakip, 30) : '';
+let barkod = '';
+// Barkoda çevrilemeyen takip numarası sayfayı çökertmesin (denetim AUD-023)
+try { barkod = bilgi?.kargoTakip && !hata ? code128Svg(bilgi.kargoTakip, 30) : ''; }
+catch { hata = 'Kargo takip numarası barkoda çevrilemedi. Etiketi Trendyol satıcı panelinden ya da kargo firmasından alın.'; }
 const takipGrup = (bilgi?.kargoTakip ?? '').replace(/(\d{4})(?=\d)/g, '$1 ');
 const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
 const urunler = bilgi?.kalemler ?? [];
@@ -74,7 +77,9 @@ const buyuk = (s?: string) => s?.toLocaleUpperCase('tr');
     .alici .il { font-size: 11.5pt; font-weight: 700; }
     .gonderici { font-size: 8pt; }
     .alt { font-size: 7.5pt; border-top: .3mm solid #000; padding-top: 1mm; display: grid; gap: .5mm; }
-    .alt .urun { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    /* Ürün adı kesilmez (ör. "4,5 L" ile "6 L" ayrımı görünsün), en fazla 2 satır; barkod yanında */
+    .alt .urun { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+    .alt .urun small { font-size: 6.5pt; }
     @media print {
       body { background: #fff; }
       .arac { display: none; }
@@ -116,8 +121,8 @@ const buyuk = (s?: string) => s?.toLocaleUpperCase('tr');
       </div>
       <div class="alt">
         <div>Sipariş <strong>{bilgi.siparisNo}</strong> · Paket {bilgi.paketNo}{bilgi.gondericiNo && bilgi.gondericiNo !== bilgi.kargoTakip && ` · Gönderi no ${bilgi.gondericiNo}`} · {tarih}</div>
-        {urunler.slice(0, 3).map((u) => <div class="urun">{u.adet} × {u.ad}</div>)}
-        {urunler.length > 3 && <div>+ {urunler.length - 3} ürün daha</div>}
+        {urunler.slice(0, 4).map((u) => <div class="urun"><strong>{u.adet} ×</strong> {u.ad}{u.barkod && <small> · {u.barkod}</small>}</div>)}
+        {urunler.length > 4 && <div><strong>+ {urunler.length - 4} ürün daha</strong> — tam liste sipariş sayfasında</div>}
       </div>
     </section>
   </main>}

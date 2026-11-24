@@ -1,0 +1,66 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import { magazaOku } from '../../../lib/depo';
+import { finansPara } from '../../../lib/finans';
+import { finansOku } from '../../../lib/finansDepo';
+import { trendyolKarlilik } from '../../../lib/karlilik';
+import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+
+/** Trendyol ürün bazında satış, kesinti, hakediş ve (maliyet girildiyse) tahmini net kâr. */
+const hatalar: string[] = [];
+const gun = [30, 90, 365].includes(Number(Astro.url.searchParams.get('gun'))) ? Number(Astro.url.searchParams.get('gun')) : 90;
+const [magaza, finans, py, ayar] = await Promise.all([
+  magazaOku(),
+  finansOku().catch(() => { hatalar.push('Finans kayıtları okunamadı.'); return undefined; }),
+  pazaryeriSiparisleriOku().catch(() => { hatalar.push('Pazaryeri siparişleri okunamadı.'); return []; }),
+  envanterAyarlariOku().catch(() => undefined),
+]);
+const kdv = (id?: string): number => (id ? ayar?.kanallar.trendyol.ilanlar[id]?.kdv ?? finans?.hbUrunler[id]?.kdv : undefined) ?? 20;
+const rapor = finans ? trendyolKarlilik(py, finans, magaza, gun, kdv) : undefined;
+const yuzde = (n?: number) => n === undefined ? '—' : '%' + (n * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
+const para = (n?: number) => n === undefined ? '—' : finansPara(n);
+const maliyetsiz = rapor?.satirlar.filter((r) => r.urunId && r.maliyet === undefined).length ?? 0;
+---
+<Yonetim baslik="Trendyol Ürün Kârlılığı" altBaslik="Hangi ürün ne kadar sattı, Trendyol ne kesti, hesabınıza ne kaldı, maliyetten sonra ne kazandınız." aktif="finans" {hatalar}>
+  <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    {[30, 90, 365].map((g) => <a class:list={['btn', 'btn--kucuk', g === gun ? 'btn--sepet' : 'btn--cizgi']} href={'?gun=' + g}>Son {g} gün</a>)}
+  </div>
+
+  {rapor && <>
+    <div class="y-metrics y-metrics--finans">
+      <div class="y-metric y-metric--altin"><PIkon ad="para" /><span>Brüt satış</span><strong>{para(rapor.toplam.brut)}</strong></div>
+      <div class="y-metric y-metric--kirmizi"><PIkon ad="yuzde" /><span>Komisyon + kargo + diğer</span><strong>{para(rapor.toplam.komisyon + rapor.toplam.kargo + rapor.toplam.diger)}</strong></div>
+      <div class="y-metric y-metric--mavi"><PIkon ad="banka" /><span>Hesaba yatacak (hakediş)</span><strong>{para(rapor.toplam.hakedis)}</strong></div>
+      <div class:list={['y-metric', (rapor.toplam.netKar ?? 0) < 0 ? 'y-metric--kirmizi' : 'y-metric--yesil']}><PIkon ad="grafik" /><span>Tahmini net kâr (maliyeti girili ürünler)</span><strong>{para(rapor.toplam.netKar)}</strong></div>
+    </div>
+
+    {(rapor.ekstresiz > 0 || maliyetsiz > 0) && <div class="y-veri-not" role="status"><PIkon ad="bilgi" boyut={18} /><p>
+      {rapor.ekstresiz > 0 && <>{rapor.ekstresiz} siparişin Trendyol ekstresi henüz gelmedi; komisyonu {rapor.ortalamaKomisyon !== undefined ? `ortalama ${yuzde(rapor.ortalamaKomisyon)} oranla tahmin edildi` : 'henüz tahmin edilemiyor (ilk ekstre bekleniyor)'} (“tahmini” işaretli). Ekstre her gün otomatik çekilir. </>}
+      {maliyetsiz > 0 && <>{maliyetsiz} ürünün alış maliyeti girilmemiş; net kâr için <a class="y-link" href="/yonetim/finans/hepsiburada">Finans › Hepsiburada kâr hesaplayıcısı</a>nda ürünü seçip “Desi ve maliyeti bu ürün için kaydet” deyin (maliyet tüm kanallarda kullanılır).</>}
+    </p></div>}
+
+    <section class="y-kart">
+      <div class="y-kart__bas"><h2><PIkon ad="liste" /> Ürün bazında (son {gun} gün)</h2><span class="y-help">{rapor.satirlar.length} ürün</span></div>
+      {rapor.satirlar.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+        <thead><tr><th>Ürün</th><th class="y-sayi">Adet</th><th class="y-sayi">Brüt satış</th><th class="y-sayi">İndirim / iade</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Kargo + diğer</th><th class="y-sayi">Hakediş</th><th class="y-sayi">Maliyet</th><th class="y-sayi">Net kâr (tahmini)</th><th class="y-sayi">Marj</th></tr></thead>
+        <tbody>{rapor.satirlar.map((r) => <tr>
+          <td data-etiket="Ürün">{r.urunId ? <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(r.urunId)}>{r.ad}</a> : <span>{r.ad} <small class="muted">(eşleşmemiş)</small></span>}{r.tahmini > 0 && <small class="y-table-note y-yazi-turuncu">{r.tahmini} satırda tahmini</small>}</td>
+          <td data-etiket="Adet" class="y-sayi">{r.adet}</td>
+          <td data-etiket="Brüt satış" class="y-sayi y-nowrap">{para(r.brut)}</td>
+          <td data-etiket="İndirim / iade" class="y-sayi y-nowrap">{para(r.indirim + r.iade)}</td>
+          <td data-etiket="Komisyon" class="y-sayi y-nowrap">{para(r.komisyon)}{r.brut > 0 && <small class="y-table-note">{yuzde(r.komisyon / r.brut)}</small>}</td>
+          <td data-etiket="Kargo + diğer" class="y-sayi y-nowrap">{para(r.kargo + r.diger)}</td>
+          <td data-etiket="Hakediş" class="y-sayi y-nowrap"><strong>{para(r.hakedis)}</strong></td>
+          <td data-etiket="Maliyet" class="y-sayi y-nowrap">{para(r.maliyet)}</td>
+          <td data-etiket="Net kâr" class:list={['y-sayi', 'y-nowrap', { 'y-yazi-kirmizi': (r.netKar ?? 0) < 0 }]}><strong>{para(r.netKar)}</strong></td>
+          <td data-etiket="Marj" class="y-sayi">{yuzde(r.marj)}</td>
+        </tr>)}</tbody>
+      </table></div> : <p class="y-bos">Bu dönemde Trendyol satışı yok.</p>}
+      {rapor.siparisDisi > 0 && <p class="y-help">Ayrıca siparişe bağlı olmayan kesinti faturaları: <strong>{para(rapor.siparisDisi)}</strong> (ürünlere dağıtılmadı).</p>}
+      <p class="y-help"><strong>Hesaba yatacak tutar net kâr değildir.</strong> Net kâr tahmini KDV hariç hesaplanır: satıştaki KDV ve kesinti faturalarındaki %20 KDV düşülür, alış maliyeti çıkarılır. Stopaj ve gelir vergisi dahil kesin kârı muhasebeciniz hesaplar.</p>
+    </section>
+  </>}
+</Yonetim>

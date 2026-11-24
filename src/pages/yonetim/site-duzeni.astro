@@ -36,9 +36,12 @@ const s = m.site;
 const a = m.anaSayfa;
 const t = s.tadilat;
 const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.includes(b))];
+const waRakam = s.telefonGorunen.replace(/\D/g, '');
+const waBaglanti = 'https://wa.me/' + (waRakam.startsWith('90') ? waRakam : waRakam.startsWith('0') ? '9' + waRakam : '90' + waRakam);
 ---
-<Yonetim baslik="Mağaza Görünümü" altBaslik="Vitrin, kampanyalar, kargo, iletişim ve bakım ayarları." aktif="site" basari={basari} hatalar={hatalar}>
+<Yonetim baslik="Mağaza Görünümü" altBaslik="Vitrin, kampanyalar, fiyat sunumu, kargo, iletişim ve bakım ayarları." aktif="site" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/fiyat-onizleme"><PIkon ad="etiket" boyut={18} />Fiyat Sunumu Önizleme</a>
     <button type="button" class="btn btn--cizgi" data-onizleme-ac aria-controls="site-onizleme" aria-expanded="false"><PIkon ad="goz" boyut={18} />Önizle</button>
     <button type="submit" form="site-ayar-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Kaydet</button>
   </div>
@@ -46,9 +49,10 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
     <input type="hidden" name="islem" value={t.aktif ? "kapat" : "ac"} />
     <input type="hidden" name="geri" value="/yonetim/site-duzeni?bolum=tadilat" />
   </form>
-  <div class="y-editor-duzen" data-editor-duzen>
+  <div class="y-editor-duzen mg-duzen" data-editor-duzen>
     <form method="post" id="site-ayar-form" class="y-editor-form" data-editor data-onizleme-form="site"><input type="hidden" name="aktifBolum" value={aktifBolum} />
       <Sekmeler secenekler={SITE_SEKMELERI} aktif={aktifBolum} />
+
       <!-- 1. TADİLAT MODU AYARLARI -->
       <section class="y-kart" id="tadilat-bolum" data-bolum="tadilat" hidden={aktifBolum !== "tadilat"} style="border-color:#E8C860">
         <div class="y-kart__bas">
@@ -69,127 +73,157 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
           <button type="submit" form="bakim-form" class:list={['btn', t.aktif ? 'btn--sepet' : 'btn--tehlike']} data-onayla={t.aktif ? "Mağaza müşterilere tekrar açılsın mı?" : "Bakım modu yeni siparişleri durdurur. Site bakıma alınsın mı?"}>{t.aktif ? "Bakımı bitir ve mağazayı aç" : "Bakımı hemen başlat"}</button>
         </div>
 
-        <div class="y-izgara y-izgara--2">
-          <div class="y-alan">
-            <label for="tadilat_baslik">Bakım Başlığı </label>
-            <input
-              id="tadilat_baslik"
-              name="tadilat_baslik"
-              value={t.baslik}
-              data-site-demo-sekme="tadilat"
-              data-alan-ipucu="Bakım Başlığı: Tadilat ekranının ortasındaki büyük ana başlıktır."
-            />
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Bakım Ekranı İçeriği</strong>
+            <span>Ziyaretçilerin göreceği başlık, tahmini açılış süresi ve açıklama metni.</span>
           </div>
-          <div class="y-alan">
-            <label for="tadilat_sure">Tahmini Açılış Süresi <span class="y-ipucu">(isteğe bağlı)</span></label>
-            <input
-              id="tadilat_sure"
-              name="tadilat_sure"
-              value={t.tahminiSure}
-              placeholder="Örn. Bugün saat 18:00 / 2 saat içinde"
-              data-site-demo-sekme="tadilat"
-              data-alan-ipucu="Tahmini Açılış Süresi: Doldurulursa bakım ekranında saat ikonuyla 'Tahmini açılış: ...' kutusu çıkar."
-            />
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="tadilat_baslik">Bakım Başlığı </label>
+              <input
+                id="tadilat_baslik"
+                name="tadilat_baslik"
+                value={t.baslik}
+                data-site-demo-sekme="tadilat"
+                data-alan-ipucu="Bakım Başlığı: Tadilat ekranının ortasındaki büyük ana başlıktır."
+              />
+            </div>
+            <div class="y-alan">
+              <label for="tadilat_sure">Tahmini Açılış Süresi <span class="y-ipucu">(isteğe bağlı)</span></label>
+              <input
+                id="tadilat_sure"
+                name="tadilat_sure"
+                value={t.tahminiSure}
+                placeholder="Örn. Bugün saat 18:00 / 2 saat içinde"
+                data-site-demo-sekme="tadilat"
+                data-alan-ipucu="Tahmini Açılış Süresi: Doldurulursa bakım ekranında saat ikonuyla 'Tahmini açılış: ...' kutusu çıkar."
+              />
+            </div>
           </div>
-        </div>
-        <div class="y-alan" style="margin-top:10px">
-          <label for="tadilat_aciklama">Bakım Açıklaması </label>
-          <textarea
-            id="tadilat_aciklama"
-            name="tadilat_aciklama"
-            rows="2"
-            data-site-demo-sekme="tadilat"
-            data-alan-ipucu="Bakım Açıklaması: Müşteriye neden bakımda olduğunuzu anlatan sıcak bilgilendirme cümlesidir."
-          >{t.aciklama}</textarea>
-        </div>
-        <div class="y-secimler" style="margin-top:10px">
-          <label class="y-secim">
-            <input type="checkbox" name="tadilat_wa" checked={t.whatsappGoster} data-site-demo-sekme="tadilat" />
-            Bakım ekranında WhatsApp destek butonu göster
-          </label>
-          <label class="y-secim">
-            <input type="checkbox" name="tadilat_takip" checked={t.siparisTakipAcik} data-site-demo-sekme="tadilat" />
-            Mevcut müşteriler sipariş takip sayfasını kullanabilsin
-          </label>
+          <div class="y-alan" style="margin-top:10px">
+            <label for="tadilat_aciklama">Bakım Açıklaması </label>
+            <textarea
+              id="tadilat_aciklama"
+              name="tadilat_aciklama"
+              rows="2"
+              data-site-demo-sekme="tadilat"
+              data-alan-ipucu="Bakım Açıklaması: Müşteriye neden bakımda olduğunuzu anlatan sıcak bilgilendirme cümlesidir."
+            >{t.aciklama}</textarea>
+          </div>
+          <div class="mg-anahtar-izgara" style="margin-top:12px">
+            <label class="mg-anahtar-kart">
+              <div>
+                <strong>WhatsApp destek butonu göster</strong>
+                <small>Bakım ekranında müşterilerin size ulaşabileceği hızlı destek düğmesi.</small>
+              </div>
+              <input type="checkbox" name="tadilat_wa" checked={t.whatsappGoster} data-site-demo-sekme="tadilat" />
+            </label>
+            <label class="mg-anahtar-kart">
+              <div>
+                <strong>Sipariş takip sayfasını açık tut</strong>
+                <small>Mevcut müşteriler sipariş ve kargo durumlarını sorgulamaya devam edebilir.</small>
+              </div>
+              <input type="checkbox" name="tadilat_takip" checked={t.siparisTakipAcik} data-site-demo-sekme="tadilat" />
+            </label>
+          </div>
         </div>
       </section>
 
       <!-- 2. ANA SAYFA VİTRİNİ (HERO) VE BÖLÜM SIRALAMASI -->
       <section class="y-kart" id="anasayfa-bolum" data-bolum="anasayfa" hidden={aktifBolum !== "anasayfa"}>
-        <h2><PIkon ad="duzen" /> Ana Sayfa</h2>
-
-
-        <div class="y-izgara y-izgara--2">
-          <div class="y-alan">
-            <label for="heroUrun">Vitrinde Gösterilecek Ürün </label>
-            <select
-              id="heroUrun"
-              name="heroUrun"
-              data-site-demo-sekme="anasayfa"
-              data-alan-ipucu="Vitrin Ürünü: Ana sayfanın en üstündeki büyük ürün fotoğrafı, fiyatı ve 'Şimdi Al / Sepete Ekle' butonları bu ürüne bağlanır."
-            >
-              {m.urunler.filter((u) => u.durum === "yayinda" || u.id === a.hero.urunId).map((u) => <option value={u.id} selected={a.hero.urunId === u.id}>{u.kisaAd} ({formatTL(u.fiyat)})</option>)}
-            </select>
-          </div>
-          <div class="y-alan">
-            <label for="heroUst">Görsel Üstü Küçük Etiket </label>
-            <input
-              id="heroUst"
-              name="heroUst"
-              value={a.hero.ustBaslik}
-              placeholder="Öne çıkan ürün"
-              data-site-demo-sekme="anasayfa"
-              data-alan-ipucu="Görsel Üstü Etiket: Ürün 'En Çok Satan' değilse fotoğrafın sol üst köşesinde bu etiket görünür."
-            />
-          </div>
-          <div class="y-alan">
-            <label for="heroBaslik">Vitrin Ana Başlığı </label>
-            <input
-              id="heroBaslik"
-              name="heroBaslik"
-              value={a.hero.baslik}
-              required
-              data-site-demo-sekme="anasayfa"
-              data-alan-ipucu="Vitrin Ana Başlığı: Ana sayfanın en dikkat çekici büyük başlığıdır."
-            />
-          </div>
-          <div class="y-alan">
-            <label for="heroAlt">Vitrin Alt Açıklaması </label>
-            <input
-              id="heroAlt"
-              name="heroAlt"
-              value={a.hero.altBaslik}
-              data-site-demo-sekme="anasayfa"
-              data-alan-ipucu="Vitrin Alt Açıklaması: Masaüstü ekranlarda ana başlığın hemen altında yer alan açıklama cümlesidir."
-            />
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="duzen" /> Ana Sayfa Düzeni</h2>
+            <p class="y-kart__alt">Karşılama vitrinindeki öne çıkan ürünü, başlıkları ve ana sayfa bölümlerinin sırasını yönetin.</p>
           </div>
         </div>
 
-        <div class="y-alan" style="margin-top:10px">
-          <label for="heroMaddeler">Vitrindeki 3 Kısa Fayda Maddesi  <span class="y-ipucu">(her satıra bir madde, en fazla 3)</span></label>
-          <textarea
-            id="heroMaddeler"
-            name="heroMaddeler"
-            rows="3"
-            data-site-demo-sekme="anasayfa"
-            data-alan-ipucu="3 Kısa Fayda Maddesi: İlk ekranda fiyat kutusunun hemen üstünde renkli ikonlarla listelenir."
-          >{a.hero.maddeler.join('\n')}</textarea>
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Karşılama Vitrini (Hero Alanı)</strong>
+            <span>Site açıldığında ilk ekranda görünen ürün, ana başlık ve 3 fayda maddesi.</span>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="heroUrun">Vitrinde Gösterilecek Ürün </label>
+              <select
+                id="heroUrun"
+                name="heroUrun"
+                data-site-demo-sekme="anasayfa"
+                data-alan-ipucu="Vitrin Ürünü: Ana sayfanın en üstündeki büyük ürün fotoğrafı, fiyatı ve 'Şimdi Al / Sepete Ekle' butonları bu ürüne bağlanır."
+              >
+                {m.urunler.filter((u) => u.durum === "yayinda" || u.id === a.hero.urunId).map((u) => <option value={u.id} selected={a.hero.urunId === u.id}>{u.kisaAd} ({formatTL(u.fiyat)})</option>)}
+              </select>
+            </div>
+            <div class="y-alan">
+              <label for="heroUst">Görsel Üstü Küçük Etiket </label>
+              <input
+                id="heroUst"
+                name="heroUst"
+                value={a.hero.ustBaslik}
+                placeholder="Öne çıkan ürün"
+                data-site-demo-sekme="anasayfa"
+                data-alan-ipucu="Görsel Üstü Etiket: Ürün 'En Çok Satan' değilse fotoğrafın sol üst köşesinde bu etiket görünür."
+              />
+            </div>
+            <div class="y-alan">
+              <label for="heroBaslik">Vitrin Ana Başlığı </label>
+              <input
+                id="heroBaslik"
+                name="heroBaslik"
+                value={a.hero.baslik}
+                required
+                data-site-demo-sekme="anasayfa"
+                data-alan-ipucu="Vitrin Ana Başlığı: Ana sayfanın en dikkat çekici büyük başlığıdır."
+              />
+            </div>
+            <div class="y-alan">
+              <label for="heroAlt">Vitrin Alt Açıklaması </label>
+              <input
+                id="heroAlt"
+                name="heroAlt"
+                value={a.hero.altBaslik}
+                data-site-demo-sekme="anasayfa"
+                data-alan-ipucu="Vitrin Alt Açıklaması: Masaüstü ekranlarda ana başlığın hemen altında yer alan açıklama cümlesidir."
+              />
+            </div>
+          </div>
+
+          <div class="y-alan" style="margin-top:10px">
+            <label for="heroMaddeler">Vitrindeki 3 Kısa Fayda Maddesi  <span class="y-ipucu">(her satıra bir madde, en fazla 3)</span></label>
+            <textarea
+              id="heroMaddeler"
+              name="heroMaddeler"
+              rows="3"
+              data-site-demo-sekme="anasayfa"
+              data-alan-ipucu="3 Kısa Fayda Maddesi: İlk ekranda fiyat kutusunun hemen üstünde renkli ikonlarla listelenir."
+            >{a.hero.maddeler.join('\n')}</textarea>
+          </div>
         </div>
 
-        <div class="y-izgara y-izgara--2" style="margin-top:10px">
-          <div class="y-alan">
-            <label for="oneCikanlarBaslik">"Öne Çıkan Ürünler" Bölüm Başlığı</label>
-            <input id="oneCikanlarBaslik" name="oneCikanlarBaslik" value={a.oneCikanlarBaslik} data-site-demo-sekme="anasayfa" />
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Koleksiyon Başlıkları</strong>
+            <span>Ana sayfadaki ürün vitrinlerinin görünen bölüm başlıkları.</span>
           </div>
-          <div class="y-alan">
-            <label for="setlerBaslik">"Setler & Fırsatlar" Bölüm Başlığı</label>
-            <input id="setlerBaslik" name="setlerBaslik" value={a.setlerBaslik} data-site-demo-sekme="anasayfa" />
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="oneCikanlarBaslik">"Öne Çıkan Ürünler" Bölüm Başlığı</label>
+              <input id="oneCikanlarBaslik" name="oneCikanlarBaslik" value={a.oneCikanlarBaslik} data-site-demo-sekme="anasayfa" />
+            </div>
+            <div class="y-alan">
+              <label for="setlerBaslik">"Setler & Fırsatlar" Bölüm Başlığı</label>
+              <input id="setlerBaslik" name="setlerBaslik" value={a.setlerBaslik} data-site-demo-sekme="anasayfa" />
+            </div>
           </div>
         </div>
 
-        <div class="y-alan" style="margin-top:14px">
-          <span class="y-etiket">Ana Sayfa Bölümleri ve Sıralaması </span>
-          <p class="y-ipucu">Gösterilmesini istediğiniz bölümleri işaretleyin, <strong>↑ / ↓</strong> oklarıyla yukarı veya aşağı taşıyın.</p>
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Ana Sayfa Bölümleri ve Sıralaması</strong>
+            <span>Gösterilmesini istediğiniz bölümleri işaretleyin, ↑ / ↓ oklarıyla yukarı veya aşağı taşıyın.</span>
+          </div>
           <div class="y-bolum-siralama-liste" data-bolum-siralayici>
             {siraliBolumler.map((b, idx) => {
               const aktifMi = a.bolumler.includes(b);
@@ -215,81 +249,131 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
 
       <!-- 3. DUYURU ŞERİDİ VE KAMPANYA KURALLARI -->
       <section class="y-kart" id="duyuru-bolum" data-bolum="duyuru" hidden={aktifBolum !== "duyuru"}>
-        <h2><PIkon ad="zil" /> Duyurular ve fiyat görünümü</h2>
-
-        <div class="y-alan">
-          <label for="duyurular">Üst Şerit Duyuruları  <span class="y-ipucu">(her satır bir mesaj; otomatik sırayla döner)</span></label>
-          <textarea
-            id="duyurular"
-            name="duyurular"
-            rows="4"
-            data-site-demo-sekme="anasayfa"
-            data-alan-ipucu="Üst Şerit Duyuruları: Sitenin en tepesindeki koyu şeritte 4 saniyede bir sırayla dönen mesajlardır."
-          >{s.duyurular.join('\n')}</textarea>
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="zil" /> Duyurular ve Fiyat Görünümü</h2>
+            <p class="y-kart__alt">Üst duyuru şeridini, ürün kartlarındaki fiyat/indirim tasarımını ve kampanya rozetlerini yönetin.</p>
+          </div>
+          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/fiyat-onizleme"><PIkon ad="etiket" boyut={16} />3 Fiyat Stilini Karşılaştır</a>
         </div>
 
-        <div class="y-alan" style="margin-top:12px">
-          <label for="fiyatSunumu">
-            Fiyat ve İndirim Görünüm Stili <a class="y-ipucu" href="/yonetim/fiyat-onizleme" style="text-decoration:underline;font-weight:700">Üç stili yan yana karşılaştırın →</a>
-          </label>
-          <select id="fiyatSunumu" name="fiyatSunumu">
-            <option value="dengeli" selected={s.fiyatSunumu === 'dengeli'}>C — Dengeli Premium (Önerilen: Bordo fiyat + yeşil TL kazanç)</option>
-            <option value="sade" selected={s.fiyatSunumu === 'sade'}>A — Sade (Siyah fiyat + küçük üstü çizili eski fiyat)</option>
-            <option value="kampanya" selected={s.fiyatSunumu === 'kampanya'}>B — Güçlü Kampanya (Kırmızı büyük % rozeti + tasarruf kutusu)</option>
-          </select>
-        </div>
-
-        <div class="y-izgara y-izgara--3" style="margin-top:12px">
-          <div class="y-alan">
-            <label>Peşin Fiyatına Taksit Sayısı <span class="y-ipucu">(yoksa boş)</span></label>
-            <input name="taksit" inputmode="numeric" value={s.taksit.pesinFiyatinaTaksit ?? ''} placeholder="Örn. 3" />
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Üst Şerit Duyuruları</strong>
+            <span>Sitenin en üstündeki koyu şeritte her 4 saniyede bir sırayla dönen kısa mesajlar (her satıra bir duyuru).</span>
           </div>
           <div class="y-alan">
-            <label>"En Çok Satan" Otomatik Eşiği <span class="y-ipucu">(30 günlük satış)</span></label>
-            <input name="cokSatanEsik" inputmode="numeric" value={s.cokSatanEsik} />
-          </div>
-          <div class="y-alan">
-            <label>"Son … Günün En Düşük Fiyatı" Rozeti (Gün)</label>
-            <input name="indirimReferansGun" inputmode="numeric" value={s.indirimReferansGun} />
-            <span class="y-ipucu">Üstü çizili önceki fiyat bu ayardan etkilenmez: yasa gereği indirimden önceki 10 günde bu sitede uygulanan en düşük fiyattır.</span>
+            <label for="duyurular" class="visually-hidden">Üst Şerit Duyuruları</label>
+            <textarea
+              id="duyurular"
+              name="duyurular"
+              rows="4"
+              data-site-demo-sekme="anasayfa"
+              data-alan-ipucu="Üst Şerit Duyuruları: Sitenin en tepesindeki koyu şeritte 4 saniyede bir sırayla dönen mesajlardır."
+            >{s.duyurular.join('\n')}</textarea>
           </div>
         </div>
-        <div class="y-izgara y-izgara--2" style="margin-top:10px">
-          <div class="y-alan"><label>Genel Taksit Metni</label><input name="taksitMetin" value={s.taksit.genelMetin} /></div>
 
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Fiyat ve İndirim Sunum Stili</strong>
+            <span>Ürün kartları ve ürün detay sayfalarında fiyat, eski fiyat ve kazanç rozetinin nasıl görüneceğini seçin.</span>
+          </div>
+          <div class="mg-fiyat-secici">
+            <div class="y-alan" style="flex:1">
+              <label for="fiyatSunumu">Aktif Fiyat Sunumu</label>
+              <select id="fiyatSunumu" name="fiyatSunumu">
+                <option value="dengeli" selected={s.fiyatSunumu === 'dengeli'}>C — Dengeli Premium (Önerilen: Bordo fiyat + yeşil TL kazanç)</option>
+                <option value="sade" selected={s.fiyatSunumu === 'sade'}>A — Sade (Siyah fiyat + küçük üstü çizili eski fiyat)</option>
+                <option value="kampanya" selected={s.fiyatSunumu === 'kampanya'}>B — Güçlü Kampanya (Kırmızı büyük % rozeti + tasarruf kutusu)</option>
+              </select>
+            </div>
+            <a class="btn btn--sepet" href="/yonetim/fiyat-onizleme" style="align-self:end"><PIkon ad="goz" boyut={17} />Canlı Fiyat Önizleme Ekranını Aç</a>
+          </div>
+        </div>
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Taksit ve Kampanya Rozet Kuralları</strong>
+            <span>Çok satan etiketi, yasal indirim referans günü ve taksit bilgilendirme metinleri.</span>
+          </div>
+          <div class="y-izgara y-izgara--3">
+            <div class="y-alan">
+              <label>Peşin Fiyatına Taksit Sayısı <span class="y-ipucu">(yoksa boş)</span></label>
+              <input name="taksit" inputmode="numeric" value={s.taksit.pesinFiyatinaTaksit ?? ''} placeholder="Örn. 3" />
+            </div>
+            <div class="y-alan">
+              <label>"En Çok Satan" Otomatik Eşiği <span class="y-ipucu">(30 günlük satış)</span></label>
+              <input name="cokSatanEsik" inputmode="numeric" value={s.cokSatanEsik} />
+            </div>
+            <div class="y-alan">
+              <label>"Son … Günün En Düşük Fiyatı" Rozeti (Gün)</label>
+              <input name="indirimReferansGun" inputmode="numeric" value={s.indirimReferansGun} />
+              <span class="y-ipucu">Üstü çizili önceki fiyat yasa gereği son 10 günün en düşük fiyatından hesaplanır.</span>
+            </div>
+          </div>
+          <div class="y-alan" style="margin-top:10px">
+            <label>Genel Taksit Metni</label>
+            <input name="taksitMetin" value={s.taksit.genelMetin} />
+          </div>
         </div>
       </section>
 
       <!-- 4. KARGO VE TESLİMAT -->
       <section class="y-kart" id="kargo-bolum" data-bolum="kargo" hidden={aktifBolum !== "kargo"}>
-        <h2><PIkon ad="kargo" /> Kargo ve Teslimat</h2>
-        <div class="y-izgara y-izgara--3">
-          <div class="y-alan"><label>Kargo Firması</label><input id="kargoFirma" name="kargoFirma" value={s.kargo.firma} data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan"><label>Kargo Ücreti (TL)</label><input id="kargoUcret" name="kargoUcret" inputmode="numeric" value={s.kargo.ucret} data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan">
-            <label>Kargo Bedava Sınırı (TL) </label>
-            <input
-              id="kargoEsik"
-              name="kargoEsik"
-              inputmode="numeric"
-              value={s.kargo.ucretsizEsik}
-              data-site-demo-sekme="anasayfa"
-              data-alan-ipucu="Kargo Bedava Sınırı: Fiyatı bu tutar ve üzerinde olan tüm ürünlerde otomatik 'Kargo Bedava' şeridi çıkar; sepette bu tutara ulaşılınca kargo 0 TL olur."
-            />
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="kargo" /> Kargo ve Teslimat</h2>
+            <p class="y-kart__alt">Anlaşmalı kargo firması, ücretsiz kargo sınırı, aynı gün kargo saati ve takip bağlantısı ayarları.</p>
           </div>
-          <div class="y-alan"><label>Aynı Gün Kargo Kesim Saati (0–23)</label><input id="kesimSaati" name="kesimSaati" inputmode="numeric" value={s.kargo.kesimSaati} data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan"><label>Teslim Süresi En Az (İş Günü)</label><input name="teslimMin" inputmode="numeric" value={s.kargo.teslimGun[0]} /></div>
-          <div class="y-alan"><label>Teslim Süresi En Çok (İş Günü)</label><input name="teslimMax" inputmode="numeric" value={s.kargo.teslimGun[1]} /></div>
         </div>
-        <div class="y-alan" style="margin-top:10px">
-          <label for="takipUrl">Kargo Takip Bağlantısı Şablonu <span class="y-ipucu">(<code>{'{kod}'}</code> yerine müşterinin takip numarası yazılır)</span></label>
-          <input id="takipUrl" name="takipUrl" value={s.kargo.takipUrl} />
-          <select aria-label="Hazır kargo şablonu" data-kargo-sablon>
-            <option value="">Hazır kargo şablonu seçin</option>
-            {KARGO_SABLONLARI.map((ks) => <option value={ks.url} data-ad={ks.ad}>{ks.ad}</option>)}
-          </select>
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Kargo Ücreti ve Teslimat Süreleri</strong>
+            <span>Sepet hesaplamasında ve ürün sayfalarındaki teslimat kutusunda kullanılır.</span>
+          </div>
+          <div class="y-izgara y-izgara--3">
+            <div class="y-alan"><label>Kargo Firması</label><input id="kargoFirma" name="kargoFirma" value={s.kargo.firma} data-site-demo-sekme="anasayfa" /></div>
+            <div class="y-alan"><label>Kargo Ücreti (TL)</label><input id="kargoUcret" name="kargoUcret" inputmode="numeric" value={s.kargo.ucret} data-site-demo-sekme="anasayfa" /></div>
+            <div class="y-alan">
+              <label>Kargo Bedava Sınırı (TL) </label>
+              <input
+                id="kargoEsik"
+                name="kargoEsik"
+                inputmode="numeric"
+                value={s.kargo.ucretsizEsik}
+                data-site-demo-sekme="anasayfa"
+                data-alan-ipucu="Kargo Bedava Sınırı: Fiyatı bu tutar ve üzerinde olan tüm ürünlerde otomatik 'Kargo Bedava' şeridi çıkar; sepette bu tutara ulaşılınca kargo 0 TL olur."
+              />
+            </div>
+            <div class="y-alan"><label>Aynı Gün Kargo Kesim Saati (0–23)</label><input id="kesimSaati" name="kesimSaati" inputmode="numeric" value={s.kargo.kesimSaati} data-site-demo-sekme="anasayfa" /></div>
+            <div class="y-alan"><label>Teslim Süresi En Az (İş Günü)</label><input name="teslimMin" inputmode="numeric" value={s.kargo.teslimGun[0]} /></div>
+            <div class="y-alan"><label>Teslim Süresi En Çok (İş Günü)</label><input name="teslimMax" inputmode="numeric" value={s.kargo.teslimGun[1]} /></div>
+          </div>
         </div>
-        <div class="y-veri-not" style="margin-top:14px">
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Kargo Takip Bağlantısı Şablonu</strong>
+            <span><code>{'{kod}'}</code> yazan yere müşterinin kargo takip numarası otomatik yerleştirilir.</span>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="takipUrl">Takip Adresi Şablonu</label>
+              <input id="takipUrl" name="takipUrl" value={s.kargo.takipUrl} />
+            </div>
+            <div class="y-alan">
+              <label>Hazır Kargo Firması Şablonu</label>
+              <select aria-label="Hazır kargo şablonu" data-kargo-sablon>
+                <option value="">Hazır şablon seçip otomatik doldurun…</option>
+                {KARGO_SABLONLARI.map((ks) => <option value={ks.url} data-ad={ks.ad}>{ks.ad}</option>)}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div class="y-veri-not" style="margin-top:12px">
           <PIkon ad="bilgi" boyut={18} />
           <p>
             <strong>Müşteriye nasıl yansır?</strong>
@@ -302,30 +386,98 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
       <section class="y-kart" id="iletisim-bolum" data-bolum="iletisim" hidden={aktifBolum !== "iletisim"}>
         <div class="y-kart__bas">
           <div>
-            <h2><PIkon ad="whatsapp" /> WhatsApp ve İletişim</h2>
-            <p class="y-kart__alt">Mağaza üst/alt bilgisinde, WhatsApp hızlı destek düğmesinde ve mesafeli satış sözleşmelerinde kullanılan iletişim bilgileri.</p>
+            <h2><PIkon ad="whatsapp" /> İletişim ve WhatsApp</h2>
+            <p class="y-kart__alt">Mağazanızın iletişim bilgilerini, çalışma saatlerini, WhatsApp hattını ve sosyal medya bağlantılarını yönetin.</p>
           </div>
         </div>
 
-        <div class="y-izgara y-izgara--2">
-          <div class="y-alan"><label for="telefon">WhatsApp / Telefon Numarası</label><input id="telefon" name="telefon" type="tel" value={s.telefonGorunen} required data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan"><label for="eposta">Müşteri Hizmetleri E-postası</label><input id="eposta" name="eposta" type="email" value={s.eposta} required /><small class="muted">Sitede, sözleşmelerde ve iade bildirimlerinde görünür.</small></div>
-          <div class="y-alan"><label for="kurumsalEposta">Kurumsal E-posta (isteğe bağlı)</label><input id="kurumsalEposta" name="kurumsalEposta" type="email" value={s.kurumsalEposta} placeholder="info@alluluhome.com" /><small class="muted">Alt bilgide "Kurumsal / iş birliği" olarak görünür.</small></div>
-          <div class="y-alan"><label for="calismaSaatleri">Çalışma Saatleri</label><input id="calismaSaatleri" name="calismaSaatleri" value={s.calismaSaatleri} placeholder="Hafta içi 09:00–18:00" /></div>
-          <div class="y-alan"><label for="url">Site Adresi (URL)</label><input id="url" name="url" value={s.url} required /></div>
-          <div class="y-alan"><label for="ad">Mağaza Adı</label><input id="ad" name="ad" value={s.ad} required data-site-demo-sekme="anasayfa" /></div>
-          <div class="y-alan"><label for="slogan">Mağaza Sloganı </label><input id="slogan" name="slogan" value={s.slogan} data-site-demo-sekme="anasayfa" /></div>
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>İletişim Bilgileri</strong>
+            <span>Üst/alt bilgide, WhatsApp destek düğmesinde ve sözleşmelerde görünen müşteri iletişim kanalları.</span>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="telefon">WhatsApp / Mağaza Telefonu *</label>
+              <input id="telefon" name="telefon" type="tel" value={s.telefonGorunen} required data-site-demo-sekme="anasayfa" />
+            </div>
+            <div class="y-alan">
+              <label for="eposta">Müşteri Hizmetleri E-postası *</label>
+              <input id="eposta" name="eposta" type="email" value={s.eposta} required />
+              <small class="muted">Sitede, sözleşmelerde ve iade bildirimlerinde görünür.</small>
+            </div>
+            <div class="y-alan">
+              <label for="kurumsalEposta">Kurumsal E-posta <span class="y-ipucu">(isteğe bağlı)</span></label>
+              <input id="kurumsalEposta" name="kurumsalEposta" type="email" value={s.kurumsalEposta} placeholder="info@alluluhome.com" />
+              <small class="muted">Alt bilgide "Kurumsal / iş birliği" olarak görünür.</small>
+            </div>
+          </div>
         </div>
-        <h3 class="y-alt-baslik">Sosyal medya hesapları</h3>
-        <p class="y-help">Hesabınız olanların profil adresini yapıştırın; boş bıraktıklarınız sitede görünmez. Dolu olanlar alt bilgide simgeyle çıkar ve Google’a “bu hesaplar bu mağazanın” diye bildirilir. Instagram/Facebook mağazası (Meta Commerce) için ürün kataloğu adresi: <code>{s.url.replace(/\/$/, '')}/urun-akisi.xml</code></p>
-        <div class="y-izgara y-izgara--2">
-          {SOSYAL_AGLAR.map((ag) => <div class="y-alan"><label for={'sosyal_' + ag}>{SOSYAL_ADLARI[ag]}</label><input id={'sosyal_' + ag} name={'sosyal_' + ag} type="url" inputmode="url" value={s.sosyal?.[ag] ?? ''} placeholder={ag === 'x' ? 'https://x.com/hesabiniz' : `https://www.${ag}.com/hesabiniz`} autocomplete="off" /></div>)}
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Çalışma Saatleri</strong>
+            <span>Müşteri desteğinin aktif olduğu gün ve saat aralığını belirtin.</span>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <div class="y-alan">
+              <label for="calismaSaatleri">Görünen Çalışma Saatleri Metni</label>
+              <input id="calismaSaatleri" name="calismaSaatleri" value={s.calismaSaatleri} placeholder="Pazartesi – Cumartesi 09:00–19:00" />
+            </div>
+            <div class="y-alan">
+              <label for="calismaSablon">Hazır Şablon Seç</label>
+              <select id="calismaSablon" onchange="if(this.value){const el=document.getElementById('calismaSaatleri');if(el){el.value=this.value;el.dispatchEvent(new Event('input',{bubbles:true}));}}">
+                <option value="">— Hazır çalışma saati şablonu seçin —</option>
+                <option value="Pazartesi – Cumartesi 09:00–19:00">Pazartesi – Cumartesi (09:00 – 19:00)</option>
+                <option value="Hafta içi 09:00–18:00">Hafta içi Pazartesi – Cuma (09:00 – 18:00)</option>
+                <option value="Her gün 10:00–20:00">Her gün (10:00 – 20:00)</option>
+              </select>
+            </div>
+          </div>
+          <div class="mg-gunler" aria-hidden="true">
+            {['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt'].map((gun) => (
+              <div class="mg-gun"><strong>{gun}</strong><small>{s.calismaSaatleri.match(/\d{2}:\d{2}\s*[–-]\s*\d{2}:\d{2}/)?.[0] ?? 'Açık'}</small></div>
+            ))}
+            <div class="mg-gun mg-gun--kapali"><strong>Paz</strong><small>{/her gün/i.test(s.calismaSaatleri) ? 'Açık' : 'Destek kapalı'}</small></div>
+          </div>
+        </div>
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Mağaza Kimliği ve Adres Bilgisi</strong>
+            <span>Site adı, slogan ve kanonik web adresi. Resmî şirket/depo adresini <a class="y-link" href="/yonetim/ayarlar">Ayarlar</a> sayfasından düzenleyebilirsiniz.</span>
+          </div>
+          <div class="y-izgara y-izgara--3">
+            <div class="y-alan"><label for="ad">Mağaza Adı *</label><input id="ad" name="ad" value={s.ad} required data-site-demo-sekme="anasayfa" /></div>
+            <div class="y-alan"><label for="slogan">Mağaza Sloganı</label><input id="slogan" name="slogan" value={s.slogan} data-site-demo-sekme="anasayfa" /></div>
+            <div class="y-alan"><label for="url">Site Adresi (URL) *</label><input id="url" name="url" value={s.url} required /></div>
+          </div>
+        </div>
+
+        <div class="mg-alt-grup">
+          <div class="mg-alt-grup__bas">
+            <strong>Sosyal Medya Bağlantıları</strong>
+            <span>Dolu bıraktığınız hesaplar mağaza alt bilgisinde simgeyle gösterilir; boş olanlar gizlenir. Meta katalog akışı: <code>{s.url.replace(/\/$/, '')}/urun-akisi.xml</code></span>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            {SOSYAL_AGLAR.map((ag) => (
+              <div class="y-alan">
+                <label for={'sosyal_' + ag}>{SOSYAL_ADLARI[ag]}</label>
+                <input id={'sosyal_' + ag} name={'sosyal_' + ag} type="url" inputmode="url" value={s.sosyal?.[ag] ?? ''} placeholder={ag === 'x' ? 'https://x.com/hesabiniz' : `https://www.${ag}.com/hesabiniz`} autocomplete="off" />
+              </div>
+            ))}
+          </div>
         </div>
       </section>
 
       <!-- 6. ANA SAYFA SSS -->
       <section class="y-kart" id="sss-bolum" data-bolum="sss" hidden={aktifBolum !== "sss"}>
-        <h2><PIkon ad="soru" /> Sık Sorulan Sorular</h2>
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="soru" /> Sık Sorulan Sorular</h2>
+            <p class="y-kart__alt">Ana sayfada müşterilerin en çok merak ettiği teslimat, orijinallik ve iade soruları.</p>
+          </div>
+        </div>
         <p class="y-ipucu" style="margin:-4px 0 10px">Kartlı ödeme (PayTR) açılana kadar içinde "taksit" geçen sorular sitede gösterilmez; ödeme açılınca kendiliğinden görünür.</p>
         <div class="y-tekrar">
           {a.sss.map((x) => (
@@ -350,9 +502,162 @@ const siraliBolumler = [...a.bolumler, ...BOLUMLER.filter((b) => !a.bolumler.inc
         </div>
       </section>
 
-
       <p class="y-form-state" data-kayit-durum role="status"></p>
     </form>
-    <Onizleme id="site-onizleme" tur="site" />
+
+    <div class="mg-sag-sutun">
+      <section class="y-kart mg-hizli-kart">
+        <div class="y-kart__bas" style="margin-bottom:10px">
+          <div>
+            <h2><PIkon ad="simsek" /> Hızlı İşlemler ve Önizleme</h2>
+            <p class="y-kart__alt">Fiyat sunumunu, WhatsApp hattını ve canlı mağazayı anında test edin.</p>
+          </div>
+        </div>
+        <div class="mg-hizli-izgara">
+          <a class="mg-hizli-kutu" href="/yonetim/fiyat-onizleme">
+            <PIkon ad="etiket" boyut={20} />
+            <div>
+              <strong>Fiyat Sunumu Önizleme</strong>
+              <small>3 indirim stilini karşılaştırın</small>
+            </div>
+          </a>
+          <a class="mg-hizli-kutu" href={waBaglanti} target="_blank" rel="noopener">
+            <PIkon ad="whatsapp" boyut={20} />
+            <div>
+              <strong>WhatsApp'ı Test Et</strong>
+              <small>Destek hattınızı canlı açın</small>
+            </div>
+          </a>
+          <a class="mg-hizli-kutu" href="/" target="_blank" rel="noopener">
+            <PIkon ad="dis-baglanti" boyut={20} />
+            <div>
+              <strong>Mağazada Görüntüle</strong>
+              <small>Canlı vitrini yeni sekmede açın</small>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <Onizleme id="site-onizleme" tur="site" />
+    </div>
   </div>
 </Yonetim>
+
+<script is:inline>
+  window.addEventListener('load', () => {
+    if (window.innerWidth >= 1100) {
+      const panel = document.getElementById('site-onizleme');
+      const acBtn = document.querySelector('[data-onizleme-ac]');
+      if (panel && panel.hidden && acBtn instanceof HTMLElement) acBtn.click();
+    }
+  });
+</script>
+
+<style>
+  @media (min-width: 1100px) {
+    :global(.y-panel) .mg-duzen {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(380px, 0.92fr) !important;
+      gap: 18px;
+      align-items: start;
+    }
+    .mg-sag-sutun {
+      position: sticky;
+      top: calc(var(--y-top-height, 58px) + 14px);
+    }
+  }
+  .mg-sag-sutun {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+  .mg-alt-grup {
+    padding: 14px 16px;
+    border: 1px solid #ebe2d5;
+    border-radius: 12px;
+    background: #fcfaf7;
+    margin-top: 12px;
+  }
+  .mg-alt-grup:first-of-type { margin-top: 4px; }
+  .mg-alt-grup__bas {
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #e6dccf;
+  }
+  .mg-alt-grup__bas strong { display: block; font-size: 14px; color: #281e15; }
+  .mg-alt-grup__bas span { display: block; font-size: 12px; color: #75685a; margin-top: 2px; }
+
+  .mg-fiyat-secici {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .mg-gunler {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .mg-gun {
+    padding: 8px 6px;
+    border-radius: 9px;
+    border: 1px solid #e6dccf;
+    background: #fff;
+    text-align: center;
+  }
+  .mg-gun strong { display: block; font-size: 12px; color: #2d2218; }
+  .mg-gun small { display: block; font-size: 10.5px; color: #6e6256; margin-top: 2px; }
+  .mg-gun--kapali { background: #f4efe8; opacity: 0.78; }
+  @media (max-width: 720px) {
+    .mg-gunler { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
+  .mg-anahtar-izgara {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 10px;
+  }
+  .mg-anahtar-kart {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #e5dccf;
+    background: #fff;
+    cursor: pointer;
+  }
+  .mg-anahtar-kart strong { display: block; font-size: 13px; color: #281e15; }
+  .mg-anahtar-kart small { display: block; font-size: 11.5px; color: #75685a; margin-top: 2px; }
+
+  .mg-hizli-izgara {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+  }
+  @media (max-width: 1360px) {
+    .mg-hizli-izgara { grid-template-columns: 1fr; }
+  }
+  .mg-hizli-kutu {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px;
+    padding: 10px 11px;
+    border-radius: 10px;
+    border: 1px solid #e6dccf;
+    background: #faf7f2;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color .15s, background .15s;
+  }
+  .mg-hizli-kutu:hover {
+    border-color: #b8894a;
+    background: #fff;
+  }
+  .mg-hizli-kutu strong { display: block; font-size: 12.5px; color: #261c14; line-height: 1.25; }
+  .mg-hizli-kutu small { display: block; font-size: 11px; color: #75685a; margin-top: 2px; line-height: 1.3; }
+</style>

@@ -20,6 +20,9 @@ const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
 const etiket = rozet?.damga ?? h.ustBaslik;
 const rozetTuru = urun && k.cokSatanMi(urun) ? 'cok-satan' : bilgi?.firsat ? 'firsat' : 'stok';
 const href = urun ? `/urun/${urun.id}` : '/';
+/* Stok yoksa "Şimdi Al / Sepete Ekle / aynı gün kargo" gösterilmez (denetim AUD-016); stoğa girince haber verme bağlantısı çıkar */
+const stokta = urun ? k.stoktaMi(urun) : false;
+const stokHaberUrl = urun ? k.whatsapp(`Merhaba, ${urun.marka} ${urun.kisaAd} stoğa girince haber verir misiniz?`) : '';
 ---
 {urun && (
   <section class="hero hero--vitrin" aria-labelledby="hero-baslik">
@@ -40,19 +43,26 @@ const href = urun ? `/urun/${urun.id}` : '/';
         <p class="hero__alt">{h.altBaslik}</p>
         <OzellikListesi kucuk maddeler={h.maddeler.slice(0, 3).map((m) => ({ ikon: metindenIkon(m), metin: m }))} dipnot="" />
         <div class="hero__fiyat"><Fiyat bilgi={bilgi!} boyut="buyuk" /></div>
-        {rozet?.serit && <p class="hero__kargo"><Ikon ad="kargo" boyut={18} />{rozet.serit} · Vergiler dahil</p>}
-        <div class="hero__cta">
-          <button class="btn btn--simdi" type="button" data-hemen-al data-tip="urun" data-id={urun.id}>Şimdi Al</button>
-          <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id={urun.id} data-konum="hero">
-            <Ikon ad="canta" boyut={18} /><span data-etiket>Sepete Ekle</span>
-          </button>
-        </div>
+        {stokta && rozet?.serit && <p class="hero__kargo"><Ikon ad="kargo" boyut={18} />{rozet.serit} · Vergiler dahil</p>}
+        {stokta ? (
+          <div class="hero__cta">
+            <button class="btn btn--simdi" type="button" data-hemen-al data-tip="urun" data-id={urun.id}>Şimdi Al</button>
+            <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id={urun.id} data-konum="hero">
+              <Ikon ad="canta" boyut={18} /><span data-etiket>Sepete Ekle</span>
+            </button>
+          </div>
+        ) : (
+          <div class="hero__cta">
+            <p class="stok stok--yok">Şu an stokta yok</p>
+            <a class="btn btn--wa" href={stokHaberUrl} target="_blank" rel="noopener"><Ikon ad="whatsapp" boyut={18} />Stoğa girince haber ver</a>
+          </div>
+        )}
         <a class="hero__detay" href={href}>
           <span><strong>Ürünü incele</strong><span>Fotoğraflar, pişirme süreleri, teknik özellikler</span></span>
           <Ikon ad="sag" boyut={18} />
         </a>
         {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">{urun.marka.toLocaleLowerCase('tr') === 'fissler' ? '* Fissler verisi; yemeğe ve miktara göre değişir.' : `* ${urun.marka} resmî ürün verisi.`}</p>}
-        <KargoSayaci kompakt />
+        {stokta && <KargoSayaci kompakt />}
       </div>
     </div>
   </section>

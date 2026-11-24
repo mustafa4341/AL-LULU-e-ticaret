@@ -1,10 +1,25 @@
 /* Yönetim paneli form yardımcıları */
 export const metin = (f: FormData, ad: string) => String(f.get(ad) ?? '').trim();
 export const istegeBagli = (f: FormData, ad: string) => metin(f, ad) || undefined;
+/**
+ * Elle ya da tarayıcının sayı alanından gelen sayıyı okur.
+ *  - Virgül varsa Türkçe yazım: "1.299,90" → 1299.9 (nokta binlik)
+ *  - Yalnız binlik nokta: "1.299", "12.999" → 1299, 12999
+ *  - Diğer noktalı değer ondalıktır: "1299.90" (type="number" alanı her zaman böyle gönderir) → 1299.9
+ * Eskiden nokta her durumda silindiği için "1299.90" 129.990 TL olarak kaydediliyordu (denetim AUD-005).
+ */
+export function sayiCoz(ham: string): number | undefined {
+  const s = ham.replace(/\s|TL|₺/gi, '');
+  if (!s) return undefined;
+  const duz = s.includes(',') ? s.replace(/\./g, '').replace(',', '.')
+    : /^-?\d{1,3}(\.\d{3})+$/.test(s) ? s.replace(/\./g, '')
+    : s;
+  const n = Number(duz);
+  return Number.isFinite(n) ? n : undefined;
+}
 export const sayi = (f: FormData, ad: string, varsayilan = 0) => {
-  const v = metin(f, ad).replace(/\./g, '').replace(',', '.');
-  const n = Number(v);
-  return v === '' || !Number.isFinite(n) ? varsayilan : Math.round(n);
+  const n = sayiCoz(metin(f, ad));
+  return n === undefined ? varsayilan : Math.round(n);
 };
 export const evet = (f: FormData, ad: string) => f.get(ad) === 'on' || f.get(ad) === '1' || f.get(ad) === 'true';
 export const liste = (f: FormData, ad: string) => f.getAll(ad).map((x) => String(x).trim());

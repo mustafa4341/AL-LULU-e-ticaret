@@ -64,29 +64,36 @@ function toplamlar(satirlar: FaturaSatiri[]) {
 export const kdvBulucu = (f: Finans, ayar?: EnvanterAyarlari) => (urunId?: string): number =>
   (urunId ? ayar?.kanallar.trendyol.ilanlar[urunId]?.kdv ?? f.hbUrunler[urunId]?.kdv : undefined) ?? 20;
 
-/** Kuruşu satırlara orantılı dağıtır (yuvarlama farkı en büyük satıra). */
-function dagit(toplam: number, agirliklar: number[]): number[] {
-  const t = agirliklar.reduce((a, b) => a + b, 0);
-  if (!t) return agirliklar.map(() => 0);
-  const parca = agirliklar.map((a) => Math.floor(toplam * a / t));
-  const fark = toplam - parca.reduce((a, b) => a + b, 0);
-  const en = agirliklar.indexOf(Math.max(...agirliklar));
-  parca[en] = (parca[en] ?? 0) + fark;
-  return parca;
+/** Yuvarlama dışında bir fark kalırsa (eski/bozuk kayıt) satırlar düzeltilmez, uyarı gösterilir. */
+const KURUS_TOLERANSI = 5;
+
+/**
+ * Web siparişinin fatura satırları. Kalem toplamı (k.toplam) set indirimi ve sepette indirim DÜŞÜLMÜŞ tutardır
+ * (lib/fiyat.ts satirCozumle), yani müşterinin o satır için ödediğidir. İndirim burada ikinci kez düşülmez
+ * (eskiden düşülüp fark ilk satıra yükleniyordu; satır tutarları ve karma KDV'de matrah yanlış çıkıyordu — denetim AUD-002).
+ */
+export function webFaturaSatirlari(s: Siparis, kdv: (id?: string) => number): { satirlar: FaturaSatiri[]; fark: number } {
+  const satirlar = s.kalemler.map((k) => satirHesapla(
+    k.ad + (k.sku ? ` (${k.sku})` : ''), k.adet, Math.round(k.toplam * 100), kdv(k.tip === 'urun' ? k.id : k.parcalar[0]?.urunId),
+  ));
+  if (s.kargo > 0) satirlar.push(satirHesapla('Kargo bedeli', 1, Math.round(s.kargo * 100), 20));
+  // Portalda toplam müşterinin ödediğiyle aynı olmalı: yalnız birkaç kuruşluk yuvarlama farkı en büyük satıra yansıtılır
+  const fark = Math.round(s.toplam * 100) - satirlar.reduce((t, x) => t + x.dahil, 0);
+  if (fark && Math.abs(fark) <= KURUS_TOLERANSI && satirlar.length) {
+    const en = satirlar.reduce((e, x, i) => (x.dahil > satirlar[e]!.dahil ? i : e), 0);
+    const x = satirlar[en]!;
+    satirlar[en] = satirHesapla(x.ad, x.adet, x.dahil + fark, x.kdvOrani);
+    return { satirlar, fark: 0 };
+  }
+  return { satirlar, fark };
 }
 
 function webAdayi(s: Siparis, kdv: (id?: string) => number): Omit<FaturaAdayi, 'fatura'> {
-  const satirlar0 = s.kalemler.map((k) => ({ ad: k.ad + (k.sku ? ` (${k.sku})` : ''), adet: k.adet, dahil: Math.round(k.toplam * 100), oran: kdv(k.tip === 'urun' ? k.id : k.parcalar[0]?.urunId) }));
-  const siparisIndirimi = Math.round((s.setIndirimi + s.sepetIndirimi) * 100);
-  const dusum = dagit(siparisIndirimi, satirlar0.map((x) => x.dahil));
-  const satirlar = satirlar0.map((x, i) => satirHesapla(x.ad, x.adet, Math.max(0, x.dahil - dusum[i]!), x.oran));
-  if (s.kargo > 0) satirlar.push(satirHesapla('Kargo bedeli', 1, Math.round(s.kargo * 100), 20));
-  // Sipariş toplamıyla kuruş farkı kalırsa ilk satıra yansıt (portalda toplam müşterinin ödediğiyle aynı olmalı)
-  const fark = Math.round(s.toplam * 100) - satirlar.reduce((t, x) => t + x.dahil, 0);
-  if (fark && satirlar[0]) satirlar[0] = satirHesapla(satirlar[0].ad, satirlar[0].adet, satirlar[0].dahil + fark, satirlar[0].kdvOrani);
+  const { satirlar, fark } = webFaturaSatirlari(s, kdv);
   const kurumsal = s.fatura.tip === 'kurumsal';
   const adres = s.fatura.adres || `${s.teslimat.adres} ${s.teslimat.ilce}/${s.teslimat.il}`;
   const eksikler: string[] = [];
+  if (fark) eksikler.push(`satırların toplamı sipariş toplamından ${tlYaz(Math.abs(fark))} TL ${fark > 0 ? 'az' : 'fazla'}; faturayı kesmeden önce sipariş tutarını kontrol edin`);
   if (kurumsal && (!s.fatura.vno || !s.fatura.vd)) eksikler.push('kurumsal alıcının vergi dairesi / numarası');
   return {
     anahtar: 'web:' + s.no, kanal: 'web', kayit: s.no, siparisNo: s.no, tarih: s.tarih,

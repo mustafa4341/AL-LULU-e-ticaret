@@ -1,11 +1,11 @@
 /**
  * Aylık veri yedeği (panel: Genel Bakış > "Veri yedeği indir").
  * Tek ZIP: siparişler (JSON + Excel'de açılan CSV), mağaza (ürünler, setler, ayarlar),
- * onaylanan sözleşmeler, finans kayıtları. Fotoğraflar boyut nedeniyle dahil değildir.
+ * onaylanan sözleşmeler, finans kayıtları, yüklenen fatura ve fiş dosyaları (sığdığı kadar). Ürün fotoğrafları dahil değildir.
  * Son yedek tarihi Supabase medya_dosyalari'nda "_yedek/son.json" olarak tutulur.
  */
 import { magazaOku, siparisleriOku, sozlesmeOku, supabaseIstemci, type SozlesmeKaydi } from './depo';
-import { finansOku } from './finansDepo';
+import { ARSIV_SINIRI, ekDosyasiOku, ekUzantisi, finansOku } from './finansDepo';
 import { csvOlustur, zipOlustur } from './finansArsiv';
 import { SIPARIS_DURUM_ADLARI } from './sema';
 import { tumYorumlar } from './yorum';
@@ -72,6 +72,25 @@ export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
     ]),
   ];
 
+  // Yüklenen resmî fatura ve gider fişi dosyaları (eskiden yedekte hiç yoktu — denetim AUD-021).
+  // Canlı sunucu tek yanıtta ~4,5 MB gönderebildiği için en yeniden başlayarak sığdığı kadarı eklenir; kalanlar listelenir.
+  const ekler: { ad: string; veri: Buffer }[] = [];
+  const disarida: string[] = [];
+  let ekBoyutu = 0;
+  const temiz = (x: string) => x.replace(/[^A-Za-z0-9._-]/g, '_');
+  const adaylar = [
+    ...finans.faturalar.filter((k) => k.ek).map((k) => ({ tur: 'fatura' as const, id: k.id, ad: 'faturalar/' + temiz(`${k.tarih}_${k.no}_${k.kanal}_${k.siparisNo}${k.iptal ? '_IPTAL' : ''}`) + '.' + ekUzantisi(k.ek!.tur), tarih: k.tarih })),
+    ...finans.giderler.filter((g) => g.ek).map((g) => ({ tur: 'gider' as const, id: g.id, ad: 'gider-fisleri/' + temiz(`${g.tarih}_${g.kategori}_${g.id.slice(0, 8)}`) + '.' + ekUzantisi(g.ek!.tur), tarih: g.tarih })),
+  ].sort((a, b) => b.tarih.localeCompare(a.tarih));
+  const verilerBoyutu = 1024 * 1024; // JSON/CSV kısmı için pay
+  for (const a of adaylar) {
+    const veri = await ekDosyasiOku(a.tur, a.id).catch(() => undefined);
+    if (!veri) { disarida.push(a.ad + ' (dosya okunamadı)'); continue; }
+    if (ekBoyutu + veri.length > ARSIV_SINIRI - verilerBoyutu) { disarida.push(a.ad); continue; }
+    ekler.push({ ad: a.ad, veri });
+    ekBoyutu += veri.length;
+  }
+
   const okubeni = [
     `Al Lulu Home veri yedeği — ${saat.format(simdi)}`,
     '',
@@ -84,7 +103,16 @@ export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
     'pazaryeri.json        Trendyol ve Hepsiburada siparişleri ve stok ayrımları',
     'envanter.json         Kanal başlangıçları, ilan eşleştirmeleri ve senkron kayıtları',
     '',
-    'Fotoğraflar bu yedekte yoktur. Bu dosyada müşteri kişisel verileri bulunur:',
+    'faturalar/            Yüklenen resmî satış faturaları (PDF/fotoğraf)',
+    'gider-fisleri/        Giderlere eklenen fiş ve faturalar',
+    ...(disarida.length ? [
+      '',
+      `Boyut sınırı nedeniyle bu yedeğe sığmayan ${disarida.length} dosya var. Bunları Finans > Raporlar > "Muhasebeci arşivi (ZIP)"`,
+      'ile ay ay indirin:',
+      ...disarida.map((x) => '  - ' + x),
+    ] : []),
+    '',
+    'Ürün fotoğrafları bu yedekte yoktur. Bu dosyada müşteri kişisel verileri bulunur:',
     'şifreli bir klasörde / güvenli bir yerde saklayın, kimseyle paylaşmayın.',
   ].join('\r\n');
 
@@ -98,6 +126,7 @@ export async function yedekOlustur(): Promise<{ ad: string; veri: Buffer }> {
     { ad: 'yorumlar.json', veri: json(yorumlar) },
     { ad: 'pazaryeri.json', veri: json(pazaryeri) },
     { ad: 'envanter.json', veri: json(envanter) },
+    ...ekler,
   ], true);
   await sonYedekKaydet(simdi.toISOString());
   return { ad: `allulu-yedek-${gun}.zip`, veri };

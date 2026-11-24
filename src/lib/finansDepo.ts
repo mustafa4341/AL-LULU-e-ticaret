@@ -1,13 +1,14 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import sharp from 'sharp';
-import { magazaOku, supabaseIstemci, VERI_KOKU } from './depo';
+import { cakismaHatasi, magazaOku, supabaseIstemci, VERI_KOKU } from './depo';
 import { BelgeAyarSema, FinansSema, faturaKaydiSema, type FaturaKaydi, HbAyarSema, HbUrunAyarSema, belgeGecerli, giderSema, type Belge, type BelgeAyarlari, type BelgeTuru, type Finans, type Gider, type HbAyar, type HbKayit, type HbPerformans, type HbUrunAyar, type TrendyolSatiri } from './finans';
 import { logoDataUri, svgdenPdf, svgdenPng } from './finansPdf';
 import { A4, siparisBelgesiSvg, type SaticiBilgisi } from './belgeSablon';
 import type { Siparis } from './sema';
 import { bosYasalBilgi } from './yonetimSite';
+import { trendyolBirlestir } from './trendyolFinans';
 
 const kok = path.join(VERI_KOKU, 'finans');
 const kayit = path.join(kok, 'kayitlar.json');
@@ -31,7 +32,12 @@ async function yaz(dosya: string, veri: string | Buffer) {
   }
 }
 
-async function bulutOku(bulutYol: string): Promise<Buffer | undefined> {
+/**
+ * Buluttaki kaydın ham (base64) içeriği. Kayıt yoksa undefined.
+ * Veritabanı hata verirse HATA FIRLATIR: "okunamadı" ile "kayıt yok" asla karıştırılmaz
+ * (eskiden ikisi de undefined dönüyordu; bir bağlantı kopmasından sonraki ilk yazma tüm finansı silebiliyordu).
+ */
+async function bulutHamOku(bulutYol: string): Promise<string | undefined> {
   const sb = supabaseIstemci();
   if (!sb) return undefined;
   const { data, error } = await sb
@@ -40,8 +46,41 @@ async function bulutOku(bulutYol: string): Promise<Buffer | undefined> {
     .eq('yol', bulutYol)
     .eq('aktif', true)
     .maybeSingle();
-  if (error || !data?.veri_base64) return undefined;
-  return Buffer.from(data.veri_base64, 'base64');
+  if (error) throw new Error('Finans kayıtları şu anda okunamadı (veritabanı bağlantısı). Biraz sonra tekrar deneyin.');
+  return data?.veri_base64 || undefined;
+}
+async function bulutOku(bulutYol: string): Promise<Buffer | undefined> {
+  const ham = await bulutHamOku(bulutYol);
+  return ham ? Buffer.from(ham, 'base64') : undefined;
+}
+
+/** Kayıt okunduktan sonra başka bir sunucu kopyası onu değiştirdiyse yazma reddedilir ve işlem baştan denenir. */
+class FinansCakismasi extends Error {}
+const md5 = (s: string) => createHash('md5').update(s, 'utf8').digest('hex');
+/** finansOku() ile okunan her nesnenin kaynağındaki içeriğin özeti. null: bulutta kayıt yoktu (yalnız ilk kayıt oluşturulabilir). */
+const kaynakOzeti = new WeakMap<Finans, string | null>();
+
+/** Koşullu yazma: buluttaki içerik hâlâ `eskiOzet` ise yazar. Yazılan içeriğin özetini döner. */
+async function kosulluYaz(bulutYol: string, buf: Buffer, eskiOzet: string | null): Promise<string> {
+  const sb = supabaseIstemci();
+  if (!sb) throw new Error('Veritabanı bağlantısı yok.');
+  const b64 = buf.toString('base64');
+  const { error } = await sb.rpc('medya_kosullu_yaz', {
+    p_yol: bulutYol, p_icerik_turu: 'application/json', p_veri_base64: b64, p_boyut: Math.max(1, buf.length), p_eski_md5: eskiOzet,
+  });
+  if (!error) return md5(b64);
+  if (cakismaHatasi(error)) throw new FinansCakismasi();
+  if (error.code !== 'PGRST202') throw new Error(`Supabase finans kayıt hatası: ${error.message}`);
+  // Veritabanı fonksiyonu henüz kurulmamış (migration 20261124120000): yazmadan hemen önce yeniden okuyup karşılaştır.
+  const simdiki = await bulutHamOku(bulutYol);
+  if ((simdiki ? md5(simdiki) : null) !== eskiOzet) throw new FinansCakismasi();
+  const satir = { yol: bulutYol, icerik_turu: 'application/json', boyut: Math.max(1, buf.length), veri_base64: b64, aktif: true };
+  const sonuc = eskiOzet === null
+    ? await sb.from('medya_dosyalari').insert(satir)
+    : await sb.from('medya_dosyalari').update(satir).eq('yol', bulutYol);
+  if (sonuc.error?.code === '23505') throw new FinansCakismasi();
+  if (sonuc.error) throw new Error(`Supabase finans kayıt hatası: ${sonuc.error.message}`);
+  return md5(b64);
 }
 
 async function bulutYaz(bulutYol: string, veri: string | Buffer, icerikTuru: string): Promise<void> {
@@ -59,33 +98,59 @@ async function bulutYaz(bulutYol: string, veri: string | Buffer, icerikTuru: str
 }
 
 export async function finansOku(): Promise<Finans> {
-  const bulutVeri = await bulutOku(BULUT_KAYIT);
-  if (bulutVeri) {
+  const ham = await bulutHamOku(BULUT_KAYIT); // veritabanı hatasında burada durur; boş finansa düşmez
+  if (ham) {
+    let f: Finans;
     try {
-      return FinansSema.parse(JSON.parse(bulutVeri.toString('utf8')));
+      f = FinansSema.parse(JSON.parse(Buffer.from(ham, 'base64').toString('utf8')));
     } catch {
       throw new Error('Finans kayıtları şu anda okunamadı.');
     }
+    kaynakOzeti.set(f, md5(ham));
+    return f;
   }
+  // Bulutta kayıt yok: yerel dosya (geliştirme ya da ilk taşıma). Yazma "yalnız kayıt yoksa oluştur" olarak yapılır,
+  // böylece yanlışlıkla boş/eski bir kopya var olan bulut kaydının üstüne yazılamaz.
   try {
     const metin = await fs.readFile(kayit, 'utf8');
-    const ayrilmis = FinansSema.parse(JSON.parse(metin));
-    await bulutYaz(BULUT_KAYIT, metin, 'application/json').catch(() => undefined);
-    return ayrilmis;
+    const f = FinansSema.parse(JSON.parse(metin));
+    let ozet: string | null = null;
+    if (supabaseIstemci()) ozet = await kosulluYaz(BULUT_KAYIT, Buffer.from(metin, 'utf8'), null).catch(() => null);
+    kaynakOzeti.set(f, ozet);
+    return f;
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return FinansSema.parse({ belgeler: [], giderler: [], trendyol: [], olaylar: [] });
-    throw new Error('Finans kayıtları şu anda okunamadı.');
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error('Finans kayıtları şu anda okunamadı.');
+    const bos = FinansSema.parse({ belgeler: [], giderler: [], trendyol: [], olaylar: [] });
+    kaynakOzeti.set(bos, null);
+    return bos;
   }
 }
+const bekle = (ms: number) => new Promise((ok) => setTimeout(ok, ms));
+/** Aynı sunucuda finans işlemleri sırayla çalışır; başka bir sunucu kopyasıyla çakışırsa işlem baştan (yeniden okuyarak) denenir. */
 function sirala<T>(islem: () => Promise<T>): Promise<T> {
-  const is = kuyruk.then(islem, islem);
+  const tekrarli = async (): Promise<T> => {
+    for (let deneme = 0; ; deneme++) {
+      try {
+        return await islem();
+      } catch (e) {
+        if (!(e instanceof FinansCakismasi)) throw e;
+        if (deneme >= 3) throw new Error('Finans kayıtları bu sırada başka bir işlemle güncellendi. Sayfayı yenileyip tekrar deneyin.');
+        await bekle(120 * (deneme + 1) + Math.floor(Math.random() * 120));
+      }
+    }
+  };
+  const is = kuyruk.then(tekrarli, tekrarli);
   kuyruk = is.catch(() => undefined);
   return is;
 }
 async function kaydet(f: Finans) {
   const metin = JSON.stringify(FinansSema.parse(f), null, 2);
-  await bulutYaz(BULUT_KAYIT, metin, 'application/json');
-  await yaz(kayit, metin).catch(() => undefined);
+  if (supabaseIstemci()) {
+    const eski = kaynakOzeti.has(f) ? kaynakOzeti.get(f)! : null;
+    kaynakOzeti.set(f, await kosulluYaz(BULUT_KAYIT, Buffer.from(metin, 'utf8'), eski));
+  }
+  // Yerel kopya yalnız bu bilgisayarda (Vercel'in geçici diskindeki eski bir kopyaya hiç güvenilmez)
+  if (!process.env.VERCEL) await yaz(kayit, metin).catch(() => undefined);
 }
 const yol = (klasor: string, id: string) => path.join(klasor, id);
 const idGecerli = (id: string) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
@@ -245,23 +310,9 @@ export function giderEkle(girdi: Omit<Gider, 'id' | 'olusturma' | 'ek'>, dosya?:
     const id = randomUUID();
     const gider = giderSema.parse({ ...girdi, id, olusturma: simdi() });
     if (dosya?.size) {
-      if (dosya.size > 10 * 1024 * 1024) throw new Error('Gider eki 10 MB veya daha küçük olmalı.');
-      let veri = Buffer.from(await dosya.arrayBuffer());
-      let tur: 'application/pdf' | 'image/jpeg' | 'image/png';
-      if (dosya.type === 'application/pdf' && veri.subarray(0, 5).toString() === '%PDF-' && veri.subarray(-1024).includes('%%EOF')) {
-        tur = 'application/pdf';
-      } else {
-        try {
-          const gorsel = sharp(veri, { failOn: 'error', limitInputPixels: 28_000_000 });
-          const { format } = await gorsel.metadata();
-          if (format !== 'png' && format !== 'jpeg') throw new Error();
-          tur = format === 'png' ? 'image/png' : 'image/jpeg';
-          veri = Buffer.from(await gorsel.rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).toBuffer());
-        } catch {
-          throw new Error('Geçerli bir PDF, JPG veya PNG dosyası seçin.');
-        }
-      }
-      gider.ek = { ad: dosya.name.slice(0, 120), boyut: veri.length, tur };
+      const { veri, tur } = await ekHazirla(dosya);
+      const ad = tur === 'image/jpeg' && !/\.jpe?g$/i.test(dosya.name) ? dosya.name.replace(/\.[^.]+$/, '') + '.jpg' : dosya.name;
+      gider.ek = { ad: ad.slice(0, 120), boyut: veri.length, tur };
       await bulutYaz(bulutGiderEki(id), veri, tur);
       await yaz(yol(giderDosyalari, id), veri).catch(() => undefined);
     }
@@ -291,7 +342,8 @@ export function trendyolKaydet(satirlar: TrendyolSatiri[]) {
   return sirala(async () => {
     const f = await finansOku();
     const tablo = new Map(f.trendyol.map((s) => [s.id, s]));
-    for (const kayit of satirlar) tablo.set(kayit.id, kayit);
+    // API satırları işlem kimliğiyle birleşir: yalnız iade içeren yeni çekim eski satışı silmez (denetim AUD-003)
+    for (const kayit of satirlar) tablo.set(kayit.id, trendyolBirlestir(tablo.get(kayit.id), kayit));
     f.trendyol = [...tablo.values()].sort((a, b) => b.tarih.localeCompare(a.tarih));
     f.olaylar.push({ tarih: simdi(), islem: 'trendyol-ice-aktar:' + satirlar.length });
     await kaydet(f);
@@ -330,8 +382,14 @@ export function hbUrunKaydet(urunId: string, ayar: HbUrunAyar) {
   });
 }
 
-/** Yüklenen PDF/JPG/PNG'yi doğrular; görseller küçültülür. */
-async function ekHazirla(dosya: File, sinir = 10 * 1024 * 1024) {
+/** Canlı sunucu (Vercel) tek istekte ~4,5 MB kabul eder; ekranlarda da bu sınır yazar. */
+export const EK_SINIRI_MB = 4;
+/**
+ * Yüklenen fiş/fatura dosyasını doğrular. PDF içeriğinden tanınır (tarayıcı türü "application/octet-stream" gönderse de).
+ * Görseller küçültülür; WebP gelirse (panel telefondan çekilen fotoğrafı küçültürken WebP yapabilir) JPEG'e çevrilir.
+ * HEIC/AVIF kabul edilmez (açığı bilinen görsel çözücü yolları).
+ */
+async function ekHazirla(dosya: File, sinir = EK_SINIRI_MB * 1024 * 1024) {
   if (dosya.size > sinir) throw new Error(`Dosya ${Math.round(sinir / 1048576)} MB veya daha küçük olmalı.`);
   let veri = Buffer.from(await dosya.arrayBuffer());
   if (dosya.type === 'application/pdf' || veri.subarray(0, 5).toString() === '%PDF-') {
@@ -341,9 +399,11 @@ async function ekHazirla(dosya: File, sinir = 10 * 1024 * 1024) {
   try {
     const gorsel = sharp(veri, { failOn: 'error', limitInputPixels: 28_000_000 });
     const { format } = await gorsel.metadata();
-    if (format !== 'png' && format !== 'jpeg') throw new Error();
-    veri = Buffer.from(await gorsel.rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true }).toBuffer());
-    return { veri, tur: format === 'png' ? 'image/png' as const : 'image/jpeg' as const };
+    if (format !== 'png' && format !== 'jpeg' && format !== 'webp') throw new Error();
+    const kucuk = gorsel.rotate().resize({ width: 2400, height: 2400, fit: 'inside', withoutEnlargement: true });
+    if (format === 'png') return { veri: Buffer.from(await kucuk.png().toBuffer()), tur: 'image/png' as const };
+    veri = Buffer.from(await kucuk.flatten({ background: '#ffffff' }).jpeg({ quality: 88, mozjpeg: true }).toBuffer());
+    return { veri, tur: 'image/jpeg' as const };
   } catch {
     throw new Error('Geçerli bir PDF, JPG veya PNG dosyası seçin.');
   }
@@ -382,6 +442,25 @@ export async function faturaEki(id: string) {
   }
   return veri ? { kayit: k, veri } : undefined;
 }
+/**
+ * Belge / gider eki / fatura dosyasını finans kaydını yeniden okumadan getirir (toplu arşiv ve yedek için).
+ * Kaydın varlığı ve geçerliliği çağıran tarafta, zaten okunmuş finans nesnesinden kontrol edilir
+ * (eskiden her dosya için finans kaydı baştan okunuyordu — denetim AUD-021).
+ */
+export async function ekDosyasiOku(tur: 'belge' | 'gider' | 'fatura', id: string): Promise<Buffer | undefined> {
+  if (!idGecerli(id)) return undefined;
+  const [klasor, bulutYol] = tur === 'belge' ? [arsiv, bulutBelge(id)] : tur === 'gider' ? [giderDosyalari, bulutGiderEki(id)] : [faturaDosyalari, bulutFatura(id)];
+  let veri: Buffer | undefined = await fs.readFile(yol(klasor, id)).catch(() => undefined);
+  if (!veri) {
+    veri = await bulutOku(bulutYol);
+    if (veri) await yaz(yol(klasor, id), veri).catch(() => undefined);
+  }
+  return veri;
+}
+/** Canlı sunucu (Vercel) tek yanıtta ~4,5 MB gönderebilir; arşivler buna göre sınırlanır */
+export const ARSIV_SINIRI = process.env.VERCEL ? 4 * 1024 * 1024 : 45 * 1024 * 1024;
+export const ekUzantisi = (tur: string) => (tur === 'application/pdf' ? 'pdf' : tur === 'image/png' ? 'png' : 'jpg');
+
 export function faturaGuncelle(id: string, degistir: (k: FaturaKaydi) => void) {
   if (!idGecerli(id)) throw new Error('Fatura bulunamadı.');
   return sirala(async () => {

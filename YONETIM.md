@@ -217,4 +217,4 @@ Bu doküman, **Al Lulu Home** yönetim panelinde (`/yonetim`) yapılan tüm geli
 
 **Müşteri tarafı:** Kartla ödeme sonrası müşteri doğrudan sipariş sayfasına gelir; ödeme onayı beklenirken sayfa kendiliğinden yenilenir. Sipariş takip formu numarayı "al 2611181234" gibi yazılsa da tanır. Sipariş numarasındaki tarih Türkiye saatine göredir.
 
-**Önemli:** Finans kayıtları, belge PDF'leri ve gider fişleri şu an sunucu diskinde `veri/finans/` klasöründe durur (Supabase'de değil). Sunucu diski kalıcı değilse bu klasör yedeklenmeli veya Supabase'e taşınmalıdır.
+**Önemli (güncel):** Finans kayıtları, belge PDF'leri, gider fişleri ve fatura dosyaları Supabase'te (`medya_dosyalari`, `_finans/…` yolları) tutulur; `veri/finans/` yalnız yerel kopyadır. Kayıt eşzamanlı yazmaya karşı korunur (veritabanı okunamazsa yazma yapılmaz).

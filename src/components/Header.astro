@@ -48,9 +48,9 @@ const takipAktif = aktif === 'takip' || Astro.url.pathname.startsWith('/siparis'
     </div>
     <nav class="cat-nav" aria-label="Kategoriler">
       <div class="container cat-nav__track">
-        <a href="/urunler" class:list={['cat-link', { 'is-active': aktif === 'urunler' }]}>Tüm ürünler</a>
+        <a href="/urunler" class:list={['cat-link', { 'is-active': aktif === 'urunler' }]} data-astro-prefetch>Tüm ürünler</a>
         {kategoriler.map((kat) => (
-          <a href={`/kategori/${kat.id}`} class:list={['cat-link', { 'is-active': aktif === kat.id }]} aria-current={aktif === kat.id ? 'page' : undefined}>{kat.ad}</a>
+          <a href={`/kategori/${kat.id}`} class:list={['cat-link', { 'is-active': aktif === kat.id }]} data-astro-prefetch aria-current={aktif === kat.id ? 'page' : undefined}>{kat.ad}</a>
         ))}
         {setVar && <a href="/setler" class:list={['cat-link cat-link--firsat', { 'is-active': aktif === 'setler' }]}><Ikon ad="etiket" boyut={16} />Setler & Fırsatlar</a>}
       </div>

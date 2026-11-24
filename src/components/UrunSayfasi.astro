@@ -132,7 +132,7 @@ const sssVerisi = urunSSS.length ? {
             {urun.durum === 'taslak' && <span class="rozet rozet--taslak">Örnek ürün · canlıda görünmez</span>}
           </div>
         )}
-        <p class="urun-eyebrow"><a href={kat ? `/kategori/${kat.id}` : '/urunler'}><span lang="en">{urun.marka}</span>{hacim && <> · {hacim}</>}</a></p>
+        <p class="urun-eyebrow"><a href={kat ? `/kategori/${kat.id}` : '/urunler'}><span>{urun.marka}</span>{hacim && <> · {hacim}</>}</a></p>
         <h1 class="urun-ad" id="urun-adi">{urun.ad}</h1>
         {urun.ozet && urun.oneCikanBilgiler.length === 0 && <p class="urun-deger">{urun.ozet}</p>}
         {guvenSatiri.length > 0 && (

@@ -55,7 +55,8 @@ if (kayit && Astro.request.method === 'POST') {
           const etiketler = await tyKargoEtiketi(kayit.kargoTakip, kayit.kargoFirma ?? '');
           return new Response(etiketler.join(String.fromCharCode(10)), { headers: {
             'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store',
-            'Content-Disposition': `attachment; filename="trendyol-etiket-${kayit.kargoTakip}.zpl"`,
+            // Dosya adına yalnız güvenli karakterler (tırnak/satır sonu başlığı bozamaz — denetim AUD-030)
+            'Content-Disposition': `attachment; filename="trendyol-etiket-${String(kayit.kargoTakip).replace(/[^A-Za-z0-9_-]/g, '_')}.zpl"`,
           } });
         } else if (tur === 'ty-fatura-link') {
           await tyFaturaLinki(kayit.paketNo, metin(f, 'link'), metin(f, 'faturaNo') || undefined);

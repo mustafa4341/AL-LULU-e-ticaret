@@ -350,6 +350,33 @@ export async function kanalFiyatGonder(
   return id;
 }
 
+/**
+ * Fiyat gönderiminin sonucu (Trendyol toplu istek sonucu). Reddedilen ilanlar sebebiyle döner.
+ * Hepsiburada'nın fiyat yükleme sonucu belgeyle doğrulanamadı: orada sonuç "bilinmiyor" sayılır (bekliyor: false, red yok).
+ */
+export async function kanalFiyatSonucu(
+  kanal: Kanal, id: string, sinyal: AbortSignal,
+): Promise<{ bekliyor: boolean; reddedilen: { kod: string; sebep: string }[]; basarili: string[] }> {
+  if (kanal !== 'trendyol') return { bekliyor: false, reddedilen: [], basarili: [] };
+  const a = baglanti(kanal);
+  const islem = `${KANALLAR[kanal]} fiyat gönderim sonucu`;
+  const yol = `/integration/product/sellers/${a.kimlik}/products/batch-requests/${encodeURIComponent(id)}`;
+  const yanit = nesne(await istek(a, new URL(yol, trendyolAdres(a)), islem, sinyal));
+  if (yanit.status === 'IN_PROGRESS') return { bekliyor: true, reddedilen: [], basarili: [] };
+  const reddedilen: { kod: string; sebep: string }[] = [];
+  const basarili: string[] = [];
+  for (const x of liste(yanit, islem, 'items')) {
+    const kod = metin(nesne(x.requestItem).barcode);
+    if (!kod) continue;
+    if (x.status === 'SUCCESS') basarili.push(kod);
+    else if (x.status === 'FAILED') {
+      const sebepler = Array.isArray(x.failureReasons) ? x.failureReasons.map((r) => String(r)).join('; ') : '';
+      reddedilen.push({ kod, sebep: (sebepler || 'Trendyol fiyatı kabul etmedi.').slice(0, 300) });
+    } else return { bekliyor: true, reddedilen: [], basarili: [] };
+  }
+  return { bekliyor: false, reddedilen, basarili };
+}
+
 export type TrendyolIlanOzeti = { barkod: string; stokKodu?: string; anaKod?: string; fiyat?: number; listeFiyati?: number; stok?: number };
 
 /** Trendyol'daki tüm onaylı ilanlar (barkod, stok kodu, fiyat, stok). Sayfa başına 100; en fazla 10.000 ilan. */

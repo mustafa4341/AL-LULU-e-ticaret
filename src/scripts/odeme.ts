@@ -1,6 +1,6 @@
 /* Al Lulu Home — tek sayfa ödeme: doğrulama, özet, ön bilgilendirme, sunucuya sipariş gönderimi */
-import { DEGISTI, adetAyarla, sepetKalemleri, sepetOzeti, satirHtml, toplamlarHtml } from './sepet';
-import { formatTL, katalog, urunBul } from './katalog';
+import { DEGISTI, adetAyarla, bosSepetOnerisi, odenecekFiyat, sepetKalemleri, sepetOzeti, satirHtml, toplamlarHtml } from './sepet';
+import { formatTL } from './katalog';
 import { satirlardanUrunler, track } from './analitik';
 import { mesafeliSatisSozlesmesi, onBilgilendirmeFormu, type YasalSite, type YasalSiparis } from '../lib/yasal';
 
@@ -14,12 +14,12 @@ const kok = $('[data-odeme-kok]')!;
 const form = $<HTMLFormElement>('[data-odeme-form]')!;
 
 function bosSepet(): void {
-  const hero = urunBul(katalog.heroId);
+  const hero = bosSepetOnerisi();
   kok.innerHTML = `
     <div class="container" style="padding-block:64px;text-align:center">
       <h1 style="font-size:36px">Sepetiniz boş</h1>
       <p class="muted" style="margin-top:8px">Ödeme adımına geçmek için önce sepetinize ürün ekleyin.</p>
-      ${hero ? `<button class="btn btn--sepet" type="button" style="margin-top:24px" data-sepete-ekle data-tip="urun" data-id="${hero.id}" data-sessiz>${esc(hero.kisaAd)} ekle · ${formatTL(hero.fiyat)}</button>` : ''}
+      ${hero ? `<button class="btn btn--sepet" type="button" style="margin-top:24px" data-sepete-ekle data-tip="urun" data-id="${esc(hero.id)}" data-sessiz>${esc(hero.kisaAd)} ekle · ${formatTL(odenecekFiyat(hero))}</button>` : ''}
       <p style="margin-top:16px"><a href="/urunler">Ürünlere göz atın</a></p>
     </div>`;
 }
@@ -200,6 +200,8 @@ function baslat(): void {
         const ekran = $('[data-paytr-ekran]')!;
         ekran.hidden = false;
         document.removeEventListener(DEGISTI, ciz);
+        // Ödeme penceresi açıldıktan sonra sepet değiştirilemez: özet +/− düğmeleri olmadan yeniden çizilir (denetim AUD-027)
+        $('[data-ozet-kalemler]')!.innerHTML = sepetOzeti().satirlar.map((x) => satirHtml(x, false)).join('');
         $('[data-paytr-baslik]')!.focus();
         ekran.scrollIntoView({ block: 'start' });
         return;

@@ -15,6 +15,7 @@
  * Aynı paket tekrar gelirse güncellenir; stok durumu kalem kalem saklandığı için iki kez düşülmez.
  */
 import { z } from 'astro/zod';
+import { bosIseVarsayilan } from './zodUyum';
 import { gecerliSepetteIndirim, sepetteFiyat } from './fiyat';
 import type { Magaza, Urun } from './sema';
 import { urunGtin } from './urunKimlik';
@@ -295,11 +296,11 @@ const KanalAyarSema = z.object({
     kalemler: z.array(z.object({ urunId: z.string(), kod: z.string(), stok: z.number().int().min(0) })),
   }).optional(),
   /** Excel sütun eşleştirmesi: alan → başlığın normal() hali */
-  sutunlar: z.record(z.string()).default({}),
+  sutunlar: z.record(z.string(), z.string()).default({}),
   /** Pazaryerine bildirilen stok = gerçek stok − güvenlik payı (aktarımlar arası aşırı satışa karşı) */
   guvenlikPayi: z.number().int().min(0).max(1000).default(1),
   /** Ürün bazında: pazaryerinde satışta mı, en son oraya hangi stok yazıldı */
-  urunler: z.record(z.object({
+  urunler: z.record(z.string(), z.object({
     satista: z.boolean().default(true),
     kod: z.string().trim().min(1).max(120).optional(),
     bildirilen: z.number().int().min(0).optional(),
@@ -318,22 +319,27 @@ const KanalAyarSema = z.object({
     /** Kanalda en son okunan satış fiyatı (TL) ve zamanı — panelde "kanaldaki fiyat" olarak gösterilir */
     kanalFiyat: z.number().nonnegative().optional(),
     kanalFiyatTarih: z.string().optional(),
+    /** Son fiyat gönderiminin kanal takip kimliği ve kanal reddettiyse sebebi (denetim AUD-014) */
+    fiyatIstek: z.string().max(120).optional(),
+    fiyatHata: z.string().max(300).optional(),
   })).default({}),
   /** Kanal genel fiyat kuralı: 0 bırakılırsa sitedeki son fiyat birebir kullanılır. */
-  fiyatKurali: z.object({
+  fiyatKurali: bosIseVarsayilan(z.object({
     yuzde: z.number().min(-50).max(300).default(0),
     ekTL: z.number().min(0).max(100_000).default(0),
     yuvarla: z.boolean().default(false),
-  }).default({}),
+  })),
   /** API ile kanala gönderilen ilanlar (ürün kimliği → taslak ve onay durumu) */
-  ilanlar: z.record(IlanSema).default({}),
+  ilanlar: z.record(z.string(), IlanSema).default({}),
+  /** Cevap bekleyen müşteri sorusu sayısı (otomatik işler 30 dakikada bir tazeler; İş Merkezi'nde görünür) */
+  soru: bosIseVarsayilan(z.object({ bekleyen: z.number().int().min(0).default(0), tarih: z.string().optional() })),
   /** Anlık sipariş bildirimi (webhook): kanalda kayıtlı abonelik ve son gelen bildirim */
-  bildirim: z.object({
+  bildirim: bosIseVarsayilan(z.object({
     id: z.string().max(120).optional(),
     kurulum: z.string().optional(),
     son: z.string().optional(),
     sayi: z.number().int().min(0).default(0),
-  }).default({}),
+  })),
 });
 export type KanalAyari = z.infer<typeof KanalAyarSema>;
 export type KanalIlanTaslagi = z.infer<typeof IlanSema>;
@@ -377,12 +383,12 @@ export function kanalHedefFiyati(
 export const EnvanterAyarSema = z.object({
   /** Tüm ürünler için kritik stok eşiği (ürüne özel eşik yoksa) */
   kritikVarsayilan: z.number().int().min(0).max(100000).default(3),
-  urunKritik: z.record(z.number().int().min(0).max(100000)).default({}),
+  urunKritik: z.record(z.string(), z.number().int().min(0).max(100000)).default({}),
   /** Pazaryeri ürün kodu (kodNormal) → mağaza ürün kimliği */
-  eslesmeler: z.record(z.string()).default({}),
+  eslesmeler: z.record(z.string(), z.string()).default({}),
   epostaBildirimi: z.boolean().default(true),
   /** Zamanlayıcının (5 dk) kendiliğinden yaptığı işler. Panel › Bugünkü işler'den açılıp kapanır. */
-  otomasyon: z.object({
+  otomasyon: bosIseVarsayilan(z.object({
     /** Yeni Trendyol/Hepsiburada siparişinde mağazaya e-posta */
     yeniSiparisBildir: z.boolean().default(true),
     /** Yeni Trendyol paketini hemen "toplanıyor" (Picking) yap: müşteri iptal edemez, kargo süreci başlar */
@@ -399,8 +405,8 @@ export const EnvanterAyarSema = z.object({
     sonCalisma: z.string().optional(),
     /** Son çalışmanın kısa özeti (panelde gösterilir) */
     sonOzet: z.array(z.string().max(300)).max(20).default([]),
-  }).default({}),
-  kanallar: z.object({ trendyol: KanalAyarSema.default({}), hepsiburada: KanalAyarSema.default({}) }).default({}),
+  })),
+  kanallar: bosIseVarsayilan(z.object({ trendyol: bosIseVarsayilan(KanalAyarSema), hepsiburada: bosIseVarsayilan(KanalAyarSema) })),
 });
 export type EnvanterAyarlari = z.infer<typeof EnvanterAyarSema>;
 export const bosAyarlar = (): EnvanterAyarlari => EnvanterAyarSema.parse({});

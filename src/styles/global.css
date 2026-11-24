@@ -459,7 +459,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .kart__ad a::after { content: ""; position: absolute; inset: 0; z-index: 0; }
 .kart__bilgi { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--gold-ink); }
 .kart__ekle { position: relative; z-index: 2; margin: 8px 12px 12px; min-height: 40px; border-radius: var(--r-sm); border: 1.5px solid var(--sepet); background: #fff; color: var(--sepet-koyu); font-weight: 700; font-size: 14px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: background .15s, transform .15s var(--spring); }
-.kart__ekle:hover:not(:disabled) { background: var(--sepet); color: #fff; }
+.kart__ekle:hover:not(:disabled) { background: var(--sepet-koyu); border-color: var(--sepet-koyu); color: #fff; } /* 14 px yazıda beyaz/turuncu kontrastı 4.5:1 üstü (AUD-025) */
 .kart__ekle:active:not(:disabled) { transform: scale(.96); }
 .kart__ekle:disabled { background: var(--surface-2); color: var(--ink-3); cursor: not-allowed; }
 .kart__ekle.is-added { background: var(--yesil); color: #fff; animation: pop .35s var(--spring); }
@@ -1114,7 +1114,8 @@ mark.yer { background: #EEF3FA; color: #1E3A5F; padding: 0 4px; border-radius: 4
 .yasal-pencere .govde h3 { font-size: 14.5px; }
 .yasal-pencere .govde p, .yasal-pencere .govde li { font-size: 14px; }
 @media print {
-  .duyuru, .header, .alt-menu, .footer, .yonetici-serit, .wa-yuzen, .btn { display: none !important; }
+  /* Sözleşme yazdırılırken sitenin koyu üst/alt bilgisi basılmasın (sınıf adları site-header/site-footer — denetim AUD-027) */
+  .duyuru, .header, .site-header, .alt-menu, .alt-cubuk, .footer, .site-footer, .yonetici-serit, .wa-yuzen, .btn, .cerez-onay { display: none !important; }
   .belge { max-width: none; padding: 0; }
 }
 @media (max-width: 479px) {

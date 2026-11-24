@@ -1,11 +1,12 @@
 ---
 import Base from '../../../layouts/Base.astro';
 import { siparisleriOku, sozlesmeOku } from '../../../lib/depo';
+import { sabitSureliEsit } from '../../../lib/guvenlik';
 const k = Astro.locals.katalog;
 const no = Astro.params.no ?? '';
 const s = (await siparisleriOku()).find((x) => x.no === no);
 const token = Astro.url.searchParams.get('t');
-if (!s || !token || token !== s.token) return Astro.rewrite('/404');
+if (!s || !sabitSureliEsit(token, s.token)) return Astro.rewrite('/404');
 const kayit = await sozlesmeOku(no);
 const onay = kayit ? new Date(kayit.onayTarihi).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'long', timeStyle: 'medium' }) : '';
 ---

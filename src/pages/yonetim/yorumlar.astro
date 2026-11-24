@@ -5,20 +5,27 @@ import { tumYorumlar, yorumGuncelle, type YorumDurumu } from '../../lib/yorum';
 import { yTarih } from '../../lib/yonetimRapor';
 
 let hatalar: string[] = [];
-let basari: string | null = null;
+let basari: string | null = Astro.url.searchParams.get('ok');
+let sonIslemId = '';
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
   const id = String(f.get('id') ?? '');
   const eylem = String(f.get('eylem') ?? '');
+  sonIslemId = id;
   try {
     if (!/^[0-9a-f-]{36}$/i.test(id)) throw new Error('Yorum bulunamadı.');
     if (eylem === 'yanit') {
       const yanit = String(f.get('yanit') ?? '').trim().slice(0, 1000);
       await yorumGuncelle(id, { yanit: yanit || null });
-      basari = 'Yanıt kaydedildi.';
+      basari = 'Mağaza yanıtı kaydedildi.';
     } else if (eylem === 'yayinda' || eylem === 'reddedildi' || eylem === 'bekliyor') {
       await yorumGuncelle(id, { durum: eylem as YorumDurumu });
       basari = eylem === 'yayinda' ? 'Yorum yayınlandı.' : eylem === 'reddedildi' ? 'Yorum yayından kaldırıldı.' : 'Yorum beklemeye alındı.';
+    }
+    // Kayıttan sonra aynı sayfaya yönlendirilir: sayfa yenilenince işlem tekrar gönderilmez (denetim AUD-020)
+    if (basari) {
+      const q = new URLSearchParams({ durum: Astro.url.searchParams.get('durum') ?? 'bekliyor', sec: id, ok: basari });
+      return Astro.redirect('/yonetim/yorumlar?' + q, 303);
     }
   } catch (e) { hatalar = [(e as Error).message]; }
 }
@@ -26,86 +33,215 @@ const filtre = (Astro.url.searchParams.get('durum') ?? 'bekliyor') as YorumDurum
 const tum = await tumYorumlar();
 const liste = filtre === 'tumu' ? tum : tum.filter((y) => y.durum === filtre);
 const sayi = (d: YorumDurumu) => tum.filter((y) => y.durum === d).length;
-const urunAdi = (id: string) => Astro.locals.katalog.urunBul(id)?.kisaAd ?? id;
-const sekmeler: [YorumDurumu | 'tumu', string][] = [['bekliyor', `Onay bekleyen (${sayi('bekliyor')})`], ['yayinda', `Yayında (${sayi('yayinda')})`], ['reddedildi', `Yayınlanmayan (${sayi('reddedildi')})`], ['tumu', `Tümü (${tum.length})`]];
+const urunBul = (id: string) => Astro.locals.katalog.urunBul(id);
+const urunAdi = (id: string) => urunBul(id)?.kisaAd ?? id;
+const seciliParam = sonIslemId || Astro.url.searchParams.get('sec') || '';
+const seciliYorum = liste.find((y) => y.id === seciliParam) ?? liste[0] ?? tum.find((y) => y.id === seciliParam);
+const sekmeler: [YorumDurumu | 'tumu', string][] = [
+  ['bekliyor', `Onay bekleyen (${sayi('bekliyor')})`],
+  ['yayinda', `Yayında (${sayi('yayinda')})`],
+  ['reddedildi', `Yayınlanmayan (${sayi('reddedildi')})`],
+  ['tumu', `Tümü (${tum.length})`],
+];
 const DURUM_ETIKET: Record<YorumDurumu, [string, string]> = {
   bekliyor: ['Onay bekliyor', 'turuncu'],
   yayinda: ['Yayında', 'yesil'],
   reddedildi: ['Yayınlanmayan', 'gri'],
 };
 ---
-<Yonetim baslik="Değerlendirmeler" altBaslik="Yalnızca teslim edilmiş web siparişlerinin müşterileri yorum yazabilir." aktif="yorumlar" basari={basari} hatalar={hatalar}>
+<Yonetim baslik="Müşteri Değerlendirmeleri" altBaslik="Teslim edilmiş web siparişlerine bırakılan müşteri yorumlarını inceleyin ve mağaza yanıtı yazın." aktif="yorumlar" basari={basari} hatalar={hatalar}>
   <div class="y-metrics y-metrics--finans">
     <a class:list={['y-metric', { 'y-metric--turuncu': sayi('bekliyor') > 0 }]} href="/yonetim/yorumlar?durum=bekliyor"><PIkon ad="saat" /><span>Onay bekleyen</span><strong>{sayi('bekliyor')}</strong><small>Yayınlamadan önce okuyun</small></a>
     <a class="y-metric y-metric--yesil" href="/yonetim/yorumlar?durum=yayinda"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{sayi('yayinda')}</strong><small>Ürün sayfasında görünüyor</small></a>
     <a class="y-metric" href="/yonetim/yorumlar?durum=reddedildi"><PIkon ad="carpi-daire" /><span>Yayınlanmayan</span><strong>{sayi('reddedildi')}</strong><small>Kurala uymayan yorumlar</small></a>
     <a class="y-metric" href="/yonetim/yorumlar?durum=tumu"><PIkon ad="yildiz" /><span>Ortalama puan</span><strong>{tum.length ? (tum.reduce((n, y) => n + y.puan, 0) / tum.length).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—'}</strong><small>{tum.length} değerlendirme</small></a>
   </div>
-  <section class="y-kart">
-    <div class="y-kart__bas">
-      <div>
-        <h2><PIkon ad="yildiz" /> Müşteri değerlendirmeleri</h2>
-        <p class="y-kart__alt">Ürün sayfalarında doğrulanmış satın alma rozetiyle yayınlanan müşteri yorumları ve mağaza yanıtları.</p>
+
+  <div class="ym-bolunmus">
+    {/* SOL SÜTUN: YORUM LİSTESİ */}
+    <section class="y-kart ym-sol">
+      <div class="y-kart__bas">
+        <h2><PIkon ad="yildiz" /> Yorumlar</h2>
+        <span class="y-chip y-chip--gri" data-ym-sayac>{liste.length} kayıt</span>
       </div>
-    </div>
-    <div class="y-veri-not"><PIkon ad="bilgi" boyut={18} /><p><strong>Yayın kuralı</strong>Olumsuz yorumlar da yayınlanmalı. Yalnızca hakaret, kişisel bilgi (telefon, adres) veya ürünle ilgisiz içerik içeren yorumları “Yayınlama”. Olumsuz yoruma kibar bir yanıt yazmak güven verir.</p></div>
-    <nav class="y-filtreler" aria-label="Yorum durumları" style="margin:12px 0">
-      {sekmeler.map(([d, ad]) => <a href={`/yonetim/yorumlar?durum=${d}`} aria-current={d === filtre ? 'page' : undefined}>{ad}</a>)}
-    </nav>
-    {liste.length === 0 ? <p class="y-bos-satir"><PIkon ad="yildiz" boyut={20} />Bu listede müşteri değerlendirmesi yok.</p> : (
-      <div class="y-yorum-liste">
-        {liste.map((y) => {
-          const [durumMetin, durumRenk] = DURUM_ETIKET[y.durum];
-          return (
-            <article class="y-yorum-kart">
-              <div class="y-yorum-kart__ust">
-                <div class="y-yorum-kart__baslik">
-                  <span class="y-yorum-puan" aria-label={`${y.puan} / 5 yıldız`}>{'★'.repeat(y.puan)}{'☆'.repeat(5 - y.puan)} <strong>{y.puan}/5</strong></span>
+
+      <div class="ym-filtre-cubuk">
+        <input type="search" class="y-girdi" placeholder="Yorum, müşteri veya ürün ara…" aria-label="Yorum ara" data-ym-ara />
+        <select class="y-girdi ym-durum-sec" aria-label="Durum filtresi" onchange="location.href='/yonetim/yorumlar?durum='+this.value">
+          {sekmeler.map(([d, ad]) => <option value={d} selected={d === filtre}>{ad}</option>)}
+        </select>
+      </div>
+
+      {liste.length === 0 ? (
+        <p class="y-bos-satir"><PIkon ad="yildiz" boyut={20} />Bu görünümde müşteri değerlendirmesi yok.</p>
+      ) : (
+        <div class="ym-liste">
+          {liste.map((y) => {
+            const [dMetin, dRenk] = DURUM_ETIKET[y.durum];
+            const aktifMi = seciliYorum?.id === y.id;
+            return (
+              <a
+                href={`/yonetim/yorumlar?durum=${filtre}&sec=${y.id}#secili-yorum`}
+                class:list={['ym-satir-kart', { 'is-secili': aktifMi }]}
+                data-ym-kart
+                data-ym-aranan={`${y.ad} ${urunAdi(y.urunId)} ${y.metin ?? ''} ${y.siparisNo}`}
+              >
+                <div class="ym-satir-kart__ust">
                   <strong>{y.ad}</strong>
-                  <span class="muted">·</span>
-                  <a class="y-link" href={`/yonetim/urunler/${y.urunId}`}>{urunAdi(y.urunId)}</a>
-                </div>
-                <div class="y-yorum-kart__etiketler">
-                  <span class:list={['y-chip', `y-chip--${durumRenk}`]}>{durumMetin}</span>
-                  <span class:list={['y-chip', y.yanit ? 'y-chip--yesil' : 'y-chip--gri']}>{y.yanit ? 'Yanıtlandı' : 'Yanıt yok'}</span>
-                  <span class="muted" style="font-size:.82rem">Sipariş: <a class="y-link" href={`/yonetim/siparisler/${y.siparisNo}`}>{y.siparisNo}</a> · {yTarih.format(new Date(y.tarih))}</span>
-                </div>
-              </div>
-
-              {y.metin ? <p class="y-yorum-kart__metin">{y.metin}</p> : <p class="muted" style="margin:0;font-style:italic">(Müşteri metin yazmadan yalnızca yıldız puanı verdi)</p>}
-
-              <div class="y-yorum-kart__alt">
-                <form method="post" class="y-yorum-yanit-form">
-                  <input type="hidden" name="id" value={y.id} />
-                  <textarea name="yanit" rows="2" maxlength="1000" placeholder="Mağaza yanıtı yazın (isteğe bağlı, ürün sayfasında yorumun altında görünür)">{y.yanit ?? ''}</textarea>
-                  <div class="y-yorum-aksiyonlar">
-                    <button class="btn btn--cizgi btn--kucuk" name="eylem" value="yanit" type="submit"><PIkon ad="tik" boyut={15} />{y.yanit ? 'Yanıtı güncelle' : 'Yanıtı kaydet'}</button>
+                  <div style="display:flex;gap:5px;align-items:center">
+                    {y.yanit && <span class="y-chip y-chip--yesil">Yanıtlı</span>}
+                    <span class:list={['y-chip', `y-chip--${dRenk}`]}>{dMetin}</span>
                   </div>
-                </form>
+                </div>
+                <div class="ym-yildizlar" aria-label={`${y.puan} yıldız`}>{'★'.repeat(y.puan)}{'☆'.repeat(5 - y.puan)}</div>
+                <small class="ym-urun-meta">{urunAdi(y.urunId)} · {yTarih.format(new Date(y.tarih))}</small>
+                <p class="ym-ozet-metin">{y.metin || '(Yalnızca yıldız puanı verildi)'}</p>
+                <span class="ym-alt-bag">Sipariş {y.siparisNo} <span>›</span></span>
+              </a>
+            );
+          })}
+        </div>
+      )}
+    </section>
 
-                <div class="y-yorum-durum-butonlar">
-                  {y.durum !== 'yayinda' && <form method="post"><input type="hidden" name="id" value={y.id} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="yayinda" type="submit"><PIkon ad="tik" boyut={15} />Yayınla</button></form>}
-                  {y.durum !== 'reddedildi' && <form method="post"><input type="hidden" name="id" value={y.id} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="reddedildi" type="submit">Yayınlama</button></form>}
-                  {y.durum !== 'bekliyor' && <form method="post"><input type="hidden" name="id" value={y.id} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="bekliyor" type="submit">Beklemeye al</button></form>}
+    {/* SAĞ SÜTUN: SEÇİLEN YORUM DETAYI + MAĞAZA YANITI + KURALLAR */}
+    <div class="ym-sag" id="secili-yorum">
+      {seciliYorum ? (() => {
+        const [dMetin, dRenk] = DURUM_ETIKET[seciliYorum.durum];
+        const urun = urunBul(seciliYorum.urunId);
+        const foto = urun?.gorseller[0]?.src;
+        return (
+          <>
+            <section class="y-kart">
+              <div class="y-kart__bas">
+                <div>
+                  <h2>Seçilen yorum · {seciliYorum.ad}</h2>
+                  <div class="ym-yildizlar ym-yildizlar--buyuk">{'★'.repeat(seciliYorum.puan)}{'☆'.repeat(5 - seciliYorum.puan)} <span>{seciliYorum.puan}/5</span></div>
+                </div>
+                <span class:list={['y-chip', `y-chip--${dRenk}`]}>{dMetin}</span>
+              </div>
+
+              <div class="ym-urun-kutu">
+                <span class="ym-urun-gorsel">
+                  {foto ? <img src={foto} alt="" width="48" height="48" loading="lazy" /> : <PIkon ad="kutu" boyut={22} />}
+                </span>
+                <div>
+                  <strong><a class="y-link" href={`/yonetim/urunler/${seciliYorum.urunId}`}>{urunAdi(seciliYorum.urunId)}</a></strong>
+                  <small class="muted" style="display:block;margin-top:2px">
+                    Sipariş <a class="y-link" href={`/yonetim/siparisler/${seciliYorum.siparisNo}`}>{seciliYorum.siparisNo}</a> · {yTarih.format(new Date(seciliYorum.tarih))}
+                  </small>
                 </div>
               </div>
-            </article>
-          );
-        })}
-      </div>
-    )}
-  </section>
+
+              <blockquote class="ym-alinti">
+                {seciliYorum.metin ? `“${seciliYorum.metin}”` : '(Müşteri yazılı yorum bırakmadan yalnızca puan verdi.)'}
+              </blockquote>
+
+              <div class="ym-kural-notu">
+                Yorumun değerlendirme puanı ve müşteri deneyimi korunmalıdır. Olumsuz bir yorum yalnızca olumsuz olduğu için gizlenmemelidir.
+              </div>
+
+              <div class="ym-karar-butonlar">
+                {seciliYorum.durum !== 'yayinda' && (
+                  <form method="post">
+                    <input type="hidden" name="id" value={seciliYorum.id} />
+                    <button class="btn btn--sepet" name="eylem" value="yayinda" type="submit"><PIkon ad="tik" boyut={17} />Yayınla</button>
+                  </form>
+                )}
+                {seciliYorum.durum !== 'reddedildi' && (
+                  <form method="post">
+                    <input type="hidden" name="id" value={seciliYorum.id} />
+                    <button class="btn btn--cizgi" name="eylem" value="reddedildi" type="submit">Yayınlama</button>
+                  </form>
+                )}
+                {seciliYorum.durum !== 'bekliyor' && (
+                  <form method="post">
+                    <input type="hidden" name="id" value={seciliYorum.id} />
+                    <button class="btn btn--cizgi" name="eylem" value="bekliyor" type="submit">Beklemeye al</button>
+                  </form>
+                )}
+              </div>
+            </section>
+
+            <section class="y-kart">
+              <div class="y-kart__bas">
+                <div>
+                  <h2>Mağaza yanıtı</h2>
+                  <p class="y-kart__alt">Yanıtınız ürün sayfasında müşteri yorumunun hemen altında gösterilir.</p>
+                </div>
+                <span class:list={['y-chip', seciliYorum.yanit ? 'y-chip--yesil' : 'y-chip--gri']}>{seciliYorum.yanit ? 'Yanıtlandı' : 'Yanıt yok'}</span>
+              </div>
+              <form method="post" class="ym-yanit-form">
+                <input type="hidden" name="id" value={seciliYorum.id} />
+                <label class="y-alan">Müşteriye yanıt
+                  <textarea name="yanit" rows="3" maxlength="1000" placeholder="Değerli değerlendirmeniz için teşekkür ederiz. Keyifle kullanmanızı dileriz.">{seciliYorum.yanit ?? ''}</textarea>
+                </label>
+                <div class="ym-yanit-alt">
+                  <small class="muted">Yanıt müşteriye ve tüm ziyaretçilere açık olacak.</small>
+                  <button class="btn btn--sepet" name="eylem" value="yanit" type="submit"><PIkon ad="tik" boyut={16} />{seciliYorum.yanit ? 'Yanıtı güncelle' : 'Yanıtı kaydet'}</button>
+                </div>
+              </form>
+            </section>
+          </>
+        );
+      })() : (
+        <section class="y-kart">
+          <p class="y-bos-satir"><PIkon ad="yildiz" boyut={20} />Soldaki listeden incelemek istediğiniz bir değerlendirmeyi seçin.</p>
+        </section>
+      )}
+
+      <section class="y-kart ym-kurallar-kart">
+        <h3>Yayınlama kuralları</h3>
+        <p class="y-help" style="margin:0">Yorumların olumlu veya olumsuz olması tek başına karar nedeni değildir. Yalnızca hakaret, kişisel bilgi (telefon, açık adres) veya ürünle ilgisiz reklam içeren yorumlar yayından kaldırılır; gecikme veya paketleme eleştirilerine kibar mağaza yanıtı yazılması güveni artırır.</p>
+      </section>
+    </div>
+  </div>
 </Yonetim>
+
+<script>
+  const ara = document.querySelector<HTMLInputElement>('[data-ym-ara]');
+  const sayac = document.querySelector<HTMLElement>('[data-ym-sayac]');
+  const kartlar = [...document.querySelectorAll<HTMLElement>('[data-ym-kart]')];
+  if (ara && kartlar.length) {
+    ara.addEventListener('input', () => {
+      const q = ara.value.trim().toLocaleLowerCase('tr');
+      let n = 0;
+      for (const k of kartlar) {
+        const es = (k.dataset.ymAranan ?? '').toLocaleLowerCase('tr').includes(q);
+        k.hidden = !es;
+        if (es) n++;
+      }
+      if (sayac) sayac.textContent = `${n} kayıt`;
+    });
+  }
+</script>
+
 <style>
-  .y-yorum-liste { display: grid; gap: 12px; }
-  .y-yorum-kart { border: 1px solid var(--y-border, #e5dec9); border-radius: 12px; padding: 16px; background: #fff; display: grid; gap: 12px; }
-  .y-yorum-kart__ust { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
-  .y-yorum-kart__baslik { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: .95rem; }
-  .y-yorum-puan { color: #b78628; letter-spacing: 1px; font-size: 1rem; }
-  .y-yorum-puan strong { color: var(--y-ink, #231f1a); font-size: .85rem; margin-left: 4px; letter-spacing: 0; }
-  .y-yorum-kart__etiketler { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .y-yorum-kart__metin { margin: 0; white-space: pre-line; line-height: 1.55; color: var(--y-ink, #231f1a); background: #faf8f4; padding: 10px 12px; border-radius: 8px; border: 1px solid #efe9dc; }
-  .y-yorum-kart__alt { display: flex; justify-content: space-between; align-items: flex-end; gap: 14px; flex-wrap: wrap; }
-  .y-yorum-yanit-form { flex: 1 1 420px; display: grid; gap: 8px; }
-  .y-yorum-durum-butonlar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .ym-bolunmus { display: grid; grid-template-columns: minmax(340px, 0.92fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+  .ym-sol, .ym-sag > .y-kart { margin: 0; }
+  .ym-sag { display: grid; gap: 16px; scroll-margin-top: 5rem; }
+  .ym-filtre-cubuk { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; margin-bottom: 12px; }
+  .ym-durum-sec { min-width: 175px; }
+  .ym-liste { display: grid; gap: 10px; max-height: 680px; overflow: auto; padding-right: 2px; }
+  .ym-satir-kart { display: grid; gap: 5px; padding: 14px; border: 1px solid var(--y-border, #e5dec9); border-radius: 12px; background: #fff; color: inherit; text-decoration: none; transition: border-color .15s, background .15s; }
+  .ym-satir-kart:hover { border-color: #c7b28a; background: #fdfbf7; }
+  .ym-satir-kart.is-secili { background: #fbf6ec; border-color: #aa812e; box-shadow: 0 0 0 1px #aa812e inset; }
+  .ym-satir-kart[hidden] { display: none; }
+  .ym-satir-kart__ust { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+  .ym-yildizlar { color: #c28a1e; letter-spacing: 1px; font-size: 14px; }
+  .ym-yildizlar--buyuk { font-size: 16px; margin-top: 4px; }
+  .ym-yildizlar--buyuk span { color: var(--y-muted, #6f6559); font-size: 12.5px; letter-spacing: 0; margin-left: 4px; font-weight: 600; }
+  .ym-urun-meta { font-size: 12px; color: var(--y-muted, #6f6559); }
+  .ym-ozet-metin { margin: 2px 0 4px; font-size: 13.5px; color: var(--y-ink, #231f1a); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .ym-alt-bag { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; font-weight: 700; color: #6b4c14; padding-top: 4px; border-top: 1px dashed #ece3d2; }
+  .ym-urun-kutu { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 11px; background: #faf7f2; border: 1px solid var(--y-border, #e5dec9); margin-bottom: 12px; }
+  .ym-urun-gorsel { display: grid; place-items: center; width: 52px; height: 52px; border-radius: 9px; background: #fff; border: 1px solid var(--y-border, #e5dec9); overflow: hidden; flex: none; }
+  .ym-urun-gorsel img { width: 100%; height: 100%; object-fit: contain; }
+  .ym-alinti { margin: 0 0 12px; font-size: 15px; line-height: 1.6; color: var(--y-ink, #231f1a); white-space: pre-line; }
+  .ym-kural-notu { padding: 10px 14px; border-radius: 10px; background: #f9f3e6; border: 1px solid #eadbc0; color: #5c4b2c; font-size: 13px; margin-bottom: 14px; }
+  .ym-karar-butonlar { display: flex; gap: 8px; flex-wrap: wrap; }
+  .ym-yanit-form { display: grid; gap: 10px; }
+  .ym-yanit-alt { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ym-kurallar-kart h3 { margin: 0 0 6px; font-size: 15px; }
+  @media (max-width: 1024px) { .ym-bolunmus { grid-template-columns: 1fr; } }
 </style>

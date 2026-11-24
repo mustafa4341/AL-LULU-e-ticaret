@@ -10,7 +10,9 @@ import crypto from 'node:crypto';
 import net from 'node:net';
 import { supabaseIstemci } from './depo';
 
-// https://www.cloudflare.com/ips-v4 ve /ips-v6 (18.11.2026 tarihinde kontrol edildi)
+// https://www.cloudflare.com/ips-v4 ve /ips-v6 (18.11.2026 tarihinde kontrol edildi).
+// BAKIM: 6 ayda bir (sıradaki: Mayıs 2027) bu iki adresle karşılaştırın. Cloudflare yeni aralık eklerse o aralıktan gelen
+// müşterilerin gerçek IP'si okunamaz ve hepsi aynı (Cloudflare) adresiyle deneme sınırına takılabilir (denetim AUD-038).
 const CF_V4 = ['173.245.48.0/20', '103.21.244.0/22', '103.22.200.0/22', '103.31.4.0/22', '141.101.64.0/18', '108.162.192.0/18',
   '190.93.240.0/20', '188.114.96.0/20', '197.234.240.0/22', '198.41.128.0/17', '162.158.0.0/15', '104.16.0.0/13',
   '104.24.0.0/14', '172.64.0.0/13', '131.0.72.0/22'];
@@ -47,11 +49,22 @@ export const SINIRLAR = {
   siparis: { limit: 10, pencereSn: 60 * 60 },
   /** Sipariş takip formu: IP başına 10 dakikada 10 */
   takip: { limit: 10, pencereSn: 10 * 60 },
+  /** Müşteri değerlendirmesi gönderme: IP başına saatte 10 */
+  yorum: { limit: 10, pencereSn: 60 * 60 },
 } as const;
 export type SinirTuru = keyof typeof SINIRLAR;
 
+/** Gizli anahtar karşılaştırması: süre farkından içerik tahmin edilemesin (sipariş bağlantısı anahtarı vb.) */
+export function sabitSureliEsit(a: string | null | undefined, b: string | null | undefined): boolean {
+  if (typeof a !== 'string' || typeof b !== 'string') return false;
+  const x = crypto.createHash('sha256').update(a).digest(), y = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(x, y) && a.length === b.length;
+}
+
 function anahtar(tur: SinirTuru, deger: string): string {
-  const gizli = ortam('OTURUM_GIZLI') || 'al-lulu-home';
+  // Canlıda gizli anahtar zorunlu: herkesçe bilinen sabit anahtarla IP özetleri tahmin edilebilirdi (denetim AUD-030)
+  const gizli = ortam('OTURUM_GIZLI') || (process.env.VERCEL ? undefined : 'yerel-gelistirme');
+  if (!gizli) throw new Error('OTURUM_GIZLI tanımlı değil.');
   return `${tur}:${crypto.createHmac('sha256', gizli).update(deger).digest('base64url').slice(0, 32)}`;
 }
 

@@ -449,7 +449,9 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
     if (!s || !p) return { durum: 'bulunamadi' } as const;
     const kurus = s.toplam * 100;
     if ((bildirim.test && !p.test) || (bildirim.basarili &&
-      (p.test !== bildirim.test || bildirim.kurus !== kurus || bildirim.siparisTutari !== String(kurus) ||
+      // payment_amount sipariş tutarıyla birebir aynı olmalı; total_amount taksitli ödemede vade farkıyla büyük olabilir
+      // (PayTR belgesi). Eksik tahsilat yine reddedilir (denetim AUD-033).
+      (p.test !== bildirim.test || !(bildirim.kurus >= kurus) || bildirim.siparisTutari !== String(kurus) ||
         bildirim.tur !== 'card' || !['TL', 'TRY'].includes(bildirim.paraBirimi)))) return { durum: 'uyusmazlik' } as const;
     if (p.sonuc !== 'bekliyor') {
       if ((p.sonuc === 'odendi') !== bildirim.basarili) return { durum: 'uyusmazlik' } as const;
@@ -542,10 +544,18 @@ export function siparisGuncelle(
     const sb = supabaseIstemci();
     magazaOnbellegiSil();
     const m = panelIslemi ? await magazaOku(true) : undefined;
-    if (m?.paytrStokIslemleri?.includes('panel:' + no + ':-1') && s.durum === 'odeme-bekliyor') s.stokDusuldu = true;
+    // Paneldeki stok hareketleri "panel:<no>:-1" / "panel:<no>:1" (ikincisinden itibaren "#2", "#3"…) olarak işaretlenir.
+    const panelOnek = 'panel:' + no + ':';
+    const hareketSayisi = (isaret: -1 | 1) => (m?.paytrStokIslemleri ?? [])
+      .filter((x) => x === panelOnek + isaret || x.startsWith(panelOnek + isaret + '#')).length;
+    if (hareketSayisi(-1) > hareketSayisi(1) && s.durum === 'odeme-bekliyor') s.stokDusuldu = true;
     const stokIsareti = degistir(s);
     const dogrulanmis = SiparisSema.parse(s);
-    const islem = 'panel:' + no + ':' + stokIsareti;
+    // Aynı yöndeki ikinci gerçek hareket (ör. iade sonrası yeniden düşüm) yeni anahtar alır; eskiden aynı anahtar yeniden
+    // kullanıldığı için stok ikinci kez değişmiyordu (denetim AUD-018). Aynı isteğin tekrarı yine aynı anahtarı üretir
+    // ve atlanır (stokUygula), sipariş kaydı da eşzamanlılık kontrolüne (eski_siparis) takılır.
+    const oncekiAyniYon = stokIsareti ? hareketSayisi(stokIsareti) : 0;
+    const islem = stokIsareti ? panelOnek + stokIsareti + (oncekiAyniYon ? '#' + (oncekiAyniYon + 1) : '') : '';
     const stokDegisti = Boolean(stokIsareti && !m?.paytrStokIslemleri?.includes(islem));
     const ayrilan = stokIsareti === -1
       ? webAyrilanAdetleri(await siparisleriOku(true), Date.now(), m?.paytrStokIslemleri, no)
@@ -590,19 +600,40 @@ export function siparisGuncelle(
   });
 }
 
-/** Son `gun` günde satılan adetler (ödeme bekleyen ve iptal edilenler hariç) */
+/*
+ * Son `gun` günde satılan adetler (ödeme bekleyen ve iptal edilenler hariç) — vitrindeki "çok satan" rozeti için.
+ * Her vitrin isteğinde çağrılır: önce yalnız ürün adetlerini döndüren veritabanı fonksiyonu (satis_adetleri, müşteri bilgisi
+ * taşımaz) denenir; fonksiyon henüz kurulmadıysa (migration 20261124123000) tüm siparişler okunur. Sonuç 5 dakika saklanır
+ * (eskiden her istekte tüm siparişler müşteri bilgileriyle okunuyordu — denetim AUD-015).
+ */
+let satisOnbellek: { gun: number; zaman: number; veri: Map<string, number> } | undefined;
 export async function satisAdetleri(gun = 30): Promise<Map<string, number>> {
+  if (satisOnbellek?.gun === gun && Date.now() - satisOnbellek.zaman < 5 * 60_000) return satisOnbellek.veri;
+  const sakla = (veri: Map<string, number>) => { satisOnbellek = { gun, zaman: Date.now(), veri }; return veri; };
+  const sb = supabaseIstemci();
+  if (sb) {
+    const { data, error } = await sb.rpc('satis_adetleri', { p_gun: gun });
+    if (!error && data && typeof data === 'object' && !Array.isArray(data)) {
+      return sakla(new Map(Object.entries(data as Record<string, unknown>).filter(([, v]) => Number.isFinite(Number(v))).map(([id, v]) => [id, Number(v)])));
+    }
+    if (error && error.code !== 'PGRST202') console.error('[Supabase] satis_adetleri hatası, siparişlerden hesaplanıyor:', error.message);
+  }
   const sinir = Date.now() - gun * 864e5;
   const m = new Map<string, number>();
   for (const s of await siparisleriOku()) {
     if (s.paytr?.test || s.durum === 'odeme-bekliyor' || s.durum === 'iptal' || s.gecmis.some((g) => g.islem === 'iade-tamamlandi') || Date.parse(s.tarih) < sinir) continue;
     for (const k of s.kalemler) for (const p of k.parcalar) m.set(p.urunId, (m.get(p.urunId) ?? 0) + p.adet * k.adet);
   }
-  return m;
+  return sakla(m);
 }
 
 /* ---------------- Görseller ---------------- */
-const IZINLI = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'image/heic', 'image/heif']);
+/** HEIC/HEIF/AVIF bilerek yok: bu biçimleri açan kütüphane yolunda (libheif) bilinen açıklar var (denetim AUD-009).
+ *  iPhone, alan HEIC istemediğinde fotoğrafı kendisi JPEG'e çevirerek gönderir. */
+const IZINLI = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+const IZINLI_BICIM = new Set(['jpeg', 'png', 'webp', 'gif']);
+/** Çok büyük çözünürlüklü (bellek tüketen) görseller reddedilir: ~40 megapiksel */
+const PIKSEL_SINIRI = 40_000_000;
 export const MAKS_GORSEL_BOYUT = 12 * 1024 * 1024;
 
 /**
@@ -618,7 +649,10 @@ export async function gorselKaydet(dosya: File, klasor: string): Promise<string>
   const bulutYol = `${guvenliKlasor}/${ad}`;
 
   const girdi = Buffer.from(await dosya.arrayBuffer());
-  const tampon = await beyazKenarKirp(await sharp(girdi, { failOn: 'error' }).rotate().toBuffer());
+  // Tarayıcının bildirdiği türe değil, dosyanın gerçek içeriğine bakılır
+  const { format } = await sharp(girdi, { failOn: 'error', limitInputPixels: PIKSEL_SINIRI }).metadata().catch(() => ({ format: undefined }));
+  if (!format || !IZINLI_BICIM.has(format)) throw new Error('Görsel JPG, PNG, WebP veya GIF olmalı.');
+  const tampon = await beyazKenarKirp(await sharp(girdi, { failOn: 'error', limitInputPixels: PIKSEL_SINIRI }).rotate().toBuffer());
   const webpTampon = await sharp(tampon)
     .resize({ width: 1600, height: 1600, fit: 'inside', withoutEnlargement: true })
     .webp({ quality: 86 })
@@ -658,8 +692,9 @@ export async function gorselOku(goreliYol: string): Promise<{ veri: Buffer; tur:
     '.jpeg': 'image/jpeg',
     '.png': 'image/png',
   };
-  const temizYol = goreliYol.replace(/^\/+/, '').replace(/\\/g, '/');
-  if (temizYol.startsWith('_')) return null;
+  // Önce normalize edilir, sonra kontrol edilir: "a/../_finans/x.jpg" gibi yollar gizli finans dosyalarına ulaşamaz (denetim AUD-030)
+  const temizYol = path.posix.normalize(goreliYol.replace(/\\/g, '/').replace(/^\/+/, ''));
+  if (!temizYol || temizYol.split('/').some((p) => !p || p.startsWith('_') || p.startsWith('.'))) return null;
   const tam = path.resolve(YUKLEME_KOKU, temizYol);
   if (!tam.startsWith(YUKLEME_KOKU + path.sep)) return null;
   const tur = TURLER[path.extname(tam).toLowerCase()];
@@ -674,7 +709,7 @@ export async function gorselOku(goreliYol: string): Promise<{ veri: Buffer; tur:
     if (!sb) return null;
     const { data, error } = await sb
       .from('medya_dosyalari')
-      .select('veri_base64, icerik_turu')
+      .select('veri_base64')
       .eq('yol', temizYol)
       .eq('aktif', true)
       .maybeSingle();
@@ -682,7 +717,7 @@ export async function gorselOku(goreliYol: string): Promise<{ veri: Buffer; tur:
     const veri = Buffer.from(data.veri_base64, 'base64');
     await fs.mkdir(path.dirname(tam), { recursive: true }).catch(() => undefined);
     await fs.writeFile(tam, veri).catch(() => undefined);
-    return { veri, tur: data.icerik_turu || tur };
+    return { veri, tur }; // içerik türü kayıttan değil, uzantıdan (sabit liste)
   }
 }
 
@@ -708,6 +743,8 @@ export async function gorselSil(src: string): Promise<void> {
   const sb = supabaseIstemci();
   if (sb && goreli) {
     await sb.from('medya_dosyalari').update({ aktif: false }).eq('yol', goreli);
+    // Storage'daki herkese açık kopya da silinir (silme izni migration 20261124121000 ile gelir; yoksa sessizce kalır)
+    await sb.storage.from('medya').remove([goreli]).catch(() => undefined);
   }
   const tam = path.resolve(YUKLEME_KOKU, '.' + src.slice('/medya'.length));
   if (!tam.startsWith(YUKLEME_KOKU + path.sep)) return;

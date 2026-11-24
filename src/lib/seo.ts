@@ -30,11 +30,26 @@ const GUNLER: [RegExp, string[]][] = [
 const SAAT = /(\d{1,2})[:.](\d{2})\s*[–—-]\s*(\d{1,2})[:.](\d{2})/;
 const iki = (s: string) => s.padStart(2, '0');
 
+const HAFTA: [RegExp, string][] = [
+  [/pazartesi/i, 'Monday'], [/salı/i, 'Tuesday'], [/çarşamba/i, 'Wednesday'], [/perşembe/i, 'Thursday'],
+  [/cuma(?!rtesi)/i, 'Friday'], [/cumartesi/i, 'Saturday'], [/pazar(?!tesi)/i, 'Sunday'],
+];
+/** "Pazartesi–Cuma" gibi gün aralığı → aradaki tüm günler (eskiden yalnız ilk gün alınıyordu — denetim AUD-028) */
+function gunAraligi(metin: string): string[] | undefined {
+  const bulunan = HAFTA.map(([d, ad], i) => ({ i, ad, yer: metin.search(d) })).filter((x) => x.yer >= 0).sort((a, b) => a.yer - b.yer);
+  if (bulunan.length !== 2) return undefined;
+  const [ilk, son] = bulunan as [typeof bulunan[number], typeof bulunan[number]];
+  if (!/[–—-]/.test(metin.slice(ilk.yer, son.yer))) return undefined;
+  const gunler: string[] = [];
+  for (let i = ilk.i; ; i = (i + 1) % 7) { gunler.push(HAFTA[i]![1]); if (i === son.i) break; }
+  return gunler;
+}
+
 /** "Hafta içi 09:00–18:00, Cumartesi 10:00–14:00" → schema.org OpeningHoursSpecification. Anlaşılamazsa boş. */
 export function calismaSaatleriVerisi(metin: string): Record<string, unknown>[] {
   return metin.split(/[,;·\n]+/).flatMap((parca) => {
     const saat = SAAT.exec(parca);
-    const gunler = GUNLER.find(([d]) => d.test(parca))?.[1];
+    const gunler = gunAraligi(saat ? parca.slice(0, saat.index) : parca) ?? GUNLER.find(([d]) => d.test(parca))?.[1];
     if (!saat || !gunler) return [];
     return [{
       '@type': 'OpeningHoursSpecification', dayOfWeek: gunler,

@@ -2,7 +2,9 @@ name: Pazaryeri eşitleme
 
 on:
   schedule:
-    - cron: '3-58/5 * * * *'
+    # YEDEK zamanlayıcı: asıl eşitleme Supabase pg_cron ile 5 dakikada bir çalışır.
+    # Depo gizli (private) olunca GitHub'ın ücretsiz Actions süresi ayda 2.000 dakika; saatte bir yeter.
+    - cron: '33 * * * *'
   workflow_dispatch:
 
 permissions: {}

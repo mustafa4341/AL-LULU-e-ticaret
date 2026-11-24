@@ -19,5 +19,6 @@ const adlar = { odendi: 'Ödemeyi onayla', hazirlaniyor: 'Hazırlamaya al', karg
     </select></label>
     <label class="y-alan">Kargo takip numarası<input name="kargoTakip" required minlength="6" maxlength="40" autocomplete="off" value={String(form?.get('kargoTakip') ?? siparis.kargoTakip ?? '')} placeholder="Kargo fişindeki numara" /></label>
   </>}
-  <button class="btn btn--sepet" type="submit">{kargola && <Ikon ad="kargo" boyut={16} />}{adlar[durum]}</button>
+  {/* Teslim edildi geri alınamaz (müşteriye e-posta gider, değerlendirme açılır): onay sorulur — denetim AUD-029 */}
+  <button class="btn btn--sepet" type="submit" data-onayla={durum === 'teslim-edildi' ? 'Sipariş teslim edildi olarak işaretlensin mi? Müşteriye bildirim gider ve bu adım geri alınamaz.' : undefined}>{kargola && <Ikon ad="kargo" boyut={16} />}{adlar[durum]}</button>
 </form>}

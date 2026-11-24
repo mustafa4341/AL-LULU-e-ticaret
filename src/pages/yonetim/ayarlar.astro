@@ -1,159 +1,461 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
+import { epostaBagli } from '../../lib/altyapi';
 import PIkon from '../../components/yonetim/PIkon.astro';
 import { DogrulamaHatasi, magazaGuncelle, magazaOku, supabaseBagliMi } from '../../lib/depo';
 import { metin, sayi } from '../../lib/form';
 import { paytrAyari } from '../../lib/paytr';
 import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
-import { envanterAyarlariOku } from '../../lib/pazaryeriDepo';
+import { envanterAyarlariGuncelle, envanterAyarlariOku } from '../../lib/pazaryeriDepo';
+import { SOZLESME_SURUMU, YASAL_SAYFALAR } from '../../lib/yasal';
+import { sonYedekTarihi } from '../../lib/yedek';
 import { yTarih } from '../../lib/yonetimRapor';
 import { bosYasalBilgi } from '../../lib/yonetimSite';
 
-const [magaza, envAyar] = await Promise.all([
+const [magaza, envAyar, sonYedek] = await Promise.all([
   magazaOku(),
   envanterAyarlariOku().catch(() => undefined),
+  sonYedekTarihi().catch(() => undefined),
 ]);
 const mevcut = magaza.site;
 let satici = mevcut.satici;
 let iade = mevcut.iadeGun;
 let hatalar: string[] = [];
+
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
-  satici = {
-    unvan: metin(f, 'unvan'), adres: metin(f, 'adres'), mersis: metin(f, 'mersis'),
-    vergiDairesiNo: metin(f, 'vergiDairesiNo'), kep: metin(f, 'kep'), etbis: metin(f, 'etbis'),
-  };
-  iade = sayi(f, 'iadeGun', mevcut.iadeGun);
+  const eylem = metin(f, 'eylem');
   try {
+    if (eylem === 'bildirim-kaydet') {
+      await envanterAyarlariGuncelle((ayar) => {
+        ayar.epostaBildirimi = f.get('epostaBildirimi') === '1';
+        ayar.otomasyon.yeniSiparisBildir = f.get('yeniSiparisBildir') === '1';
+        ayar.otomasyon.faturaYenidenDene = f.get('faturaYenidenDene') === '1';
+        ayar.otomasyon.gunlukIsler = f.get('gunlukIsler') === '1';
+      });
+      return Astro.redirect('/yonetim/ayarlar?ok=' + encodeURIComponent('Bildirim ve otomasyon tercihleri kaydedildi.') + '#bildirimler', 303);
+    }
+
+    satici = {
+      unvan: metin(f, 'unvan'), adres: metin(f, 'adres'), mersis: metin(f, 'mersis'),
+      vergiDairesiNo: metin(f, 'vergiDairesiNo'), kep: metin(f, 'kep'), etbis: metin(f, 'etbis'),
+    };
+    iade = sayi(f, 'iadeGun', mevcut.iadeGun);
     /* Mesafeli Sözleşmeler Yönetmeliği m.9: cayma süresi en az 14 gün */
     if (!Number.isInteger(iade) || iade < 14 || iade > 365) throw new DogrulamaHatasi(['Cayma ve iade süresi yasal olarak en az 14 gün olmalı (en fazla 365).']);
     await magazaGuncelle((m) => { m.site.satici = satici; m.site.iadeGun = iade; });
-    return Astro.redirect('/yonetim/ayarlar?ok=' + encodeURIComponent('Yasal bilgiler kaydedildi.'), 303);
+    return Astro.redirect('/yonetim/ayarlar?ok=' + encodeURIComponent('Şirket ve yasal bilgiler kaydedildi.'), 303);
   } catch (e) {
     hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
   }
 }
-const alanlar = [
-  ['unvan', 'Ticari unvan', 'Sözleşmelerde, fatura ve sipariş belgelerinde satıcı unvanı olarak görünür.'],
-  ['adres', 'Açık adres', 'Mesafeli satış sözleşmesi ve iade/tebligat adresi.'],
-  ['mersis', 'MERSİS no', '16 haneli merkezi sicil numarası (yoksa boş bırakılabilir).'],
-  ['vergiDairesiNo', 'Vergi dairesi ve numarası', 'Örn. Başkent VD · 1234567890'],
-  ['kep', 'KEP adresi', 'Kayıtlı Elektronik Posta adresi (isteğe bağlı).'],
-  ['etbis', 'ETBİS kayıt no', 'Elektronik Ticaret Bilgi Sistemi numarası (isteğe bağlı).'],
+
+const sirketAlanlari = [
+  ['unvan', 'Ticari Unvan', 'Sözleşmelerde, fatura ve sipariş belgelerinde satıcı unvanı olarak görünür.'],
+  ['vergiDairesiNo', 'Vergi Dairesi ve Vergi No', 'Örn. Başkent VD · 1234567890'],
+  ['mersis', 'MERSİS Numarası', '16 haneli merkezi sicil numarası (yoksa boş bırakılabilir).'],
+  ['adres', 'Açık Tebligat ve İade Adresi', 'Mesafeli satış sözleşmesi ve müşteri iade gönderim adresi.'],
 ] as const;
-const eksik = alanlar.slice(0, 4).filter(([id]) => bosYasalBilgi(satici[id])).map(([, ad]) => ad);
+const yasalAlanlari = [
+  ['kep', 'KEP Adresi', 'Kayıtlı Elektronik Posta adresi (isteğe bağlı).'],
+  ['etbis', 'ETBİS Kayıt No', 'Elektronik Ticaret Bilgi Sistemi numarası (isteğe bağlı).'],
+] as const;
+
+const eksik = sirketAlanlari.filter(([id]) => bosYasalBilgi(satici[id])).map(([, ad]) => ad);
 const tyDurum = pazaryeriApiDurumu('trendyol');
 const hbDurum = pazaryeriApiDurumu('hepsiburada');
 const tySonApi = envAyar?.kanallar.trendyol.sonApi;
 const hbSonApi = envAyar?.kanallar.hepsiburada.sonApi;
 const paytr = paytrAyari();
-const smtpHazir = Boolean((process.env.SMTP_PAROLA ?? (import.meta.env as Record<string, string | undefined>).SMTP_PAROLA)?.trim());
+// Gönderim için sunucu adresi de gerekir (lib/altyapi.ts epostaBagli ile aynı kural — denetim AUD-032)
+const smtpHazir = epostaBagli();
+const bulutBagli = supabaseBagliMi();
 ---
-<Yonetim baslik="Ayarlar" altBaslik="Şirket ve yasal bilgiler, sistem/servis bağlantı durumları ve tam veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
-  <button slot="ust-sag" type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Yasal Bilgileri Kaydet</button>
+<Yonetim baslik="Ayarlar" altBaslik="Şirket künyesi, yasal sözleşmeler, bildirim tercihleri, sistem bağlantıları ve tam veri yedeği." aktif="ayarlar" basari={Astro.url.searchParams.get('ok')} hatalar={hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedek İndir (ZIP)</a>
+    <button type="submit" form="yasal-form" class="btn btn--sepet"><PIkon ad="tik" boyut={18} />Şirket ve Yasal Bilgileri Kaydet</button>
+  </div>
 
-  <form method="post" id="yasal-form" class="y-kart" data-editor>
-    <div class="y-kart__bas">
-      <div>
-        <h2><PIkon ad="terazi" /> 1. Şirket ve Yasal Bilgiler</h2>
-        <p class="y-kart__alt">Mesafeli Satış Sözleşmesi, Ön Bilgilendirme Formu, Sipariş Belgeleri ve site alt bilgisinde kullanılan resmî satıcı bilgileri.</p>
-      </div>
-      <span class:list={['y-chip', eksik.length === 0 ? 'y-chip--yesil' : 'y-chip--turuncu']}>
-        {eksik.length === 0 ? 'Temel yasal bilgiler tam' : `${eksik.length} alan eksik`}
-      </span>
-    </div>
-    {eksik.length > 0 && (
-      <div class="y-veri-not" style="margin-bottom:14px">
-        <PIkon ad="bilgi" boyut={18} />
-        <p>
-          <strong>Henüz doldurulmamış alanlar: {eksik.join(', ')}</strong>
-          Boş bıraktığınız veya örnek değer içeren alanlar müşteriye gösterilen sözleşmelerde ve sipariş belgelerinde otomatik gizlenir.
-        </p>
-      </div>
-    )}
-    <div class="y-izgara y-izgara--2">
-      {alanlar.map(([id, ad, ipucu]) => (
-        <label class="y-alan">
-          {ad}
-          <input name={id} value={satici[id]} />
-          <small class="muted">{ipucu}</small>
-        </label>
-      ))}
-      <label class="y-alan">
-        Cayma ve iade süresi (gün)
-        <input name="iadeGun" type="number" min="14" max="365" required value={iade} />
-        <small class="muted">Mesafeli Sözleşmeler Yönetmeliği m.9 uyarınca yasal en az süre 14 gündür.</small>
-      </label>
-    </div>
-    <p class="y-form-state" data-kayit-durum role="status"></p>
-  </form>
+  <nav class="ay-bolum-cubuk" aria-label="Ayarlar bölümleri">
+    <a href="#sirket">Şirket Bilgileri</a>
+    <a href="#yasal">Yasal ve Sözleşmeler</a>
+    <a href="#bildirimler">Bildirimler</a>
+    <a href="#guvenlik">Güvenlik</a>
+    <a href="#yedekleme">Sistem ve Yedekleme</a>
+  </nav>
 
-  <div class="y-iki-sutun" style="margin-top:16px">
-    <section class="y-kart">
-      <div class="y-kart__bas">
-        <div>
-          <h2><PIkon ad="kilit" /> 2. Sistem ve Servis Bağlantıları</h2>
-          <p class="y-kart__alt">Veritabanı, pazaryeri API servisleri, e-posta ve ödeme altyapısının çalışma durumu.</p>
+  <div class="ay-iki-sutun">
+    <div class="ay-sutun">
+      <form method="post" id="yasal-form" class="ay-sutun" data-editor>
+        <section class="y-kart" id="sirket">
+          <div class="y-kart__bas">
+            <div>
+              <h2><PIkon ad="magaza" /> Şirket ve Fatura Bilgileri</h2>
+              <p class="y-kart__alt">Sipariş belgelerinde, e-Arşiv fatura künyesinde ve site alt bilgisinde yer alan resmî satıcı bilgileri.</p>
+            </div>
+            <span class:list={['y-chip', eksik.length === 0 ? 'y-chip--yesil' : 'y-chip--turuncu']}>
+              {eksik.length === 0 ? 'Temel bilgiler tam' : `${eksik.length} alan eksik`}
+            </span>
+          </div>
+
+          {eksik.length > 0 && (
+            <div class="y-veri-not" style="margin-bottom:14px">
+              <PIkon ad="bilgi" boyut={18} />
+              <p>
+                <strong>Henüz doldurulmamış alanlar: {eksik.join(', ')}</strong>
+                Boş bıraktığınız veya yer tutucu içeren alanlar müşteriye gösterilen sözleşmelerde ve sipariş belgelerinde otomatik gizlenir.
+              </p>
+            </div>
+          )}
+
+          <div class="y-izgara y-izgara--2">
+            {sirketAlanlari.map(([id, ad, ipucu]) => (
+              <label class="y-alan">
+                {ad}
+                <input name={id} value={satici[id]} />
+                <small class="muted">{ipucu}</small>
+              </label>
+            ))}
+          </div>
+          <p class="y-help" style="margin-top:10px">Mağaza telefonu ({mevcut.telefonGorunen}), WhatsApp hattı ve müşteri e-postasını ({mevcut.eposta}) <a class="y-link" href="/yonetim/site-duzeni?bolum=iletisim">Mağaza Görünümü › İletişim ve WhatsApp</a> ekranından değiştirebilirsiniz.</p>
+        </section>
+
+        <section class="y-kart" id="yasal">
+          <div class="y-kart__bas">
+            <div>
+              <h2><PIkon ad="terazi" /> Yasal Bilgiler ve Sözleşme Metinleri</h2>
+              <p class="y-kart__alt">6502 sayılı Kanun ve Mesafeli Sözleşmeler Yönetmeliği kapsamında cayma süresi ve canlı yasal sayfalar.</p>
+            </div>
+            <span class="y-chip y-chip--gri">Sözleşme Sürümü: {SOZLESME_SURUMU}</span>
+          </div>
+
+          <div class="y-izgara y-izgara--3">
+            <label class="y-alan">
+              Cayma ve İade Süresi (Gün) *
+              <input name="iadeGun" type="number" min="14" max="365" required value={iade} />
+              <small class="muted">Yasal alt sınır en az 14 gündür.</small>
+            </label>
+            {yasalAlanlari.map(([id, ad, ipucu]) => (
+              <label class="y-alan">
+                {ad}
+                <input name={id} value={satici[id]} />
+                <small class="muted">{ipucu}</small>
+              </label>
+            ))}
+          </div>
+
+          <div class="ay-sozlesme-kutu">
+            <div class="ay-sozlesme-bas">
+              <strong>Canlı Yasal Metinler ve Müşteri Görünümü</strong>
+              <span>Yukarıdaki şirket bilgileri bu sayfalara ve ödeme anındaki sözleşmelere otomatik işlenir:</span>
+            </div>
+            <div class="ay-sozlesme-linkler">
+              <a class="ay-sozlesme-pil" href="/bilgi" target="_blank" rel="noopener">
+                <PIkon ad="belge" boyut={15} />
+                <span>Satıcı Künyesi (/bilgi)</span>
+                <PIkon ad="dis-baglanti" boyut={14} />
+              </a>
+              {YASAL_SAYFALAR.map((ys) => (
+                <a class="ay-sozlesme-pil" href={'/yasal/' + ys.yol} target="_blank" rel="noopener">
+                  <PIkon ad="belge" boyut={15} />
+                  <span>{ys.baslik}</span>
+                  <PIkon ad="dis-baglanti" boyut={14} />
+                </a>
+              ))}
+            </div>
+          </div>
+
+          <div class="y-modal__alt" style="margin-top:12px">
+            <p class="y-form-state" data-kayit-durum role="status" style="margin-right:auto"></p>
+            <button type="submit" class="btn btn--sepet"><PIkon ad="tik" boyut={17} />Şirket ve Yasal Bilgileri Kaydet</button>
+          </div>
+        </section>
+      </form>
+
+      <section class="y-kart" id="bildirimler">
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="zil" /> Bildirim ve Otomasyon Tercihleri</h2>
+            <p class="y-kart__alt">Yeni sipariş, kritik stok ve otomatik fatura/hakediş işlerinin çalışma kuralları.</p>
+          </div>
+          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/isler">Bugünkü İşler</a>
         </div>
-        <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar">Kanalları yönet</a>
-      </div>
-      <ul class="y-varsayim">
-        <li>
-          <PIkon ad="veritabani" />
-          <span>Veritabanı ve Depo<small>{supabaseBagliMi() ? 'Bulut veritabanı ve görsel deposu aktif' : 'Yerel JSON veri deposu kullanılıyor'}</small></span>
-          <span class:list={['y-chip', supabaseBagliMi() ? 'y-chip--yesil' : 'y-chip--turuncu']}>{supabaseBagliMi() ? 'Supabase Bağlı' : 'Yerel Dosya'}</span>
-        </li>
-        <li>
-          <PIkon ad="zincir" />
-          <span>
-            Trendyol API
-            <small>{tySonApi ? `Son başarılı bağlantı: ${yTarih.format(new Date(tySonApi))}` : 'Henüz API çekimi kaydı yok'}</small>
-          </span>
-          <span class:list={['y-chip', tyDurum === 'canli' ? 'y-chip--yesil' : tyDurum === 'test' || tySonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
-            {tyDurum === 'canli' ? 'Canlı Bağlı' : tyDurum === 'test' ? 'Test Ortamı' : tySonApi ? 'Canlı Sunucuda Aktif (Yerel .env Yok)' : 'Bağlı Değil'}
-          </span>
-        </li>
-        <li>
-          <PIkon ad="zincir" />
-          <span>
-            Hepsiburada API
-            <small>{hbSonApi ? `Son başarılı bağlantı: ${yTarih.format(new Date(hbSonApi))}` : 'Kimlik bilgileri girildiğinde aktif olur'}</small>
-          </span>
-          <span class:list={['y-chip', hbDurum === 'canli' ? 'y-chip--yesil' : hbDurum === 'test' || hbSonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
-            {hbDurum === 'canli' ? 'Canlı Bağlı' : hbDurum === 'test' ? 'Test Ortamı' : hbSonApi ? 'Canlı Sunucuda Aktif' : 'Bekliyor'}
-          </span>
-        </li>
-        <li>
-          <PIkon ad="gonder" />
-          <span>E-posta Gönderimi (SMTP)<small>Sipariş onayı, kargo takip ve e-Arşiv fatura iletimi</small></span>
-          <span class:list={['y-chip', smtpHazir ? 'y-chip--yesil' : 'y-chip--gri']}>{smtpHazir ? 'Aktif' : 'Ayarlanmadı'}</span>
-        </li>
-        <li>
-          <PIkon ad="cuzdan" />
-          <span>Kartlı Ödeme (PayTR)<small>Havale/EFT her zaman açıktır; PayTR kartlı ödemeyi açar</small></span>
-          <span class:list={['y-chip', paytr ? (paytr.test ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--gri']}>
-            {paytr ? (paytr.test ? 'Test Modu' : 'Canlı Aktif') : 'Kapalı (Yalnız Havale/EFT)'}
-          </span>
-        </li>
-      </ul>
-    </section>
 
-    <section class="y-kart">
-      <div class="y-kart__bas">
-        <div>
-          <h2><PIkon ad="veritabani" /> 3. Veri Yedeği ve Arşiv</h2>
-          <p class="y-kart__alt">Tüm mağaza kataloğu, siparişler, pazaryeri kayıtları ve finans/fatura arşivini tek pakette indirin.</p>
+        <form method="post" class="y-izgara">
+          <input type="hidden" name="eylem" value="bildirim-kaydet" />
+          <div class="ay-anahtar-liste">
+            <label class="ay-anahtar-satir">
+              <div>
+                <strong>Stok ve Kritik Uyarı E-postaları</strong>
+                <small>Yayındaki bir ürün kritik stok eşiğine indiğinde veya tükendiğinde mağaza e-postasına bildirim gönderir.</small>
+              </div>
+              <input type="checkbox" name="epostaBildirimi" value="1" checked={envAyar?.epostaBildirimi ?? true} disabled={!bulutBagli} />
+            </label>
+            <label class="ay-anahtar-satir">
+              <div>
+                <strong>Yeni Pazaryeri Sipariş Bildirimi</strong>
+                <small>Trendyol veya Hepsiburada'dan yeni sipariş geldiğinde anında e-posta ile haber verir.</small>
+              </div>
+              <input type="checkbox" name="yeniSiparisBildir" value="1" checked={envAyar?.otomasyon.yeniSiparisBildir ?? true} disabled={!bulutBagli} />
+            </label>
+            <label class="ay-anahtar-satir">
+              <div>
+                <strong>Bekleyen e-Arşiv Fatura İletimini Otomatik Yeniden Dene</strong>
+                <small>Sisteme yüklenmiş ama pazaryerine veya müşteriye iletilememiş faturaları arka planda tekrar dener.</small>
+              </div>
+              <input type="checkbox" name="faturaYenidenDene" value="1" checked={envAyar?.otomasyon.faturaYenidenDene ?? true} disabled={!bulutBagli} />
+            </label>
+            <label class="ay-anahtar-satir">
+              <div>
+                <strong>Günlük Otomatik Hakediş ve İlan Kontrolü</strong>
+                <small>Her gün Trendyol cari hakediş kayıtlarını ve ilan onay durumlarını otomatik eşitler.</small>
+              </div>
+              <input type="checkbox" name="gunlukIsler" value="1" checked={envAyar?.otomasyon.gunlukIsler ?? true} disabled={!bulutBagli} />
+            </label>
+          </div>
+          {!bulutBagli ? (
+            <p class="y-help" style="margin:4px 0 0">Yerel dosya modunda çalışıyorsunuz; pazaryeri bildirim ve otomasyon anahtarları Supabase bulut bağlantısı aktifken kaydedilir.</p>
+          ) : (
+            <div class="y-modal__alt">
+              <button type="submit" class="btn btn--cizgi"><PIkon ad="tik" boyut={16} />Bildirim Tercihlerini Kaydet</button>
+            </div>
+          )}
+        </form>
+      </section>
+
+      <section class="y-kart" id="guvenlik">
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="kilit" /> Güvenlik ve Oturum Koruması</h2>
+            <p class="y-kart__alt">Yönetim panelini yetkisiz erişimlere karşı koruyan aktif güvenlik katmanları.</p>
+          </div>
+          <span class="y-chip y-chip--yesil">Tam Koruma Aktif</span>
         </div>
-        <a class="btn btn--sepet" href="/yonetim/yedek"><PIkon ad="indir" boyut={18} />Yedeği İndir (ZIP)</a>
-      </div>
-      <div class="y-veri-not">
-        <PIkon ad="bilgi" boyut={18} />
-        <p>
-          <strong>ZIP yedeğinde neler bulunur?</strong>
-          Ürünler, setler, kategoriler, mağaza görünüm ayarları (<code>magaza.json</code>), web siparişleri (<code>siparisler.json</code>), müşteri değerlendirmeleri (<code>yorumlar.json</code>), pazaryeri siparişleri ve eşleştirmeleri, finans/gider kayıtları ve yüklenen fatura/fiş ekleri.
-        </p>
-      </div>
-      <p class="y-help" style="margin-top:10px">Önemli katalog veya fiyat güncellemelerinden önce ve her ay sonunda bir yedek indirip bilgisayarınızda saklamanız önerilir.</p>
-    </section>
+        <ul class="y-varsayim">
+          <li>
+            <PIkon ad="kilit" />
+            <span>Gizli Yönetim Giriş Kapısı<small>Standart <code>/yonetim</code> dışındaki gizli giriş adresiyle bot taramalarına 404 yanıtı verilir</small></span>
+            <span class="y-chip y-chip--yesil">Aktif</span>
+          </li>
+          <li>
+            <PIkon ad="ayar" />
+            <span>Hatalı Şifre Kilidi (Brute-Force Koruması)<small>Ardışık hatalı giriş denemelerinde IP adresi geçici olarak kilitlenir</small></span>
+            <span class="y-chip y-chip--yesil">Aktif</span>
+          </li>
+          <li>
+            <PIkon ad="tik" />
+            <span>İmzalı Oturum Çerezi<small>HttpOnly ve SameSite korumalı yönetici oturumu; parola ortam değişkeninden okunur</small></span>
+            <span class="y-chip y-chip--yesil">Güvenli</span>
+          </li>
+        </ul>
+        <form method="post" action="/yonetim/cikis" style="margin-top:12px;display:flex;justify-content:flex-end">
+          <button type="submit" class="btn btn--cizgi btn--kucuk"><PIkon ad="cikis" boyut={16} />Bu Cihazda Oturumu Kapat</button>
+        </form>
+      </section>
+    </div>
+
+    <aside class="ay-sutun" id="yedekleme">
+      <section class="y-kart">
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="veritabani" /> Sistem Durumu</h2>
+            <p class="y-kart__alt">Mağaza, veritabanı, pazaryeri ve ödeme servislerinin canlı bağlantı özeti.</p>
+          </div>
+          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar">Kanallar</a>
+        </div>
+        <ul class="y-varsayim">
+          <li>
+            <PIkon ad="magaza" />
+            <span>Mağaza Vitrini<small>{mevcut.tadilat.aktif ? 'Müşterilere bakım ekranı gösteriliyor' : 'Sipariş ve ziyarete açık'}</small></span>
+            <span class:list={['y-chip', mevcut.tadilat.aktif ? 'y-chip--kirmizi' : 'y-chip--yesil']}>{mevcut.tadilat.aktif ? 'Bakımda' : 'Yayında'}</span>
+          </li>
+          <li>
+            <PIkon ad="veritabani" />
+            <span>Veritabanı ve Depo<small>{bulutBagli ? 'Bulut veritabanı ve medya deposu bağlı' : 'Yerel JSON veri deposu aktif'}</small></span>
+            <span class:list={['y-chip', bulutBagli ? 'y-chip--yesil' : 'y-chip--turuncu']}>{bulutBagli ? 'Supabase Bağlı' : 'Yerel Dosya'}</span>
+          </li>
+          <li>
+            <PIkon ad="zincir" />
+            <span>
+              Trendyol API
+              <small>{tySonApi ? `Son eşitlenme: ${yTarih.format(new Date(tySonApi))}` : 'Henüz API çekimi kaydı yok'}</small>
+            </span>
+            <span class:list={['y-chip', tyDurum === 'canli' ? 'y-chip--yesil' : tyDurum === 'test' || tySonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
+              {tyDurum === 'canli' ? 'Canlı Bağlı' : tyDurum === 'test' ? 'Test Ortamı' : tySonApi ? 'Canlı Sunucuda Aktif (Yerel .env Yok)' : 'Bağlı Değil'}
+            </span>
+          </li>
+          <li>
+            <PIkon ad="zincir" />
+            <span>
+              Hepsiburada API
+              <small>{hbSonApi ? `Son eşitlenme: ${yTarih.format(new Date(hbSonApi))}` : 'Kimlik bilgileri girildiğinde aktif olur'}</small>
+            </span>
+            <span class:list={['y-chip', hbDurum === 'canli' ? 'y-chip--yesil' : hbDurum === 'test' || hbSonApi ? 'y-chip--turuncu' : 'y-chip--gri']}>
+              {hbDurum === 'canli' ? 'Canlı Bağlı' : hbDurum === 'test' ? 'Test Ortamı' : hbSonApi ? 'Canlı Sunucuda Aktif' : 'Bekliyor'}
+            </span>
+          </li>
+          <li>
+            <PIkon ad="cuzdan" />
+            <span>Kartlı Ödeme (PayTR)<small>Havale/EFT her zaman açıktır; PayTR kartlı ödemeyi açar</small></span>
+            <span class:list={['y-chip', paytr ? (paytr.test ? 'y-chip--turuncu' : 'y-chip--yesil') : 'y-chip--gri']}>
+              {paytr ? (paytr.test ? 'Test Modu' : 'Canlı Aktif') : 'Kapalı (Yalnız Havale/EFT)'}
+            </span>
+          </li>
+          <li>
+            <PIkon ad="gonder" />
+            <span>E-posta Gönderimi (SMTP)<small>Sipariş onayı, kargo takip ve e-Arşiv fatura iletimi</small></span>
+            <span class:list={['y-chip', smtpHazir ? 'y-chip--yesil' : 'y-chip--gri']}>{smtpHazir ? 'Aktif' : 'Ayarlanmadı'}</span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="y-kart ay-yedek-kart">
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="indir" /> Son Yedek ve Veri Arşivi</h2>
+            <p class="y-kart__alt">Tüm mağaza kataloğu, siparişler, pazaryeri ve finans kayıtlarını tek ZIP dosyasında indirin.</p>
+          </div>
+        </div>
+
+        <div class="ay-yedek-durum">
+          <div>
+            <span>Son Tam Yedek Tarihi</span>
+            <strong>{sonYedek ? yTarih.format(new Date(sonYedek)) : 'Henüz bulut yedek kaydı yok'}</strong>
+          </div>
+          <span class:list={['y-chip', sonYedek ? 'y-chip--yesil' : 'y-chip--altin']}>{sonYedek ? 'Kayıtlı' : 'Önerilir'}</span>
+        </div>
+
+        <ul class="ay-yedek-icerik">
+          <li>✓ Ürünler, setler, kategoriler ve vitrin ayarları (<code>magaza.json</code>)</li>
+          <li>✓ Web ve pazaryeri siparişleri (JSON + Excel uyumlu CSV)</li>
+          <li>✓ Müşteri değerlendirmeleri ve onaylanan mesafeli satış sözleşmeleri</li>
+          <li>✓ Gelir/gider kayıtları, hakedişler ve yüklenen fatura/fiş ekleri</li>
+        </ul>
+
+        <a class="btn btn--sepet" href="/yonetim/yedek" style="width:100%;justify-content:center;margin-top:12px">
+          <PIkon ad="indir" boyut={18} />Yeni Yedek Al ve İndir (ZIP)
+        </a>
+        <p class="y-help" style="margin:8px 0 0">Toplu fiyat/katalog değişikliklerinden önce ve her ay sonunda bir yedek indirip bilgisayarınızda saklamanız önerilir.</p>
+      </section>
+    </aside>
   </div>
 </Yonetim>
+
+<style>
+  .ay-bolum-cubuk {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    background: #fff;
+    border: 1px solid var(--y-cizgi, #e8dfd4);
+    border-radius: 12px;
+    padding: 8px 10px;
+    margin-bottom: 16px;
+  }
+  .ay-bolum-cubuk a {
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #5c5044;
+    text-decoration: none;
+    background: #faf7f2;
+    border: 1px solid transparent;
+  }
+  .ay-bolum-cubuk a:hover {
+    border-color: #cbbba6;
+    color: #261c14;
+    background: #f4ece0;
+  }
+
+  .ay-iki-sutun {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(330px, 0.85fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .ay-sutun {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    min-width: 0;
+  }
+  @media (max-width: 1080px) {
+    .ay-iki-sutun { grid-template-columns: 1fr; }
+  }
+
+  .ay-sozlesme-kutu {
+    margin-top: 14px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    background: #faf7f2;
+    border: 1px solid #e6dccf;
+  }
+  .ay-sozlesme-bas strong { display: block; font-size: 13px; color: #281e15; }
+  .ay-sozlesme-bas span { display: block; font-size: 12px; color: #75685a; margin-top: 2px; }
+  .ay-sozlesme-linkler {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .ay-sozlesme-pil {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    background: #fff;
+    border: 1px solid #dfd3c3;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #36281c;
+    text-decoration: none;
+    transition: border-color .15s, background .15s;
+  }
+  .ay-sozlesme-pil:hover { border-color: #9c6b30; background: #fcf8f2; }
+
+  .ay-anahtar-liste {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ay-anahtar-satir {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    border: 1px solid #ebe2d5;
+    background: #fcfaf7;
+    cursor: pointer;
+  }
+  .ay-anahtar-satir strong { display: block; font-size: 13.5px; color: #261c14; }
+  .ay-anahtar-satir small { display: block; font-size: 12px; color: #6e6256; margin-top: 2px; line-height: 1.4; }
+  .ay-anahtar-satir input[type="checkbox"] { width: 18px; height: 18px; flex-shrink: 0; accent-color: #7c5425; }
+
+  .ay-yedek-durum {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #faf7f2;
+    border: 1px solid #e6dccf;
+    margin-bottom: 10px;
+  }
+  .ay-yedek-durum span { display: block; font-size: 12px; color: #75685a; }
+  .ay-yedek-durum strong { display: block; font-size: 14px; color: #261c14; margin-top: 2px; }
+  .ay-yedek-icerik {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: grid;
+    gap: 6px;
+    font-size: 12.5px;
+    color: #5c5044;
+  }
+</style>

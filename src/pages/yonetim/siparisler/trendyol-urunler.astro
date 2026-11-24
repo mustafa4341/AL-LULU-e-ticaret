@@ -356,7 +356,7 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
         : <div class="y-modal__alt">
             <button class="btn btn--cizgi" type="submit" name="eylem" value="kaydet" disabled={!depoHazir}>Kaydet</button>
             <button class="btn btn--sepet" type="submit" name="eylem" value="gonder" disabled={!depoHazir || !apiHazir || ilanBekliyor(taslak)}>{taslak.durum === 'reddedildi' || taslak.durum === 'hata' ? 'Düzeltip yeniden gönder' : 'Kaydet ve Trendyol’a gönder'}</button>
-            {k.ilanlar[secili.id] && !ilanBekliyor(taslak) && <button class="btn btn--cizgi" type="submit" name="eylem" value="taslak-sil" formnovalidate>Taslağı sıfırla</button>}
+            {k.ilanlar[secili.id] && !ilanBekliyor(taslak) && <button class="btn btn--cizgi" type="submit" name="eylem" value="taslak-sil" formnovalidate data-onayla="Bu ürünün Trendyol taslağı silinsin mi? Girdiğiniz ilan bilgileri kaybolur.">Taslağı sıfırla</button>}
           </div>}
     </form>
   </section>
@@ -404,7 +404,7 @@ const ozellikAlanlari = [{ baslik: 'Zorunlu özellikler', liste: zorunluOz, acik
       </div>
     </form>
     <form method="post" class="y-modal__alt">
-      <button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-gonder" disabled={!depoHazir || !apiHazir}>Takipteki ürünlerin fiyatını şimdi gönder</button>
+      <button class="btn btn--sepet" type="submit" name="eylem" value="fiyat-gonder" disabled={!depoHazir || !apiHazir} data-onayla="Takipteki ürünlerin fiyatı şimdi Trendyol’a gönderilsin mi? Fiyat birkaç dakika içinde canlıda değişir.">Takipteki ürünlerin fiyatını şimdi gönder</button>
       <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar?eslestirme=trendyol#eslestirme-trendyol">Ürün seçip fiyat gönder / takibi aç</a>
     </form>
   </details>

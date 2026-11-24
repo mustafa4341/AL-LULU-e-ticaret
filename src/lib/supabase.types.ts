@@ -45,6 +45,20 @@ export type Database = {
         };
         Relationships: [];
       };
+      // Migration 20261118170000 (deneme sınırı) — eksikti (denetim AUD-031)
+      istek_sinirlari: {
+        Row: { anahtar: string; pencere_bas: string; sayi: number };
+        Insert: { anahtar: string; pencere_bas?: string; sayi?: number };
+        Update: { anahtar?: string; pencere_bas?: string; sayi?: number };
+        Relationships: [];
+      };
+      // Migration 20261119152000 (pazaryeri eşitleme kilidi) — eksikti (denetim AUD-031)
+      pazaryeri_senkron_kilidi: {
+        Row: { id: number; sahip: string; bitis: string };
+        Insert: { id: number; sahip: string; bitis: string };
+        Update: { id?: number; sahip?: string; bitis?: string };
+        Relationships: [];
+      };
       yorumlar: {
         Row: {
           id: string; siparis_no: string; urun_id: string; ad: string; puan: number; metin: string;
@@ -523,6 +537,8 @@ export type Database = {
       /** p_artir: 0 = oku, 1 = say, null = sıfırla → penceredeki deneme sayısı */
       istek_say: { Args: { p_anahtar: string; p_pencere_sn: number; p_artir: number | null }; Returns: number };
       eposta_gonderim_al: { Args: { p_anahtar: string; p_siparis_no: string; p_tur: string; p_alici: string; p_zorla?: boolean }; Returns: boolean };
+      satis_adetleri: { Args: { p_gun?: number }; Returns: Json };
+      medya_kosullu_yaz: { Args: { p_yol: string; p_icerik_turu: string; p_veri_base64: string; p_boyut: number; p_eski_md5: string | null }; Returns: boolean };
     };
     Enums: {
       [_ in never]: never;

@@ -225,6 +225,31 @@ export async function tyOnayliIcerikler(barkod?: string, enFazla = 2000): Promis
   return barkod ? sonuc.filter((x) => x.barkod === barkod) : sonuc;
 }
 
+/* ---------------- Buybox (aynı ürünü satan başka mağazalar) ---------------- */
+
+export type TyBuybox = { barkod: string; sira?: number; fiyat?: number; cokSatici: boolean };
+
+/** getBuyboxInformation — POST, istek başına en fazla 10 barkod (1000 istek/dk). Yalnız okuma: fiyat değiştirmez. */
+export async function tyBuybox(barkodlar: string[]): Promise<Map<string, TyBuybox>> {
+  const sonuc = new Map<string, TyBuybox>();
+  const liste = [...new Set(barkodlar.filter(Boolean))].slice(0, 200);
+  const s = sinyal(40_000);
+  for (let i = 0; i < liste.length; i += 10) {
+    const y = nesne(await trendyolCagir((id) => `/product/sellers/${id}/products/buybox-information`, 'Trendyol buybox', s, {
+      json: { barcodes: liste.slice(i, i + 10) },
+    }));
+    for (const b of dizi(y.buyboxInfo)) {
+      const barkod = yazi(b.barcode);
+      if (!barkod) continue;
+      sonuc.set(barkod, {
+        barkod, sira: tam(b.buyboxOrder), fiyat: typeof b.buyboxPrice === 'number' ? Math.round(b.buyboxPrice * 100) / 100 : undefined,
+        cokSatici: b.hasMultipleSeller === true,
+      });
+    }
+  }
+  return sonuc;
+}
+
 /* ---------------- Anlık sipariş bildirimi (webhook) ---------------- */
 
 export type TyWebhook = { id: string; url: string; durum: string; dogrulama?: string };

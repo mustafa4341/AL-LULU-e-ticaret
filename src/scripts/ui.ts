@@ -38,6 +38,18 @@ let oncekiOdak: HTMLElement | null = null;
 const odaklanabilir = (kok: HTMLElement) =>
   $$<HTMLElement>('a[href], button:not([disabled]), input, select, textarea, [tabindex]:not([tabindex="-1"])', kok).filter((e) => e.offsetParent !== null);
 
+/* Çekmece açıkken arkadaki sayfa ekran okuyucu ve klavye için erişilemez olur (inert) — denetim AUD-025 */
+let arkaPlan: HTMLElement[] = [];
+function arkaPlaniKapat(el: HTMLElement): void {
+  arkaPlan = $$<HTMLElement>('body > *').filter((x) => x !== el && x !== perde && !x.contains(el) && !x.inert
+    && !x.matches('script, style, template, [aria-live], [role="status"], [role="alert"]'));
+  arkaPlan.forEach((x) => { x.inert = true; });
+}
+function arkaPlaniAc(): void {
+  arkaPlan.forEach((x) => { x.inert = false; });
+  arkaPlan = [];
+}
+
 export function cekmeceAc(id: string, odak?: HTMLElement | null): void {
   const el = document.getElementById(id);
   if (!el || !perde) return;
@@ -52,6 +64,7 @@ export function cekmeceAc(id: string, odak?: HTMLElement | null): void {
   document.documentElement.classList.add('kilitli');
   $$(`[data-cekmece-ac="${id}"]`).forEach((b) => b.setAttribute('aria-expanded', 'true'));
   acik = el;
+  arkaPlaniKapat(el);
   const hedef: HTMLElement = odak ?? $<HTMLElement>('[data-cekmece-kapat]', el) ?? el;
   hedef.focus({ preventScroll: true });
   el.dispatchEvent(new CustomEvent('cekmece:acildi'));
@@ -61,6 +74,7 @@ export function cekmeceKapat(hemen = false): void {
   const el = acik;
   if (!el || !perde) return;
   acik = null;
+  arkaPlaniAc();
   el.classList.remove('is-open');
   perde.classList.remove('is-open');
   document.documentElement.classList.remove('kilitli');
@@ -219,14 +233,27 @@ $$('[data-galeri]').forEach((gal) => {
 (() => {
   const kutular = $$('[data-kargo-sayac]');
   if (!kutular.length) return;
-  const isGunu = (d: Date) => d.getDay() !== 0 && d.getDay() !== 6; // resmi tatiller dahil değil
-  const isGunuEkle = (d: Date, n: number) => { const x = new Date(d); while (n > 0) { x.setDate(x.getDate() + 1); if (isGunu(x)) n--; } return x; };
-  const gunAy = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long' });
-  const gunAdi = new Intl.DateTimeFormat('tr-TR', { weekday: 'long' });
+  /* Saat her zaman Türkiye saatine göre (UTC+3, yaz saati yok): tarayıcının saat dilimi farklı olsa da sayaç doğru kalır.
+   * "tr" tarihlerinin UTC alanları Türkiye yerel saatini taşır. Resmî tatillerde kargo çıkmaz (denetim AUD-027). */
+  const TR_FARK = 3 * 3600_000;
+  const trSimdi = () => new Date(Date.now() + TR_FARK);
+  const gunKodu = (d: Date) => d.toISOString().slice(0, 10);
+  const SABIT_TATILLER = ['01-01', '04-23', '05-01', '05-19', '07-15', '08-30', '10-29'];
+  // Dini bayramlar (Diyanet takvimi). Yeni yıl gelince eklenmeli.
+  const DINI_BAYRAMLAR = new Set([
+    '2026-03-20', '2026-03-21', '2026-03-22', '2026-05-27', '2026-05-28', '2026-05-29', '2026-05-30',
+    '2027-03-09', '2027-03-10', '2027-03-11', '2027-05-16', '2027-05-17', '2027-05-18', '2027-05-19',
+  ]);
+  const tatilMi = (d: Date) => SABIT_TATILLER.includes(gunKodu(d).slice(5)) || DINI_BAYRAMLAR.has(gunKodu(d));
+  const haftaSonu = (d: Date) => d.getUTCDay() === 0 || d.getUTCDay() === 6;
+  const isGunu = (d: Date) => !haftaSonu(d) && !tatilMi(d);
+  const isGunuEkle = (d: Date, n: number) => { const x = new Date(d); while (n > 0) { x.setUTCDate(x.getUTCDate() + 1); if (isGunu(x)) n--; } return x; };
+  const gunAy = new Intl.DateTimeFormat('tr-TR', { day: 'numeric', month: 'long', timeZone: 'UTC' });
+  const gunAdi = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', timeZone: 'UTC' });
   const { kesimSaati, teslimGun } = katalog.kargo;
   const guncelle = () => {
-    const simdi = new Date();
-    const kesim = new Date(simdi); kesim.setHours(kesimSaati, 0, 0, 0);
+    const simdi = trSimdi();
+    const kesim = new Date(simdi); kesim.setUTCHours(kesimSaati, 0, 0, 0);
     const bugun = isGunu(simdi) && simdi < kesim;
     const kargoGunu = bugun ? simdi : isGunuEkle(simdi, 1);
     let satir: string;
@@ -235,14 +262,15 @@ $$('[data-galeri]').forEach((gal) => {
       const sa = Math.floor(dk / 60), kalan = dk % 60;
       satir = `<span class="sayac-sure"><strong>${sa ? `${sa} saat ${kalan} dakika` : `${kalan} dakika`}</strong></span> içinde sipariş verirsen <span class="gun-rozet">Bugün</span> kargoda`;
     } else {
-      const yarin = new Date(simdi); yarin.setDate(yarin.getDate() + 1);
-      const gun = kargoGunu.toDateString() === yarin.toDateString() ? 'Yarın' : gunAdi.format(kargoGunu);
+      const yarin = new Date(simdi); yarin.setUTCDate(yarin.getUTCDate() + 1);
+      const gun = gunKodu(kargoGunu) === gunKodu(yarin) ? 'Yarın' : gunAdi.format(kargoGunu);
       // "14:00'e kadar aynı gün kargo" duyurusuyla çelişmesin: neden bugün değil, açıkça söyle
-      const neden = isGunu(simdi) ? `Bugünkü kargo ${kesimSaati}:00'te çıktı.` : 'Hafta sonu kargo çıkmıyor.';
+      const neden = tatilMi(simdi) ? 'Bugün resmî tatil, kargo çıkmıyor.'
+        : haftaSonu(simdi) ? 'Hafta sonu kargo çıkmıyor.' : `Bugünkü kargo ${kesimSaati}:00'te çıktı.`;
       satir = `${neden} Şimdi sipariş verirsen <span class="gun-rozet">${gun}</span> kargoda`;
     }
     const bas = isGunuEkle(kargoGunu, teslimGun[0]), son = isGunuEkle(kargoGunu, teslimGun[1]);
-    const aralik = bas.getMonth() === son.getMonth() ? `${bas.getDate()}–${gunAy.format(son)}` : `${gunAy.format(bas)} – ${gunAy.format(son)}`;
+    const aralik = bas.getUTCMonth() === son.getUTCMonth() ? `${bas.getUTCDate()}–${gunAy.format(son)}` : `${gunAy.format(bas)} – ${gunAy.format(son)}`;
     kutular.forEach((k) => {
       const s = $('[data-kargo-satir]', k); if (s) s.innerHTML = satir;
       const t = $('[data-teslim-aralik]', k); if (t) t.textContent = aralik;

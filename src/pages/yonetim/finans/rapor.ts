@@ -1,7 +1,7 @@
 import type { APIRoute } from 'astro';
 import { siparisleriOku } from '../../../lib/depo';
 import { GIDER_KATEGORILERI, donem, finansPara, kalanTutar, raporla, type Gider } from '../../../lib/finans';
-import { belgeOku, finansOku, giderEki, saticiBilgisi } from '../../../lib/finansDepo';
+import { ARSIV_SINIRI, ekDosyasiOku, ekUzantisi, finansOku, saticiBilgisi } from '../../../lib/finansDepo';
 import { aylar, csvYaniti, dosyaYaniti, muhasebeTablolari, xlsxOlustur } from '../../../lib/finansDisari';
 import { zipOlustur } from '../../../lib/finansArsiv';
 import { A4, donemOzetiSvg, type OzetSatiri } from '../../../lib/belgeSablon';
@@ -23,7 +23,8 @@ export const GET: APIRoute = async ({ url }) => {
     const satirlar: OzetSatiri[] = [
       { ad: 'Satışlar', tur: 'baslik' },
       { ad: 'Onaylı web satışları (' + r.satislar.length + ' sipariş)', tutar: finansPara(r.webSatis) },
-      { ad: 'İade ve iptal geri ödemeleri (' + r.iadeler.length + ' kayıt)', tutar: '−' + finansPara(r.webIade) },
+      // Ödenmemiş (geri ödemesiz) iptaller iade sayısına katılmaz (denetim AUD-024)
+      { ad: 'İade ve iptal geri ödemeleri (' + r.iadeler.filter((x) => x.tutar > 0).length + ' kayıt)', tutar: '−' + finansPara(r.webIade) },
       { ad: 'Net web satışı', tutar: finansPara(r.webSatis - r.webIade), tur: 'ara' },
       { ad: 'Satışa dahil kargo tahsilatı', tutar: finansPara(r.kargo), tur: 'alt' },
       { ad: 'Fiyatlara yansıyan indirimler', tutar: finansPara(r.webIndirim), tur: 'alt' },
@@ -39,10 +40,11 @@ export const GET: APIRoute = async ({ url }) => {
       baslik: 'Satış ve Gider Özeti', donem: gun(bas) + ' – ' + gun(son), olusturma: new Date(),
       logo: f.ayarlar.logo ? await logoDataUri() : '', satici: await saticiBilgisi(), satirlar,
       tablo: ayTablosu.length > 1 ? {
-        baslik: 'Aylara göre', kolonlar: ['Ay', 'Satış', 'İade', 'Gider', 'Kalan'],
+        // Kalan pazaryeri hakedişini de içerdiği için ayrı sütunda görünür: Satış − İade + Pazaryeri − Gider = Kalan (denetim AUD-024)
+        baslik: 'Aylara göre', kolonlar: ['Ay', 'Web satış', 'İade', 'Pazaryeri', 'Gider', 'Kalan'],
         satirlar: ayTablosu.map((a) => {
           const x = raporla(f, siparisler, a.bas, a.son);
-          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.gider), finansPara(kalanTutar(x))];
+          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.trendyolBeklenen + x.hepsiburadaBeklenen), finansPara(x.gider), finansPara(kalanTutar(x))];
         }),
       } : undefined,
       notlar: [
@@ -57,24 +59,29 @@ export const GET: APIRoute = async ({ url }) => {
   const tablolar = muhasebeTablolari(f, siparisler, bas, son, pazaryeri);
   if (tur === 'excel') return dosyaYaniti(xlsxOlustur(tablolar), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'muhasebe-' + ad + '.xlsx');
   if (tur === 'zip') {
-    const dosyalar = [];
+    const dosyalar: { ad: string; veri: Buffer }[] = [];
     let boyut = 0;
-    for (const b of r.belge) {
-      const v = await belgeOku(b.id);
-      if (v) {
-        dosyalar.push({ ad: 'siparis-belgeleri/' + (b.belgeNo ?? b.tur) + '_' + b.siparisNo + (b.durum === 'iptal' ? '_IPTAL' : '') + '.pdf', veri: v.veri });
-        boyut += v.veri.length;
-      }
-      if (boyut > 45 * 1024 * 1024) return new Response('Arşiv 45 MB sınırını aştı. Tarih aralığını daraltın.', { status: 413 });
+    const sinirMb = Math.round(ARSIV_SINIRI / 1048576);
+    const asildi = () => new Response(`Arşiv ${sinirMb} MB sınırını aştı. Tarih aralığını daraltın (ör. tek ay).`, { status: 413 });
+    const temiz = (s: string) => s.replace(/[^A-Za-z0-9._-]/g, '_');
+    // Resmî satış faturaları (GİB e-Arşiv'den kesilip yüklenenler) — eskiden muhasebeci arşivinde hiç yoktu (denetim AUD-021)
+    for (const k of f.faturalar.filter((x) => x.ek && x.tarih >= bas && x.tarih <= son)) {
+      const veri = await ekDosyasiOku('fatura', k.id);
+      if (!veri) continue;
+      dosyalar.push({ ad: 'faturalar/' + temiz(`${k.tarih}_${k.no}_${k.kanal}_${k.siparisNo}${k.iptal ? '_IPTAL' : ''}`) + '.' + ekUzantisi(k.ek!.tur), veri });
+      if ((boyut += veri.length) > ARSIV_SINIRI) return asildi();
     }
-    for (const g of r.giderler) {
-      const v = g.ek && await giderEki(g.id);
-      if (v) {
-        const ext = v.tur === 'application/pdf' ? 'pdf' : v.tur === 'image/png' ? 'png' : 'jpg';
-        dosyalar.push({ ad: 'gider-fisleri/' + g.tarih + '_' + g.kategori + '_' + g.id.slice(0, 8) + '.' + ext, veri: v.veri });
-        boyut += v.veri.length;
-      }
-      if (boyut > 45 * 1024 * 1024) return new Response('Arşiv 45 MB sınırını aştı. Tarih aralığını daraltın.', { status: 413 });
+    for (const b of r.belge.filter((x) => ['duzenlendi', 'gonderildi', 'iptal'].includes(x.durum))) {
+      const veri = await ekDosyasiOku('belge', b.id);
+      if (!veri) continue;
+      dosyalar.push({ ad: 'siparis-belgeleri/' + temiz((b.belgeNo ?? b.tur) + '_' + b.siparisNo + (b.durum === 'iptal' ? '_IPTAL' : '')) + '.pdf', veri });
+      if ((boyut += veri.length) > ARSIV_SINIRI) return asildi();
+    }
+    for (const g of r.giderler.filter((x) => x.ek)) {
+      const veri = await ekDosyasiOku('gider', g.id);
+      if (!veri) continue;
+      dosyalar.push({ ad: 'gider-fisleri/' + g.tarih + '_' + g.kategori + '_' + g.id.slice(0, 8) + '.' + ekUzantisi(g.ek!.tur), veri });
+      if ((boyut += veri.length) > ARSIV_SINIRI) return asildi();
     }
     // Arşivin içine Excel özeti de konur: muhasebeci tek dosyayla her şeyi alır
     dosyalar.push({ ad: 'muhasebe-' + ad + '.xlsx', veri: xlsxOlustur(tablolar) });

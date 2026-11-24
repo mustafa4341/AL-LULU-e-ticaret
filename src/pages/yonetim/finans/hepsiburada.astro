@@ -128,22 +128,152 @@ const isaretli = (k: number) => (k < 0 ? '−' : '') + finansPara(Math.abs(k));
 const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
 const grupSirasi: HbGrup[] = ['satis', 'iade', 'komisyon', 'kampanya', 'kargo', 'islem', 'hizmet', 'odemeServisi', 'ceza', 'reklam', 'kdv', 'stopaj', 'diger'];
 const bugun = finansGunu();
+/* Sabit kargo tablosu eskidikçe uyarı (denetim AUD-024) */
+const tarifeGun = Math.floor((Date.now() - Date.parse(KARGO_TABLO_TARIHI + 'T00:00:00+03:00')) / 864e5);
+const tarifeEski = tarifeGun > 90;
 ---
-<Yonetim baslik="Hepsiburada Finans" altBaslik="Bir ürünün tüm Hepsiburada kesintilerini hesaba katarak tahmini kârı, marjı ve başabaş fiyatını görün; hakedişlerinizi takip edin." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
+<Yonetim baslik="Hepsiburada Finans ve Hakediş" altBaslik="Hepsiburada hakedişlerinizi, sipariş mutabakatını ve ürün bazlı net kâr simülasyonunu tek ekrandan yönetin." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
   <KanalLogo slot="baslik-onu" kanal="hepsiburada" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/finans"><PIkon ad="ok-sol" boyut={18} />Finans ve Belgeler'e dön</a>
-    <a class="btn btn--sepet" href="/yonetim/finans/hepsiburada#hesap"><PIkon ad="arti" boyut={18} />Yeni hesaplama</a>
+    <a class="btn btn--cizgi" href="/yonetim/finans"><PIkon ad="ok-sol" boyut={18} />Finans Özeti</a>
+    <a class="btn btn--cizgi" href="#hesabim"><PIkon ad="banka" boyut={18} />Hakedişler</a>
+    <a class="btn btn--sepet" href="#hesap"><PIkon ad="hedef" boyut={18} />Kâr Hesaplayıcı</a>
   </div>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
     <a href="/yonetim/finans/faturalar">Faturalar</a>
+    <a href="/yonetim/finans/trendyol-karlilik">Trendyol Kârlılık</a>
     <a href="/yonetim/finans/hepsiburada" aria-current="page">Hepsiburada</a>
   </nav>
 
+  <div class="y-metrics y-metrics--finans" id="hesabim">
+    <div class="y-metric y-metric--altin">
+      <PIkon ad="sepet" />
+      <span>Cari Brüt Satış</span>
+      <strong>{finansPara(Math.max(0, ozet.gruplar.satis))}</strong>
+      <small>{mutabakat.length} sipariş mutabakat satırı</small>
+    </div>
+    <div class="y-metric y-metric--kirmizi">
+      <PIkon ad="yuzde" />
+      <span>Komisyon, Kargo ve Hizmet</span>
+      <strong>{isaretli(ozet.gruplar.komisyon + ozet.gruplar.kargo + ozet.gruplar.islem + ozet.gruplar.hizmet + ozet.gruplar.odemeServisi + ozet.gruplar.stopaj)}</strong>
+      <small>Platform kesintileri ve stopaj toplamı</small>
+    </div>
+    <div class="y-metric">
+      <PIkon ad="uyari" />
+      <span>İade, Kampanya ve Ceza</span>
+      <strong>{isaretli(ozet.gruplar.iade + ozet.gruplar.kampanya + ozet.gruplar.ceza + ozet.gruplar.reklam)}</strong>
+      <small>İade düşümleri ve kampanya katılımı</small>
+    </div>
+    <div class="y-metric y-metric--yesil">
+      <PIkon ad="para" />
+      <span>Toplam Net Hakediş</span>
+      <strong>{isaretli(ozet.hakedis)}</strong>
+      <small>Ödenen: {isaretli(ozet.odenen)} · Bekleyen: {isaretli(ozet.odenecek)}</small>
+    </div>
+  </div>
+
+  <div class="hb-iki-sutun" style="margin-bottom:18px">
+    <section class="y-kart">
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="banka" /> Hepsiburada Hakediş ve Sipariş Mutabakatı</h2>
+          <p class="y-kart__alt">Sipariş bazında brüt satış, kesintiler, net hakediş ve ödeme vadesi durumu.</p>
+        </div>
+        {finans.hbSonCekim && <small class="muted">Son çekim: {tarihTr(finans.hbSonCekim.tarih)}</small>}
+      </div>
+
+      {finans.hepsiburada.length > 0 ? <>
+        <dl class="y-hesap" style="margin-bottom:14px">
+          {grupSirasi.filter((g) => ozet.gruplar[g] !== 0).map((g) => <div class:list={{ eksi: ozet.gruplar[g] < 0 }}><dt>{HB_GRUPLAR[g]}</dt><dd>{isaretli(ozet.gruplar[g])}</dd></div>)}
+          <div class="sonuc"><dt>Toplam net hakediş</dt><dd>{isaretli(ozet.hakedis)}</dd></div>
+          <div><dt>Bankaya ödenen</dt><dd>{isaretli(ozet.odenen)}</dd></div>
+          <div><dt>Vadesi bekleyen</dt><dd>{isaretli(ozet.odenecek)}</dd></div>
+          {ozet.gruplar.aktarim > 0 && <div class="alt"><dt>{HB_GRUPLAR.aktarim}</dt><dd>{finansPara(ozet.gruplar.aktarim)}</dd></div>}
+        </dl>
+
+        <div class="y-tablo-kap">
+          <table class="y-tablo">
+            <thead><tr><th>Sipariş</th><th>Tarih</th><th class="y-sayi">Satış</th><th class="y-sayi">Kesintiler</th><th class="y-sayi">Net</th><th class="y-sayi">HB Hakediş</th><th>Vade / Durum</th></tr></thead>
+            <tbody>{mutabakat.slice(0, 200).map((s) => <tr>
+              <td data-etiket="Sipariş"><strong>{s.siparisNo}</strong>{s.urun && <small class="y-table-note">{s.urun}</small>}</td>
+              <td data-etiket="Tarih" class="y-nowrap">{tarihTr(s.tarih)}</td>
+              <td data-etiket="Satış" class="y-sayi y-nowrap">{isaretli(s.satis)}</td>
+              <td data-etiket="Kesintiler" class="y-sayi y-nowrap">{isaretli(s.kesinti)}</td>
+              <td data-etiket="Net" class="y-sayi y-nowrap"><strong>{isaretli(s.kayitToplami)}</strong></td>
+              <td data-etiket="HB hakediş" class="y-sayi y-nowrap">{s.hakedis === undefined ? '—' : <span class:list={['y-chip', s.fark === 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']} title={s.fark ? 'Fark: ' + isaretli(s.fark) : 'Aynı'}>{isaretli(s.hakedis)}</span>}</td>
+              <td data-etiket="Vade" class="y-nowrap">{s.odendi ? <span class="y-chip y-chip--yesil">Ödendi</span> : <span class="y-chip y-chip--turuncu">{tarihTr(s.vade)}</span>}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+      </> : (
+        <div class="hb-bos-kutu">
+          <PIkon ad="banka" boyut={24} />
+          <strong>Henüz çekilmiş Hepsiburada hakediş kaydı bulunmuyor.</strong>
+          <p>Siparişler teslim edildikten sonra sağdaki <em>Cari Hesap Çekimi</em> kartından dönem seçerek tüm satış, komisyon, kargo kesintisi ve vade tarihlerini tek tıkla getirebilirsiniz.</p>
+          <div class="y-ust-aksiyonlar" style="justify-content:center;margin-top:10px">
+            <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler?kanal=hepsiburada">Hepsiburada Siparişlerini Gör</a>
+            <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar?gorunum=hepsiburada">Kanal Ayarları</a>
+          </div>
+        </div>
+      )}
+    </section>
+
+    <aside class="hb-yan-sutun">
+      <section class="y-kart">
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad="yenile" /> Cari Hesap Çekimi</h2>
+            <p class="y-kart__alt">Hepsiburada muhasebe servisinden kayıtları eşitleyin.</p>
+          </div>
+          {apiDurumu === 'test' && <span class="y-chip y-chip--turuncu">Test ortamı</span>}
+        </div>
+        {apiDurumu === 'kapali' || apiDurumu === 'eksik' ? (
+          <div class="y-veri-not" style="margin:0">
+            <PIkon ad="bilgi" boyut={18} />
+            <p>
+              <strong>API bağlantısı bekleniyor</strong>
+              Hepsiburada satıcı entegrasyon bilgileri ve “Muhasebe entegrasyonu” yetkisi tanımlandığında buradan 30/60/90 günlük hakediş çekimi aktif olur.
+            </p>
+          </div>
+        ) : (
+          <form method="post" class="y-izgara">
+            <input type="hidden" name="eylem" value="cek" />
+            <label class="y-alan">Çekilecek dönem
+              <select name="gun">
+                <option value="30">Son 30 gün</option>
+                <option value="60">Son 60 gün</option>
+                <option value="90">Son 90 gün</option>
+              </select>
+            </label>
+            <button class="btn btn--sepet" type="submit" style="width:100%;justify-content:center"><PIkon ad="indir" boyut={17} />Şimdi Hepsiburada'dan Çek</button>
+          </form>
+        )}
+      </section>
+
+      <section class:list={['y-kart', farkli.length > 0 ? 'hb-uyari-kart' : '']}>
+        <div class="y-kart__bas">
+          <div>
+            <h2><PIkon ad={farkli.length > 0 ? 'uyari' : 'tik'} /> Mutabakat ve Vadeler</h2>
+            <p class="y-kart__alt">Ödeme takvimi ve tutar kontrolü.</p>
+          </div>
+        </div>
+        {farkli.length > 0
+          ? <p class="y-uyari" style="margin-top:0">{farkli.length} siparişte muhasebe kayıtlarının toplamı Hepsiburada hakediş tutarından farklı. Fark birkaç gün içinde kapanmazsa satıcı ekstresiyle karşılaştırın.</p>
+          : mutabakat.some((s) => s.fark === 0)
+            ? <p class="y-help" style="margin-top:0">Muhasebe kayıtları Hepsiburada hakediş hesabıyla kuruşu kuruşuna uyumlu.</p>
+            : <p class="y-help" style="margin-top:0">Teslimattan {ODEME_VADESI_IS_GUNU} iş günü sonra hakediş ödemesi oluşur (bugün teslim edilse tahmini vade: <strong>{gunTr(vadeOrnegi.toISOString().slice(0, 10))}</strong>).</p>}
+        {ozet.vadeler.length > 0 && <>
+          <h3>Yaklaşan Ödemeler</h3>
+          <ul class="y-task-list">{ozet.vadeler.map(([g, t]) => <li><span>{gunTr(g)}{g !== 'vadesiz' && g < bugun ? ' (vadesi geçti)' : ''}</span><strong>{isaretli(t)}</strong></li>)}</ul>
+        </>}
+      </section>
+    </aside>
+  </div>
+
   <div class="y-hesap-izgara" id="hesap">
   <section class="y-kart">
-    <div class="y-kart__bas"><div><h2><PIkon ad="kutu" /> Ürün bilgileri ve maliyetler</h2><p class="y-kart__alt">Bu fiyattan satarsam elime ne kalır? Ürünü seçin, eksik bilgileri girin.</p></div></div>
+    <div class="y-kart__bas"><div><h2><PIkon ad="kutu" /> Ürün Kâr ve Başabaş Hesaplayıcı</h2><p class="y-kart__alt">Bu fiyattan satarsam elime ne kalır? Ürünü seçin, eksik bilgileri girin.</p></div></div>
     <form method="get" class="y-izgara" action="#hesap">
       <label class="y-alan">Ürün
         <select name="urun" onchange="this.form.querySelectorAll('[data-urun-bagli]').forEach((e) => { e.disabled = true; }); this.form.submit()">
@@ -188,11 +318,11 @@ const bugun = finansGunu();
       <div class="y-sonuc-vurgu">
         <PIkon ad="para" />
         {hesap.netKar !== undefined
-          ? <div><span>Tahmini net kâr (birim)</span><strong class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</strong></div>
+          ? <div><span>Tahmini net kâr (birim, gelir/kurumlar vergisi öncesi)</span><strong class:list={{ 'y-negatif': hesap.netKar < 0 }}>{isaretli(hesap.netKar)}</strong></div>
           : <div><span>Hesabınıza yatacak</span><strong>{finansPara(hesap.hesabaYatan)}</strong><small>Net kâr için alış maliyetini girin</small></div>}
       </div>
       <div class="y-sonuc-kutular">
-        <div class="y-sonuc-kutu"><PIkon ad="yuzde" boyut={18} /><span>Kâr marjı</span><strong>{hesap.marj !== undefined ? '%' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—'}</strong><small>Net kârın satış fiyatına oranı</small></div>
+        <div class="y-sonuc-kutu"><PIkon ad="yuzde" boyut={18} /><span>Kâr marjı</span><strong>{hesap.marj !== undefined ? '%' + (hesap.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 }) : '—'}</strong><small>Net kârın KDV hariç satış tutarına oranı</small></div>
         <div class="y-sonuc-kutu"><PIkon ad="hedef" boyut={18} /><span>Başabaş fiyatı</span><strong>{basaBas !== undefined ? finansPara(basaBas) : '—'}</strong><small>Zarar etmemek için en düşük fiyat</small></div>
         <div class="y-sonuc-kutu"><PIkon ad="trend" boyut={18} /><span>Hedef kâr için fiyat</span><strong>{hedef !== undefined ? finansPara(hedef) : '—'}</strong><small>{hedef !== undefined ? finansPara(tlKurus(hedefGirdi)!) + ' net kâr için' : 'Hedef net kârı girin'}</small></div>
       </div>
@@ -228,6 +358,7 @@ const bugun = finansGunu();
       <li><PIkon ad="belge" /><span>Ürün KDV oranı</span><strong>%{kdv}</strong></li>
       <li><PIkon ad="takvim" /><span>Ödeme vadesi<small>Teslimattan sonra</small></span><strong>{ODEME_VADESI_IS_GUNU} iş günü</strong></li>
     </ul>
+    {tarifeEski && <p class="y-uyari">Kargo ücret tablosu {tarifeGun} gün önce alındı. Hepsiburada tarifeleri değişmiş olabilir; satıcı panelindeki güncel desi tablosuyla karşılaştırın.</p>}
     <div class="y-veri-not"><PIkon ad="saat" boyut={18} /><p><strong>Veri güncelliği</strong>Komisyon oranları Hepsiburada EK-4 tablosundan, kargo ücretleri {KARGO_TABLO_TARIHI.split('-').reverse().join('.')} tarihli desi tablosundan alındı. Ürünün kesin komisyon oranı Hepsiburada satıcı panelinde ürünün sayfasında yazar; farklıysa kategoriyi "Elle oran" yapın.</p></div>
     {gercek && <p class="y-help">Hepsiburada'nın gerçek kayıtlarına göre (son {gercek.siparis} sipariş): işlem bedeli ort. {finansPara(gercek.islem)}, hizmet bedeli ort. {finansPara(gercek.hizmet)}, komisyon oranı ort. {yuzde(gercek.komisyonBp)} (KDV hariç). Ayarlardaki tutarları bunlarla karşılaştırın.</p>}
     <a class="btn btn--cizgi" href="#ayarlar" data-ac="ayarlar"><PIkon ad="ayar" boyut={18} />Maliyet ayarlarını düzenle</a>
@@ -255,49 +386,29 @@ const bugun = finansGunu();
       <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Ayarları kaydet</button></div>
     </form>
   </details>
-
-  <section class="y-kart" id="hesabim">
-    <div class="y-kart__bas"><h2><PIkon ad="banka" /> Hepsiburada hesabım</h2>{finans.hbSonCekim && <small class="muted">Son çekim: {tarihTr(finans.hbSonCekim.tarih)}</small>}</div>
-    {apiDurumu === 'kapali' || apiDurumu === 'eksik'
-      ? <p class="y-help">Hepsiburada bağlantısı henüz kurulmadı. Hepsiburada'dan gelecek test bilgileri sunucuya girildiğinde, buradaki "Şimdi çek" düğmesi her siparişin satışını, komisyonunu, kargo ve diğer kesintilerini, ödenip ödenmediğini ve vade gününü getirir. Bunun için talebinizde "Muhasebe entegrasyonu" yetkisinin de istenmiş olması gerekir.</p>
-      : <form method="post" class="y-toolbar">
-          <input type="hidden" name="eylem" value="cek" />
-          <label class="y-alan">Dönem<select name="gun"><option value="30">Son 30 gün</option><option value="60">Son 60 gün</option><option value="90">Son 90 gün</option></select></label>
-          <button class="btn btn--sepet" type="submit">Şimdi çek</button>
-          {apiDurumu === 'test' && <span class="y-chip y-chip--turuncu">Test ortamı</span>}
-        </form>}
-
-    {finans.hepsiburada.length > 0 && <>
-      <dl class="y-hesap">
-        {grupSirasi.filter((g) => ozet.gruplar[g] !== 0).map((g) => <div class:list={{ eksi: ozet.gruplar[g] < 0 }}><dt>{HB_GRUPLAR[g]}</dt><dd>{isaretli(ozet.gruplar[g])}</dd></div>)}
-        <div class="sonuc"><dt>Toplam hakediş</dt><dd>{isaretli(ozet.hakedis)}</dd></div>
-        <div><dt>Ödenen</dt><dd>{isaretli(ozet.odenen)}</dd></div>
-        <div><dt>Ödenecek</dt><dd>{isaretli(ozet.odenecek)}</dd></div>
-        {ozet.gruplar.aktarim > 0 && <div class="alt"><dt>{HB_GRUPLAR.aktarim}</dt><dd>{finansPara(ozet.gruplar.aktarim)}</dd></div>}
-      </dl>
-      {ozet.vadeler.length > 0 && <>
-        <h3>Yaklaşan ödemeler</h3>
-        <ul class="y-task-list">{ozet.vadeler.map(([g, t]) => <li><span>{gunTr(g)}{g !== 'vadesiz' && g < bugun ? ' (vadesi geçti)' : ''}</span><span>{isaretli(t)}</span></li>)}</ul>
-      </>}
-      {farkli.length > 0
-        ? <p class="y-uyari">{farkli.length} siparişte muhasebe kayıtlarının toplamı Hepsiburada'nın hakediş tutarından farklı. Kayıtlar sipariş teslim edildikten sonra oluşur; fark birkaç gün içinde kapanmazsa Hepsiburada ekstresiyle karşılaştırın.</p>
-        : mutabakat.some((s) => s.fark === 0) && <p class="y-help">Muhasebe kayıtları Hepsiburada'nın hakediş hesabıyla kuruşu kuruşuna aynı.</p>}
-      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-        <thead><tr><th>Sipariş</th><th>Tarih</th><th class="y-sayi">Satış</th><th class="y-sayi">Kesintiler</th><th class="y-sayi">Net</th><th class="y-sayi">HB hakediş</th><th>Vade / durum</th></tr></thead>
-        <tbody>{mutabakat.slice(0, 200).map((s) => <tr>
-          <td data-etiket="Sipariş"><strong>{s.siparisNo}</strong>{s.urun && <small class="y-table-note">{s.urun}</small>}</td>
-          <td data-etiket="Tarih" class="y-nowrap">{tarihTr(s.tarih)}</td>
-          <td data-etiket="Satış" class="y-sayi">{isaretli(s.satis)}</td>
-          <td data-etiket="Kesintiler" class="y-sayi">{isaretli(s.kesinti)}</td>
-          <td data-etiket="Net" class="y-sayi"><strong>{isaretli(s.kayitToplami)}</strong></td>
-          <td data-etiket="HB hakediş" class="y-sayi">{s.hakedis === undefined ? '—' : <span class:list={['y-chip', s.fark === 0 ? 'y-chip--yesil' : 'y-chip--kirmizi']} title={s.fark ? 'Fark: ' + isaretli(s.fark) : 'Aynı'}>{isaretli(s.hakedis)}</span>}</td>
-          <td data-etiket="Vade" class="y-nowrap">{s.odendi ? <span class="y-chip y-chip--yesil">Ödendi</span> : <span class="y-chip y-chip--turuncu">{tarihTr(s.vade)}</span>}</td>
-        </tr>)}</tbody>
-      </table></div>
-    </>}
-  </section>
 </Yonetim>
 <style>
   .y-negatif { color: #8a2d22; }
-  h3 { font-size: 15px; margin: 18px 0 6px; }
+  h3 { font-size: 15px; margin: 16px 0 6px; }
+  .hb-iki-sutun {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.85fr);
+    gap: 16px;
+    align-items: start;
+  }
+  .hb-yan-sutun { display: flex; flex-direction: column; gap: 16px; }
+  @media (max-width: 1080px) {
+    .hb-iki-sutun { grid-template-columns: 1fr; }
+  }
+  .hb-bos-kutu {
+    text-align: center;
+    padding: 28px 20px;
+    background: #faf7f2;
+    border: 1px dashed #dfd3c3;
+    border-radius: 12px;
+    color: #6e6256;
+  }
+  .hb-bos-kutu strong { display: block; color: #2d2218; margin: 8px 0 6px; font-size: 14.5px; }
+  .hb-bos-kutu p { margin: 0 auto; max-width: 520px; font-size: 13px; line-height: 1.5; }
+  .hb-uyari-kart { border-color: #e6b980 !important; background: #fffaf2 !important; }
 </style>

@@ -21,6 +21,25 @@ interface ImportMetaEnv {
   readonly SIPARIS_BILDIRIM_EPOSTA?: string;
   /** Google Tag Manager kapsayıcı kimliği, ör. GTM-ABC1234 (yalnız çerez onayıyla yüklenir) */
   readonly GTM_KIMLIGI?: string;
+  /** Panelin gizli giriş adresi (lib/oturum.ts girisYolu) */
+  readonly YONETIM_GIRIS_YOLU?: string;
+  /** Asıl zamanlayıcı (Supabase pg_cron) anahtarı; anlık bildirim anahtarı da bundan türetilir */
+  readonly ZAMANLAYICI_ANAHTARI?: string;
+  /** Yedek zamanlayıcı (GitHub Actions) anahtarı */
+  readonly CRON_SECRET?: string;
+  readonly PAZARYERI_BILDIRIM_ANAHTARI?: string;
+  readonly TRENDYOL_ORTAM?: string;
+  readonly TRENDYOL_SATICI_ID?: string;
+  readonly TRENDYOL_API_KEY?: string;
+  readonly TRENDYOL_API_SECRET?: string;
+  readonly HEPSIBURADA_ORTAM?: string;
+  readonly HEPSIBURADA_MERCHANT_ID?: string;
+  readonly HEPSIBURADA_KULLANICI?: string;
+  readonly HEPSIBURADA_PAROLA?: string;
+  readonly HEPSIBURADA_USER_AGENT?: string;
+  readonly PAZARYERI_TEST_VERITABANI?: string;
+  readonly PAZARYERI_STOK_YAZ?: string;
+  readonly PAZARYERI_STOK_ARTIR?: string;
 }
 
 interface ImportMeta {

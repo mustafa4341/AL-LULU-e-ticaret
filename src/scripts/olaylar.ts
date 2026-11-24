@@ -11,7 +11,10 @@ function listeAdi(): string {
   const p = location.pathname;
   if (p === '/') return 'Ana sayfa';
   if (p === '/urunler') return 'Tüm ürünler';
-  if (p.startsWith('/kategori/')) return 'Kategori: ' + decodeURIComponent(p.slice(10));
+  if (p.startsWith('/kategori/')) {
+    // Bozuk kodlanmış adres (ör. "%E0") betiği durdurmasın (denetim AUD-037)
+    try { return 'Kategori: ' + decodeURIComponent(p.slice(10)); } catch { return 'Kategori: ' + p.slice(10); }
+  }
   if (p.startsWith('/urun/')) return 'Ürün sayfası önerileri';
   return 'Diğer';
 }

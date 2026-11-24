@@ -3,6 +3,7 @@
  * Yönetim panelinden gelen her kayıt bu şemayla doğrulanır; geçersiz veri kaydedilmez.
  */
 import { z } from 'astro/zod';
+import { bosIseVarsayilan } from './zodUyum';
 
 export const IKONLAR = [
   'canta', 'menu', 'kapat', 'sol', 'sag', 'asagi', 'tik', 'arti', 'eksi', 'kargo', 'kalkan', 'iade', 'kilit', 'belge',
@@ -168,10 +169,10 @@ export const SiteSema = z.object({
   whatsapp: metin.regex(/^90\d{10}$/),
   calismaSaatleri: metin.default(''),
   /** Sosyal medya hesapları (https adresi). Boş olan görünmez; dolu olanlar alt bilgide ve arama motoru kimliğinde (sameAs) yer alır. */
-  sosyal: z.object({
+  sosyal: bosIseVarsayilan(z.object({
     instagram: sosyalAdres, facebook: sosyalAdres, tiktok: sosyalAdres, youtube: sosyalAdres,
     x: sosyalAdres, pinterest: sosyalAdres, linkedin: sosyalAdres,
-  }).default({}),
+  })),
   satici: z.object({
     unvan: metin, adres: metin, mersis: metin, vergiDairesiNo: metin, kep: metin, etbis: metin,
   }),

@@ -67,13 +67,19 @@ if (Astro.request.method === 'POST') {
     <div class="kart-kutu" data-siparislerim hidden>
       <h2>Bu cihazdan verdiğiniz siparişler</h2>
       <div class="siparislerim" data-siparislerim-liste></div>
+      <p class="ipucu" style="margin-top:10px">Ortak bir bilgisayar kullanıyorsanız <button type="button" data-siparislerim-temizle style="background:none;border:0;padding:0;color:inherit;font:inherit;text-decoration:underline;cursor:pointer">bu listeyi cihazdan silin</button>. Kayıtlar 90 gün sonra kendiliğinden silinir.</p>
     </div>
   </div>
 
   <script is:inline>
     (function () {
       var liste = [];
-      try { liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]'); } catch (e) {}
+      var sinir = Date.now() - 90 * 864e5;
+      try {
+        liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]');
+        var guncel = liste.filter(function (x) { return (x.e || Date.parse(x.tarih)) > sinir; });
+        if (guncel.length !== liste.length) { liste = guncel; localStorage.setItem('allulu_siparislerim', JSON.stringify(liste)); }
+      } catch (e) {}
       if (!liste.length) return;
       var kutu = document.querySelector('[data-siparislerim]');
       var alan = document.querySelector('[data-siparislerim-liste]');
@@ -91,6 +97,11 @@ if (Astro.request.method === 'POST') {
         a.appendChild(sol); a.appendChild(sag); alan.appendChild(a);
       });
       if (alan.children.length) kutu.hidden = false;
+      var temizle = document.querySelector('[data-siparislerim-temizle]');
+      if (temizle) temizle.addEventListener('click', function () {
+        try { localStorage.removeItem('allulu_siparislerim'); } catch (e) {}
+        kutu.hidden = true;
+      });
     })();
   </script>
 </Base>

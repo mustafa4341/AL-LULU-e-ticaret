@@ -36,9 +36,17 @@ export const GET: APIRoute = async ({ url }) => {
         }),
       });
     } else {
+      // Paketleyen kişi doğru ürünü ve doğru adresi etiketten görebilsin: açık adres, telefon ve ürün/SKU listesi (denetim AUD-023)
       for (const s of siparisler) sayfalar.push({
         baslik: 'Sipariş Hazırlık Etiketi', alt: s.no,
-        satirlar: [{ metin: s.musteri.ad + ' ' + s.musteri.soyad }, { metin: s.teslimat.ilce + ' / ' + s.teslimat.il }],
+        satirlar: [
+          { metin: s.musteri.ad + ' ' + s.musteri.soyad },
+          { metin: s.teslimat.adres },
+          { metin: s.teslimat.ilce + ' / ' + s.teslimat.il },
+          { metin: 'Tel: ' + s.musteri.tel },
+          { metin: '— Paket içeriği —' },
+          ...s.kalemler.map((k) => ({ metin: '□ ' + k.adet + ' × ' + k.ad + (k.sku ? ' · ' + k.sku : '') })),
+        ],
         barkodlar: [s.no], etiket: 'Mağaza içi etiket · Taşıma etiketi değildir.',
       });
     }

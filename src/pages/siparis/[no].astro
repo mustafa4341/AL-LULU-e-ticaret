@@ -7,11 +7,12 @@ import { formatTL } from '../../lib/fiyat';
 import { bildirimKanali } from '../../lib/altyapi';
 import { iadeEdildi } from '../../lib/siparisAkisi';
 import { siparisUrunleri, siparisYorumlari, yorumKaydet, yorumYazilabilir } from '../../lib/yorum';
+import { istemciIp, sabitSureliEsit, sinirAsildi } from '../../lib/guvenlik';
 
 const k = Astro.locals.katalog;
 const s = (await siparisleriOku()).find((x) => x.no === Astro.params.no);
 const token = Astro.url.searchParams.get('t');
-if (!s || !token || token !== s.token) return Astro.rewrite('/404');
+if (!s || !sabitSureliEsit(token, s.token)) return Astro.rewrite('/404');
 const yeni = Astro.url.searchParams.has('yeni');
 
 /* Değerlendirme (yalnız teslim edilmiş siparişte; lib/yorum.ts) */
@@ -22,6 +23,7 @@ if (Astro.request.method === 'POST') {
   const puan = Number(f?.get('puan'));
   const metin = String(f?.get('metin') ?? '').trim().slice(0, 1500);
   if (!Number.isInteger(puan) || puan < 1 || puan > 5) yorumHata = 'Lütfen 1 ile 5 arasında bir puan seçin.';
+  else if (await sinirAsildi('yorum', istemciIp(Astro.request, Astro.clientAddress))) yorumHata = 'Çok sayıda deneme yapıldı. Lütfen bir saat sonra tekrar deneyin.';
   else {
     try {
       await yorumKaydet(s, { urunId, puan, metin });
@@ -169,7 +171,7 @@ const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
                 <legend>Puanınız</legend>
                 {[5, 4, 3, 2, 1].map((p) => <>
                   <input type="radio" name="puan" value={p} id={`p-${u.id}-${p}`} checked={m?.puan === p} required />
-                  <label for={`p-${u.id}-${p}`} title={`${p} yıldız`}>★</label>
+                  <label for={`p-${u.id}-${p}`} title={`${p} yıldız`}><span aria-hidden="true">★</span><span class="visually-hidden">{p} yıldız</span></label>
                 </>)}
               </fieldset>
               <textarea name="metin" rows="3" maxlength="1500" placeholder="Ürünü nasıl buldunuz? (isteğe bağlı)">{m?.metin ?? ''}</textarea>
@@ -213,6 +215,9 @@ const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
 
   {gaSatinAlma && <script is:inline define:vars={{ gaSatinAlma }}>
     try {
+      // Yalnız analitik çerezine izin verildiyse (reddedilince hiçbir şey yazılmaz — denetim AUD-025)
+      const rizaVar = JSON.parse(localStorage.getItem('allulu-cerez') || 'null')?.analitik === true;
+      if (!rizaVar) throw 0;
       const v = JSON.parse(gaSatinAlma);
       const gonderilen = JSON.parse(localStorage.getItem('allulu_ga_satin') || '[]');
       if (!gonderilen.includes(v.transaction_id)) {
@@ -227,8 +232,10 @@ const gaSatinAlma = odendi && !s.paytr?.test && s.durum !== 'iptal'
   <script is:inline define:vars={{ kayit, sepetiTemizle, paytrRef: s.paytr?.ref ?? null, bekliyor: odemeBekleniyor }}>
     // Hesapsız takip: bu cihazdan verilen siparişleri hatırla
     try {
-      const k = JSON.parse(kayit);
-      const liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]').filter((x) => x.no !== k.no);
+      // 90 günden eski kayıtlar silinir (ortak bilgisayarda sipariş bağlantısı süresiz kalmasın — denetim AUD-019)
+      const k = { ...JSON.parse(kayit), e: Date.now() };
+      const sinir = Date.now() - 90 * 864e5;
+      const liste = JSON.parse(localStorage.getItem('allulu_siparislerim') || '[]').filter((x) => x.no !== k.no && (x.e ?? Date.parse(x.tarih)) > sinir);
       localStorage.setItem('allulu_siparislerim', JSON.stringify([k, ...liste].slice(0, 20)));
       if (sepetiTemizle) {
         const paytrTakip = paytrRef && JSON.parse(sessionStorage.getItem('allulu_paytr_takip') || 'null');

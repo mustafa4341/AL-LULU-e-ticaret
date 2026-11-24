@@ -9,6 +9,7 @@ export const GET: APIRoute = async ({ params }) => {
     headers: {
       'Content-Type': sonuc.tur,
       'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff',
     },
   });
 };

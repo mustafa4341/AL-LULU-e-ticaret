@@ -9,7 +9,7 @@
  *
  * ÖNEMLİ: Metinler yayına almadan önce bir avukat tarafından kontrol edilmelidir.
  */
-import { formatTL } from './fiyat';
+import { formatTL, YASAL_INDIRIM_GUN } from './fiyat';
 
 export const SOZLESME_SURUMU = '2026-11-18';
 
@@ -355,7 +355,7 @@ export function teslimatKosullari(s: YasalSite): string {
   <h2>2. Kargo ücreti</h2>
   <p>${kargoMetni(s)}. Ürün sayfasında "Kargo Bedava" ibaresi bulunan ürünlerde kargo ücreti alınmaz.</p>
   <h2>3. Takip</h2>
-  <p>Siparişiniz kargoya verildiğinde kargo takip numaranız SMS ile (e-posta adresinizi verdiyseniz e-postayla da) iletilir. Siparişinizin durumunu "Sipariş takip" sayfasından da görebilirsiniz.</p>
+  <p>Siparişiniz kargoya verildiğinde kargo takip numaranız size iletilir (e-posta adresinizi verdiyseniz e-postayla). Siparişinizin durumunu ve takip numarasını "Sipariş takip" sayfasından da görebilirsiniz.</p>
   <h2>4. Teslim alırken</h2>
   <p>Paketi teslim alırken kontrol edin; hasarlı paketleri kargo görevlisine tutanak tutturarak teslim alın veya teslim almayın ve bize hemen bildirin. Adreste bulunamamanız durumunda kargo şirketi bilgilendirme bırakır; paket şubede bekletme süresi sonunda bize geri döner. Hatalı/eksik adres veya teslim alınmaması nedeniyle geri dönen siparişlerin yeniden gönderim ücreti alıcıdan talep edilebilir.</p>
   <h2>5. Teslimata kadar sorumluluk</h2>
@@ -446,7 +446,7 @@ export function kullanimKosullari(s: YasalSite): string {
   <ol class="belge-liste">
     <li>${esc(s.url.replace(/^https?:\/\//, ''))} ("Site") ${saticiAdi(s)} tarafından işletilir. Site'yi kullanan herkes bu koşulları kabul etmiş sayılır.</li>
     <li>Site'deki ürün açıklamaları, fotoğraflar ve teknik bilgiler mümkün olan en doğru şekilde hazırlanır; fotoğraflardaki renk ve görünüm ekran ayarlarına göre farklılık gösterebilir. Ürünlerin temel nitelikleri ürün sayfasında ve sipariş anında onaylanan Ön Bilgilendirme Formu'nda yer alır.</li>
-    <li>Fiyatlar, kampanyalar ve stok bilgileri önceden haber verilmeksizin değiştirilebilir; siparişinizi onayladığınız andaki fiyat ve koşullar sizin için geçerlidir. İndirimli fiyatlarda gösterilen önceki fiyat, mevzuata uygun olarak kampanyadan önceki 30 günlük dönemdeki en düşük satış fiyatıdır.</li>
+    <li>Fiyatlar, kampanyalar ve stok bilgileri önceden haber verilmeksizin değiştirilebilir; siparişinizi onayladığınız andaki fiyat ve koşullar sizin için geçerlidir. İndirimli fiyatlarda gösterilen önceki fiyat, mevzuata uygun olarak indirimden önceki ${YASAL_INDIRIM_GUN} günlük dönemde bu sitede uygulanan en düşük satış fiyatıdır.</li>
     <li>Site'deki logo, metin, tasarım, fotoğraf ve diğer içerikler ${esc(s.ad)}'a veya ilgili hak sahiplerine aittir; izinsiz kopyalanamaz, çoğaltılamaz ve ticari amaçla kullanılamaz. Ürünlerdeki marka ve logolar ilgili üreticilere aittir.</li>
     <li>Site'nin güvenliğini tehlikeye atacak, işleyişini bozacak, otomatik yazılımlarla veri toplayacak veya başkalarının bilgileriyle sipariş verecek şekilde kullanılması yasaktır; bu tür kullanımlarda ilgili siparişler iptal edilebilir ve yasal yollara başvurulabilir.</li>
     <li>Site'deki bağlantılarla erişilen üçüncü taraf sitelerin içerik ve uygulamalarından ${esc(s.ad)} sorumlu değildir.</li>

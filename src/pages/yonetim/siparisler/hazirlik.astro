@@ -1,0 +1,108 @@
+---
+import Yonetim from '../../../layouts/Yonetim.astro';
+import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../../components/yonetim/PIkon.astro';
+import { magazaOku, siparisleriOku } from '../../../lib/depo';
+import { hazirlikListesi } from '../../../lib/hazirlik';
+import { pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import { yTarih } from '../../../lib/yonetimRapor';
+
+/**
+ * Hazırlık ve paketleme: tüm kanallardan hazırlanacak siparişler tek listede.
+ * Seç → toplama listesi / kargo etiketleri (toplu yazdırma) · sipariş satırından barkodla paketleme.
+ */
+const hatalar: string[] = [];
+const [magaza, web, py] = await Promise.all([
+  magazaOku(),
+  siparisleriOku().catch(() => { hatalar.push('Web siparişleri okunamadı.'); return []; }),
+  pazaryeriSiparisleriOku().catch(() => { hatalar.push('Pazaryeri siparişleri okunamadı.'); return []; }),
+]);
+const liste = hazirlikListesi(web, py, magaza);
+const simdi = Date.now();
+const sure = (t?: string) => {
+  const z = Date.parse(t ?? '');
+  if (!Number.isFinite(z)) return undefined;
+  const saat = Math.round((z - simdi) / 3600_000);
+  // "<" ile şablon metni (backtick) aynı ifadede Astro derleyicisini bozuyor: düz birleştirme
+  const gecikti = saat <= -1, yakin = !gecikti && saat <= 23;
+  return { metin: gecikti ? -saat + ' saat gecikti' : yakin ? saat + ' saat kaldı' : yTarih.format(z), renk: gecikti ? 'kirmizi' : yakin ? 'turuncu' : 'gri' };
+};
+const KANAL_ADI = { web: 'Web', trendyol: 'Trendyol', hepsiburada: 'Hepsiburada' } as const;
+const hazirlanacak = liste.filter((x) => x.asama === 'hazirlanacak').length;
+const sorunlu = liste.filter((x) => x.sorun).length;
+const toplamAdet = liste.reduce((t, x) => t + x.kalemler.reduce((a, k) => a + k.adet, 0), 0);
+---
+<Yonetim baslik="Hazırlık ve Paketleme" altBaslik="Web, Trendyol ve Hepsiburada siparişlerini tek yerden toplayın, etiketleyin ve barkodla kontrol ederek paketleyin." aktif="siparisler" basari={Astro.url.searchParams.get('ok')} {hatalar}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/siparisler"><PIkon ad="ok-sol" boyut={18} />Tüm siparişler</a>
+  </div>
+
+  <div class="y-metrics y-metrics--finans">
+    <div class="y-metric y-metric--turuncu"><PIkon ad="kutu" /><span>Hazırlanacak sipariş</span><strong>{hazirlanacak}</strong></div>
+    <div class="y-metric y-metric--mavi"><PIkon ad="paket-tik" /><span>Hazırlanıyor</span><strong>{liste.length - hazirlanacak}</strong></div>
+    <div class="y-metric y-metric--altin"><PIkon ad="katman" /><span>Toplanacak ürün adedi</span><strong>{toplamAdet}</strong></div>
+    <div class:list={['y-metric', sorunlu ? 'y-metric--kirmizi' : 'y-metric--yesil']}><PIkon ad="uyari" /><span>Önce düzeltilecek</span><strong>{sorunlu}</strong></div>
+  </div>
+
+  <section class="y-kart">
+    <div class="y-kart__bas"><h2><PIkon ad="liste" /> Hazırlanacak siparişler</h2><span class="y-help">{liste.length} sipariş</span></div>
+    {liste.length ? <>
+      <form method="get" id="secim" target="_blank" class="hz-toplu" action="/yonetim/siparisler/hazirlik/liste">
+        <span class="y-help">Seçilenler için:</span>
+        <button class="btn btn--sepet btn--kucuk" type="submit" formaction="/yonetim/siparisler/hazirlik/liste"><PIkon ad="liste" boyut={16} />Toplama listesi</button>
+        <button class="btn btn--cizgi btn--kucuk" type="submit" formaction="/yonetim/siparisler/hazirlik/etiketler"><PIkon ad="yazici" boyut={16} />Kargo / hazırlık etiketleri</button>
+        <button class="btn btn--cizgi btn--kucuk" type="button" data-hz-hepsi>Hepsini seç</button>
+        <span class="y-help" data-hz-sayac>0 seçili</span>
+      </form>
+      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo hz-tablo">
+        <thead><tr><th>Seç</th><th>Sipariş</th><th>Ürünler</th><th>Son kargo</th><th>Durum</th><th class="y-islem">İşlem</th></tr></thead>
+        <tbody>{liste.map((s) => {
+          const k = sure(s.sonKargo);
+          return <tr class:list={{ 'is-sorun': !!s.sorun }}>
+            <td data-etiket="Seç"><input type="checkbox" name="id" value={s.anahtar} form="secim" aria-label={'Seç: ' + s.no} data-hz-secim /></td>
+            <td data-etiket="Sipariş"><div class="hz-siparis"><KanalLogo kanal={s.kanal} boyut="kucuk" /><span><a class="y-link" href={s.href}><strong>{s.no}</strong></a><small class="y-table-note">{[KANAL_ADI[s.kanal], s.musteri, s.yer].filter(Boolean).join(' · ')}</small><small class="y-table-note">{yTarih.format(new Date(s.tarih))}</small></span></div></td>
+            <td data-etiket="Ürünler"><ul class="hz-urunler">{s.kalemler.map((x) => <li><b>{x.adet} ×</b> {x.ad}{!x.kodlar.length && <small class="y-yazi-turuncu"> (barkodsuz)</small>}</li>)}</ul></td>
+            <td data-etiket="Son kargo">{k ? <span class:list={['y-chip', 'y-chip--' + k.renk]}>{k.metin}</span> : <span class="muted">—</span>}</td>
+            <td data-etiket="Durum"><span class:list={['y-chip', s.asama === 'hazirlanacak' ? 'y-chip--turuncu' : 'y-chip--mavi']}>{s.asama === 'hazirlanacak' ? 'Hazırlanacak' : 'Hazırlanıyor'}</span>{s.sorun && <small class="y-table-note y-yazi-kirmizi">{s.sorun}</small>}{s.kargoTakip && <small class="y-table-note">{s.kargoFirma} · {s.kargoTakip}</small>}</td>
+            <td data-etiket="İşlem" class="y-islem hz-islem">
+              <a class:list={['btn', 'btn--kucuk', s.sorun ? 'btn--cizgi' : 'btn--sepet']} href={'/yonetim/siparisler/hazirlik/paketle?id=' + encodeURIComponent(s.anahtar)}><PIkon ad="barkod" boyut={16} />Barkodla paketle</a>
+            </td>
+          </tr>;
+        })}</tbody>
+      </table></div>
+    </> : <p class="y-bos">Hazırlanacak sipariş yok. Yeni siparişler geldiğinde burada görünür.</p>}
+  </section>
+
+  <section class="y-kart">
+    <h2><PIkon ad="bilgi" /> Önerilen sıra</h2>
+    <ol class="hz-sira">
+      <li><strong>Toplama listesi:</strong> seçtiğiniz siparişlerin ürünleri tek listede, aynı ürün birleşik — depoda bir turda toplarsınız.</li>
+      <li><strong>Barkodla paketle:</strong> her siparişte ürünlerin barkodunu okutun (barkod okuyucu ya da telefon kamerası). Yanlış ya da eksik ürün varsa ekran uyarır; tamamlanınca sipariş “hazırlanıyor”a geçer, Trendyol’a “toplanıyor” bildirilir.</li>
+      <li><strong>Etiketler:</strong> Trendyol paketlerinde kargo barkodlu etiket (Trendyol Express/Aras’ta Trendyol’un hazır etiketi), web siparişlerinde adresli hazırlık etiketi.</li>
+    </ol>
+  </section>
+</Yonetim>
+<script>
+  const kutular = [...document.querySelectorAll<HTMLInputElement>('[data-hz-secim]')];
+  const sayac = document.querySelector<HTMLElement>('[data-hz-sayac]');
+  const guncelle = () => { if (sayac) sayac.textContent = kutular.filter((k) => k.checked).length + ' seçili'; };
+  for (const k of kutular) k.addEventListener('change', guncelle);
+  document.querySelector<HTMLButtonElement>('[data-hz-hepsi]')?.addEventListener('click', (e) => {
+    const hepsi = kutular.every((k) => k.checked);
+    for (const k of kutular) k.checked = !hepsi;
+    (e.currentTarget as HTMLButtonElement).textContent = hepsi ? 'Hepsini seç' : 'Seçimi kaldır';
+    guncelle();
+  });
+  document.querySelector<HTMLFormElement>('#secim')?.addEventListener('submit', (e) => {
+    if (!kutular.some((k) => k.checked)) { e.preventDefault(); alert('Önce listeden sipariş seçin.'); }
+  });
+</script>
+<style>
+  .hz-toplu { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; padding: 10px 12px; border: 1px dashed var(--y-border); border-radius: 10px; background: var(--y-bg); }
+  .hz-siparis { display: flex; gap: 8px; align-items: flex-start; }
+  .hz-siparis span { display: grid; }
+  .hz-urunler { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; font-size: 13.5px; white-space: normal; }
+  .hz-tablo tr.is-sorun { background: #fdf6f4; }
+  .hz-tablo td { white-space: normal; }
+  .hz-sira { margin: 4px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; font-size: 14.5px; line-height: 1.5; }
+</style>

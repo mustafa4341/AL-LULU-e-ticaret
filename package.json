@@ -10,17 +10,17 @@
     "check": "astro check"
   },
   "dependencies": {
-    "@astrojs/check": "^0.9.12",
-    "@astrojs/node": "^9.5.5",
-    "@astrojs/vercel": "^8.2.11",
+    "@astrojs/node": "^11.1.14",
+    "@astrojs/vercel": "^11.0.22",
     "@supabase/supabase-js": "2.119.0",
     "@vercel/functions": "^2.2.13",
-    "astro": "^5.18.2",
+    "astro": "^7.4.13",
     "nodemailer": "^10.6.0",
-    "sharp": "^0.35.5",
-    "typescript": "^5.9.3"
+    "sharp": "^0.35.5"
   },
   "devDependencies": {
-    "@types/nodemailer": "^8.0.2"
+    "@astrojs/check": "^0.9.12",
+    "@types/nodemailer": "^8.0.2",
+    "typescript": "^5.9.3"
   }
 }

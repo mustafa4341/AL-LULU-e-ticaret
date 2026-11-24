@@ -3,7 +3,7 @@
 ## v3 güncellemesi: yönetim paneli ve Trendyol/Amazon mantığı
 
 - **Yönetim paneli (/yonetim):** Ürün, fiyat, stok, görsel, indirim, sepette indirim, set, kategori, sipariş ve site ayarları panelden yönetiliyor. Değişiklikler sitede anında görünüyor. Kullanımı README.md dosyasında.
-- **İletişim:** WhatsApp 0552 577 85 78 ve solyanim4341@gmail.com. Header'da, mobil alt menüde, masaüstünde yüzen butonda, ürün sayfasında ("Bu ürünle ilgili sorunuz mu var?"), ödeme sayfasında ve footer'da görünüyor.
+- **İletişim:** WhatsApp destek hattı ve mağaza e-postası (site ayarlarındaki adres). Header'da, mobil alt menüde, masaüstünde yüzen butonda, ürün sayfasında ("Bu ürünle ilgili sorunuz mu var?"), ödeme sayfasında ve footer'da görünüyor.
 - **Tek menü:** Hamburger menü ve mobildeki kategori şeridi kaldırıldı. Mobilde kategoriler alt menüden (Ana Sayfa · Kategoriler · Sepetim · WhatsApp), masaüstünde başlığın altından açılıyor.
 - **Renkler:** Sepete Ekle sarı-altın, Hemen Al turuncu, indirim kırmızı, kazanç ve kargo bedava yeşil; sayfa zemini açık gri, kartlar beyaz.
 - **Büyüteç:** Masaüstünde fareyle üzerine gelince yakınlaştırma; dokununca tam ekran, iki parmakla yakınlaştırma ve çift dokunma.

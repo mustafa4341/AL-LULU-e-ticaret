@@ -81,8 +81,8 @@ export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string,
       ...r.giderler.slice().sort((a, b) => a.tarih.localeCompare(b.tarih)).map((x: Gider) => [x.tarih, GIDER_KATEGORILERI[x.kategori], x.not, tl(x.tutar), x.ek?.ad ?? 'Yok', x.id.slice(0, 8)]),
     ] },
     { ad: 'Trendyol kesintileri', kod: 'trendyol', satirlar: [
-      [...TRENDYOL_BASLIK, 'Beklenen hakediş', 'Ödeme farkı'],
-      ...r.trendyol.map((x) => [x.id, x.tarih, tl(x.brut), tl(x.indirim), tl(x.iade), tl(x.komisyon), tl(x.hizmet), tl(x.kargo), tl(x.diger), x.banka === undefined ? '' : tl(x.banka), tl(hakEdis(x)), x.banka === undefined ? '' : tl(x.banka - hakEdis(x))]),
+      [...TRENDYOL_BASLIK, 'Stopaj (%1, vergiden mahsup)', 'Beklenen hakediş', 'Ödeme farkı'],
+      ...r.trendyol.map((x) => [x.id, x.tarih, tl(x.brut), tl(x.indirim), tl(x.iade), tl(x.komisyon), tl(x.hizmet), tl(x.kargo), tl(x.diger), x.banka === undefined ? '' : tl(x.banka), tl(x.stopaj ?? 0), tl(hakEdis(x)), x.banka === undefined ? '' : tl(x.banka - hakEdis(x))]),
     ] },
     { ad: 'Hepsiburada kayıtları', kod: 'hepsiburada', satirlar: [
       ['Kayıt no', 'Gün', 'Sipariş no', 'Paket no', 'Ürün', 'Kayıt türü', 'Grup', 'Tutar (TL, KDV dahil)', 'KDV (TL)', 'KDV hariç (TL)', 'Hakedişe etkisi (TL)', 'Durum', 'Vade', 'Ödeme tarihi', 'Fatura no'],
@@ -123,6 +123,8 @@ export function dosyaYaniti(veri: Uint8Array, tur: string, ad: string, onizle = 
     'Content-Type': tur,
     'Content-Disposition': (onizle ? 'inline' : 'attachment') + "; filename*=UTF-8''" + encodeURIComponent(ad),
     'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff',
+    // Tarayıcıda açılan yüklenmiş görseller yalıtılmış (sandbox) çalışır; PDF'te tarayıcının PDF görüntüleyicisi bozulmasın diye uygulanmaz
+    ...(onizle && tur.startsWith('image/') ? { 'Content-Security-Policy': "sandbox; default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'" } : {}),
   } });
 }
 export const csvYaniti = (satirlar: Satirlar, ad: string) => dosyaYaniti(csvOlustur(satirlar), 'text/csv; charset=utf-8', ad + '.csv');

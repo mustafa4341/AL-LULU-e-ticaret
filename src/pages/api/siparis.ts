@@ -24,7 +24,8 @@ const Girdi = z.object({
     tip: z.enum(['bireysel', 'kurumsal']),
     firma: z.string().trim().max(160).optional(),
     vd: z.string().trim().max(80).optional(),
-    vno: z.string().regex(/^\d{10}$/).optional().or(z.literal('')),
+    // 10 haneli VKN ya da şahıs şirketinde 11 haneli TC kimlik no (vergi no yerine geçer — denetim AUD-027)
+    vno: z.string().regex(/^\d{10,11}$/).optional().or(z.literal('')),
     adres: z.string().trim().max(400).optional(),
   }),
   onay: z.literal(true),
@@ -48,7 +49,10 @@ export const POST: APIRoute = async ({ request, locals, clientAddress: baglananA
     return json({ hata: 'Çok fazla deneme. Lütfen biraz sonra tekrar deneyin veya WhatsApp üzerinden yazın.' }, 429);
   }
 
-  const g = Girdi.safeParse(await request.json().catch(() => null));
+  // Gövde en fazla 32 KB: gerçek bir sipariş birkaç KB'tır. Büyük/kötü niyetli gövde ayrıştırıcıyı yormasın (denetim AUD-009, zod DoS)
+  const govdeMetni = await request.text().catch(() => '');
+  if (govdeMetni.length > 32 * 1024) return json({ hata: 'Geçersiz istek.' }, 413);
+  const g = Girdi.safeParse((() => { try { return JSON.parse(govdeMetni); } catch { return null; } })());
   if (!g.success) return json({ hata: 'Lütfen bilgileri kontrol edin.', ayrinti: g.error.issues.map((i) => i.path.join('.')) }, 400);
   const d = g.data;
   if (paytr && (!d.musteri.eposta || !/^[\x21-\x7e]{1,100}$/.test(d.musteri.eposta))) {
@@ -134,9 +138,15 @@ export const POST: APIRoute = async ({ request, locals, clientAddress: baglananA
       return json({ no, token: siparis.token, toplam: hesap.toplam, odemeUrl, odemeRef: siparis.paytr?.ref });
     } catch {
       console.error('[PayTR] Ödeme ekranı açılamadı', no);
-      // Form bağlantısı müşteriye ulaşmadı. Ödeme sonucu saklı kalır, yalnızca stok ayrımı sonlanır.
+      // Form bağlantısı müşteriye ulaşmadı: ödeme hiç başlamadı. Stok ayrımı biter ve sipariş "ödeme bekliyor" listesinde
+      // yetim kalmasın diye otomatik iptal edilir (müşteri sepeti korunur, yeniden denerse yeni sipariş açılır — denetim AUD-033).
       await siparisGuncelle(no, (s) => {
-        if (s.paytr?.sonuc === 'bekliyor') s.paytr.beklemeBitis = Date.now();
+        if (s.paytr?.sonuc !== 'bekliyor' || s.durum !== 'odeme-bekliyor') return;
+        s.paytr.beklemeBitis = Date.now();
+        s.paytr.sonuc = 'basarisiz';
+        s.durum = 'iptal';
+        s.iptalNotu = 'Ödeme ekranı açılamadı; ödeme alınmadı (otomatik).';
+        s.gecmis.push({ tarih: new Date().toISOString(), durum: 'iptal', not: s.iptalNotu });
       }).catch(() => console.error('[PayTR] Stok ayrımı kapatılamadı', no));
       return json({ hata: 'Ödeme ekranı şu anda açılamadı. Sepetiniz korundu. Lütfen daha sonra tekrar deneyin.' }, 502);
     }

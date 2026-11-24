@@ -68,7 +68,7 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
   <section class="y-kart">
     <div class="y-kart__bas"><h2><PIkon ad="takvim-tik" /> Bugün ne yapmalıyım?</h2><a class="y-link" href="/yonetim/isler">Tüm görevler</a></div>
     <div class="y-metrics y-merkez-gorevler">
-      <a class="y-metric y-metric--turuncu" href="/yonetim/siparisler?durum=islem&amp;kanal=tumu"><PIkon ad="kutu" /><strong>{hazirAdet}</strong><span>Sipariş kuyruğu</span><small>Hazırlanacak ve kargolanacak · tüm kanallar</small></a>
+      <a class="y-metric y-metric--turuncu" href="/yonetim/siparisler?durum=kuyruk&amp;kanal=tumu"><PIkon ad="kutu" /><strong>{hazirAdet}</strong><span>Sipariş kuyruğu</span><small>Hazırlanacak ve kargolanacak · tüm kanallar</small></a>
       <a class="y-metric y-metric--yesil" href="/yonetim/siparisler?durum=hazirlaniyor&amp;kanal=web"><PIkon ad="kargo" /><strong>{kargolanacak.length}</strong><span>Kargoya verilecek</span><small>Hazırlanmış web siparişi</small></a>
       <a class="y-metric y-metric--kirmizi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" /><strong>{faturasiz.length}</strong><span>Faturası kesilecek</span><small>GİB'de düzenlenip kaydedilmeli</small></a>
       <a class="y-metric y-metric--altin" href="/yonetim/urunler?filtre=kritik"><PIkon ad="uyari" /><strong>{stokUyarilari.length}</strong><span>Stok uyarısı</span><small>{tukenen.length} tükendi · {kritikStok.length} azaldı</small></a>
@@ -108,7 +108,8 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
           const son = envanter.kanallar[k].sonApi;
           const api = pazaryeriApiDurumu(k);
           const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi']
-            : (api === 'kapali' || api === 'eksik') ? (son ? ['Canlıda bağlı', 'yesil'] : ['Kurulum bekliyor', 'gri'])
+            // API anahtarı silinmiş/eksikse eski "son çekim" tarihi bağlı gibi göstermesin (denetim AUD-029)
+            : (api === 'kapali' || api === 'eksik') ? (son ? ['Bağlantı kapalı', 'kirmizi'] : ['Kurulum bekliyor', 'gri'])
             : kanalGecikti.includes(k) ? [son ? 'Eşitleme gecikti' : 'İlk eşitleme bekleniyor', 'turuncu']
             : api === 'test' ? ['Test', 'gri'] : !son ? ['İlk çekim bekleniyor', 'turuncu'] : ['Bağlı', 'yesil'];
           return <li><a href={'/yonetim/siparisler/kanallar#' + k}>

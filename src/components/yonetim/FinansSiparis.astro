@@ -35,6 +35,8 @@ const etiketAdres = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' +
   <div class="y-belge-tablo">
     {(['ozet', 'fis', 'paket', 'iade'] as BelgeTuru[]).filter((t) => !iptal || t === 'iade').map((t) => {
       const kayit = mevcutBelge[t];
+      // Son deneme hata verdiyse görünsün ve düğme "Yeniden dene" olsun (Panel 2.0'da bu ayrım kaybolmuştu — denetim AUD-020)
+      const hatali = !kayit && sirali.find((b) => b.tur === t)?.durum === 'hata';
       return (
         <div class="y-belge-satir">
           <span class="y-pdf-rozet" aria-hidden="true">PDF</span>
@@ -42,14 +44,18 @@ const etiketAdres = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' +
             <strong>{BELGE_TURLERI[t]}</strong>
             <small>{ACIKLAMA[t]}{kayit ? ` · ${kayit.belgeNo ?? ''} (${yTarih.format(new Date(kayit.olusturma))})` : ''}</small>
           </div>
-          <span class:list={['y-chip', kayit ? 'y-chip--' + durumSinifi(kayit.durum) : 'y-chip--gri']}>
-            {kayit ? BELGE_DURUMLARI[kayit.durum] : 'Hazırlanmadı'}
+          <span class:list={['y-chip', kayit ? 'y-chip--' + durumSinifi(kayit.durum) : hatali ? 'y-chip--' + durumSinifi('hata') : 'y-chip--gri']}>
+            {kayit ? BELGE_DURUMLARI[kayit.durum] : hatali ? BELGE_DURUMLARI.hata : 'Hazırlanmadı'}
           </span>
           <div class="y-belge-satir__aksiyon">
             {kayit && ['duzenlendi', 'gonderildi', 'iptal'].includes(kayit.durum) ? (
               <>
                 <a class="y-ikon-aksiyon" href={'/yonetim/finans/belge?id=' + kayit.id} title="PDF İndir" aria-label={BELGE_TURLERI[t] + ' indir'}><PIkon ad="indir" boyut={16} /></a>
                 <a class="y-ikon-aksiyon" href={'/yonetim/finans/belge?goster=1&id=' + kayit.id} target="_blank" rel="noopener" title="Önizle / Yazdır" aria-label={BELGE_TURLERI[t] + ' görüntüle'}><PIkon ad="goz" boyut={16} /></a>
+                {kayit.durum === 'duzenlendi' && <form method="post" action="/yonetim/finans/belge">
+                  <input type="hidden" name="id" value={kayit.id} /><input type="hidden" name="geri" value={geri + '#belgeler'} />
+                  <button class="btn btn--cizgi btn--kucuk" type="submit" name="islem" value="gonderildi" title="Belgeyi müşteriye ilettiyseniz işaretleyin">Gönderildi</button>
+                </form>}
               </>
             ) : (
               <form method="post" action="/yonetim/finans/belge">
@@ -57,7 +63,7 @@ const etiketAdres = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' +
                 <input type="hidden" name="tur" value={t} />
                 <input type="hidden" name="geri" value={geri + '#belgeler'} />
                 <input type="hidden" name="indir" value="0" />
-                <button class="btn btn--cizgi btn--kucuk" type="submit" name="islem" value="olustur">Oluştur</button>
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="islem" value="olustur">{hatali ? 'Yeniden dene' : 'Oluştur'}</button>
               </form>
             )}
           </div>

@@ -17,7 +17,10 @@ export default defineConfig({
     ? vercel({ includeFiles: ['./public/img/logo/yazi.png'], maxDuration: 60 }) // 60 sn her Vercel planında geçerli (Hobby dahil)
     : node({ mode: 'standalone' }),
   trailingSlash: 'never',
-  prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
+  // Önyükleme yalnız açıkça işaretli (data-astro-prefetch) vitrin bağlantılarında. Eskiden TÜM bağlantılar fareyle
+  // üzerine gelince yükleniyordu: "Yedek indir"e gelmek yedeği alınmış sayıyor, "Müşteri gibi bak" çerezi kendiliğinden
+  // açılıyor, Trendyol menüleri canlı API'yi çağırıyordu (denetim AUD-006).
+  prefetch: { prefetchAll: false, defaultStrategy: 'hover' },
   security: {
     checkOrigin: false, // src/middleware.ts aynı origin'i zorunlu tutar; PayTR bildirimi kendi imzasıyla doğrulanır
     // ZORUNLU: Astro 5.14+ bu liste olmadan canlı sunucuda adresi "localhost" sayar.
@@ -25,10 +28,15 @@ export default defineConfig({
     allowedDomains: [
       { protocol: 'https', hostname: ALAN },
       { protocol: 'https', hostname: `www.${ALAN}` },
-      { protocol: 'https', hostname: '**.vercel.app' },
+      // Yalnız bu projenin Vercel adresi (eskiden her *.vercel.app kabul ediliyordu — denetim AUD-009).
+      // Dal önizlemelerinde (rastgele adlı *.vercel.app) formlar bu yüzden 403 verir; önizlemede panel denenecekse adı buraya ekleyin.
+      { protocol: 'https', hostname: 'al-lulu-e-ticaret.vercel.app' },
       { protocol: 'http', hostname: 'localhost' },  // yerelde `npm run preview` / test
       { protocol: 'http', hostname: '127.0.0.1' },
     ],
   },
+  // Astro'nun /_image dönüştürücüsü kullanılmıyor (görseller lib/depo.ts'de işleniyor). Açıklı sharp/libheif yolu
+  // dışarıdan tetiklenemesin diye işlem yapmayan servis seçildi (denetim AUD-009).
+  image: { service: { entrypoint: 'astro/assets/services/noop' } },
   devToolbar: { enabled: false },
 });

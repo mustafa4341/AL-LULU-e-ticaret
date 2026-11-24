@@ -1,4 +1,5 @@
 import { z } from 'astro/zod';
+import { bosIseVarsayilan } from './zodUyum';
 import type { Siparis } from './sema';
 import { iadeEdildi, IADE_ISLEMI } from './siparisAkisi';
 
@@ -21,6 +22,7 @@ export const GIDER_KATEGORILERI = {
 export const TRENDYOL_TUTARLARI = {
   brut: 'Brüt satış', indirim: 'Satıcı indirimi', iade: 'İadeler', komisyon: 'Komisyon',
   hizmet: 'Hizmet bedeli', kargo: 'Kargo kesintisi', diger: 'Diğer kesinti', banka: 'Bankaya geçen',
+  stopaj: 'E-ticaret stopajı (%1, vergiden mahsup edilir)',
 } as const;
 
 export const ISO_GUN = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,18 +54,29 @@ export const BelgeAyarSema = z.object({
   satici: z.boolean().default(true),
   fisFiyat: z.boolean().default(true),
   barkod: z.boolean().default(true),
-  onekler: z.object({ ozet: onek.default('SO'), fis: onek.default('SF'), paket: onek.default('PL'), iade: onek.default('IF') }).default({}),
-  notlar: z.object({
+  onekler: bosIseVarsayilan(z.object({ ozet: onek.default('SO'), fis: onek.default('SF'), paket: onek.default('PL'), iade: onek.default('IF') })),
+  notlar: bosIseVarsayilan(z.object({
     ozet: notMetni.default(''),
     fis: notMetni.default('Bizi tercih ettiğiniz için teşekkür ederiz. Sorularınız için bize WhatsApp’tan yazabilirsiniz.'),
     paket: notMetni.default(''),
     iade: notMetni.default(''),
-  }).default({}),
+  })),
 });
 export type BelgeAyarlari = z.infer<typeof BelgeAyarSema>;
+/** İşaretli kuruş: iadede komisyon/indirim/kargo geri döner, eski bir satışın iadesinde bankaya geçen eksi olabilir. */
+const ki = z.number().int().min(-1_000_000_000_000).max(1_000_000_000_000);
+/** Trendyol cari hesabındaki tek işlem (satış, iade, kesinti…) — aynı işlem tekrar gelirse üstüne yazılır, iki kez sayılmaz. */
+const trendyolParca = z.object({
+  tarih: z.number().int().nonnegative(), tur: z.string().max(60).optional(), odenen: z.boolean(),
+  brut: ki, indirim: ki, iade: ki, komisyon: ki, hizmet: ki, kargo: ki, diger: ki, banka: ki, stopaj: ki.default(0),
+});
 const trendyol = z.object({
-  id: z.string().min(1).max(100), tarih, brut: k, indirim: k, iade: k, komisyon: k,
-  hizmet: k, kargo: k, diger: k, banka: k.optional(),
+  id: z.string().min(1).max(100), tarih, brut: ki, indirim: ki, iade: ki, komisyon: ki,
+  hizmet: ki, kargo: ki, diger: ki, banka: ki.optional(),
+  /** %1 e-ticaret stopajı: hakedişten düşülür ama gider değildir (gelir/kurumlar vergisinden mahsup edilir) */
+  stopaj: k.optional(),
+  /** API'den gelen satırlarda işlem kimliğine göre parçalar (sonraki çekimler eski satışı silmeden birleşir) */
+  parcalar: z.record(z.string().max(120), trendyolParca).optional(),
 });
 /** Hepsiburada muhasebe servisinden gelen tek kayıt. tutar/kdv/net kuruş ve işaretsiz; yönü `gelir` belirler. */
 const opsMetin = (n: number) => z.string().max(n).optional();
@@ -129,10 +142,10 @@ export const FinansSema = z.object({
   hepsiburada: z.array(hbKayit).default([]),
   hbPerformans: z.array(hbPerformans).default([]),
   hbSonCekim: z.object({ tarih: z.string(), bas: z.string(), son: z.string(), kayit: z.number().int(), performans: z.number().int() }).optional(),
-  hbAyar: HbAyarSema.default({}),
+  hbAyar: bosIseVarsayilan(HbAyarSema),
   hbUrunler: z.record(z.string(), HbUrunAyarSema).default({}),
   faturalar: z.array(faturaKaydi).default([]),
-  ayarlar: BelgeAyarSema.default({}),
+  ayarlar: bosIseVarsayilan(BelgeAyarSema),
   /** Belge türü ve yıla göre son verilen sıra numarası, ör. { "ozet-2026": 12 } */
   sayaclar: z.record(z.string(), z.number().int().nonnegative()).default({}),
 });
@@ -140,6 +153,7 @@ export type Finans = z.infer<typeof FinansSema>;
 export type Gider = z.infer<typeof gider>;
 export type Belge = z.infer<typeof belge>;
 export type TrendyolSatiri = z.infer<typeof trendyol>;
+export type TrendyolParcasi = z.infer<typeof trendyolParca>;
 export const giderSema = gider;
 export const trendyolSema = trendyol;
 
@@ -162,7 +176,7 @@ export function paraOku(v: string) {
   return tutar;
 }
 export function hakEdis(s: TrendyolSatiri) {
-  return s.brut - s.indirim - s.iade - s.komisyon - s.hizmet - s.kargo - s.diger;
+  return s.brut - s.indirim - s.iade - s.komisyon - s.hizmet - s.kargo - s.diger - (s.stopaj ?? 0);
 }
 /** Hepsiburada kaydının hakedişe etkisi (kuruş, işaretli). "TotalPayment" bankaya aktarım özetidir, hakedişe eklenmez. */
 export const hbIsaretli = (x: HbKayit) => x.tur === 'TotalPayment' ? 0 : (x.gelir ? x.tutar : -x.tutar);

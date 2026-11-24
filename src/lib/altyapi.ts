@@ -1,4 +1,5 @@
 import { paytrAyari } from './paytr';
+import { TAKSIT_ACIK } from './taksit';
 
 /**
  * Hangi dış hizmetler GERÇEKTEN bağlı? Sitedeki vaatler buna göre değişir:
@@ -20,7 +21,7 @@ export const epostaBagli = (): boolean => !!ortam('SMTP_HOST') && !!ortam('SMTP_
  * Ödeme açıldığı an panelde yazılı oldukları gibi kendiliğinden geri gelir.
  */
 export function hizmeteUygunSSS<T extends { soru: string; cevap: string }>(maddeler: readonly T[]): T[] {
-  if (ODEME_BAGLI()) return [...maddeler];
+  if (ODEME_BAGLI() && TAKSIT_ACIK) return [...maddeler];
   return maddeler.filter((m) => !/taksit/i.test(m.soru + ' ' + m.cevap));
 }
 

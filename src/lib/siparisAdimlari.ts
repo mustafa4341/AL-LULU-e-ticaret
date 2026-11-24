@@ -59,8 +59,11 @@ const PY_SIRA: PyDurum[] = ['onay-bekliyor', 'yeni', 'hazirlaniyor', 'kargoda', 
 
 export function pazaryeriYolculugu(s: PazaryeriSiparisi, fatura: FaturaKaydi | undefined, faturaAdresi: string): SiparisYolculugu {
   const ilk = (d: PyDurum) => s.gecmis.find((g) => g.durum === d)?.tarih;
-  const asama = PY_SIRA.indexOf(s.durum);
-  const gecti = (d: PyDurum) => asama >= PY_SIRA.indexOf(d);
+  // İade / teslim edilemedi sırada yer almaz: o siparişte paket kargoya çıkmıştır (iade çoğunlukla teslimden sonra gelir).
+  // Geçmiş kaydı varsa ona bakılır; yoksa bu varsayım kullanılır. Eskiden tamamlanmış adımlar "atlandı" görünüyordu (denetim AUD-029).
+  const kapanisSirasi = s.durum === 'iade' ? PY_SIRA.indexOf('teslim-edildi') : s.durum === 'teslim-edilemedi' ? PY_SIRA.indexOf('kargoda') : -1;
+  const asama = Math.max(PY_SIRA.indexOf(s.durum), kapanisSirasi);
+  const gecti = (d: PyDurum) => asama >= PY_SIRA.indexOf(d) || s.gecmis.some((g) => g.durum === d);
   const ty = s.kanal === 'trendyol';
   const kanalAdi = KANALLAR[s.kanal];
   const adimlar: SiparisAdimi[] = [];
@@ -81,12 +84,14 @@ export function pazaryeriYolculugu(s: PazaryeriSiparisi, fatura: FaturaKaydi | u
 
   // Hazırlık (panelden/otomatik bildirim geçmişe yazılır; kanal onayı birkaç dakika sonra gelir)
   const toplamaNotu = s.gecmis.find((g) => g.not?.includes('“toplanıyor” bildirildi'))?.tarih;
-  const hazir = gecti('hazirlaniyor') || ['Picking', 'Invoiced', 'Shipped', 'Delivered'].includes(s.hamDurum) || !!toplamaNotu;
+  const paketNotu = s.gecmis.find((g) => g.not?.startsWith('Barkodla paketlendi'));
+  const hazir = gecti('hazirlaniyor') || ['Picking', 'Invoiced', 'Shipped', 'Delivered'].includes(s.hamDurum) || !!toplamaNotu || (!ty && !!paketNotu);
+  if (paketNotu) adimlar.push({ ad: 'Barkodla paketlendi', durum: 'tamam', tarih: paketNotu.tarih, aciklama: paketNotu.not?.replace(/^Barkodla paketlendi\s*/, '').replace(/[()]/g, '') });
   adimlar.push(hazir
     ? { ad: ty ? 'Hazırlamaya alındı (toplanıyor)' : 'Paketlendi', durum: 'tamam', tarih: toplamaNotu ?? ilk('hazirlaniyor') ?? ilk('kargoda'), aciklama: ty ? 'Trendyol’a “toplanıyor” bildirildi; müşteri artık iptal edemez.' : undefined }
     : { ad: ty ? 'Hazırlamaya alındı (toplanıyor)' : 'Paketlendi', durum: 'bekliyor',
         aciklama: s.sonKargoTarihi ? `Son kargolama: ${new Date(s.sonKargoTarihi).toLocaleString('tr-TR', { timeZone: 'Europe/Istanbul', dateStyle: 'short', timeStyle: 'short' })}` : undefined,
-        eylem: ty ? { etiket: 'Toplamaya başla', href: '#trendyol-islem' } : { etiket: 'Hepsiburada panelinde paketle', href: '#hepsiburada-islem' } });
+        eylem: { etiket: 'Barkodla paketle', href: '/yonetim/siparisler/hazirlik/paketle?id=' + encodeURIComponent(s.id) } });
 
   // Fatura
   adimlar.push(...faturaAdimlari(fatura, gecti('kargoda'), faturaAdresi, kanalAdi, s.kanal === 'hepsiburada'));
@@ -139,7 +144,7 @@ export function webYolculugu(s: Siparis, fatura: FaturaKaydi | undefined, fatura
       : { ad: 'Stok ayrıldı', durum: 'bekliyor', aciklama: 'Ödeme onaylanınca otomatik ayrılır.' },
     gecti('hazirlaniyor')
       ? { ad: 'Hazırlanıyor', durum: 'tamam', tarih: ilk('hazirlaniyor') }
-      : { ad: 'Hazırlanıyor', durum: 'bekliyor', eylem: odendi ? { etiket: 'Hazırlamaya al', href: '#kargo' } : undefined },
+      : { ad: 'Hazırlanıyor', durum: 'bekliyor', eylem: odendi ? { etiket: 'Barkodla paketle', href: '/yonetim/siparisler/hazirlik/paketle?id=' + encodeURIComponent('web:' + s.no) } : undefined },
     ...faturaAdimlari(fatura, gecti('kargoda'), faturaAdresi, 'Web sitesi', false),
     gecti('kargoda')
       ? { ad: 'Kargoya verildi', durum: 'tamam', tarih: ilk('kargoda'), aciklama: [s.kargoFirma, s.kargoTakip].filter(Boolean).join(' · ') }

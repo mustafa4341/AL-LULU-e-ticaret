@@ -1,5 +1,6 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import { guvenliBaglanti } from '../../../lib/istek';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import { DogrulamaHatasi, magazaOku } from '../../../lib/depo';
@@ -9,6 +10,7 @@ import { bosAyarlar, kanalHedefStok } from '../../../lib/pazaryeri';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi } from '../../../lib/pazaryeriDepo';
 import { kanalFiyatiniKoru, kanalFiyatlariniKaydet, trendyolIlaniniBagla, trendyolKatalogu, trendyoldanUrunCek, type TyKatalogSatiri } from '../../../lib/trendyolIceAktar';
+import { tyBuybox, type TyBuybox } from '../../../lib/trendyolApi';
 
 /**
  * Trendyol ilanları: Trendyol'daki her onaylı ilanın sitedeki karşılığı.
@@ -92,10 +94,16 @@ let ayar = bosAyarlar();
 try { ayar = await envanterAyarlariOku(); } catch { hatalar.push('Kanal ayarları okunamadı.'); }
 const k = ayar.kanallar.trendyol;
 let satirlar: TyKatalogSatiri[] | undefined;
+let buybox: Map<string, TyBuybox> | undefined;
 if (apiHazir && depoHazir) {
   try {
     satirlar = await trendyolKatalogu();
     await kanalFiyatlariniKaydet(satirlar).catch(() => undefined);
+    // Buybox yalnız istenince (her ilan için ayrı sorgu): ?buybox=1
+    if (q.has('buybox') && satirlar.length) {
+      try { buybox = await tyBuybox(satirlar.filter((s) => s.satista).map((s) => s.barkod)); }
+      catch (e) { hatalar.push('Buybox bilgisi alınamadı: ' + hataMetni(e).join(' ')); }
+    }
   } catch (e) { hatalar.push(...hataMetni(e)); }
 }
 const urunler = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
@@ -113,6 +121,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
     <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
     <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Siteden Trendyol’a gönder</a>
     <a class="btn btn--cizgi" href={yol}><PIkon ad="yenile" boyut={18} />Listeyi yenile</a>
+    {apiHazir && <a class="btn btn--cizgi" href={yol + '?buybox=1#liste'} data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Buybox durumunu getir</a>}
   </div>
 
   {!apiHazir && <div class="y-veri-not" role="status"><PIkon ad="bilgi" boyut={18} /><p><strong>Bu ekran canlı sitede çalışır.</strong> Trendyol anahtarları yalnız canlı sunucuda (Vercel) tanımlı; bu bilgisayarda Trendyol’a bağlanılamaz.</p></div>}
@@ -123,6 +132,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
       <li><strong>Bağla:</strong> Trendyol ilanı sitedeki ürüne bağlanır. Stok ortak olur: hangi kanaldan satılırsa satılsın depodaki adet düşer, Trendyol stoğu 5 dakikada bir depodaki satılabilir adet − {k.guvenlikPayi} (güvenlik payı) olur. <strong>Fiyata dokunulmaz.</strong></li>
       <li><strong>Siteye çek:</strong> Sitede olmayan ilan; başlık, açıklama, özellikler, barkod ve görselleriyle sitede <strong>taslak</strong> ürün olur ve aynı anda bağlanır. Kontrol edip yayınlayana kadar sitede görünmez.</li>
       <li><strong>Fiyat:</strong> “Fiyatı gönder” sitedeki (ya da ürüne özel) hedef fiyatı Trendyol’a yollar. “Trendyol fiyatını koru” ise Trendyol’daki fiyatı o ürünün Trendyol’a özel fiyatı yapar.</li>
+      <li><strong>Buybox:</strong> aynı ürünü başka mağazalar da satıyorsa “Sepete ekle” en uygun teklife gider. “Buybox durumunu getir” hangi üründe kaçıncı sırada olduğunuzu ve en iyi fiyatı gösterir; fiyatı siz karar verip değiştirirsiniz (otomatik düşürme yok). Her gün kendiliğinden kontrol edilir, kaybedilen buybox “Bugünkü işler”e yazılır.</li>
     </ol>
   </section>
 
@@ -139,7 +149,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
       <div class="tyi-toplu__satir">
         <span class="y-help">Seçilenler:</span>
         <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="bagla">Bağla (sitede olanlar)</button>
-        <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="fiyat-gonder">Fiyatını gönder (bağlı olanlar)</button>
+        <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="fiyat-gonder" data-onayla="Seçilen bağlı ilanların fiyatı Trendyol’a gönderilsin mi? Fiyat birkaç dakika içinde canlıda değişir.">Fiyatını gönder (bağlı olanlar)</button>
         <button class="btn btn--cizgi btn--kucuk" type="button" data-hepsini-sec>Hepsini seç</button>
       </div>
       <details class="tyi-cek">
@@ -172,10 +182,14 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
               <span><strong>{s.baslik}</strong><small class="y-table-note">{[s.marka?.ad, `Barkod ${s.barkod}`, s.stokKodu && s.stokKodu !== s.barkod ? `Stok kodu ${s.stokKodu}` : ''].filter(Boolean).join(' · ')}</small>
                 {s.kategori && <small class="y-table-note">{s.kategori.ad}</small>}
                 {!s.satista && <small class="y-table-note y-yazi-turuncu">{s.kilit ? `Kilitli: ${s.kilit}` : s.arsiv ? 'Arşivde' : 'Satışta değil'}</small>}
-                {s.url && <a class="y-link" href={s.url} target="_blank" rel="noopener noreferrer">Trendyol’da gör ↗</a>}
+                {guvenliBaglanti(s.url) && <a class="y-link" href={guvenliBaglanti(s.url)} target="_blank" rel="noopener noreferrer">Trendyol’da gör ↗</a>}
               </span></div>
           </td>
-          <td data-etiket="Trendyol fiyat / stok" class="y-sayi y-nowrap"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small></td>
+          <td data-etiket="Trendyol fiyat / stok" class="y-sayi y-nowrap"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small>{e?.fiyatHata && <small class="y-table-note" style="color:var(--y-kirmizi, #b42318);white-space:normal">Son fiyat reddedildi: {e.fiyatHata}</small>}
+            {(() => { const b = buybox?.get(s.barkod); if (!b) return null;
+              if (!b.cokSatici || b.sira === 1) return <small class="y-table-note y-yazi-yesil" title="Buybox: ürün sayfasında “Sepete ekle” sizin mağazanızda">Buybox sizde{b.cokSatici ? '' : ' (tek satıcı)'}</small>;
+              return <small class="y-table-note y-yazi-kirmizi" title="Aynı ürünü başka mağazalar da satıyor">Buybox {b.sira ?? '?'}. sırada · en iyi {para(b.fiyat)}</small>; })()}
+          </td>
           <td data-etiket="Sitedeki ürün">
             {u ? <><a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>{u.marka} {u.kisaAd}</a>
               <small class="y-table-note">Depo {u.stok} · Trendyol hedefi {kanalHedefStok(u.stok, k)} adet</small>
@@ -187,7 +201,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
           <td data-etiket="İşlem" class="y-islem tyi-islemler">
             {s.durum === 'eslesir' && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="bagla">Bağla</button></form>}
             {s.durum === 'bagli' && s.urunId && <>
-              {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="fiyat-gonder" title={`Trendyol fiyatını ${para(s.siteFiyat)} yapar`}>Fiyatı gönder</button></form>}
+              {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="fiyat-gonder" title={`Trendyol fiyatını ${para(s.siteFiyat)} yapar`} data-onayla={`Trendyol fiyatı ${para(s.siteFiyat)} yapılsın mı? Birkaç dakika içinde canlıda değişir.`}>Fiyatı gönder</button></form>}
               {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="fiyat-koru" title="Trendyol’daki fiyatı bu ürünün Trendyol’a özel fiyatı yapar">Trendyol fiyatını koru</button></form>}
               <form method="post"><input type="hidden" name="urun" value={s.urunId} /><input type="hidden" name="deger" value={e?.fiyatTakip ? 'kapat' : 'ac'} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="takip">{e?.fiyatTakip ? 'Fiyat takibini kapat' : 'Fiyatı otomatik takip et'}</button></form>
             </>}
@@ -196,7 +210,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
               {s.durum === 'yeni' && <form method="post" class="tyi-mini">
                 <input type="hidden" name="barkod" value={s.barkod} />
                 <label class="y-alan">Site kategorisi<select name="kategori">{magaza.kategoriler.map((c) => <option value={c.id}>{c.ad}</option>)}</select></label>
-                <label class="y-alan">Depo stoğu<input name={'stok-' + s.barkod} inputmode="numeric" value={s.stok ?? 0} /></label>
+                <label class="y-alan">Depo stoğu<input name={'stok-' + s.barkod} inputmode="numeric" value={s.stok ?? 0} data-tyi-stok={s.barkod} /></label>
                 <input type="hidden" name="stokAl" value="on" />
                 <button class="btn btn--sepet btn--kucuk" name="eylem" value="cek">Siteye taslak ürün olarak çek</button>
               </form>}
@@ -208,7 +222,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
                 <button class="btn btn--cizgi btn--kucuk" name="eylem" value="elle-bagla">Bağla</button>
               </form>
             </details>}
-            {s.durum === 'yeni' && <input type="hidden" form="toplu" name={'stok-' + s.barkod} value={s.stok ?? 0} />}
+            {s.durum === 'yeni' && <input type="hidden" form="toplu" name={'stok-' + s.barkod} value={s.stok ?? 0} data-tyi-toplu-stok={s.barkod} />}
           </td>
         </tr>;
       })}</tbody>
@@ -218,6 +232,12 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
   </section>}
 </Yonetim>
 <script>
+  // Satırdaki "Depo stoğu" kutusunda yapılan düzeltme toplu çekimde de kullanılsın (eskiden toplu form gizli alandaki
+  // Trendyol adedini gönderiyor, elle düzeltilen değer kayboluyordu — denetim AUD-020)
+  document.querySelectorAll<HTMLInputElement>('[data-tyi-stok]').forEach((kutu) => kutu.addEventListener('input', () => {
+    const gizli = [...document.querySelectorAll<HTMLInputElement>('[data-tyi-toplu-stok]')].find((x) => x.dataset.tyiTopluStok === kutu.dataset.tyiStok);
+    if (gizli) gizli.value = kutu.value;
+  }));
   const filtre = document.querySelector<HTMLElement>('[data-tyi-filtre]');
   const ara = filtre?.querySelector<HTMLInputElement>('[data-tyi-ara]');
   const durum = filtre?.querySelector<HTMLSelectElement>('[data-tyi-durum]');
@@ -245,6 +265,7 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
   });
 </script>
 <style>
+  .tyi-tablo :global(.y-yazi-yesil) { color: var(--y-yesil, #0a7f3f); font-weight: 650; }
   .tyi-kural { margin: 4px 0 0; padding-left: 1.2rem; display: grid; gap: 6px; font-size: 14.5px; line-height: 1.5; }
   .tyi-toplu { display: grid; gap: 8px; margin-bottom: 10px; padding: 10px 12px; border: 1px dashed var(--y-border); border-radius: 10px; background: var(--y-bg); }
   .tyi-toplu__satir { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }

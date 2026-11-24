@@ -7,6 +7,8 @@ const k = Astro.locals.katalog;
 const kategoriler = k.gorunurKategoriler({ menu: true });
 const amiral = k.urunBul(k.anaSayfa.hero.urunId);
 const amiralGorsel = amiral ? k.anaGorsel(amiral) : undefined;
+/* Sepette indirim varsa ödenecek fiyat gösterilir (sepetle aynı — denetim AUD-027) */
+const amiralFiyat = amiral ? (k.fiyatBilgisi(amiral).sepette?.fiyat ?? amiral.fiyat) : 0;
 const setSayisi = k.tumSetler().length;
 ---
 <aside class="cekmece cekmece--alt" id="kategori-paneli" role="dialog" aria-modal="true" aria-labelledby="kategori-baslik" data-cekmece tabindex="-1" hidden>
@@ -22,7 +24,7 @@ const setSayisi = k.tumSetler().length;
         <span>
           <span class="menu-amiral__ust">Öne çıkan</span>
           <span class="menu-amiral__ad">{amiral.marka} {amiral.kisaAd}</span>
-          <span class="menu-amiral__fiyat">{formatTL(amiral.fiyat)}</span>
+          <span class="menu-amiral__fiyat">{formatTL(amiralFiyat)}{!k.stoktaMi(amiral) && ' · Tükendi'}</span>
         </span>
         <Ikon ad="sag" boyut={18} />
       </a>

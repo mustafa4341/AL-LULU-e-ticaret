@@ -46,17 +46,18 @@ const mobilAdlar = { ozet: 'İşler', siparisler: 'Siparişler', urunler: 'Ürü
 /* Alt menü: [ad, adres, kanal işareti (isteğe bağlı)] */
 const altMenu: Partial<Record<MenuBolumu, [string, string, string?][]>> = {
   ozet: [['Bugünkü işler', '/yonetim/isler']],
-  urunler: [['Tüm ürünler', '/yonetim/urunler'], ['Setler', '/yonetim/setler'], ['Kategoriler', '/yonetim/kategoriler'], ['Değerlendirmeler', '/yonetim/yorumlar']],
+  siparisler: [['Tüm siparişler', '/yonetim/siparisler'], ['Hazırlık ve paketleme', '/yonetim/siparisler/hazirlik']],
+  urunler: [['Tüm ürünler', '/yonetim/urunler'], ['Toplu fiyat ve stok (Excel)', '/yonetim/urunler/toplu'], ['Setler', '/yonetim/setler'], ['Kategoriler', '/yonetim/kategoriler'], ['Değerlendirmeler', '/yonetim/yorumlar']],
   kanallar: [
     ['Genel durum', '/yonetim/siparisler/kanallar'],
     ['Ürün eşleştirme', '/yonetim/siparisler/kanallar?gorunum=eslestirme'],
     ['Fiyat ve kurallar', '/yonetim/siparisler/kanallar?gorunum=fiyatlar'],
     ['Trendyol ürünleri', '/yonetim/siparisler/trendyol-urunler', 'trendyol'],
     ['Trendyol ilanları', '/yonetim/siparisler/trendyol-ilanlar', 'trendyol'],
-    ['Trendyol iadeleri', '/yonetim/siparisler/trendyol-iade-soru', 'trendyol'],
+    ['Trendyol iade ve sorular', '/yonetim/siparisler/trendyol-iade-soru', 'trendyol'],
     ['Hepsiburada ürünleri', '/yonetim/siparisler/kanallar?gorunum=hepsiburada', 'hepsiburada'],
   ],
-  finans: [['Genel bakış', '/yonetim/finans'], ['Giderler', '/yonetim/finans?sekme=giderler'], ['Sipariş belgeleri', '/yonetim/finans?sekme=belgeler'], ['Faturalar', '/yonetim/finans/faturalar'], ['Trendyol hakedişi', '/yonetim/finans?sekme=trendyol', 'trendyol'], ['Hepsiburada', '/yonetim/finans/hepsiburada', 'hepsiburada'], ['Raporlar', '/yonetim/finans?sekme=raporlar']],
+  finans: [['Genel bakış', '/yonetim/finans'], ['Giderler', '/yonetim/finans?sekme=giderler'], ['Sipariş belgeleri', '/yonetim/finans?sekme=belgeler'], ['Faturalar', '/yonetim/finans/faturalar'], ['Trendyol hakedişi', '/yonetim/finans?sekme=trendyol', 'trendyol'], ['Trendyol ürün kârlılığı', '/yonetim/finans/trendyol-karlilik', 'trendyol'], ['Hepsiburada', '/yonetim/finans/hepsiburada', 'hepsiburada'], ['Raporlar', '/yonetim/finans?sekme=raporlar']],
   site: [
     ['Ana sayfa düzeni', '/yonetim/site-duzeni'],
     ['Kampanya ve duyurular', '/yonetim/site-duzeni?bolum=duyuru'],
@@ -124,7 +125,7 @@ const baglantiYazisi = baglanti === 'bagli' ? 'Veritabanı bağlı' : baglanti =
           <summary class="y-ust-ikon" aria-label={dikkat ? `${dikkat} konu dikkat bekliyor` : 'Bildirimler'} title="Dikkat bekleyenler"><PIkon ad="zil" boyut={20} />{dikkat > 0 && <b class="y-ust-sayi">{dikkat > 99 ? '99+' : dikkat}</b>}</summary>
           <div>
             <strong>Dikkat bekleyenler</strong>
-            <a href="/yonetim/siparisler?durum=islem&amp;kanal=tumu"><PIkon ad="sepet" boyut={17} /><span>{bekleyen ? `${bekleyen} sipariş işlem bekliyor` : 'İşlem bekleyen sipariş yok'}<small>Web {bekleyenWeb} · Pazaryeri {bekleyenPazar}</small></span>{bekleyen > 0 && <b class="y-chip y-chip--turuncu">{bekleyen}</b>}</a>
+            <a href="/yonetim/siparisler?durum=kuyruk&amp;kanal=tumu"><PIkon ad="sepet" boyut={17} /><span>{bekleyen ? `${bekleyen} sipariş hazırlanacak / kargolanacak` : 'Hazırlanacak sipariş yok'}<small>Web {bekleyenWeb} · Pazaryeri {bekleyenPazar}</small></span>{bekleyen > 0 && <b class="y-chip y-chip--turuncu">{bekleyen}</b>}</a>
             <a href="/yonetim/urunler?filtre=kritik"><PIkon ad="uyari" boyut={17} /><span>{stokUyari ? `${stokUyari} ürün stok uyarısında` : 'Stok uyarısı yok'}<small>Tükenen veya uyarı eşiğine inen yayındaki ürünler</small></span>{stokUyari > 0 && <b class="y-chip y-chip--kirmizi">{stokUyari}</b>}</a>
             <a href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={17} /><span>Bugünkü işlerin tamamı<small>Fatura, iade, eşleştirme ve otomatik işler</small></span></a>
           </div>

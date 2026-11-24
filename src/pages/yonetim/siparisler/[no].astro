@@ -290,9 +290,13 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
 
       <ul class="y-eposta-adimlar">
         {[
-          { tur: 'siparis-alindi', baslik: 'Sipariş Onayı', bul: epostalar.find((e) => e.tur === 'siparis-alindi') },
-          { tur: 'odeme-onaylandi', baslik: 'Ödeme Onayı', bul: epostalar.find((e) => e.tur === 'odeme-onaylandi') },
-          { tur: 'kargoya-verildi', baslik: 'Kargo Bilgisi', bul: epostalar.find((e) => e.tur === 'kargoya-verildi') },
+          // Türler lib/bildirim.ts'deki kayıt adlarıyla aynı olmalı ("alindi", "durum-<durum>"); eskiden farklı adlar
+          // arandığı için e-postalar gönderilmiş olsa da hep "Gönderilmedi" görünüyordu (denetim AUD-020).
+          { tur: 'alindi', baslik: 'Sipariş Onayı', bul: epostalar.find((e) => e.tur === 'alindi') },
+          { tur: 'durum-odendi', baslik: 'Ödeme Onayı', bul: epostalar.find((e) => e.tur === 'durum-odendi') },
+          { tur: 'durum-kargoda', baslik: 'Kargo Bilgisi', bul: epostalar.find((e) => e.tur === 'durum-kargoda') },
+          // Diğer kayıtlı e-postalar (fatura, teslim/iptal bildirimi, mağaza bildirimi…) da görünsün
+          ...epostalar.filter((e) => !['alindi', 'durum-odendi', 'durum-kargoda'].includes(e.tur)).map((e) => ({ tur: e.tur, baslik: e.ad, bul: e })),
         ].map((satir) => {
           const kayit = satir.bul;
           const okDurum = kayit?.durum === 'gonderildi';
@@ -324,7 +328,7 @@ const etiket = (bicim: string, tur?: string) => '/yonetim/finans/etiket?' + new 
     <section class="y-kart y-gecmis-kart" id="gecmis">
       <div class="y-kart__bas">
         <h2><PIkon ad="gecmis" /> İşlem Geçmişi / İç Not</h2>
-        <div class="y-mini-sekmeler" role="tablist">
+        <div class="y-mini-sekmeler" role="group" aria-label="Geçmiş ve iç not">
           <button type="button" class="is-aktif" data-gecmis-sekme="zaman">İşlem Geçmişi</button>
           <button type="button" data-gecmis-sekme="not">İç Not{s.yoneticiNotu ? ' •' : ''}</button>
         </div>

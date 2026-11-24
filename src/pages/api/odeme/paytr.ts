@@ -2,6 +2,8 @@ import type { APIRoute } from 'astro';
 import { siparisAlindi } from '../../../lib/bildirim';
 import { magazaOku, paytrSonuclandir, sozlesmeOku } from '../../../lib/depo';
 import { paytrAyari, paytrBildirimDogrula } from '../../../lib/paytr';
+import { arkaPlanda } from '../../../lib/arkaPlan';
+import { pazaryeriSenkron } from '../../../lib/pazaryeriSenkron';
 
 const yanit = (metin: string, status: number) => new Response(metin, {
   status, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' },
@@ -42,6 +44,9 @@ export const POST: APIRoute = async ({ request }) => {
       await Promise.all([magazaOku(), sozlesmeOku(s.no)])
         .then(([m, belge]) => siparisAlindi(s, m.site, adres, belge ? { ...belge, baglanti: belgeAdresi } : undefined))
         .catch(() => console.error('[PayTR] Sipariş bildirimi gönderilemedi', s.no));
+      // Ortak stok: web satışı düşen adet pazaryerlerine hemen gitsin (5 dakikalık zamanlayıcıyı beklemesin, denetim AUD-018).
+      // Kilitliyse (başka eşitleme sürüyor) o eşitleme ya da bir sonraki tur zaten gönderir.
+      arkaPlanda(pazaryeriSenkron('bildirim'), 'web satışı sonrası pazaryeri stoğu');
     }
     return yanit('OK', 200);
   } catch (e) {

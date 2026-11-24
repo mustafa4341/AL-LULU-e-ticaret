@@ -93,7 +93,8 @@ export function hbPerformansOku(h: Ham): HbPerformans | undefined {
   const gelirKalem = kalemler(alan(h, 'income'), 1);
   const giderKalem = kalemler(alan(h, 'expense'), -1);
   const kayit = {
-    anahtar: siparisNo + '|' + sku, siparisNo, sku, urun: metin(alan(h, 'productName')), adet: sayi(alan(h, 'quantity')),
+    // Aynı SKU'lu iki satır birbirinin üstüne yazılmasın: varsa satır kimliği de anahtara girer (denetim AUD-024)
+    anahtar: [siparisNo, sku, metin(alan(h, 'lineItemId'), 60) ?? metin(alan(h, 'orderLineId'), 60)].filter(Boolean).join('|').slice(0, 160), siparisNo, sku, urun: metin(alan(h, 'productName')), adet: sayi(alan(h, 'quantity')),
     birim: (() => { const b = para(alan(h, 'unitAmount')); return b === undefined ? undefined : Math.abs(b); })(),
     hakedis,
     gelir: Math.abs(para(alan(nesne(alan(h, 'income')), 'totalAmount')) ?? gelirKalem.reduce((t, k) => t + k.tutar, 0)),

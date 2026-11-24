@@ -7,7 +7,7 @@ const k = Astro.locals.katalog;
 const s = k.site;
 const maddeler: { ikon: IkonAdi; baslik: string; metin: string; href?: string }[] = [
   { ikon: 'kalkan', baslik: 'Orijinal ürün', metin: 'Faturalı gönderim' },
-  { ikon: 'belge', baslik: '2 yıl garanti', metin: 'Üretici garantisi' },
+  { ikon: 'belge', baslik: 'Üretici garantili', metin: 'Süre ürün sayfasında' }, // tek kullanımlık/aksesuar ürünlerle çelişmesin (AUD-035)
   { ikon: 'kargo', baslik: 'Kargo bedava', metin: `${formatTL(s.kargo.ucretsizEsik)} üzeri` },
   { ikon: 'saat', baslik: 'Aynı gün kargo', metin: `${s.kargo.kesimSaati}:00'e kadar` },
   ODEME_BAGLI()

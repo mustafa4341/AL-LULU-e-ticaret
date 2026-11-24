@@ -1,7 +1,7 @@
 import { aralikta, gecerliGun, paraOku, trendyolSema } from './finans';
 import { xlsxParcalari } from './finansArsiv';
 
-function csvOku(s: string) {
+export function csvOku(s: string) {
   const ilk = s.split(/\r?\n/, 1)[0] ?? '';
   const ayrac = ilk.includes(';') ? ';' : ilk.includes('\t') ? '\t' : ',';
   const tablo: string[][] = [];
@@ -34,7 +34,7 @@ const xmlMetin = (s: string) => s.replace(/&(?:amp|lt|gt|quot|apos|#\d+|#x[\da-f
   const kod = etiket.startsWith('&#x') ? parseInt(etiket.slice(3, -1), 16) : parseInt(etiket.slice(2, -1), 10);
   return Number.isInteger(kod) && kod >= 0 && kod <= 0x10ffff ? String.fromCodePoint(kod) : '';
 });
-function excelOku(veri: Buffer) {
+export function excelOku(veri: Buffer) {
   const { sayfa, ortak } = xlsxParcalari(veri);
   const t = (s: string) => [...s.matchAll(/<t(?:\s[^>]*)?>([^<]*)<\/t>/g)].map((x) => xmlMetin(x[1]!)).join('');
   const metinler = [...ortak.matchAll(/<si(?:\s[^>]*)?>([\s\S]*?)<\/si>/g)].map((m) => t(m[1]!));

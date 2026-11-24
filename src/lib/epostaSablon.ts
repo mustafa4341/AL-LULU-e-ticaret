@@ -185,10 +185,11 @@ ${belgeler ? sozlesmeKutusu(belgeler.baglanti) : ''}`;
     // Sözleşmeler ayrı e-postayla gitmez: sitedeki sayfaya bağlantı + kayıt için küçük bir ek dosya
     // (e-posta eki "kalıcı veri saklayıcısı"dır; site bağlantısı tek başına sayılmaz)
     ...(belgeler ? { ekler: [{ dosyaAdi: `Sozlesmeler-${s.no}.html`, icerik: sozlesmelerEpostasi(s, site, belgeler).html, tur: 'text/html' }] } : {}),
-    konu: `Siparişiniz alındı — ${s.no}`,
+    // Ödenmemiş (havale/EFT) siparişte "onay" denmez: ödeme beklendiği başlıkta da görünür (denetim AUD-022)
+    konu: odemeBekliyor ? `Siparişiniz alındı, ödeme bekleniyor — ${s.no}` : `Siparişiniz alındı — ${s.no}`,
     html: cerceve(site, {
-      onYazi: `${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}.`,
-      ust: 'Sipariş onayı', baslik: 'Teşekkürler, siparişiniz alındı', icerik, altNot: altNot(s),
+      onYazi: `${s.no} numaralı siparişiniz alındı. Toplam ${formatTL(s.toplam)}.${odemeBekliyor ? ' Ödeme bekleniyor.' : ''}`,
+      ust: odemeBekliyor ? 'Ödeme bekleniyor' : 'Sipariş onayı', baslik: 'Teşekkürler, siparişiniz alındı', icerik, altNot: altNot(s),
     }),
     metin: `Merhaba ${s.musteri.ad},\n\n${s.no} numaralı siparişiniz alındı. ${durumNotu}\n\n${satirlarMetin(s)}\n\nTeslimat: ${s.teslimat.adres}, ${s.teslimat.ilce} / ${s.teslimat.il}\n\nSiparişinizi takip edin: ${takipUrl}${belgeler ? `\n\nSözleşmeleriniz (Ön Bilgilendirme Formu ve Mesafeli Satış Sözleşmesi): ${belgeler.baglanti}` : ''}${imza(site)}`,
   };
@@ -253,7 +254,8 @@ function belgeyiBicimle(html: string): string {
     .replace(/<mark[^>]*>/g, `<span style="background:#FFF4D6;color:#8A5A00;padding:1px 5px;border-radius:4px">`).replace(/<\/mark>/g, '</span>')
     .replace(/<div class="belge-tablo-kap">/g, '<div>')
     .replace(/<table class="belge-tablo">/g, `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:6px 0 14px;border-collapse:collapse">`)
-    .replace(/<(td|th)([^>]*)>/g, (_t, ad: string, oz: string) =>
+    // Yukarıda <dt>/<dd>'den üretilen hücrelerin zaten stili var: ikinci style="" eklenmez (denetim AUD-022)
+    .replace(/<(td|th)([^>]*)>/g, (t, ad: string, oz: string) => /\sstyle=/.test(oz) ? t :
       `<${ad}${oz.replace(/ class="[^"]*"/, '')} style="padding:8px 8px;border-bottom:1px solid ${R.cizgi};font-size:12.5px;line-height:1.45;vertical-align:top;${/sayi/.test(oz) ? 'text-align:right;white-space:nowrap;' : 'text-align:left;'}${ad === 'th' ? `font-weight:bold;color:${R.yazi};background:#FAF7F1;` : ''}">`);
 }
 
@@ -323,7 +325,8 @@ ${baslikSatiri('Sipariş özeti')}${urunTablosu(s, site, gorsel)}${takipButonu}`
 
   if (s.durum === 'iptal') {
     const odenmisti = !!s.paytr && s.paytr.sonuc === 'odendi' || s.gecmis.some((g) => g.durum === 'odendi');
-    const iade = odenmisti ? 'Ödediğiniz tutar, ödeme yaptığınız karta/hesaba iade edilmiştir. Tutarın hesabınıza yansıma süresi bankanıza göre birkaç iş günü sürebilir.' : '';
+    // Panel iptalde geri ödemenin yapıldığını yöneticiye onaylatır; banka yansıması ayrıca sürer (denetim AUD-022)
+    const iade = odenmisti ? 'Ödediğiniz tutarın iadesi, ödeme yaptığınız karta/hesaba başlatılmıştır. Tutarın hesabınıza yansıma süresi bankanıza göre birkaç iş günü sürebilir.' : '';
     const icerik = `<p style="margin:0 0 8px">Merhaba ${ad},</p>
 <p style="margin:0">${no} numaralı siparişiniz iptal edildi.${iade ? ' ' + iade : ''}</p>
 ${s.iptalNotu ? kutu(`<span style="font-size:11px;letter-spacing:1.5px;text-transform:uppercase;color:${R.soluk}">Açıklama</span><br>${kacis(s.iptalNotu)}`, R.kirmiziAcik, '#F2D3CF') : ''}

@@ -1,0 +1,148 @@
+---
+/**
+ * Toplu etiket: seçilen siparişlerin etiketleri tek sayfada, her biri ayrı kâğıt/etiket.
+ *  • Trendyol (DHL eCommerce, Yurtiçi, Sürat, PTT…): kargo takip numarası barkodlu taşıma etiketi; alıcı adresi o an Trendyol'dan okunur.
+ *  • Trendyol Express / Aras ("Trendyol öder"): Trendyol'un hazır (ZPL) etiketi kullanılır → burada yalnız uyarı.
+ *  • Web: sipariş numarası barkodlu, adresli hazırlık etiketi (kargo şubesi kendi fişini keser).
+ *  • Hepsiburada: etiket satıcı panelinden.
+ * ?id=…&id=… · ?kagit=etiket → 10×10 cm etiket yazıcısı, varsayılan A4.
+ */
+import { code128Svg } from '../../../../lib/barkod';
+import { magazaOku, siparisleriOku } from '../../../../lib/depo';
+import { hazirlikListesi } from '../../../../lib/hazirlik';
+import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
+import { pazaryeriSiparisleriOku } from '../../../../lib/pazaryeriDepo';
+import { tyEtiketBilgisi, tyOrtakEtiketVar } from '../../../../lib/trendyolApi';
+
+Astro.response.headers.set('Cache-Control', 'no-store');
+Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
+Astro.response.headers.set('Referrer-Policy', 'no-referrer');
+const q = Astro.url.searchParams;
+const idler = [...new Set(q.getAll('id'))].slice(0, 25);
+const etiketKagidi = q.get('kagit') === 'etiket';
+const [magaza, web, py] = await Promise.all([magazaOku(), siparisleriOku().catch(() => []), pazaryeriSiparisleriOku().catch(() => [])]);
+const secili = hazirlikListesi(web, py, magaza).filter((x) => idler.includes(x.anahtar));
+const webMap = new Map(web.map((s) => [s.no, s]));
+const pyMap = new Map(py.map((s) => [s.id, s]));
+const tyHazir = ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+const satici = magaza.site.satici;
+const gonderen = [satici.unvan || magaza.site.ad, satici.adres, magaza.site.telefonGorunen].filter(Boolean).join(' · ');
+const buyuk = (s?: string) => s?.toLocaleUpperCase('tr');
+const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+
+type Etiket = { tur: 'ty' | 'web'; no: string; barkod: string; ustSag: string; takip: string; alici: { ad?: string; adres?: string; il?: string; tel?: string }; alt: string[]; urunler: string[] };
+const etiketler: Etiket[] = [];
+const notlar: { no: string; metin: string }[] = [];
+for (const s of secili) {
+  if (s.kanal === 'web') {
+    const w = webMap.get(s.no);
+    if (!w) continue;
+    etiketler.push({
+      tur: 'web', no: w.no, barkod: code128Svg(w.no, 26), ustSag: 'Hazırlık etiketi', takip: w.no,
+      alici: { ad: `${w.musteri.ad} ${w.musteri.soyad}`, adres: w.teslimat.adres, il: [buyuk(w.teslimat.ilce), buyuk(w.teslimat.il)].filter(Boolean).join(' / '), tel: w.musteri.tel },
+      alt: [`Web siparişi ${w.no} · ${tarih}`, 'Kargo şubesi kendi gönderi fişini keser; bu etiket hazırlık içindir.'],
+      urunler: s.kalemler.map((k) => `${k.adet} × ${k.ad}`),
+    });
+    continue;
+  }
+  if (s.kanal === 'hepsiburada') { notlar.push({ no: s.no, metin: 'Hepsiburada kargo etiketi Hepsiburada satıcı panelinden basılır.' }); continue; }
+  const p = pyMap.get(s.anahtar);
+  if (!p?.paketNo) { notlar.push({ no: s.no, metin: 'Trendyol paket numarası yok; siparişi yeniden eşitleyin.' }); continue; }
+  if (!tyHazir) { notlar.push({ no: s.no, metin: 'Trendyol etiketleri canlı sitede basılır (bu sunucuda Trendyol bağlantısı yok).' }); continue; }
+  if (tyOrtakEtiketVar(p.kargoFirma)) { notlar.push({ no: s.no, metin: `${p.kargoFirma}: Trendyol’un hazır etiketi kullanılır — sipariş sayfasındaki “Kargo etiketini indir (ZPL)” ile basın.` }); continue; }
+  try {
+    const b = await tyEtiketBilgisi(p.siparisNo, p.paketNo);
+    if (!b.kargoTakip) { notlar.push({ no: s.no, metin: 'Kargo takip numarası henüz yok: önce “Toplamaya başla” (ya da barkodla paketle) yapın.' }); continue; }
+    if (['Cancelled', 'UnSupplied', 'UnPacked'].includes(b.durum ?? '')) { notlar.push({ no: s.no, metin: 'Paket iptal edilmiş ya da bölünmüş; etiket basmayın.' }); continue; }
+    if (tyOrtakEtiketVar(b.kargoFirma)) { notlar.push({ no: s.no, metin: `${b.kargoFirma}: Trendyol’un hazır etiketi kullanılır (sipariş sayfasından ZPL).` }); continue; }
+    etiketler.push({
+      tur: 'ty', no: b.siparisNo, barkod: code128Svg(b.kargoTakip, 30), ustSag: b.kargoFirma ?? 'Kargo', takip: b.kargoTakip.replace(/(\d{4})(?=\d)/g, '$1 '),
+      alici: {
+        ad: b.alici.ad ?? p.musteri, adres: [b.alici.adres, b.alici.mahalle && !b.alici.adres?.includes(b.alici.mahalle) ? b.alici.mahalle : undefined].filter(Boolean).join(' '),
+        il: [buyuk(b.alici.ilce), buyuk(b.alici.il)].filter(Boolean).join(' / ') + (b.alici.postaKodu ? ` · ${b.alici.postaKodu}` : ''),
+      },
+      alt: [`Sipariş ${b.siparisNo} · Paket ${b.paketNo} · ${tarih}`],
+      urunler: b.kalemler.map((k) => `${k.adet} × ${k.ad}`),
+    });
+  } catch (e) {
+    notlar.push({ no: s.no, metin: e instanceof PazaryeriApiHatasi ? e.message : 'Paket bilgisi Trendyol’dan okunamadı.' });
+  }
+}
+const kagitSorgu = (k: string) => '?' + new URLSearchParams([...idler.map((id) => ['id', id] as [string, string]), ['kagit', k]]);
+---
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Etiketler · {etiketler.length}</title>
+  <style is:inline set:html={`
+    @page { size: ${etiketKagidi ? '100mm 100mm' : 'A4'}; margin: ${etiketKagidi ? '0' : '10mm'}; }
+    :root { color-scheme: light; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #f3efe6; color: #000; font: 14px/1.3 Arial, Helvetica, sans-serif; }
+    .arac { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 10px; }
+    .arac h1 { font-size: 20px; margin: 0; }
+    .dugmeler { display: flex; flex-wrap: wrap; gap: 8px; }
+    .dugme { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #30291f; background: #fff; color: #30291f; font: 600 15px Arial, sans-serif; text-decoration: none; cursor: pointer; }
+    .dugme--ana { background: #30291f; color: #fff; }
+    .dugme[aria-current="page"] { outline: 3px solid #aa812e; }
+    .not { background: #fff7e6; border: 1px solid #e9d5a4; border-radius: 10px; padding: 8px 12px; font-size: 14px; margin: 0; }
+    .sayfalar { display: grid; justify-items: center; gap: 16px; padding: 0 16px 24px; }
+    .etiket { width: 100mm; height: 100mm; background: #fff; border: 1px dashed #777; padding: 3.5mm; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 1.6mm; overflow: hidden; break-after: page; }
+    .ust { display: flex; justify-content: space-between; align-items: baseline; border-bottom: .5mm solid #000; padding-bottom: 1.2mm; }
+    .ust strong { font-size: 14pt; letter-spacing: .5pt; }
+    .ust span { font-size: 9.5pt; font-weight: 700; text-align: right; }
+    .barkod svg { display: block; width: 93mm; height: 19mm; }
+    .takip { text-align: center; font: 700 12.5pt/1 "Courier New", monospace; letter-spacing: 1pt; margin-top: .8mm; }
+    .kutu { border: .3mm solid #000; padding: 1.4mm 2mm; }
+    .kutu b { display: block; font-size: 7pt; letter-spacing: .6pt; }
+    .ad { font-size: 12pt; font-weight: 700; }
+    .adres { font-size: 9pt; }
+    .il { font-size: 11pt; font-weight: 700; }
+    .gonderici { font-size: 7.5pt; }
+    .alt { font-size: 7.3pt; border-top: .3mm solid #000; padding-top: 1mm; display: grid; gap: .4mm; }
+    .alt .urun { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    @media print {
+      body { background: #fff; }
+      .arac { display: none; }
+      .sayfalar { display: block; padding: 0; }
+      .etiket { border: ${etiketKagidi ? '0' : '.2mm dashed #999'}; margin: 0 0 ${etiketKagidi ? '0' : '6mm'}; }
+    }
+  `} />
+</head>
+<body>
+  <div class="arac">
+    <h1>Etiketler ({etiketler.length})</h1>
+    {!secili.length && <p class="not">Seçilen siparişler artık hazırlanacaklar arasında değil. Listeyi yenileyip yeniden seçin.</p>}
+    {notlar.map((n) => <p class="not"><strong>{n.no}:</strong> {n.metin}</p>)}
+    {etiketler.length > 0 && <div class="dugmeler">
+      <button class="dugme dugme--ana" type="button" data-yazdir>Yazdır</button>
+      <a class="dugme" href={kagitSorgu('a4')} aria-current={etiketKagidi ? undefined : 'page'}>Normal yazıcı (A4)</a>
+      <a class="dugme" href={kagitSorgu('etiket')} aria-current={etiketKagidi ? 'page' : undefined}>Etiket yazıcısı (10×10 cm)</a>
+    </div>}
+    <p><a class="dugme" href="/yonetim/siparisler/hazirlik">← Hazırlık listesine dön</a></p>
+  </div>
+  <main class="sayfalar">
+    {etiketler.map((e) => <section class="etiket" aria-label={'Etiket ' + e.no}>
+      <div class="ust"><strong>{e.tur === 'ty' ? 'TRENDYOL' : buyuk(magaza.site.ad)}</strong><span>{e.ustSag}</span></div>
+      <div class="barkod"><Fragment set:html={e.barkod} /><div class="takip">{e.takip}</div></div>
+      <div class="kutu">
+        <b>ALICI</b>
+        <div class="ad">{e.alici.ad ?? '—'}</div>
+        {e.alici.adres && <div class="adres">{e.alici.adres}</div>}
+        <div class="il">{e.alici.il}</div>
+        {e.alici.tel && <div class="adres">Tel: {e.alici.tel}</div>}
+      </div>
+      <div class="kutu gonderici"><b>GÖNDERİCİ</b>{gonderen}</div>
+      <div class="alt">
+        {e.alt.map((x) => <div>{x}</div>)}
+        {e.urunler.slice(0, 3).map((u) => <div class="urun">{u}</div>)}
+        {e.urunler.length > 3 && <div>+ {e.urunler.length - 3} ürün daha</div>}
+      </div>
+    </section>)}
+  </main>
+  <script>document.querySelector('[data-yazdir]')?.addEventListener('click', () => window.print());</script>
+</body>
+</html>

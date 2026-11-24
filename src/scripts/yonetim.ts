@@ -1,5 +1,5 @@
 import { formatTL, sepetteFiyat, setToplamlari } from '../lib/fiyat';
-import { kod } from '../lib/form';
+import { kod, sayiCoz } from '../lib/form';
 
 const root = document.documentElement;
 const menuDugmeleri = [...document.querySelectorAll<HTMLButtonElement>('[data-menu-ac]')];
@@ -381,7 +381,12 @@ document.querySelectorAll<HTMLSelectElement>('[data-kargo-sablon]').forEach((sec
 const KUCULTME_ESIGI = 900 * 1024;
 const ISTEK_SINIRI = 4 * 1024 * 1024;
 const kucultulebilir = (f: File) => ['image/jpeg', 'image/png', 'image/webp'].includes(f.type) && f.size > KUCULTME_ESIGI;
-async function gorselKucult(f: File): Promise<File> {
+/** Alan WebP kabul ediyor mu? (Fiş/fatura alanları yalnız PDF/JPG/PNG kabul eder; oraya WebP gönderilmez.) */
+const webpKabul = (input: HTMLInputElement) => {
+  const kabul = input.accept.toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
+  return !kabul.length || kabul.some((t) => t === 'image/webp' || t === 'image/*' || t === '.webp');
+};
+async function gorselKucult(f: File, webp = true): Promise<File> {
   if (!kucultulebilir(f)) return f;
   try {
     const bmp = await createImageBitmap(f, { imageOrientation: 'from-image' });
@@ -392,8 +397,8 @@ async function gorselKucult(f: File): Promise<File> {
     tuval.getContext('2d')!.drawImage(bmp, 0, 0, tuval.width, tuval.height);
     bmp.close();
     const blob = (r: string) => new Promise<Blob | null>((ok) => tuval.toBlob(ok, r, 0.88));
-    // Saydam PNG'de arka plan kararmasın: önce WebP (saydamlığı korur), desteklenmiyorsa JPEG
-    let sonuc = await blob('image/webp');
+    // Saydam PNG'de arka plan kararmasın: önce WebP (saydamlığı korur), desteklenmiyorsa ya da alan WebP kabul etmiyorsa PNG/JPEG
+    let sonuc = webp ? await blob('image/webp') : null;
     if (!sonuc || sonuc.type !== 'image/webp') sonuc = f.type === 'image/png' ? await blob('image/png') : await blob('image/jpeg');
     if (!sonuc || sonuc.size >= f.size) return f;
     const uzanti = sonuc.type === 'image/webp' ? '.webp' : sonuc.type === 'image/png' ? '.png' : '.jpg';
@@ -409,7 +414,8 @@ document.addEventListener('change', async (e) => {
   if (!dosyalar.some(kucultulebilir)) { setTimeout(() => toplamKontrol(input)); return; }
   e.stopImmediatePropagation(); // asıl işleyiciler küçültülmüş dosyalarla tekrar çalışır
   input.form?.setAttribute('aria-busy', 'true');
-  const yeni = await Promise.all(dosyalar.map(gorselKucult));
+  const webp = webpKabul(input);
+  const yeni = await Promise.all(dosyalar.map((f) => gorselKucult(f, webp)));
   input.form?.removeAttribute('aria-busy');
   const dt = new DataTransfer();
   yeni.forEach((f) => dt.items.add(f));
@@ -433,7 +439,7 @@ function toplamKontrol(input: HTMLInputElement) {
 }
 
 const dosyaUrl = new WeakMap<HTMLInputElement, string[]>();
-const dosyaTurleri = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/avif', 'image/gif', 'image/heic', 'image/heif']);
+const dosyaTurleri = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 document.querySelectorAll<HTMLInputElement>('[data-gorsel-sec]').forEach((input) => {
   const yukle = input.closest<HTMLElement>('[data-dosya-birak]');
   const galeri = input.form?.querySelector<HTMLElement>('[data-gorsel-onizleme]');
@@ -443,7 +449,7 @@ document.querySelectorAll<HTMLInputElement>('[data-gorsel-sec]').forEach((input)
     dosyaUrl.get(input)?.forEach((url) => URL.revokeObjectURL(url));
     const dosyalar = [...(input.files ?? [])];
     const hatali = dosyalar.some((f) => !dosyaTurleri.has(f.type) || f.size > 12 * 1024 * 1024);
-    input.setCustomValidity(hatali ? 'Desteklenen türlerde, en fazla 12 MB boyutlu fotoğraflar seçin.' : '');
+    input.setCustomValidity(hatali ? 'JPG, PNG, WebP veya GIF türünde, en fazla 12 MB boyutlu fotoğraflar seçin.' : '');
     if (hatali) input.reportValidity();
     const urller = hatali ? [] : dosyalar.map((f) => URL.createObjectURL(f));
     dosyaUrl.set(input, urller);
@@ -487,7 +493,7 @@ if (urunForm) {
     if (adres && !urunForm.dataset.kayit) adres.textContent = '/urun/' + kod([f.get('marka'), f.get('kisaAd') || f.get('ad')].join(' '));
     const ozet = urunForm.querySelector('[data-indirim-onizleme]');
     if (ozet) {
-      const fiyat = Number(String(f.get('fiyat') ?? '').replace(/\./g, '').replace(',', '.'));
+      const fiyat = sayiCoz(String(f.get('fiyat') ?? '')) ?? 0;
       const oran = Math.min(50, Math.max(0, Number(f.get('sepetteIndirim'))));
       ozet.textContent = fiyat > 0 && oran > 0 ? 'Sepette ' + formatTL(sepetteFiyat(fiyat, oran)) : '';
     }
@@ -506,7 +512,7 @@ if (setForm) {
     const f = new FormData(setForm!);
     const secilenler = [...setForm!.querySelectorAll<HTMLSelectElement>('[name="kalem_urun"]')];
     const hedefId = String(f.get('kalem_hedef') || secilenler.filter((x) => x.value).at(-1)?.value || '');
-    const deger = Math.round(Number(String(f.get('deger') ?? '').replace(/\./g, '').replace(',', '.')));
+    const deger = Math.round(sayiCoz(String(f.get('deger') ?? '')) ?? NaN);
     const adetler = f.getAll('kalem_adet');
     const satirlar = secilenler.flatMap((x, i) => {
       const birim = Number(x.selectedOptions[0]?.dataset.fiyat);

@@ -89,7 +89,7 @@ const ozetSatiri = (satir: string) => {
   const hatali = !kismi && (kucuk.includes('hata') || kucuk.includes('alınamadı') || kucuk.includes('gönderilemedi') || kucuk.includes('kabul etmedi'));
   const sonuc = kismi ? 'Kısmen tamamlandı' : hatali ? 'Hata' : 'Başarılı';
   const ton: 'yesil' | 'turuncu' | 'kirmizi' = kismi ? 'turuncu' : hatali ? 'kirmizi' : 'yesil';
-  const url = kucuk.includes('fatura') ? '/yonetim/finans/faturalar?durum=kesildi'
+  const url = kucuk.includes('fatura') ? '/yonetim/finans/faturalar?durum=iletilecek'
     : kanal === 'trendyol' ? (kucuk.includes('paket') || kucuk.includes('sipariş') ? '/yonetim/siparisler?kanal=trendyol&durum=islem' : '/yonetim/siparisler/kanallar#trendyol')
     : kanal === 'hepsiburada' ? (kucuk.includes('paket') || kucuk.includes('sipariş') ? '/yonetim/siparisler?kanal=hepsiburada&durum=islem' : '/yonetim/siparisler/kanallar#hepsiburada')
     : '/yonetim/siparisler/kanallar';

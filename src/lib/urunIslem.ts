@@ -45,6 +45,7 @@ export interface SiparisIslemGirdi {
 export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ siparis: Siparis; mesaj: string }> {
   const m = await magazaOku();
   let durumDegistiMi = false;
+  let takipDegisti = false;
   let mesaj = 'Sipariş güncellendi.';
   const guncel = await siparisGuncelle(girdi.no, (s) => {
     const onceki = s.durum;
@@ -102,6 +103,7 @@ export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ 
       if (!firma || !takipUrl) throw new Error('Kargo firması seçin ve geçerli takip numarası girin.');
       if (takipDuzelt && s.kargoTakip === kod && s.kargoFirma === firma.ad &&
         [...s.gecmis].reverse().find((g) => g.durum === 'kargoda')?.takipUrl === takipUrl) return stok;
+      takipDegisti = takipDuzelt;
       s.kargoTakip = kod;
       s.kargoFirma = firma.ad;
       not = firma.ad + ' · ' + kod;
@@ -118,11 +120,12 @@ export async function siparisDurumGuncelle(girdi: SiparisIslemGirdi): Promise<{ 
     });
     return stok;
   }, true);
-  if (durumDegistiMi) {
+  if (durumDegistiMi || takipDegisti) {
     const link = new URL('/siparis/' + guncel.no + '?t=' + guncel.token, girdi.origin).href;
     // Müşteriye SMS/e-posta arka planda gider: "Kargoya verildi" gibi düğmeler e-postayı beklemez.
     // Gönderim sonucu sipariş sayfasındaki "E-postalar" bölümünde görünür.
-    arkaPlanda(durumDegisti(guncel, m.site, link), 'sipariş durum bildirimi');
+    // Takip numarası düzeltildiyse kargo e-postası yeni numarayla yeniden gider (denetim AUD-023).
+    arkaPlanda(durumDegisti(guncel, m.site, link, takipDegisti), 'sipariş durum bildirimi');
   }
   return { siparis: guncel, mesaj };
 }

@@ -1,11 +1,12 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
+import { guvenliBaglanti } from '../../../lib/istek';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import { metin, liste } from '../../../lib/form';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
-import { envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
-import { tyIadeOnayla, tyIadeler, type TyIade } from '../../../lib/trendyolApi';
+import { envanterAyarlariGuncelle, envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
+import { tyIadeOnayla, tyIadeler, tySoruCevapla, tySorular, type TyIade, type TySoru } from '../../../lib/trendyolApi';
 import { yTarih } from '../../../lib/yonetimRapor';
 
 const yol = '/yonetim/siparisler/trendyol-iade-soru';
@@ -28,6 +29,13 @@ if (Astro.request.method === 'POST' && apiHazir) {
       await tyIadeOnayla(metin(f, 'claim'), kalemler);
       return Astro.redirect(`${yol}?ok=${encodeURIComponent('İade onaylandı. Trendyol müşteriye ödemeyi yapar; ürünü stoğa eklemek için siparişin sayfasında “satılabilir / satılamaz” seçin.')}`, 303);
     }
+    if (eylem === 'soru-cevapla') {
+      const soruId = Number(metin(f, 'soru'));
+      if (!Number.isSafeInteger(soruId) || soruId <= 0) throw new PazaryeriApiHatasi('Soru bulunamadı.');
+      await tySoruCevapla(soruId, metin(f, 'cevap'));
+      await envanterAyarlariGuncelle((a) => { const s = a.kanallar.trendyol.soru; s.bekleyen = Math.max(0, s.bekleyen - 1); }).catch(() => undefined);
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Cevap Trendyol’a gönderildi. Trendyol kontrol ettikten sonra ürün sayfasında yayınlar.')}#sorular`, 303);
+    }
     throw new PazaryeriApiHatasi('Geçersiz işlem.');
   } catch (e) {
     hatalar.push(hata(e));
@@ -35,11 +43,28 @@ if (Astro.request.method === 'POST' && apiHazir) {
 }
 
 let iadeler: TyIade[] = [];
+let sorular: TySoru[] = [];
 if (apiHazir) {
-  try {
-    iadeler = await tyIadeler(30);
-  } catch (e) { hatalar.push(hata(e)); }
+  const [i, s] = await Promise.allSettled([tyIadeler(30), tySorular('WAITING_FOR_ANSWER', 14)]);
+  if (i.status === 'fulfilled') iadeler = i.value; else hatalar.push(hata(i.reason));
+  if (s.status === 'fulfilled') {
+    sorular = s.value.sort((a, b) => a.tarih - b.tarih);
+    // İş Merkezi'ndeki "cevap bekleyen soru" sayısı sayfa açılınca da tazelenir
+    await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.soru = { bekleyen: sorular.length, tarih: new Date().toISOString() }; }).catch(() => undefined);
+  } else hatalar.push('Müşteri soruları: ' + hata(s.reason));
 }
+/* Ürüne özel iddia içermeyen hazır cevaplar (ürün bilgisi gerekiyorsa siz eklersiniz) */
+const SABLONLAR = [
+  'Merhaba, ilginiz için teşekkür ederiz. Ürünümüz orijinal ve faturalı olarak gönderilir. İyi alışverişler dileriz.',
+  'Merhaba, ürün stoklarımızda mevcuttur; siparişiniz en kısa sürede özenle paketlenip kargoya verilir. İyi alışverişler dileriz.',
+  'Merhaba, ürünün tüm teknik özellikleri ürün sayfasındaki “Ürün Özellikleri” bölümünde yer almaktadır. Başka sorunuz olursa memnuniyetle yardımcı oluruz.',
+];
+/* Not: "<" karşılaştırması ile şablon metni (backtick) aynı ifadede Astro derleyicisini bozuyor; düz birleştirme kullanılır */
+const saatOnce = (ms: number) => {
+  const saat = Math.floor((Date.now() - ms) / 3600_000);
+  if (saat <= 0) return 'az önce';
+  return saat >= 24 ? Math.floor(saat / 24) + ' gün önce' : saat + ' saat önce';
+};
 const DURUM: Record<string, [string, string]> = {
   Created: ['Müşteri iade başlattı', 'gri'], WaitingInAction: ['Depoya ulaştı, onayınız bekleniyor', 'turuncu'],
   WaitingFraudCheck: ['Trendyol kontrol ediyor', 'gri'], Accepted: ['Onaylandı', 'yesil'], Rejected: ['Reddedildi', 'kirmizi'],
@@ -54,7 +79,7 @@ const iadeSirasi = iadeler.map((iade, i) => ({
 })).sort((a, b) => Number(b.bekleyen > 0) - Number(a.bekleyen > 0) || b.iade.tarih - a.iade.tarih);
 const acikIadeler = iadeSirasi.filter((x) => x.bekleyen > 0);
 ---
-<Yonetim baslik="Trendyol İadeleri" altBaslik="Gelen talepleri inceleyin, depoda kontrol edilen ürünlerin iadesini onaylayın." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
+<Yonetim baslik="Trendyol İadeleri ve Soruları" altBaslik="İade taleplerini onaylayın, müşteri sorularını panelden cevaplayın." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
   <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
@@ -92,7 +117,7 @@ const acikIadeler = iadeSirasi.filter((x) => x.bekleyen > 0);
       <details class="y-kart iade" {id} open={i === 0}>
         <summary><strong>Sipariş {c.siparisNo}</strong></summary>
         <p class="y-help">{c.musteri}{c.kargo ? ` · ${c.kargo}` : ''}{c.kargoTakip ? ` · Takip ${c.kargoTakip}` : ''}
-          {c.kargoLink && <> · <a class="y-link" href={c.kargoLink} target="_blank" rel="noopener noreferrer">Kargoyu izle ↗</a></>}
+          {guvenliBaglanti(c.kargoLink) && <> · <a class="y-link" href={guvenliBaglanti(c.kargoLink)} target="_blank" rel="noopener noreferrer">Kargoyu izle ↗</a></>}
           {c.paketId && <> · <a class="y-link" href={'/yonetim/siparisler/pazaryeri/trendyol-' + encodeURIComponent(c.paketId)}>Siparişi aç</a></>}</p>
         <form method="post">
           <input type="hidden" name="claim" value={c.id} />
@@ -116,8 +141,42 @@ const acikIadeler = iadeSirasi.filter((x) => x.bekleyen > 0);
     </div>
     </>}
 
+  {apiHazir && <section class="y-kart" id="sorular" aria-labelledby="sorular-baslik">
+    <div class="y-kart__bas">
+      <h2 id="sorular-baslik"><PIkon ad="soru" /> Cevap bekleyen müşteri soruları</h2>
+      <span class:list={['y-chip', sorular.length ? 'y-chip--turuncu' : 'y-chip--yesil']}>{sorular.length ? `${sorular.length} soru` : 'Bekleyen soru yok'}</span>
+    </div>
+    <p class="y-help">Hızlı cevap Trendyol mağaza puanınızı ve satışı etkiler. Cevap 10–2000 karakter olmalı; telefon, e-posta, site adresi yazmayın (Trendyol reddeder). Aşağıdaki hazır cevaplardan birine dokunup düzenleyebilirsiniz.</p>
+    {sorular.map((s) => <form method="post" class="soru">
+      <input type="hidden" name="soru" value={s.id} />
+      <div class="soru__bas">
+        {s.gorsel && <img src={s.gorsel} alt="" width="48" height="48" loading="lazy" referrerpolicy="no-referrer" />}
+        <div><strong>{s.urun}</strong><small class="muted">{saatOnce(s.tarih)}{s.kullanici ? ` · ${s.kullanici}` : ''}{s.webUrl && <> · <a class="y-link" href={s.webUrl} target="_blank" rel="noopener noreferrer">Trendyol’da gör ↗</a></>}</small></div>
+      </div>
+      <p class="soru__metin">“{s.metin}”</p>
+      <div class="soru__sablon">{SABLONLAR.map((t, i) => <button type="button" class="btn btn--cizgi btn--kucuk" data-sablon={t}>Hazır cevap {i + 1}</button>)}</div>
+      <label class="y-alan">Cevabınız<textarea name="cevap" rows="3" minlength="10" maxlength="2000" required placeholder="Merhaba, …"></textarea></label>
+      <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="soru-cevapla">Cevabı gönder</button>
+    </form>)}
+  </section>}
 </Yonetim>
+<script>
+  for (const b of document.querySelectorAll<HTMLButtonElement>('[data-sablon]')) {
+    b.addEventListener('click', () => {
+      const alan = b.closest('form')?.querySelector<HTMLTextAreaElement>('textarea');
+      if (alan) { alan.value = b.dataset.sablon ?? ''; alan.focus(); }
+    });
+  }
+</script>
 <style>
+  .soru { display: grid; gap: 8px; padding: 12px 0; border-top: 1px solid var(--y-border); justify-items: start; }
+  .soru > * { justify-self: stretch; }
+  .soru > .btn { justify-self: start; }
+  .soru__bas { display: flex; gap: 10px; align-items: center; }
+  .soru__bas img { object-fit: contain; border: 1px solid var(--y-border); border-radius: 8px; background: #fff; }
+  .soru__bas div { display: grid; }
+  .soru__metin { margin: 0; padding: 10px 12px; background: var(--y-bg); border-radius: 10px; font-size: 15px; }
+  .soru__sablon { display: flex; flex-wrap: wrap; gap: 6px; }
   @media (min-width: 1000px) { .iade-izgara { grid-template-columns: minmax(230px, .72fr) minmax(0, 1.28fr); } }
   .iade-kalemler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   .iade-kalemler li { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 0; border-top: 1px solid var(--y-border); }

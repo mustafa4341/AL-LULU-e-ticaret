@@ -50,7 +50,7 @@ Mağazadaki tüm ürünleri (yayında, taslak, gizli), fiyat geçmişlerini, ind
 - `kisa_ad` (`text`, kısa vitrin adı)
 - `kategoriler` (`jsonb`, bağlı olduğu kategori ID listesi)
 - `fiyat` (`integer`, güncel satış fiyatı TL, `check (fiyat > 0)`)
-- `fiyat_gecmisi` (`jsonb`, tarih ve fiyat kayıtları — 30 günlük en düşük fiyat hesabı için)
+- `fiyat_gecmisi` (`jsonb`, tarih ve fiyat kayıtları — indirimden önceki 10 günün en düşük fiyatı hesabı için)
 - `kampanya` (`jsonb`, aktif fiyat düşüşü kampanya başlangıç tarihi ve etiketi)
 - `sepette_indirim` (`integer`, `%0`–`%50` arası sepette ek indirim oranı)
 - `firsat` (`jsonb`, fırsat etiketi ve geri sayım bitiş tarihi)
@@ -200,7 +200,7 @@ Supabase Dashboard'da tek tıkla satış ve stok analizi yapılabilmesi için `s
 
 ## 7. Güvenlik ve Row Level Security (RLS)
 
-- `public` şemasındaki **8 tablonun tamamında** Row Level Security (`ENABLE ROW LEVEL SECURITY`) aktif edildi.
+- `public` şemasındaki **tüm tablolarda** Row Level Security (`ENABLE ROW LEVEL SECURITY`) aktif (ilk kurulumda 8 tabloydu; sonradan eklenen sipariş/pazaryeri/e-posta/yorum/istek sınırı tabloları da dahil).
 - Tüm tablolarda `SELECT`, `INSERT`, `UPDATE`, `DELETE` politikaları `(select public.sunucu_yetkili_mi())` koşuluna bağlandı. Böylece dışarıdan anonim anahtarla (`SUPABASE_KEY`) müşteri siparişlerine veya mağaza yazma işlemlerine yetkisiz erişim tamamen engellendi.
 - Supabase güvenlik ve performans denetimi (`get_advisors`) çalıştırıldı ve **0 güvenlik uyarısı** ile doğrulandı.
 

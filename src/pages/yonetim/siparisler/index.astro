@@ -74,6 +74,8 @@ const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi
   ['tumu', 'Tümü', () => true, () => true],
   ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr) || !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip),
     (_, d) => d.hazirlanacak || d.hazirlaniyor || d.uyari.length > 0],
+  // Kenar menü rozeti ve Genel Bakış'taki "Sipariş kuyruğu" sayısı bu tanımla aynı (denetim AUD-029)
+  ['kuyruk', 'Hazırlanacak + kargolanacak', (s) => gonderilecek(s) && !s.paytr?.test, (s, d) => !s.stokDisi && (d.hazirlanacak || d.hazirlaniyor)],
   ['kontrol', 'Kontrol gerekli', (s) => !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip), (_, d) => d.uyari.length > 0],
   ['odendi', 'Hazırlanacak', (s) => s.durum === 'odendi', (_, d) => d.hazirlanacak],
   ['hazirlaniyor', 'Kargoya verilecek', (s) => s.durum === 'hazirlaniyor', (_, d) => d.hazirlaniyor],

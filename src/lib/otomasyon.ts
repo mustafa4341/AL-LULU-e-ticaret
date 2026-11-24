@@ -16,7 +16,7 @@ import { faturaAdaylari } from './faturaMerkezi';
 import { faturaIlet } from './faturaIlet';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriGecmiseEkle, pazaryeriSiparisiOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
-import { trendyolEkstreCek, tyPaketDurumu } from './trendyolApi';
+import { trendyolEkstreCek, tyBuybox, tyPaketDurumu, tySorular } from './trendyolApi';
 import { trendyolEkstreSatirlari } from './trendyolFinans';
 import { ilanDurumlariniYenile } from './trendyolIlanIslem';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
@@ -85,15 +85,38 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
     } catch (e) { ozet.push(`Fiyat eşitleme: ${mesaj(e)}`); }
   }
 
+  // 4b. Cevap bekleyen Trendyol müşteri soruları: 30 dakikada bir sayılır (İş Merkezi'nde görünür); yeni soru gelirse günlüğe yazılır
+  const soru = ayar.kanallar.trendyol.soru;
+  if (tyBagli && kaldi() > 6000 && Date.now() - Date.parse(soru.tarih ?? '') > 30 * 60_000) {
+    try {
+      const bekleyen = (await tySorular('WAITING_FOR_ANSWER', 14)).length;
+      if (bekleyen > soru.bekleyen) ozet.push(`Trendyol’da cevap bekleyen ${bekleyen} müşteri sorusu var (Satış kanalları › Trendyol iade ve sorular)`);
+      await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.soru = { bekleyen, tarih: new Date().toISOString() }; });
+    } catch (e) { ozet.push(`Müşteri soruları: ${mesaj(e)}`); }
+  }
+
   // 5. Günlük işler
   const bugun = finansGunu();
   const gunluk = ot.gunlukIsler && tyBagli && (o.gunlukZorla || ot.sonGunluk !== bugun);
   let gunlukBitti = false;
   if (gunluk && kaldi() > 8000) {
-    try {
-      const notlar = await ilanDurumlariniYenile(undefined, 12);
-      ozet.push(...notlar);
-    } catch (e) { ozet.push(`İlan durumları: ${mesaj(e)}`); }
+    // Önce hakediş (günün tamamlandı sayılması buna bağlı), sonra ilan işleri: süre biterse ertesi güne kalırlar
+    if (kaldi() > 6000) {
+      try {
+        const son = Date.now();
+        const ham = await trendyolEkstreCek(son - 15 * 86_400_000, son, AbortSignal.timeout(Math.max(3000, Math.min(20_000, kaldi() - 2000))));
+        const e = trendyolEkstreSatirlari(ham.satislar, ham.diger);
+        if (e.satirlar.length) await trendyolKaydet(e.satirlar);
+        ozet.push(e.kayit ? `Trendyol hakedişi güncellendi (${e.satirlar.length} satır)` : 'Trendyol hakedişinde yeni kayıt yok');
+        gunlukBitti = true;
+      } catch (e) { ozet.push(`Trendyol hakedişi: ${mesaj(e)}`); }
+    }
+    if (kaldi() > 6000) {
+      try {
+        const notlar = await ilanDurumlariniYenile(undefined, 12);
+        ozet.push(...notlar);
+      } catch (e) { ozet.push(`İlan durumları: ${mesaj(e)}`); }
+    }
     // Her ürünün stoğu ortak olsun: aynı barkod/stok kodlu yeni Trendyol ilanları kendiliğinden bağlanır (fiyata dokunulmaz).
     if (ot.otoBagla && kaldi() > 8000) {
       try {
@@ -103,15 +126,19 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
         if (bagsiz) ozet.push(`Trendyol’da sitede karşılığı olmayan ${bagsiz} ilan var: Satış kanalları › Trendyol ilanları’ndan siteye çekebilir ya da bağlayabilirsiniz`);
       } catch (e) { ozet.push(`İlan bağlama: ${mesaj(e)}`); }
     }
-    if (kaldi() > 6000) {
+    // Buybox: bağlı ilanlardan başka mağazanın önde olduğu varsa haber ver (fiyat kendiliğinden değişmez)
+    if (kaldi() > 8000) {
       try {
-        const son = Date.now();
-        const ham = await trendyolEkstreCek(son - 15 * 86_400_000, son, AbortSignal.timeout(Math.max(3000, kaldi() - 2000)));
-        const e = trendyolEkstreSatirlari(ham.satislar, ham.diger);
-        if (e.satirlar.length) await trendyolKaydet(e.satirlar);
-        ozet.push(e.kayit ? `Trendyol hakedişi güncellendi (${e.satirlar.length} satır)` : 'Trendyol hakedişinde yeni kayıt yok');
-        gunlukBitti = true;
-      } catch (e) { ozet.push(`Trendyol hakedişi: ${mesaj(e)}`); }
+        const bagli = Object.entries(ayar.kanallar.trendyol.urunler).filter(([, e]) => e.kod && e.satista !== false);
+        if (bagli.length) {
+          const bb = await tyBuybox(bagli.map(([, e]) => e.kod!));
+          const kayip = [...bb.values()].filter((b) => b.cokSatici && b.sira !== undefined && b.sira > 1);
+          if (kayip.length) {
+            const para = (n?: number) => n === undefined ? '—' : n.toLocaleString('tr-TR', { maximumFractionDigits: 2 }) + ' TL';
+            ozet.push(`Trendyol buybox: ${kayip.length} üründe başka mağaza önde (${kayip.slice(0, 3).map((b) => `${b.barkod} ${b.sira}. sıra, en iyi ${para(b.fiyat)}`).join('; ')}). Satış kanalları › Trendyol ilanları › “Buybox durumunu getir”`);
+          }
+        }
+      } catch (e) { ozet.push(`Buybox kontrolü: ${mesaj(e)}`); }
     }
   }
 

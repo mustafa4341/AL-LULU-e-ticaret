@@ -4,6 +4,7 @@
  */
 import type { Durum, Kategori, Magaza, Urun, UrunSeti } from './sema';
 import { YASAL_INDIRIM_GUN, gecerliSepetteIndirim, oncekiFiyat, sepetteFiyat, setToplamlari, sonGunlerinEnDusugu, type IstemciKatalog, type IstemciSet, type IstemciUrun } from './fiyat';
+import { TAKSIT_ACIK } from './taksit';
 
 export interface FiyatBilgisi {
   fiyat: number;
@@ -165,8 +166,10 @@ export class Katalog {
         damgaStil = ozelDamga.stil;
       }
     }
-    if (this.site.taksit.pesinFiyatinaTaksit) kucuk.push(`Peşin fiyatına ${this.site.taksit.pesinFiyatinaTaksit} taksit`);
-    const serit = u.fiyat >= this.site.kargo.ucretsizEsik ? 'Kargo Bedava' : undefined;
+    if (TAKSIT_ACIK && this.site.taksit.pesinFiyatinaTaksit) kucuk.push(`Peşin fiyatına ${this.site.taksit.pesinFiyatinaTaksit} taksit`);
+    // Ücretsiz kargo sepette ödenecek (sepette indirimli) fiyata göre: sepet de aynı tutarla hesaplar (denetim AUD-017)
+    const odenecek = sepetteFiyat(u.fiyat, gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }));
+    const serit = odenecek >= this.site.kargo.ucretsizEsik ? 'Kargo Bedava' : undefined;
     const stokSeridi = u.stok > 0 && u.stok <= 5 ? `Son ${u.stok} Ürün` : undefined;
     return { damga, damgaTon, damgaStil, serit, stokSeridi, kucuk };
   }

@@ -69,7 +69,10 @@ export async function yorumKaydet(s: Siparis, girdi: { urunId: string; puan: num
     siparis_no: s.no, urun_id: girdi.urunId, ad: gorunenAd(s.musteri.ad, s.musteri.soyad),
     puan: girdi.puan, metin: girdi.metin, durum: 'bekliyor', guncelleme: new Date().toISOString(),
   }, { onConflict: 'siparis_no,urun_id' });
-  if (error) throw new Error('Değerlendirme kaydedilemedi: ' + error.message);
+  if (error) {
+    console.error('[yorum] Kaydedilemedi', s.no, error.code, error.message);
+    throw new Error('Değerlendirmeniz şu anda kaydedilemedi. Lütfen biraz sonra tekrar deneyin.'); // ham veritabanı hatası müşteriye gösterilmez
+  }
 }
 
 /** Panel: tüm yorumlar (en yeni önce) */

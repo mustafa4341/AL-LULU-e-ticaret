@@ -1,3 +1,6 @@
+-- !!! DİKKAT (denetim AUD-031): Aşağıdaki adres CANLI siteye sabittir. Bu dosyayı bir TEST/STAGING Supabase projesine
+-- !!! uygulamayın; uygularsanız test veritabanı 5 dakikada bir canlı siteyi tetikler. Test projesinde bu dosyayı atlayın
+-- !!! ya da URL'yi test adresine çevirin.
 -- Pazaryeri eşitlemesi için 5 dakikalık zamanlayıcı (GitHub Actions zamanlaması saatlerce gecikebiliyordu).
 -- pg_cron her 5 dakikada canlı sitedeki /api/pazaryeri-senkron ucunu pg_net ile çağırır.
 -- Anahtar depoda DEĞİL: Supabase Vault'ta 'zamanlayici_anahtari' adıyla durur (Vercel'deki ZAMANLAYICI_ANAHTARI ile aynı).

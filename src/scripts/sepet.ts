@@ -3,7 +3,7 @@
  * Hesap lib/fiyat.ts → sepetHesapla ile yapılır; sunucu siparişi alırken AYNI fonksiyonla yeniden hesaplar.
  */
 import { formatTL, katalog, setBul, urunBul } from './katalog';
-import { kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, urunKullanimi, type HesapSatiri, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
+import { gecerliSepetteIndirim, kampanyaIndirimi, satirKampanyaIndirimi, sepetHesapla, sepetteFiyat, urunKullanimi, type HesapSatiri, type IstemciUrun, type KalemTipi, type SepetKalemi } from '../lib/fiyat';
 import { cekmeceAc, toast } from './ui';
 import { satirlardanUrunler, track } from './analitik';
 
@@ -34,6 +34,14 @@ function kaydet(): void {
 window.addEventListener('storage', (e) => { if (e.key === ANAHTAR) { kalemler = oku(); yansit(); document.dispatchEvent(new CustomEvent(DEGISTI)); } });
 
 export const sepetKalemleri = (): readonly SepetKalemi[] => kalemler;
+
+/** Boş sepette önerilecek ürün: vitrin ürünü stoktaysa o, değilse stokta olan ilk ürün (stoksuz ürün önerilmez — denetim AUD-016). */
+export function bosSepetOnerisi(): IstemciUrun | undefined {
+  const hero = urunBul(katalog.heroId);
+  return hero && hero.maxAdet > 0 ? hero : Object.values(katalog.urunler).find((u) => u.maxAdet > 0);
+}
+/** Ürünün sepette ödenecek birim fiyatı (sepette indirim dahil) */
+export const odenecekFiyat = (u: IstemciUrun) => sepetteFiyat(u.fiyat, gecerliSepetteIndirim(u));
 export const sepetOzeti = () => sepetHesapla(kalemler, katalog);
 export function sepetiBosalt(): void { kalemler = []; kaydet(); }
 
@@ -100,18 +108,18 @@ export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
   const altSatir = `
         <div class="kalem__satir">
           ${duzenlenebilir ? `<div class="adet adet--kucuk" role="group" aria-label="${esc(s.ad)} adet">
-            <button type="button" data-kalem-eksi="${anah}" aria-label="${s.adet > 1 ? 'Adedi azalt' : 'Sepetten çıkar'}">${ikonSvg(s.adet > 1 ? 'eksi' : 'cop', 16)}</button>
+            <button type="button" data-kalem-eksi="${esc(anah)}" aria-label="${s.adet > 1 ? 'Adedi azalt' : 'Sepetten çıkar'}">${ikonSvg(s.adet > 1 ? 'eksi' : 'cop', 16)}</button>
             <span class="adet__deger" aria-live="polite">${s.adet}</span>
-            <button type="button" data-kalem-arti="${anah}" aria-label="Adedi artır"${eklenir ? '' : ' disabled'}>${ikonSvg('arti', 16)}</button>
+            <button type="button" data-kalem-arti="${esc(anah)}" aria-label="Adedi artır"${eklenir ? '' : ' disabled'}>${ikonSvg('arti', 16)}</button>
           </div>` : `<span class="muted small">${s.adet} adet</span>`}
           <div class="kalem__fiyat">${once ? `<s>${formatTL(once)}</s>` : ''}<span class="${once ? 'fiyat--indirimli' : ''}">${formatTL(s.toplam)}</span></div>
         </div>`;
   if (s.tip === 'set') return setSatirHtml(s, altSatir, once);
   return `
     <div class="kalem">
-      <a class="kalem__gorsel" href="${s.href}" tabindex="-1" aria-hidden="true">${s.gorsel ? `<img src="${s.gorsel}" alt="" width="72" height="88">` : ikonSvg(s.ikon, 28)}</a>
+      <a class="kalem__gorsel" href="${esc(s.href)}" tabindex="-1" aria-hidden="true">${s.gorsel ? `<img src="${esc(s.gorsel)}" alt="" width="72" height="88">` : ikonSvg(s.ikon, 28)}</a>
       <div>
-        <a class="kalem__ad" href="${s.href}">${esc(s.ad)}</a>
+        <a class="kalem__ad" href="${esc(s.href)}">${esc(s.ad)}</a>
         ${dokumHtml(s)}
         ${altSatir}
       </div>
@@ -131,7 +139,7 @@ function setSatirHtml(s: HesapSatiri, altSatir: string, once: number): string {
   const liste = urunler.length && urunler.every((k) => k.u)
     ? urunler.map(({ x, u }) => `
         <li class="set-kalem__urun">
-          <span class="set-kalem__gorsel" aria-hidden="true">${u!.gorsel ? `<img src="${u!.gorsel}" alt="" width="44" height="52" loading="lazy">` : ikonSvg(u!.ikon, 20)}</span>
+          <span class="set-kalem__gorsel" aria-hidden="true">${u!.gorsel ? `<img src="${esc(u!.gorsel)}" alt="" width="44" height="52" loading="lazy">` : ikonSvg(u!.ikon, 20)}</span>
           <span class="set-kalem__bilgi"><span class="set-kalem__ad">${esc(`${u!.marka} ${u!.kisaAd}`)}</span><span class="set-kalem__adet">${x.adet * s.adet} adet</span></span>
           <span class="set-kalem__fiyat">${formatTL(u!.fiyat * x.adet * s.adet)}</span>
         </li>`).join('')
@@ -141,7 +149,7 @@ function setSatirHtml(s: HesapSatiri, altSatir: string, once: number): string {
       <div class="set-kalem">
         <div class="set-kalem__ust">
           <span class="kalem__rozet">${ikonSvg('etiket', 12)}Set · ${urunSayisi} ürün</span>
-          <a class="kalem__ad" href="${s.href}">${esc(s.ad)}</a>
+          <a class="kalem__ad" href="${esc(s.href)}">${esc(s.ad)}</a>
         </div>
         <ul class="set-kalem__liste" aria-label="${esc(s.ad)} içindeki ürünler">${liste}</ul>
         ${once ? `<div class="set-kalem__indirim"><span>Set indirimi${yuzde ? ` (%${yuzde})` : ''}</span><span>−${formatTL(once - s.toplam)}</span></div>` : ''}
@@ -207,6 +215,22 @@ function setleriYansit(): void {
   }
 }
 
+/* Sepet yeniden çizilince klavye odağı kaybolmasın: +/− düğmesi (satır silindiyse çekmecenin kendisi) yeniden odak alır — AUD-025 */
+function odakAnahtari(kok: HTMLElement): string | undefined {
+  const a = document.activeElement;
+  if (!(a instanceof HTMLElement) || !kok.contains(a)) return undefined;
+  for (const ad of ['data-kalem-arti', 'data-kalem-eksi']) {
+    if (a.hasAttribute(ad)) return `[${ad}="${CSS.escape(a.getAttribute(ad) ?? '')}"]`;
+  }
+  if (a.dataset.id && a.hasAttribute('data-sepete-ekle')) return `[data-sepete-ekle][data-id="${CSS.escape(a.dataset.id)}"]`;
+  return 'cekmece';
+}
+function odagiGeriVer(kok: HTMLElement, anahtar: string | undefined): void {
+  if (!anahtar) return;
+  const hedef = anahtar === 'cekmece' ? null : kok.querySelector<HTMLElement>(anahtar);
+  (hedef ?? kok.closest<HTMLElement>('[data-cekmece]'))?.focus({ preventScroll: true });
+}
+
 function yansit(): void {
   const o = sepetOzeti();
   setleriYansit();
@@ -224,16 +248,18 @@ function yansit(): void {
   if (!govde || !alt) return;
   if (sayi) sayi.textContent = o.adet ? `(${o.adet})` : '';
 
+  const odak = odakAnahtari(govde);
   if (!o.satirlar.length) {
-    const hero = urunBul(katalog.heroId);
+    const hero = bosSepetOnerisi();
     govde.innerHTML = `
       <div class="bos-sepet">
         <div class="bos-sepet__ikon">${ikonSvg('canta', 40)}</div>
         <p><strong>Sepetiniz boş</strong></p>
-        ${hero ? `<button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id="${hero.id}" data-konum="bos-sepet">${esc(hero.kisaAd)} ekle · ${formatTL(hero.fiyat)}</button>` : ''}
+        ${hero ? `<button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="urun" data-id="${esc(hero.id)}" data-konum="bos-sepet">${esc(hero.kisaAd)} ekle · ${formatTL(odenecekFiyat(hero))}</button>` : ''}
         <p style="margin-top:12px"><a href="/urunler">Tüm ürünlere göz atın</a></p>
       </div>`;
     alt.hidden = true;
+    odagiGeriVer(govde, odak);
     return;
   }
   alt.hidden = false;
@@ -245,12 +271,13 @@ function yansit(): void {
   const oneriHtml = oneri ? `
     <div class="oneri"><p class="oneri__baslik">Bununla iyi gider</p>
       <div class="oneri__oge">
-        ${oneri.gorsel ? `<img src="${oneri.gorsel}" alt="" width="48" height="56">` : `<span class="oneri__yok">${ikonSvg(oneri.ikon, 22)}</span>`}
-        <div><div class="oneri__ad">${esc(oneri.kisaAd)}</div><div class="oneri__fiyat">${formatTL(oneri.fiyat)}</div></div>
-        <button class="btn btn--sepet btn--kucuk" type="button" data-sepete-ekle data-tip="urun" data-id="${oneri.id}" data-konum="sepet-oneri" data-sessiz>${ikonSvg('arti', 16)}Ekle</button>
+        ${oneri.gorsel ? `<img src="${esc(oneri.gorsel)}" alt="" width="48" height="56">` : `<span class="oneri__yok">${ikonSvg(oneri.ikon, 22)}</span>`}
+        <div><div class="oneri__ad">${esc(oneri.kisaAd)}</div><div class="oneri__fiyat">${formatTL(odenecekFiyat(oneri))}</div></div>
+        <button class="btn btn--sepet btn--kucuk" type="button" data-sepete-ekle data-tip="urun" data-id="${esc(oneri.id)}" data-konum="sepet-oneri" data-sessiz>${ikonSvg('arti', 16)}Ekle</button>
       </div></div>` : '';
 
   govde.innerHTML = kargoKutusu + o.satirlar.map((s) => satirHtml(s)).join('') + oneriHtml;
+  odagiGeriVer(govde, odak);
   alt.innerHTML = `
     <div class="toplamlar">${toplamlarHtml(o)}</div>
     <a class="btn btn--sepet btn--block btn--buyuk" href="/odeme" data-odemeye-gec>${ikonSvg('kilit', 18)}Ödemeye Geç</a>
@@ -301,7 +328,8 @@ document.addEventListener('click', (e) => {
     const tip = (t.dataset.tip as KalemTipi) || 'urun', id = t.dataset.id!;
     const istenen = adetKaynagi(t);
     const mevcut = kalemler.find((k) => k.tip === tip && k.id === id)?.adet ?? 0;
-    if (mevcut < istenen) ekle(tip, id, istenen - mevcut);
+    // Ürün sepete girmediyse (stok yok / alım sınırı) ödeme sayfasına başka ürünlerle gidilmez (denetim AUD-016)
+    if (mevcut < istenen && !ekle(tip, id, istenen - mevcut) && !mevcut) return;
     track('quick_buy_click', { item_id: id });
     if (kalemler.length) { t.classList.add('is-yukleniyor'); location.href = '/odeme'; }
     return;
@@ -314,7 +342,7 @@ document.addEventListener('click', (e) => {
     if (k) {
       adetAyarla(k.tip, k.id, k.adet + (t.hasAttribute('data-kalem-arti') ? 1 : -1));
       // Tutar değişimini görünür kıl
-      document.querySelectorAll(`[data-kalem-arti="${ana}"]`).forEach((b) => {
+      document.querySelectorAll(`[data-kalem-arti="${CSS.escape(ana)}"]`).forEach((b) => {
         b.closest('.kalem')?.querySelector('.kalem__fiyat')?.classList.add('is-guncellendi');
       });
       document.querySelectorAll('.toplamlar .genel span:last-child').forEach((el) => el.classList.add('is-guncellendi'));
@@ -362,7 +390,7 @@ yansit();
     kart.className = 'hatirlatma';
     kart.setAttribute('role', 'status');
     kart.innerHTML = `
-      ${ilk.gorsel ? `<img src="${ilk.gorsel}" alt="">` : `<span class="oneri__yok">${ikonSvg(ilk.ikon, 22)}</span>`}
+      ${ilk.gorsel ? `<img src="${esc(ilk.gorsel)}" alt="">` : `<span class="oneri__yok">${ikonSvg(ilk.ikon, 22)}</span>`}
       <div class="hatirlatma__metin"><strong>Sepetin seni bekliyor</strong>${o.adet} ürün · ${formatTL(o.toplam)}</div>
       <button class="btn btn--sepet btn--kucuk" type="button" data-cekmece-ac="sepet">Tamamla</button>
       <button class="hatirlatma__kapat" type="button" aria-label="Kapat">${ikonSvg('kapat', 14)}</button>`;
