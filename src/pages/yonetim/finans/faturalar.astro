@@ -243,7 +243,9 @@ const bugun = finansGunu();
     {secili.fatura ? <div class="fm-kesildi">
       <h3>Kesilen fatura ve iletim işlemleri</h3>
       <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
-        {secili.fatura.ek || faturaKanalLinki(secili.fatura) ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a>{!secili.fatura.ek && <small class="muted"> (Trendyol’dan indirilir)</small>}</> : <span class="muted"> · Dosya eklenmedi</span>}</p>
+        {secili.fatura.ek ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a></>
+          : faturaKanalLinki(secili.fatura) ? <> · <span class="muted">Dosyası Trendyol satıcı panelinde (Siparişler › fatura)</span> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">Trendyol’dan indirmeyi dene ↗</a></>
+          : <span class="muted"> · Dosya eklenmedi</span>}</p>
       <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
       <details class="fm-dosya-yenile">
         <summary>Fatura numarasını düzelt{secili.fatura.no.startsWith('TY-') ? ' (Trendyol’dan alındı, numarayı faturadan yazın)' : ''}</summary>
@@ -354,7 +356,8 @@ const bugun = finansGunu();
             </td>
             <td data-etiket="İşlem" class="y-sayi">
               <div class="fm-satir-butonlar">
-                {a.fatura && (a.fatura.ek || faturaKanalLinki(a.fatura)) && <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/fatura-dosya?id=' + a.fatura.id} target="_blank" rel="noopener">PDF ↗</a>}
+                {a.fatura && (a.fatura.ek || (faturaKanalLinki(a.fatura) && !a.fatura.kanalDeneme)) && <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/fatura-dosya?id=' + a.fatura.id} target="_blank" rel="noopener">PDF ↗</a>}
+                {a.fatura && !a.fatura.ek && faturaKanalLinki(a.fatura) && a.fatura.kanalDeneme && <small class="y-table-note">PDF Trendyol panelinde</small>}
                 {bekliyorMu && a.fatura && !a.fatura.ek && (
                   <a class="btn btn--sepet btn--kucuk" href={filtre({ sec: a.anahtar }) + '#secili'}>PDF Ekle</a>
                 )}

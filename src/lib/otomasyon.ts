@@ -27,6 +27,8 @@ import { tyKomisyonlariniGuncelle } from './trendyolIceAktar';
 
 const SITE = 'https://alluluhome.com';
 const mesaj = (e: unknown) => e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'bilinmeyen hata';
+/** Hiç çalışmamışsa (tarih yok/geçersiz) ya da üzerinden `ms` geçtiyse true. (Date.parse('') NaN döner; NaN > x her zaman false idi.) */
+const eskiMi = (tarih: string | undefined, ms: number) => { const t = Date.parse(tarih ?? ''); return !Number.isFinite(t) || Date.now() - t > ms; };
 
 export type OtomasyonSecenek = {
   yeniIdler?: string[]; gunlukZorla?: boolean; sureMs?: number;
@@ -130,7 +132,7 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
 
   // 4b. Cevap bekleyen Trendyol müşteri soruları: 30 dakikada bir sayılır (İş Merkezi'nde görünür); yeni soru gelirse günlüğe yazılır
   const soru = ayar.kanallar.trendyol.soru;
-  if (tyBagli && kaldi() > 6000 && Date.now() - Date.parse(soru.tarih ?? '') > 30 * 60_000) {
+  if (tyBagli && kaldi() > 6000 && eskiMi(soru.tarih, 30 * 60_000)) {
     try {
       const bekleyen = (await tySorular('WAITING_FOR_ANSWER', 14)).length;
       if (bekleyen > soru.bekleyen) ozet.push(`Trendyol’da cevap bekleyen ${bekleyen} müşteri sorusu var (Satış kanalları › Trendyol iade ve sorular)`);
@@ -141,7 +143,7 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
   // 4c. Trendyol iade talepleri (claims): 30 dakikada bir çekilir. Her yeni talep/durum siparişin geçmişine ve günlüğe yazılır;
   // depoya ulaşıp onay bekleyenler İş Merkezi'nde görünür (onay: Satış kanalları › Trendyol iade ve sorular).
   const iadeTakip = ayar.kanallar.trendyol.iade;
-  if (tyBagli && kaldi() > 8000 && (o.gunlukZorla || Date.now() - Date.parse(iadeTakip.tarih ?? '') > 30 * 60_000)) {
+  if (tyBagli && kaldi() > 8000 && (o.gunlukZorla || eskiMi(iadeTakip.tarih, 30 * 60_000))) {
     try {
       const [talepler, pySip] = await Promise.all([tyIadeler(30), pazaryeriSiparisleriOku().catch(() => [])]);
       const islenen = new Set(iadeTakip.islenen);
@@ -175,7 +177,7 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
 
   // 4c-2. Trendyol ilan başına komisyon oranları: hiç okunmadıysa hemen, sonra günde bir (kâr hesapları bunu kullanır)
   const tyKom = ayar.kanallar.trendyol.komisyonTarih;
-  if (tyBagli && kaldi() > 10_000 && (o.gunlukZorla || Date.now() - Date.parse(tyKom ?? '') > 24 * 3600_000)) {
+  if (tyBagli && kaldi() > 10_000 && (o.gunlukZorla || eskiMi(tyKom, 24 * 3600_000))) {
     try {
       const degisen = await tyKomisyonlariniGuncelle();
       if (degisen.length) ozet.push(`Trendyol komisyon oranları okundu: ${degisen.length} ürün (${degisen.slice(0, 3).map((d) => `${d.urunId} %${(d.yeni / 100).toLocaleString('tr-TR')}`).join(', ')}${degisen.length > 3 ? '…' : ''})`);
@@ -184,7 +186,7 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
 
   // 4d. Hepsiburada ürün başına komisyon oranları: günde bir (canlı bağlantıda). Kâr hesaplayıcısı ve kârlılık bu oranı kullanır.
   const hbKom = ayar.kanallar.hepsiburada.komisyonTarih;
-  if (pazaryeriApiDurumu('hepsiburada') === 'canli' && kaldi() > 10_000 && (o.gunlukZorla || Date.now() - Date.parse(hbKom ?? '') > 24 * 3600_000)) {
+  if (pazaryeriApiDurumu('hepsiburada') === 'canli' && kaldi() > 10_000 && (o.gunlukZorla || eskiMi(hbKom, 24 * 3600_000))) {
     try {
       const r = await hbKomisyonlariniGuncelle(Math.min(20_000, kaldi() - 4000));
       const degisen = r.guncellenen.filter((g) => g.eski !== g.yeni);

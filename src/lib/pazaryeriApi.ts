@@ -594,7 +594,7 @@ export async function trendyolDosyaIndir(link: string, sinyal: AbortSignal): Pro
   if (!izinli(url)) throw new PazaryeriApiHatasi('Bağlantı Trendyol sunucusuna ait değil.');
   const turBul = (b: Buffer) => b.subarray(0, 5).toString() === '%PDF-' ? 'application/pdf' as const
     : b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' as const : b.subarray(1, 4).toString() === 'PNG' ? 'image/png' as const : undefined;
-  for (let adim = 0; adim < 2; adim++) {
+  for (let adim = 0; adim < 3; adim++) {
     const kimlikli = izinli(url);
     const y = await fetch(url, {
       headers: {
@@ -605,6 +605,11 @@ export async function trendyolDosyaIndir(link: string, sinyal: AbortSignal): Pro
     }).catch(() => { throw new PazaryeriApiHatasi('Trendyol fatura dosyasına bağlanılamadı.'); });
     if (!y.ok) {
       await y.body?.cancel().catch(() => undefined);
+      // Eski ağ geçidi yolu (/sapigw/) entegrasyon kimliğine 403 verebiliyor: aynı dosya yeni yolda (/integration/) bir kez denenir
+      if (adim === 0 && [403, 404].includes(y.status) && kimlikli && url.pathname.startsWith('/sapigw/')) {
+        url = new URL(url.href.replace('/sapigw/', '/integration/'));
+        continue;
+      }
       throw new PazaryeriApiHatasi(`Trendyol fatura dosyası HTTP ${y.status} döndürdü.`, y.status);
     }
     if (Number(y.headers.get('content-length') ?? 0) > 8 * 1024 * 1024) throw new PazaryeriApiHatasi('Trendyol fatura dosyası 8 MB’tan büyük.');

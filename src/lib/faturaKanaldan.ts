@@ -154,10 +154,10 @@ export async function trendyolFaturalariniAl(secenek: { enFazlaSorgu?: number; s
       if (!/zaten kayıtlı/i.test(m)) sonuc.hatalar.push(`${a.siparisNo}: ${m.slice(0, 160) || 'fatura kaydedilemedi'}`);
     }
   }
-  // Önceden alınıp dosyası eklenemeyenler: 6 saatte bir yeniden denenir (en fazla 3 kayıt)
+  // Önceden alınıp dosyası eklenemeyenler: kendiliğinden yalnız bir kez denenir (Trendyol dosyayı entegrasyona vermeyebiliyor,
+  // ör. HTTP 403); sonra panelde "PDF" düğmesiyle elle denenebilir. En fazla 3 kayıt.
   const eksikler = finans.faturalar.filter((x) => x.kanal === 'trendyol' && !x.iptal && !x.ek && faturaKanalLinki(x)
-    && Date.now() - Date.parse(x.olusturma) < 60 * 86_400_000
-    && (!x.kanalDeneme || Date.now() - Date.parse(x.kanalDeneme) > 6 * 3600_000)).slice(0, 3);
+    && Date.now() - Date.parse(x.olusturma) < 60 * 86_400_000 && !x.kanalDeneme).slice(0, 3);
   for (const x of eksikler) {
     if (Date.now() > bitis - 3000) break;
     const r = await kanalFaturaDosyasiniTamamla(x).catch((e) => ({ tamam: false, hata: e instanceof Error ? e.message : 'hata' }));
