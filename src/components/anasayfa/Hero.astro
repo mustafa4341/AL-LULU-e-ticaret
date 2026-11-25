@@ -11,9 +11,22 @@ import UrunRozeti from '../UrunRozeti.astro';
 import OzellikListesi from '../OzellikListesi.astro';
 import { metindenIkon } from '../../lib/ozellik';
 const k = Astro.locals.katalog;
-const h = k.anaSayfa.hero;
-const urun = k.urunBul(h.urunId);
-const gorsel = urun ? k.anaGorsel(urun) : undefined;
+const ayar = k.anaSayfa.hero;
+const secili = k.urunBul(ayar.urunId);
+const toronto = k.urunBul('fissler-toronto-tencere-seti');
+const duetto = k.urunBul('tefal-duetto-plus-tava-24');
+const yedek = [toronto, duetto].find((aday) => aday && k.stoktaMi(aday));
+const urun = secili && k.stoktaMi(secili) ? secili : yedek ?? secili;
+const yedekVitrin = Boolean(urun && urun.id !== secili?.id);
+const h = yedekVitrin && urun ? {
+  baslik: `${urun.marka} ${urun.kisaAd}`,
+  altBaslik: urun.ozet,
+  maddeler: urun.faydalar.slice(0, 3).map((fayda) => fayda.baslik).filter(Boolean),
+  ustBaslik: 'Öne çıkan ürün',
+} : ayar;
+const mutfakGorseli = yedekVitrin && urun?.id === toronto?.id ? urun?.gorseller.find((resim) => resim.src.endsWith('/05.webp')) : undefined;
+const gorsel = mutfakGorseli ?? (urun ? k.anaGorsel(urun) : undefined);
+const digerUrun = yedekVitrin ? [duetto, toronto].find((aday) => aday && aday.id !== urun?.id && k.stoktaMi(aday)) : undefined;
 const rozet = urun ? k.rozetler(urun) : undefined;
 const bilgi = urun ? k.fiyatBilgisi(urun) : undefined;
 /* Görselin sol üst etiketi: gerçek durum varsa o (En Çok Satan / Fırsat / Son N Adet), yoksa panel → "Üst başlık" */
@@ -58,9 +71,13 @@ const stokHaberUrl = urun ? k.whatsapp(`Merhaba, ${urun.marka} ${urun.kisaAd} st
           </div>
         )}
         <a class="hero__detay" href={href}>
-          <span><strong>Ürünü incele</strong><span>Fotoğraflar, pişirme süreleri, teknik özellikler</span></span>
+          <span><strong>Ürünü incele</strong><span>Fotoğraflar ve teknik özellikler</span></span>
           <Ikon ad="sag" boyut={18} />
         </a>
+        {digerUrun && <a class="hero__detay" href={`/urun/${digerUrun.id}`}>
+          <span><strong>{digerUrun.marka} {digerUrun.kisaAd}</strong><span>Ürünü incele</span></span>
+          <Ikon ad="sag" boyut={18} />
+        </a>}
         {h.maddeler.some((m) => m.includes('*')) && <p class="hero__dipnot">{urun.marka.toLocaleLowerCase('tr') === 'fissler' ? '* Fissler verisi; yemeğe ve miktara göre değişir.' : `* ${urun.marka} resmî ürün verisi.`}</p>}
         {stokta && <KargoSayaci kompakt />}
       </div>

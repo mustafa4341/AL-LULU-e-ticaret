@@ -1,0 +1,602 @@
+---
+import Ikon from '../Ikon.astro';
+
+const k = Astro.locals.katalog;
+const kategoriler = new Set(k.gorunurKategoriler().map(({ id }) => id));
+const gorselKlasoru = '/img/vitrin';
+const duduklu = k.urunBul('fissler-vitaquick-premium-6l');
+const dudukluStokta = duduklu ? k.stoktaMi(duduklu) : false;
+const fiyat = duduklu && dudukluStokta ? k.fiyatBilgisi(duduklu) : undefined;
+const indirim = fiyat?.sepette
+  ? 'Sepette %' + fiyat.sepette.yuzde + ' indirim'
+  : fiyat?.onceki && fiyat.yuzde
+    ? '%' + fiyat.yuzde + ' indirim'
+    : undefined;
+
+type Vitrin = {
+  id: string;
+  etiket: string;
+  baslik: string;
+  aciklama: string;
+  href: string;
+  baglanti: string;
+  rozet?: string;
+  durum?: string;
+};
+
+const vitrinler: Vitrin[] = [{
+  id: 'secim',
+  etiket: 'Mutfak seçkisi',
+  baslik: 'Mutfak ve sofra seçkisi',
+  aciklama: 'Pişirmeden sofraya, günlük mutfak gereçlerini keşfedin.',
+  href: '/urunler',
+  baglanti: 'Tüm ürünleri keşfet',
+}];
+
+const kategoriVitrinleri = [
+  { id: 'tava', etiket: 'Tavalar', baslik: 'Her gün için tavalar', aciklama: 'Tekli tavalar ve farklı boylarda tava setleri.', baglanti: 'Tavaları incele' },
+  { id: 'tencere', etiket: 'Tencereler', baslik: 'Çelik tencere setleri', aciklama: 'Günlük yemeklerden kalabalık sofralara farklı boy seçenekleri.', baglanti: 'Tencereleri incele' },
+  { id: 'mutfak-aletleri', etiket: 'Pratik yardımcılar', baslik: 'Mutfakta pratik yardımcılar', aciklama: 'Günlük hazırlık için ipli rondolar ve doğrayıcılar.', baglanti: 'Yardımcıları incele' },
+];
+for (const kategori of kategoriVitrinleri) {
+  if (kategoriler.has(kategori.id) && k.kategoriUrunleri(kategori.id).length) {
+    vitrinler.push({ ...kategori, href: '/kategori/' + kategori.id });
+  }
+}
+
+if (duduklu) {
+  vitrinler.push({
+    id: 'duduklu',
+    etiket: 'Fissler Vitaquick',
+    baslik: 'Fissler Vitaquick® Premium 6 L',
+    aciklama: 'Paslanmaz çelik düdüklü tencere, iki pişirme kademesiyle.',
+    href: '/urun/' + duduklu.id,
+    baglanti: 'Düdüklü tencereyi incele',
+    rozet: indirim,
+    durum: dudukluStokta ? undefined : 'Şu an stokta yok',
+  });
+}
+
+const coklu = vitrinler.length > 1;
+---
+
+<section class="vitrin-banner container" aria-roledescription={coklu ? 'karusel' : undefined} aria-label="Mağaza vitrini" data-vitrin>
+  <div class="vitrin-banner__sahne" data-vitrin-sahne>
+    <div class="vitrin-banner__ray" data-vitrin-ray>
+      {vitrinler.map((vitrin, sira) => {
+        const Baslik = sira === 0 ? 'h1' : 'h2';
+        return (
+          <div
+            class="vitrin-banner__panel"
+            id={'vitrin-' + vitrin.id}
+            role={coklu ? 'group' : undefined}
+            aria-roledescription={coklu ? 'slayt' : undefined}
+            aria-label={coklu ? `${sira + 1} / ${vitrinler.length}: ${vitrin.etiket}` : undefined}
+            data-vitrin-panel
+          >
+            <picture class="vitrin-banner__gorsel">
+              <source media="(max-width: 699px)" srcset={gorselKlasoru + '/' + vitrin.id + '-mobil.webp'} width="900" height="570" />
+              <img src={gorselKlasoru + '/' + vitrin.id + '.webp'} width="1600" height="800" alt=""
+                loading={sira === 0 ? 'eager' : 'lazy'} fetchpriority={sira === 0 ? 'high' : undefined}
+                decoding={sira === 0 ? 'auto' : 'async'} />
+            </picture>
+            <div class="vitrin-banner__metin">
+              {vitrin.rozet && <span class="vitrin-banner__rozet">{vitrin.rozet}</span>}
+              <Baslik>{vitrin.baslik}</Baslik>
+              <p>{vitrin.aciklama}</p>
+              <div class="vitrin-banner__aksiyon">
+                <a href={vitrin.href} class="vitrin-banner__baglanti">{vitrin.baglanti} <Ikon ad="sag" boyut={17} /></a>
+                {vitrin.durum && <span class="vitrin-banner__durum">{vitrin.durum}</span>}
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+
+    {coklu && (
+      <>
+        <button type="button" class="vitrin-banner__ok vitrin-banner__ok--sol" aria-label="Önceki banner" data-vitrin-onceki>
+          <Ikon ad="sol" boyut={22} />
+        </button>
+        <button type="button" class="vitrin-banner__ok vitrin-banner__ok--sag" aria-label="Sonraki banner" data-vitrin-sonraki>
+          <Ikon ad="sag" boyut={22} />
+        </button>
+        <div class="vitrin-banner__noktalar" role="group" aria-label="Banner sırası" data-vitrin-noktalar>
+          {vitrinler.map((vitrin, sira) => (
+            <button
+              type="button"
+              class="vitrin-banner__nokta"
+              aria-label={`${sira + 1}. banner: ${vitrin.etiket}`}
+              aria-current={sira === 0 ? 'true' : 'false'}
+              data-vitrin-nokta={sira}
+            />
+          ))}
+        </div>
+      </>
+    )}
+  </div>
+</section>
+
+<script>
+  const OTOMATIK_SURE = 4800;
+  const azHareket = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  for (const vitrin of document.querySelectorAll<HTMLElement>('[data-vitrin]')) {
+    const sahne = vitrin.querySelector<HTMLElement>('[data-vitrin-sahne]');
+    const ray = vitrin.querySelector<HTMLElement>('[data-vitrin-ray]');
+    if (!sahne || !ray) continue;
+
+    const paneller = [...ray.querySelectorAll<HTMLElement>('[data-vitrin-panel]')];
+    const noktalar = [...vitrin.querySelectorAll<HTMLButtonElement>('[data-vitrin-nokta]')];
+    const oncekiBtn = vitrin.querySelector<HTMLButtonElement>('[data-vitrin-onceki]');
+    const sonrakiBtn = vitrin.querySelector<HTMLButtonElement>('[data-vitrin-sonraki]');
+    const toplam = paneller.length;
+    if (toplam < 2) continue;
+
+    // Son slayttan ilk slayta da sağa doğru kesintisiz akması için ilk slaydın erişilebilirlik dışı kopyası
+    let klonVar = false;
+    if (!azHareket) {
+      const klon = paneller[0]!.cloneNode(true) as HTMLElement;
+      klon.removeAttribute('id');
+      klon.removeAttribute('role');
+      klon.removeAttribute('aria-roledescription');
+      klon.removeAttribute('aria-label');
+      klon.removeAttribute('data-vitrin-panel');
+      klon.dataset.vitrinKlon = '';
+      klon.setAttribute('aria-hidden', 'true');
+      const klonBaslik = klon.querySelector('h1');
+      if (klonBaslik) {
+        const taklit = document.createElement('p');
+        for (const nitelik of klonBaslik.attributes) {
+          taklit.setAttribute(nitelik.name, nitelik.value);
+        }
+        taklit.classList.add('vitrin-banner__baslik');
+        taklit.textContent = klonBaslik.textContent;
+        klonBaslik.replaceWith(taklit);
+      }
+      klon.querySelectorAll<HTMLElement>('a, button').forEach((el) => { el.tabIndex = -1; });
+      ray.append(klon);
+      klonVar = true;
+    }
+
+    let aktif = 0;
+    let hedefIndeks: number | undefined;
+    let klonaGidiyor = false;
+    let otoZaman: number | undefined;
+    let sifirlaZaman: number | undefined;
+    let kaydirBitisZaman: number | undefined;
+    let uzerinde = false;
+    let odakta = false;
+    let dokunuyor = false;
+    let gorunur = true;
+
+    const gorseliHazirla = (indeks: number) => {
+      const p = paneller[((indeks % toplam) + toplam) % toplam];
+      const img = p?.querySelector<HTMLImageElement>('img');
+      if (img && img.loading === 'lazy') img.loading = 'eager';
+    };
+
+    const guncelle = (indeks: number) => {
+      aktif = ((indeks % toplam) + toplam) % toplam;
+      noktalar.forEach((n, i) => {
+        n.setAttribute('aria-current', i === aktif ? 'true' : 'false');
+      });
+      paneller.forEach((p, i) => {
+        const secili = i === aktif;
+        p.querySelectorAll<HTMLElement>('a, button').forEach((el) => {
+          el.tabIndex = secili ? 0 : -1;
+        });
+      });
+      gorseliHazirla(aktif + 1);
+    };
+
+    const klondanSifiraAl = () => {
+      window.clearTimeout(sifirlaZaman);
+      if (!klonVar || !ray.clientWidth) return;
+      if (Math.round(ray.scrollLeft / ray.clientWidth) >= toplam) {
+        ray.scrollTo({ left: 0, behavior: 'instant' });
+      }
+      klonaGidiyor = false;
+    };
+
+    const git = (istenen: number, yon?: 'ileri' | 'geri') => {
+      const g = ray.clientWidth;
+      if (!g) return;
+      window.clearTimeout(sifirlaZaman);
+
+      if (!klonVar) {
+        const yeni = ((istenen % toplam) + toplam) % toplam;
+        gorseliHazirla(yeni);
+        guncelle(yeni);
+        hedefIndeks = undefined;
+        ray.scrollTo({ left: yeni * g, behavior: 'auto' });
+        return;
+      }
+
+      const yumusakKaydir = (hedefSol: number, onceSifirla?: number) => {
+        if (onceSifirla !== undefined) {
+          ray.scrollTo({ left: onceSifirla, behavior: 'instant' });
+          requestAnimationFrame(() => {
+            ray.scrollTo({ left: hedefSol, behavior: 'smooth' });
+          });
+        } else {
+          ray.scrollTo({ left: hedefSol, behavior: 'smooth' });
+        }
+      };
+
+      // Klon üzerindeyken yeni bir komut gelirse önce gerçek konuma hizala
+      let baslangicSifirla: number | undefined;
+      if (yon !== 'geri' && (klonaGidiyor || ray.scrollLeft >= (toplam - 0.5) * g)) {
+        baslangicSifirla = Math.max(0, ray.scrollLeft - toplam * g);
+        klonaGidiyor = false;
+      }
+
+      if (yon === 'ileri' && aktif === toplam - 1 && baslangicSifirla === undefined) {
+        gorseliHazirla(0);
+        guncelle(0);
+        hedefIndeks = 0;
+        klonaGidiyor = true;
+        yumusakKaydir(toplam * g);
+        sifirlaZaman = window.setTimeout(klondanSifiraAl, 650);
+        return;
+      }
+
+      if (yon === 'geri' && aktif === 0) {
+        gorseliHazirla(toplam - 1);
+        const klonKonumu = ray.scrollLeft < 0.5 * g ? toplam * g : undefined;
+        klonaGidiyor = false;
+        guncelle(toplam - 1);
+        hedefIndeks = toplam - 1;
+        yumusakKaydir((toplam - 1) * g, klonKonumu);
+        return;
+      }
+
+      const yeni = ((istenen % toplam) + toplam) % toplam;
+      klonaGidiyor = false;
+      gorseliHazirla(yeni);
+      guncelle(yeni);
+      hedefIndeks = yeni;
+      yumusakKaydir(yeni * g, baslangicSifirla);
+    };
+
+    const duraklatildiMi = () => uzerinde || odakta || dokunuyor || !gorunur || document.hidden;
+
+    const durdur = () => {
+      window.clearTimeout(otoZaman);
+      otoZaman = undefined;
+    };
+
+    const planla = () => {
+      durdur();
+      if (duraklatildiMi()) return;
+      otoZaman = window.setTimeout(() => {
+        if (!duraklatildiMi()) git(aktif + 1, 'ileri');
+        planla();
+      }, OTOMATIK_SURE);
+    };
+
+    let raf = 0;
+    ray.addEventListener('scroll', () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const g = ray.clientWidth;
+        if (!g) return;
+        const ham = Math.round(ray.scrollLeft / g);
+        const gercek = ((ham % toplam) + toplam) % toplam;
+        if (hedefIndeks !== undefined) {
+          const beklenenHam = klonaGidiyor ? toplam : hedefIndeks;
+          if (Math.abs(ray.scrollLeft - beklenenHam * g) < 2) {
+            hedefIndeks = undefined;
+            if (klonaGidiyor) klondanSifiraAl();
+          }
+        } else if (gercek !== aktif) {
+          guncelle(gercek);
+        }
+      });
+
+      window.clearTimeout(kaydirBitisZaman);
+      kaydirBitisZaman = window.setTimeout(() => {
+        hedefIndeks = undefined;
+        klondanSifiraAl();
+      }, 180);
+    }, { passive: true });
+
+    ray.addEventListener('scrollend', () => {
+      window.clearTimeout(kaydirBitisZaman);
+      hedefIndeks = undefined;
+      klondanSifiraAl();
+    });
+
+    ray.addEventListener('pointerdown', (e) => {
+      hedefIndeks = undefined;
+      if (e.pointerType !== 'mouse') {
+        dokunuyor = true;
+        durdur();
+      }
+    }, { passive: true });
+
+    const dokunmaBitir = () => {
+      if (!dokunuyor) return;
+      dokunuyor = false;
+      planla();
+    };
+    window.addEventListener('pointerup', dokunmaBitir, { passive: true });
+    window.addEventListener('pointercancel', dokunmaBitir, { passive: true });
+
+    ray.addEventListener('wheel', () => {
+      hedefIndeks = undefined;
+      planla();
+    }, { passive: true });
+
+    sahne.addEventListener('pointerenter', (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      uzerinde = true;
+      durdur();
+    });
+
+    sahne.addEventListener('pointerleave', (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      uzerinde = false;
+      planla();
+    });
+
+    sahne.addEventListener('focusin', () => {
+      odakta = true;
+      durdur();
+    });
+
+    sahne.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && sahne.contains(e.relatedTarget)) return;
+      odakta = false;
+      planla();
+    });
+
+    oncekiBtn?.addEventListener('click', () => {
+      git(aktif - 1, 'geri');
+      planla();
+    });
+
+    sonrakiBtn?.addEventListener('click', () => {
+      git(aktif + 1, 'ileri');
+      planla();
+    });
+
+    noktalar.forEach((nokta, i) => {
+      nokta.addEventListener('click', () => {
+        if (i === aktif && !klonaGidiyor) { planla(); return; }
+        git(i);
+        planla();
+      });
+    });
+
+    sahne.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        git(aktif + 1, 'ileri');
+        planla();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        git(aktif - 1, 'geri');
+        planla();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) durdur();
+      else planla();
+    });
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(([girdi]) => {
+        gorunur = Boolean(girdi?.isIntersecting);
+        if (gorunur) planla();
+        else durdur();
+      }, { threshold: 0.15 }).observe(vitrin);
+    }
+
+    window.addEventListener('resize', () => {
+      if (!ray.clientWidth) return;
+      klonaGidiyor = false;
+      hedefIndeks = undefined;
+      ray.scrollTo({ left: aktif * ray.clientWidth, behavior: 'instant' });
+    }, { passive: true });
+
+    guncelle(0);
+    planla();
+  }
+</script>
+
+<style>
+  .vitrin-banner { padding-block: clamp(14px, 2vw, 28px) 14px; }
+  .vitrin-banner__sahne {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--r-lg);
+    background: #242418;
+    color: #fff5e5;
+  }
+  .vitrin-banner__ray {
+    display: flex;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .vitrin-banner__ray::-webkit-scrollbar { display: none; }
+  .vitrin-banner__panel {
+    position: relative;
+    flex: 0 0 100%;
+    min-width: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  .vitrin-banner__gorsel { display: block; width: 100%; }
+  .vitrin-banner__gorsel img { display: block; width: 100%; height: 100%; object-fit: cover; }
+  .vitrin-banner__metin { position: relative; padding: 22px 22px 52px; }
+  .vitrin-banner__metin :is(h1, h2, .vitrin-banner__baslik) {
+    margin: 0;
+    font: 700 clamp(35px, 4.8vw, 72px)/.98 var(--font-serif);
+    letter-spacing: -.025em;
+    color: inherit;
+    text-wrap: balance;
+  }
+  .vitrin-banner__metin p:not(.vitrin-banner__baslik) {
+    margin: 14px 0 0;
+    max-width: 31ch;
+    color: #f6ead6;
+    line-height: 1.5;
+  }
+  .vitrin-banner__aksiyon { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-top: 22px; }
+  .vitrin-banner__baglanti {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 46px;
+    padding: 10px 16px;
+    border-radius: 7px;
+    background: #f5e3bf;
+    color: #242116;
+    font-weight: 700;
+    text-decoration: none;
+    line-height: 1.3;
+    transition: background-color .18s var(--ease), transform .18s var(--ease);
+  }
+  .vitrin-banner__baglanti:hover { background: #fff3da; }
+  .vitrin-banner__baglanti:focus-visible { outline: 2px solid #fff5e5; outline-offset: 4px; }
+  .vitrin-banner__rozet {
+    display: inline-block;
+    margin-bottom: 12px;
+    padding: 4px 10px;
+    border-radius: 4px;
+    color: #fff;
+    background: #9a2529;
+    font-size: .9rem;
+    font-weight: 700;
+  }
+  .vitrin-banner__durum { color: #f4e5c8; font-size: .85rem; }
+
+  /* Sağ / Sol geçiş okları: banner üzerine gelince veya odaklanınca belirir */
+  .vitrin-banner__ok {
+    position: absolute;
+    top: calc(clamp(185px, 54vw, 270px) / 2);
+    transform: translateY(-50%);
+    z-index: 3;
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 245, 229, .28);
+    background: rgba(24, 22, 15, .66);
+    backdrop-filter: blur(8px);
+    color: #fff5e5;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .28);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity .22s var(--ease), background-color .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+  }
+  .vitrin-banner__ok--sol { left: 12px; }
+  .vitrin-banner__ok--sag { right: 12px; }
+  .vitrin-banner__sahne:hover .vitrin-banner__ok,
+  .vitrin-banner__sahne:focus-within .vitrin-banner__ok {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .vitrin-banner__ok:hover {
+    background: #f5e3bf;
+    border-color: #f5e3bf;
+    color: #242116;
+    transform: translateY(-50%) scale(1.05);
+  }
+  .vitrin-banner__ok:focus-visible {
+    outline: 2px solid #fff5e5;
+    outline-offset: 2px;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    .vitrin-banner__ok { display: none; }
+  }
+
+  /* Alt noktalar: toplam kaç banner olduğunu gösterir ve doğrudan seçim sağlar */
+  .vitrin-banner__noktalar {
+    position: absolute;
+    left: 50%;
+    bottom: 13px;
+    transform: translateX(-50%);
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 3px 8px;
+    border-radius: 999px;
+    background: rgba(20, 19, 13, .55);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 245, 229, .14);
+  }
+  .vitrin-banner__nokta {
+    display: grid;
+    place-items: center;
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+  .vitrin-banner__nokta::before {
+    content: '';
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 245, 229, .42);
+    transition: width .26s var(--ease), background-color .2s var(--ease);
+  }
+  .vitrin-banner__nokta:hover::before {
+    background: rgba(255, 245, 229, .78);
+  }
+  .vitrin-banner__nokta[aria-current="true"]::before {
+    width: 22px;
+    background: #f5e3bf;
+  }
+  .vitrin-banner__nokta:focus-visible {
+    outline: 2px solid #fff5e5;
+    outline-offset: 1px;
+    border-radius: 999px;
+  }
+
+  @media (max-width: 699px) {
+    .vitrin-banner__panel { display: flex; flex-direction: column; }
+    .vitrin-banner__gorsel { height: clamp(185px, 54vw, 270px); flex: none; }
+    .vitrin-banner__metin { flex: 1; display: flex; flex-direction: column; background: #26261a; }
+    .vitrin-banner__aksiyon { margin-top: auto; padding-top: 20px; }
+  }
+
+  @media (min-width: 700px) {
+    .vitrin-banner__panel {
+      display: grid;
+      align-items: center;
+      min-height: clamp(365px, 40vw, 570px);
+      isolation: isolate;
+    }
+    .vitrin-banner__panel::after {
+      position: absolute;
+      z-index: -1;
+      inset: 0;
+      background: linear-gradient(90deg, #1b1a11f2 0%, #1b1a11bd 25%, #1b1a1144 48%, transparent 68%);
+      content: '';
+    }
+    .vitrin-banner__gorsel { position: absolute; z-index: -2; inset: 0; }
+    .vitrin-banner__metin {
+      width: min(52%, 36rem);
+      padding: 32px 0 50px clamp(72px, 6.2vw, 94px);
+    }
+    .vitrin-banner__ok {
+      top: 50%;
+      width: 46px;
+      height: 46px;
+    }
+    .vitrin-banner__ok--sol { left: 16px; }
+    .vitrin-banner__ok--sag { right: 16px; }
+    .vitrin-banner__noktalar { bottom: 16px; }
+  }
+</style>

@@ -1,6 +1,6 @@
 ---
 import Base from '../layouts/Base.astro';
-import Hero from './anasayfa/Hero.astro';
+import VitrinBanner from './anasayfa/VitrinBanner.astro';
 import Guven from './anasayfa/Guven.astro';
 import Firsatlar from './anasayfa/Firsatlar.astro';
 import Kategoriler from './anasayfa/Kategoriler.astro';
@@ -13,13 +13,13 @@ import { magazaVerisi } from '../lib/seo';
 import { hizmeteUygunSSS } from '../lib/altyapi';
 
 /* Bölümler panel → Ayarlar → Ana sayfa'daki sırayla gösterilir. */
-const bilesenler = { hero: Hero, firsatlar: Firsatlar, guven: Guven, kategoriler: Kategoriler, oneCikanlar: OneCikanlar, setler: Setler, amiralHikaye: AmiralHikaye, nedenBiz: NedenBiz, sss: SSSBolumu } as const;
+const bilesenler = { hero: VitrinBanner, firsatlar: Firsatlar, guven: Guven, kategoriler: Kategoriler, oneCikanlar: OneCikanlar, setler: Setler, amiralHikaye: AmiralHikaye, nedenBiz: NedenBiz, sss: SSSBolumu } as const;
 const k = Astro.locals.katalog;
 const sss = hizmeteUygunSSS(k.anaSayfa.sss);
 ---
 <Base
-  baslik={`${k.site.ad} | Fissler Düdüklü Tencere ve Premium Mutfak Ürünleri`}
-  aciklama="Orijinal, faturalı ve 2 yıl garantili Fissler Vitaquick® Premium 6 L düdüklü tencere ve premium mutfak ürünleri. Hızlı sipariş, hafta içi aynı gün kargo."
+  baslik={`${k.site.ad} | Tencere, Tava ve Mutfak Gereçleri`}
+  aciklama="Fissler tencereleri, Tefal tavaları, pratik doğrayıcıları ve sofra gereçlerini Al Lulu Home’da keşfedin."
   aktif="ana"
   yapisalVeri={[
     ...magazaVerisi(k.site),
