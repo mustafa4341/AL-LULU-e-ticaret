@@ -116,6 +116,10 @@ const faturaKaydi = z.object({
   }).default({ durum: 'bekliyor' }),
   iptal: z.boolean().default(false),
   olusturma: z.string(),
+  /** Kanaldan (Trendyol) alınan faturanın kaynak bağlantısı; dosyası buradan indirilir */
+  kanalLink: z.string().max(1000).optional(),
+  /** Kanaldan dosya indirmenin son denendiği an (tekrar denemeyi seyreltmek için) */
+  kanalDeneme: z.string().optional(),
 });
 export type FaturaKaydi = z.infer<typeof faturaKaydi>;
 export const faturaKaydiSema = faturaKaydi;
@@ -133,6 +137,11 @@ export const HbUrunAyarSema = z.object({
   desi: z.number().min(0).max(4500),
   maliyet: k.optional(),
   kdv: z.number().int().min(0).max(20),
+  /** Komisyon oranının kaynağı: Hepsiburada API'sinden (Komisyon Bilgisi Sorgulama) ya da satıcı panelinden elle */
+  oranKaynak: z.enum(['hepsiburada', 'elle']).optional(),
+  oranTarih: z.string().optional(),
+  /** Hepsiburada'nın bu ilan için verdiği ödeme vadesi (gün) */
+  vadeGun: z.number().int().min(0).max(365).optional(),
 });
 export type HbKayit = z.infer<typeof hbKayit>;
 export type HbPerformans = z.infer<typeof hbPerformans>;

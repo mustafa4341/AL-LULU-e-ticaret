@@ -10,7 +10,7 @@ import { bosAyarlar, kanalHedefStok } from '../../../lib/pazaryeri';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi } from '../../../lib/pazaryeriDepo';
 import {
-  kanalFiyatiniKoru, kanalFiyatlariniKaydet, trendyolAnaIlaniSec, trendyolIlaniniBagla, trendyolIlaniSatistanKaldir, trendyolKatalogu,
+  kanalFiyatiniKoru, kanalFiyatlariniKaydet, trendyolAnaIlaniSec, tyKomisyonlariniGuncelle, trendyolIlaniniBagla, trendyolIlaniSatistanKaldir, trendyolKatalogu,
   trendyoldanUrunCek, type TyKatalogSatiri,
 } from '../../../lib/trendyolIceAktar';
 import { tyBuybox, type TyBuybox } from '../../../lib/trendyolApi';
@@ -117,6 +117,10 @@ if (apiHazir && depoHazir) {
   try {
     satirlar = await trendyolKatalogu();
     await kanalFiyatlariniKaydet(satirlar).catch(() => undefined);
+    // Komisyon oranları da aynı listede gelir: değiştiyse kaydedilir (kâr hesapları için)
+    if (satirlar.some((s) => s.durum === 'bagli' && s.komisyon !== undefined && k.urunler[s.urunId!]?.komisyonBp !== Math.round(s.komisyon * 100))) {
+      await tyKomisyonlariniGuncelle(satirlar).catch(() => undefined);
+    }
     // Buybox yalnız istenince (her ilan için ayrı sorgu): ?buybox=1
     if (q.has('buybox') && satirlar.length) {
       try { buybox = await tyBuybox(satirlar.filter((s) => s.satista).map((s) => s.barkod)); }
@@ -139,8 +143,8 @@ const ciftGruplari = (() => {
   return idler.map((urunId) => {
     const ilanlar = satirlar!.filter((s) => s.urunId === urunId);
     const bagli = k.urunler[urunId]?.kod;
-    // Öneri: zaten bağlı olan; o yoksa gerçek barkodlu (EAN-13) ve satışta olan; sonra stoğu olan
-    const puan = (s: TyKatalogSatiri) => (s.barkod === bagli ? 8 : 0) + (gtinGecerli(s.barkod) ? 4 : 0) + (s.satista ? 2 : 0) + ((s.stok ?? 0) > 0 ? 1 : 0);
+    // Öneri: fiyatı olan (fiyatı 0 ilan satışa çıkamaz); sonra zaten bağlı olan; gerçek barkodlu (EAN-13); satışta; stoğu olan
+    const puan = (s: TyKatalogSatiri) => ((s.fiyat ?? 0) > 0 ? 16 : 0) + (s.barkod === bagli ? 8 : 0) + (gtinGecerli(s.barkod) ? 4 : 0) + (s.satista ? 2 : 0) + ((s.stok ?? 0) > 0 ? 1 : 0);
     const oneri = [...ilanlar].sort((a, b) => puan(b) - puan(a))[0]?.barkod;
     return { urunId, urun: urunMap.get(urunId), ilanlar, bagli, oneri };
   });
@@ -180,7 +184,7 @@ const ciftGruplari = (() => {
             <div class="tyi-cift__bilgi">
               <strong>{s.baslik}</strong>
               <small class="muted">Barkod {s.barkod}{gtinGecerli(s.barkod) ? '' : ' (gerçek EAN değil)'}{s.stokKodu && s.stokKodu !== s.barkod ? ` · stok kodu ${s.stokKodu}` : ''}</small>
-              <small>{para(s.fiyat)} · Trendyol’da {s.stok ?? '—'} adet{!s.satista ? ' · satışta değil' : ''}</small>
+              <small>{para(s.fiyat)} · Trendyol’da {s.stok ?? '—'} adet{!s.satista ? ' · satışta değil' : ''}{!((s.fiyat ?? 0) > 0) ? ' · fiyatı yok, satışa çıkamaz' : ''}</small>
               <span>
                 {s.barkod === g.bagli && <span class="y-chip y-chip--yesil">Ana ilan · depoya bağlı</span>}
                 {s.barkod !== g.bagli && s.barkod === g.oneri && <span class="y-chip y-chip--turuncu">Önerilen</span>}
@@ -247,7 +251,7 @@ const ciftGruplari = (() => {
                 {guvenliBaglanti(s.url) && <a class="y-link" href={guvenliBaglanti(s.url)} target="_blank" rel="noopener noreferrer">Trendyol’da gör ↗</a>}
               </span></div>
           </td>
-          <td data-etiket="Trendyol fiyat / stok" class="y-sayi tyi-fiyat"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small>{e?.fiyatHata && <small class="y-table-note" style="color:var(--y-kirmizi, #b42318);white-space:normal">Son fiyat reddedildi: {e.fiyatHata}</small>}
+          <td data-etiket="Trendyol fiyat / stok" class="y-sayi tyi-fiyat"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small>{s.komisyon !== undefined && <small class="y-table-note">Komisyon %{s.komisyon.toLocaleString('tr-TR')}</small>}{e?.fiyatHata && <small class="y-table-note" style="color:var(--y-kirmizi, #b42318);white-space:normal">Son fiyat reddedildi: {e.fiyatHata}</small>}
             {(() => { const b = buybox?.get(s.barkod); if (!b) return null;
               if (!b.cokSatici || b.sira === 1) return <small class="y-table-note y-yazi-yesil" title="Buybox: ürün sayfasında “Sepete ekle” sizin mağazanızda">Buybox sizde{b.cokSatici ? '' : ' (tek satıcı)'}</small>;
               return <small class="y-table-note y-yazi-kirmizi" title="Aynı ürünü başka mağazalar da satıyor">Buybox {b.sira ?? '?'}. sırada · en iyi {para(b.fiyat)}</small>; })()}

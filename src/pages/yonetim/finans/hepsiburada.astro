@@ -12,6 +12,9 @@ import {
 } from '../../../lib/hepsiburadaTarife';
 import { HB_GRUPLAR, hbGercekOrtalamalar, hbKayitOku, hbOzet, hbPerformansOku, hbSiparisMutabakati, type HbGrup } from '../../../lib/hepsiburadaFinans';
 import { PazaryeriApiHatasi, hepsiburadaFinansCek, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+import { hbKomisyonlariniGuncelle } from '../../../lib/hepsiburadaKomisyon';
+import { kanalHedefFiyati } from '../../../lib/pazaryeri';
+import { envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
 
 const q = { get: (k: string) => Astro.url.searchParams.get(k) || null };
 let hatalar: string[] = [];
@@ -54,6 +57,14 @@ if (Astro.request.method === 'POST') {
       const ayar: HbUrunAyar = { kategori, desi, kdv, maliyet: tlKurus(metin(f, 'maliyet')), oranBp: kategori === 'elle' ? oran : undefined };
       await hbUrunKaydet(urunId, ayar);
       return geri({ ...hesapParametreleri(f), ok: 'Ürünün Hepsiburada bilgileri kaydedildi.' });
+    }
+    if (eylem === 'komisyon-cek') {
+      const r = await hbKomisyonlariniGuncelle(40_000);
+      const parcalar = [
+        r.guncellenen.length ? `${r.guncellenen.length} ürünün komisyon oranı Hepsiburada’dan alındı (${r.guncellenen.slice(0, 5).map((g) => `${g.ad} %${(g.yeni / 100).toLocaleString('tr-TR')}`).join(', ')}${r.guncellenen.length > 5 ? '…' : ''}).` : 'Sitedeki ürünlerle eşleşen Hepsiburada ilanı bulunamadı.',
+        r.eslesmeyenIlanlar.length ? `Hepsiburada’da sitedeki ürüne bağlanmamış ${r.eslesmeyenIlanlar.length} ilan var (satıcı stok kodları: ${r.eslesmeyenIlanlar.slice(0, 6).map((i) => i.merchantSku).join(', ')}${r.eslesmeyenIlanlar.length > 6 ? '…' : ''}). Satış kanalları › Ürün eşleştirme’de bu kodlarla bağlayın.` : '',
+      ].filter(Boolean);
+      return Astro.redirect('/yonetim/finans/hepsiburada?' + new URLSearchParams({ [r.guncellenen.length ? 'ok' : 'hata']: parcalar.join(' ') }) + '#komisyonlar', 303);
     }
     if (eylem === 'cek') {
       const gun = Number(metin(f, 'gun'));
@@ -116,6 +127,25 @@ try {
   hatalar.push((e as Error).message);
 }
 const vadeOrnegi = isGunuEkle(new Date(), ODEME_VADESI_IS_GUNU);
+
+/* ---- Ürün başına komisyon ve net kâr (25.11.2026): her ürün kendi oranı + alış maliyetiyle ---- */
+const hbKanal = await envanterAyarlariOku().then((a) => a.kanallar.hepsiburada, () => undefined);
+const komisyonSatirlari = magaza.urunler
+  .filter((u) => u.durum === 'yayinda' && hbKanal?.urunler[u.id]?.satista !== false)
+  .map((u) => {
+    const a = finans.hbUrunler[u.id];
+    const oran = a ? (a.kategori === 'elle' ? a.oranBp : hbKategori(a.kategori)?.oranBp) : hbKategori(kategoriOnerisi(u.kategoriler))?.oranBp;
+    const fiyat = Math.round(kanalHedefFiyati(u, hbKanal).hedef * 100);
+    const girdi = oran === undefined ? undefined : {
+      oranBp: oran, urunKdv: a?.kdv ?? 20, desi: a?.desi ?? 3, kargoFirmasi: ayar.kargoFirmasi,
+      islemBedeli: ayar.islemBedeli, hizmetBedeli: ayar.hizmetBedeli, stopajBp: ayar.stopajBp, maliyet: a?.maliyet,
+    };
+    const h = girdi ? satisHesabi({ ...girdi, fiyat }) : undefined;
+    const kaynak = a?.oranKaynak === 'hepsiburada' ? `Hepsiburada’dan okundu${a.oranTarih ? ' · ' + new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'Europe/Istanbul' }).format(new Date(a.oranTarih)) : ''}`
+      : a?.oranKaynak === 'elle' ? 'Satıcı panelinden elle girildi' : a?.kategori === 'elle' ? undefined : 'Kategori tablosundaki genel oran (gerçek oran farklı olabilir)';
+    return { id: u.id, ad: `${u.marka} ${u.kisaAd}`, oranBp: oran, vadeGun: a?.vadeGun, maliyet: a?.maliyet, fiyat, kar: h?.netKar, marj: h?.marj, basaBas: girdi ? hedefFiyat(girdi, 0) : undefined, kaynak };
+  })
+  .sort((x, y) => (x.kar ?? 0) - (y.kar ?? 0));
 
 /* ---- Hepsiburada hesabı (muhasebe servisi) ---- */
 const ozet = hbOzet(finans.hepsiburada);
@@ -270,6 +300,30 @@ const tarifeEski = tarifeGun > 90;
       </section>
     </aside>
   </div>
+
+  <section class="y-kart" id="komisyonlar">
+    <div class="y-kart__bas">
+      <div>
+        <h2><PIkon ad="yuzde" /> Ürün Başına Komisyon ve Net Kâr</h2>
+        <p class="y-kart__alt">Her ürünün Hepsiburada’daki kendi komisyon oranıyla: hedef fiyattan satışta elinize kalan ve zarar etmeden inebileceğiniz en düşük fiyat.</p>
+      </div>
+      <form method="post"><button class="btn btn--cizgi btn--kucuk" name="eylem" value="komisyon-cek" type="submit" disabled={!['canli', 'test'].includes(apiDurumu)} title={['canli', 'test'].includes(apiDurumu) ? 'Hepsiburada Komisyon Bilgisi Sorgulama servisinden okunur' : 'Canlı Hepsiburada API bilgileri tanımlanınca çalışır'}><PIkon ad="yenile" boyut={16} />Komisyonları Hepsiburada’dan çek</button></form>
+    </div>
+    {!['canli', 'test'].includes(apiDurumu) && <p class="y-help">Hepsiburada bağlantısı kurulunca oranlar her gün kendiliğinden Hepsiburada’dan okunur. Şimdilik satıcı panelinde gördüğünüz oranlar kullanılıyor.</p>}
+    {!ayar.kargoFirmasi && <p class="y-uyari">Kargo firması seçilmemiş; kâr kargo düşülmeden hesaplanır. Aşağıdaki “Hepsiburada maliyet ayarları”ndan seçin.</p>}
+    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Ürün</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Alış (KDV hariç)</th><th class="y-sayi">Hedef fiyat</th><th class="y-sayi">Satış başı net kâr</th><th class="y-sayi">Zararsız en düşük fiyat</th></tr></thead>
+      <tbody>{komisyonSatirlari.map((r) => <tr>
+        <td data-etiket="Ürün"><strong>{r.ad}</strong>{r.kaynak && <small class="y-table-note">{r.kaynak}</small>}</td>
+        <td data-etiket="Komisyon" class="y-sayi">{r.oranBp !== undefined ? yuzde(r.oranBp) : '—'}{r.vadeGun !== undefined && <small class="y-table-note">{r.vadeGun} gün vade</small>}</td>
+        <td data-etiket="Alış" class="y-sayi">{r.maliyet !== undefined ? finansPara(r.maliyet) : <span class="muted">girilmedi</span>}</td>
+        <td data-etiket="Hedef fiyat" class="y-sayi">{finansPara(r.fiyat)}</td>
+        <td data-etiket="Net kâr" class:list={['y-sayi', r.kar !== undefined && r.kar < 0 ? 'y-yazi-kirmizi' : '']}><strong>{r.kar !== undefined ? isaretli(r.kar) : '—'}</strong>{r.marj !== undefined && <small class="y-table-note">%{(r.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} marj</small>}</td>
+        <td data-etiket="En düşük fiyat" class="y-sayi">{r.basaBas !== undefined ? finansPara(r.basaBas) : '—'}</td>
+      </tr>)}</tbody>
+    </table></div>
+    <p class="y-help">Net kâr = KDV hariç satış − komisyon − kargo − işlem/hizmet bedeli − alış maliyeti (KDV’ler ve %1 stopaj vergiden mahsup edildiği için düşülmez). Hepsiburada’nın “sepete özel” indirimini siz karşılıyorsanız müşterinin ödediği fiyat düşer; bu indirimle kârı hesaplayıcıda fiyatı düşürerek görün.</p>
+  </section>
 
   <div class="y-hesap-izgara" id="hesap">
   <section class="y-kart">

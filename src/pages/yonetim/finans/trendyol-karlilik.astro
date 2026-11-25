@@ -7,6 +7,8 @@ import { finansPara } from '../../../lib/finans';
 import { finansOku } from '../../../lib/finansDepo';
 import { trendyolKarlilik } from '../../../lib/karlilik';
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import { hedefFiyat, satisHesabi } from '../../../lib/hepsiburadaTarife';
+import { kanalHedefFiyati } from '../../../lib/pazaryeri';
 
 /** Trendyol ürün bazında satış, kesinti, hakediş ve (maliyet girildiyse) tahmini net kâr. */
 const hatalar: string[] = [];
@@ -18,7 +20,28 @@ const [magaza, finans, py, ayar] = await Promise.all([
   envanterAyarlariOku().catch(() => undefined),
 ]);
 const kdv = (id?: string): number => (id ? ayar?.kanallar.trendyol.ilanlar[id]?.kdv ?? finans?.hbUrunler[id]?.kdv : undefined) ?? 20;
-const rapor = finans ? trendyolKarlilik(py, finans, magaza, gun, kdv) : undefined;
+const tyUrunler = ayar?.kanallar.trendyol.urunler ?? {};
+const komisyonOrani = (id?: string) => { const bp = id ? tyUrunler[id]?.komisyonBp : undefined; return bp === undefined ? undefined : bp / 10_000; };
+const rapor = finans ? trendyolKarlilik(py, finans, magaza, gun, kdv, komisyonOrani) : undefined;
+
+/* ---- Satış başı tahmini kâr: ilanın Trendyol komisyon oranı + alış maliyeti (25.11.2026) ---- */
+const kargoFirmasi = finans?.hbAyar.kargoFirmasi || 'aras';
+const birimSatirlar = magaza.urunler
+  .filter((u) => tyUrunler[u.id]?.kod && tyUrunler[u.id]?.satista !== false)
+  .map((u) => {
+    const e = tyUrunler[u.id]!;
+    const fiyatTL = e.kanalFiyat && e.kanalFiyat > 0 ? e.kanalFiyat : kanalHedefFiyati(u, ayar?.kanallar.trendyol).hedef;
+    const fiyat = Math.round(fiyatTL * 100);
+    const hb = finans?.hbUrunler[u.id];
+    const girdi = e.komisyonBp === undefined ? undefined : {
+      oranBp: e.komisyonBp, urunKdv: kdv(u.id), desi: ayar?.kanallar.trendyol.ilanlar[u.id]?.desi ?? hb?.desi ?? 3, kargoFirmasi,
+      islemBedeli: 0, hizmetBedeli: 0, stopajBp: 100, maliyet: hb?.maliyet,
+    };
+    const h = girdi ? satisHesabi({ ...girdi, fiyat }) : undefined;
+    return { id: u.id, ad: `${u.marka} ${u.kisaAd}`, oranBp: e.komisyonBp, fiyat, maliyet: hb?.maliyet, yatan: h?.hesabaYatan, kar: h?.netKar, marj: h?.marj, basaBas: girdi ? hedefFiyat(girdi, 0) : undefined };
+  })
+  .sort((a, b) => (a.kar ?? 0) - (b.kar ?? 0));
+const komisyonsuz = birimSatirlar.filter((r) => r.oranBp === undefined).length;
 const yuzde = (n?: number) => n === undefined ? '—' : '%' + (n * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const para = (n?: number) => n === undefined ? '—' : finansPara(n);
 const maliyetsiz = rapor?.satirlar.filter((r) => r.urunId && r.maliyet === undefined).length ?? 0;
@@ -28,6 +51,25 @@ const maliyetsiz = rapor?.satirlar.filter((r) => r.urunId && r.maliyet === undef
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     {[30, 90, 365].map((g) => <a class:list={['btn', 'btn--kucuk', g === gun ? 'btn--sepet' : 'btn--cizgi']} href={'?gun=' + g}>Son {g} gün</a>)}
   </div>
+
+  <section class="y-kart" id="birim">
+    <div class="y-kart__bas"><div><h2><PIkon ad="yuzde" /> Satış başı tahmini kâr (ilanın Trendyol komisyonuyla)</h2>
+      <p class="y-kart__alt">Trendyol’daki şu anki fiyatla bir adet satılırsa: hesabınıza yatacak tutar, alış maliyetinden sonra kalan net kâr ve zarar etmeden inebileceğiniz en düşük fiyat.</p></div></div>
+    {komisyonsuz > 0 && <p class="y-help">{komisyonsuz} ürünün komisyon oranı henüz okunmadı; oranlar Trendyol’dan günde bir (ve “Trendyol ilanları” ekranı açılınca) kendiliğinden alınır.</p>}
+    {birimSatirlar.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
+      <thead><tr><th>Ürün</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Trendyol fiyatı</th><th class="y-sayi">Alış (KDV hariç)</th><th class="y-sayi">Hesaba yatan</th><th class="y-sayi">Net kâr</th><th class="y-sayi">Zararsız en düşük fiyat</th></tr></thead>
+      <tbody>{birimSatirlar.map((r) => <tr>
+        <td data-etiket="Ürün"><strong>{r.ad}</strong></td>
+        <td data-etiket="Komisyon" class="y-sayi">{r.oranBp !== undefined ? '%' + (r.oranBp / 100).toLocaleString('tr-TR') : '—'}</td>
+        <td data-etiket="Trendyol fiyatı" class="y-sayi y-nowrap">{para(r.fiyat)}</td>
+        <td data-etiket="Alış" class="y-sayi y-nowrap">{r.maliyet !== undefined ? para(r.maliyet) : <span class="muted">girilmedi</span>}</td>
+        <td data-etiket="Hesaba yatan" class="y-sayi y-nowrap">{para(r.yatan)}</td>
+        <td data-etiket="Net kâr" class:list={['y-sayi', 'y-nowrap', { 'y-yazi-kirmizi': (r.kar ?? 0) < 0 }]}><strong>{para(r.kar)}</strong>{r.marj !== undefined && <small class="y-table-note">{yuzde(r.marj)} marj</small>}</td>
+        <td data-etiket="En düşük fiyat" class="y-sayi y-nowrap">{para(r.basaBas)}</td>
+      </tr>)}</tbody>
+    </table></div> : <p class="y-bos">Trendyol’a bağlı ürün yok.</p>}
+    <p class="y-help">Kargo, Trendyol’un sözleşmeli kargo ücreti siparişten sonra kesinti faturasıyla geldiği için burada {kargoFirmasi === 'aras' ? 'Aras' : kargoFirmasi} desi tarifesiyle tahmin edilir; gerçek kesintiler aşağıdaki tabloda ekstreden gelir. Trendyol’un platform hizmet bedeli ve kampanya/kupon indirimleri dahil değildir.</p>
+  </section>
 
   {rapor && <>
     <div class="y-metrics y-metrics--finans">

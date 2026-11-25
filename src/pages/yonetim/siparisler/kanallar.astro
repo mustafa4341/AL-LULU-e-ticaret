@@ -31,6 +31,8 @@ else {
 }
 const urunler = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
 const baglantiAdi = { kapali: 'Bağlı değil', eksik: 'API ayarları eksik', test: 'Test bağlantısı', canli: 'Canlı bağlantı' };
+/** Vercel dışında (bilgisayardaki kopya) çalışıyor mu? Pazaryeri anahtarları yalnız canlı sunucuda tanımlı. */
+const yerelKopya = !process.env.VERCEL;
 const panel = { trendyol: 'https://partner.trendyol.com/', hepsiburada: 'https://merchant.hepsiburada.com/' };
 const ayarliKanal = KANAL_LISTESI.some((kanal) => {
   const api = pazaryeriApiDurumu(kanal);
@@ -169,6 +171,20 @@ if (Astro.request.method === 'POST' && depoHazir) {
         delete k.bekleyenStok;
         k.sonStokHata = 'Satıcı paneli kontrolü sonrasında önceki stok işlemi kapatıldı. Yeni kanal okuması bekleniyor.';
       });
+    } else if (eylem === 'kanal-disi') {
+      // Ürün bu kanalda hiç satılmıyor (ilanı yok): eşleşme bekleyen sayılmaz. Geri alınabilir.
+      duzenlenenKanal = kanal;
+      const urunId = String(f.get('urunId') ?? '');
+      const disarida = String(f.get('deger') ?? '') === 'ac';
+      if (!urunler.some((u) => u.id === urunId)) throw new DogrulamaHatasi(['Ürün bulunamadı.']);
+      await envanterAyarlariGuncelle((a) => {
+        const k = a.kanallar[kanal];
+        if (k.urunler[urunId]?.kod) throw new DogrulamaHatasi(['Bu ürün bir ilana bağlı. Satışı durdurmak için ••• menüsünden “Kanalda satışa açık” seçimini kaldırın.']);
+        if (disarida) k.urunler[urunId] = { satista: false };
+        else delete k.urunler[urunId];
+      });
+      const ad = urunler.find((u) => u.id === urunId);
+      return Astro.redirect(`${yol}?eslestirme=${kanal}&m=${encodeURIComponent(`${ad?.marka} ${ad?.kisaAd}: ${disarida ? `${KANALLAR[kanal]}’da satılmıyor olarak işaretlendi.` : `yeniden ${KANALLAR[kanal]} eşleşmesi bekliyor.`}`)}#${kanal}-${encodeURIComponent(urunId)}`, 303);
     } else if (eylem === 'urun-ayari') {
       duzenlenenKanal = kanal;
       const urunId = String(f.get('urunId') ?? '');
@@ -270,8 +286,9 @@ const webStokEksik = web?.filter((s) => s.paytr?.stokEksik && s.durum !== 'iptal
 const pyBekleyen = (kanal: 'trendyol' | 'hepsiburada') => pySiparisler.filter((s) => s.kanal === kanal && ['onay-bekliyor', 'yeni', 'hazirlaniyor'].includes(s.durum)).length;
 const kanalIstatistik = (kanal: 'trendyol' | 'hepsiburada') => {
   const k = ayar.kanallar[kanal];
-  const eslesen = Object.values(k.urunler).filter((u) => u.kod).length;
-  const eslesmeyen = Math.max(0, urunler.length - eslesen);
+  const eslesen = urunler.filter((u) => k.urunler[u.id]?.kod).length;
+  // Taslak ürünler ve "bu kanalda satılmıyor" işaretlenenler eşleşme bekleyen sayılmaz (25.11.2026)
+  const eslesmeyen = urunler.filter((u) => !k.urunler[u.id]?.kod && k.urunler[u.id]?.satista !== false && u.durum !== 'taslak').length;
   const stokFarkli = urunler.filter((u) => {
     const es = k.urunler[u.id];
     if (!es?.kod || !ayrilan) return false;
@@ -341,13 +358,14 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         const k = ayar.kanallar[kanal];
         const api = pazaryeriApiDurumu(kanal);
         const apiHazir = api === 'canli' || api === 'test';
-        const bulutBagli = !apiHazir && Boolean(k.sonApi || k.sonOtomatikApi);
-        const otomatikGecikti = Boolean(k.sonOtomatikApi && simdi - Date.parse(k.sonOtomatikApi) > 30 * 60_000);
+        // "Canlıda aktif" tahmini yalnız yerel kopyada anlamlı (anahtarlar yalnız canlı sunucuda); canlı sunucuda anahtar yoksa kanal kapalıdır
+        const bulutBagli = yerelKopya && !apiHazir && Boolean(k.sonApi || k.sonOtomatikApi);
+        const otomatikGecikti = Boolean((apiHazir || bulutBagli) && k.sonOtomatikApi && simdi - Date.parse(k.sonOtomatikApi) > 30 * 60_000);
         const ist = kanalIstatistik(kanal);
         const bekleyen = pyBekleyen(kanal);
         const sorunSayisi = ist.eslesmeyen + ist.stokFarkli;
         const rozetRenk = k.sonApiHata || k.sonStokHata ? 'kirmizi' : otomatikGecikti ? 'turuncu' : (apiHazir || bulutBagli) ? 'yesil' : 'gri';
-        const rozetYazi = k.sonApiHata || k.sonStokHata ? '⚠ Bağlantı Hatası' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? '● Bağlı ve Aktif' : bulutBagli ? '● Canlıda Aktif' : '○ Kurulum Bekliyor';
+        const rozetYazi = k.sonApiHata || k.sonStokHata ? '⚠ Bağlantı Hatası' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? (api === 'test' ? '● Test Bağlantısı' : '● Bağlı ve Aktif') : bulutBagli ? '● Canlıda Aktif' : k.sonApi ? '○ Bağlantı Kapalı' : '○ Kurulum Bekliyor';
         return (
           <section class:list={['y-kart', 'sk-ozet-kart', 'sk-ozet-kart--' + kanal]}>
             <div class="sk-ozet-ust">
@@ -523,7 +541,7 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
     const k = ayar.kanallar[kanal];
     const api = pazaryeriApiDurumu(kanal);
     const apiHazir = api === 'canli' || api === 'test';
-    const bulutBagli = !apiHazir && Boolean(k.sonApi || k.sonOtomatikApi);
+    const bulutBagli = yerelKopya && !apiHazir && Boolean(k.sonApi || k.sonOtomatikApi);
     const eslesen = Object.values(k.urunler).filter((u) => u.kod).length;
     const otomatikGecikti = k.sonOtomatikApi && simdi - Date.parse(k.sonOtomatikApi) > 30 * 60_000;
     const baglantiMetni = apiHazir ? baglantiAdi[api] : bulutBagli ? 'Canlı sunucuda aktif (Yerel .env yok)' : baglantiAdi[api];
@@ -854,8 +872,18 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
                           {eslesme.fiyatTakip && <span class="y-chip y-chip--yesil">Oto-Fiyat</span>}
                           {!eslesme.satista && <span class="y-chip y-chip--gri">Kapalı</span>}
                         </div>
+                      ) : eslesme?.satista === false ? (
+                        <form method="post" class="sk-durum-etiketler">
+                          <input type="hidden" name="kanal" value={kanal} /><input type="hidden" name="urunId" value={u.id} /><input type="hidden" name="deger" value="kapat" />
+                          <span class="y-chip y-chip--gri">Bu kanalda satılmıyor</span>
+                          <button class="btn btn--cizgi btn--kucuk" name="eylem" value="kanal-disi" type="submit" disabled={!depoHazir}>Geri al</button>
+                        </form>
                       ) : (
-                        <span class="y-chip y-chip--turuncu">● Eşleşme Bekliyor</span>
+                        <form method="post" class="sk-durum-etiketler">
+                          <input type="hidden" name="kanal" value={kanal} /><input type="hidden" name="urunId" value={u.id} /><input type="hidden" name="deger" value="ac" />
+                          <span class="y-chip y-chip--turuncu">● Eşleşme Bekliyor</span>
+                          <button class="btn btn--cizgi btn--kucuk" name="eylem" value="kanal-disi" type="submit" disabled={!depoHazir} title={`Bu ürünün ${KANALLAR[kanal]}’da ilanı yoksa işaretleyin; eşleşme bekleyenlerden çıkar`}>Bu kanalda satmıyorum</button>
+                        </form>
                       )}
 
                       <details class="sk-duzenle-ac">

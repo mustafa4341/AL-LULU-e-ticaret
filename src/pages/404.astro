@@ -1,5 +1,13 @@
 ---
 import Base from '../layouts/Base.astro';
+import { Katalog } from '../lib/katalog';
+import { magazaOku, satisAdetleri } from '../lib/depo';
+// Ara katman /medya/, /jpg/, /_… adreslerinde ve gizli panel yönlendirmesinde kataloğu yüklemez; bulunamayan böyle bir
+// adreste 404 sayfası katalogsuz kalıp çöküyordu (canlı hata kaydı 25.11.2026). Gerekirse burada yüklenir.
+if (!Astro.locals.katalog) {
+  const [magaza, satislar] = await Promise.all([magazaOku(), satisAdetleri()]);
+  Astro.locals.katalog = new Katalog(magaza, satislar, false);
+}
 const k = Astro.locals.katalog;
 Astro.response.status = 404;
 ---

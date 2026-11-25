@@ -307,6 +307,58 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
   return sonuc;
 }
 
+export type HbIlani = { hbSku: string; merchantSku: string; fiyat?: number; stok?: number; satista: boolean };
+
+/** Hepsiburada'daki tüm ilanlar (listing API, sayfa başına 100, en fazla 5.000). */
+export async function hbTumIlanlar(sinyal: AbortSignal): Promise<HbIlani[]> {
+  const a = baglanti('hepsiburada');
+  const islem = 'Hepsiburada ilan listesi';
+  const sonuc: HbIlani[] = [];
+  for (let offset = 0; offset < 5000; offset += 100) {
+    const url = new URL(hbYol(a, 'listings'), hbAdres(a, 'listing'));
+    url.searchParams.set('limit', '100');
+    url.searchParams.set('offset', String(offset));
+    const yanit = await istek(a, url, islem, sinyal);
+    const sayfa = liste(yanit, islem, 'listings', 'items');
+    for (const x of sayfa) {
+      const hbSku = metin(alan(x, 'hepsiburadaSku'));
+      const merchantSku = metin(alan(x, 'merchantSku'));
+      if (!hbSku || !merchantSku) continue;
+      sonuc.push({ hbSku, merchantSku, fiyat: tutar(alan(x, 'price')), stok: tamsayi(alan(x, 'availableStock')), satista: alan(x, 'isSalable') !== false });
+    }
+    const toplam = tamsayi(alan(nesne(yanit), 'totalCount'));
+    if (sayfa.length < 100 || (toplam !== undefined && offset + 100 >= toplam)) break;
+  }
+  return sonuc;
+}
+
+/**
+ * Hepsiburada Komisyon Bilgisi Sorgulama (listing API, GET /commissions/merchantid/{id}?skuList=…, en fazla 50 HB SKU).
+ * Yanıt (SIT ortamında doğrulandı, 25.11.2026): { commissions: [{ listingId, hepsiburadaSku, merchantSku, rate (% olarak, ör. 9),
+ * paymentTermInDays, price, pricings }] }. Komisyon, KDV dahil satış fiyatı üzerinden + KDV hesaplanır.
+ */
+export async function hbKomisyonlari(hbSkular: string[], sinyal: AbortSignal): Promise<Map<string, { oranBp: number; vadeGun?: number; merchantSku?: string; fiyat?: number }>> {
+  const a = baglanti('hepsiburada');
+  const islem = 'Hepsiburada komisyon sorgusu';
+  const sonuc = new Map<string, { oranBp: number; vadeGun?: number; merchantSku?: string; fiyat?: number }>();
+  const skular = [...new Set(hbSkular.filter((s) => /^[A-Za-z0-9-]{3,40}$/.test(s)))];
+  for (let i = 0; i < skular.length; i += 50) {
+    const url = new URL(`/commissions/merchantid/${encodeURIComponent(a.kimlik)}`, hbAdres(a, 'listing'));
+    url.searchParams.set('skuList', skular.slice(i, i + 50).join(','));
+    for (const x of liste(await istek(a, url, islem, sinyal), islem, 'commissions')) {
+      const hbSku = metin(alan(x, 'hepsiburadaSku'));
+      const oranHam = alan(x, 'rate');
+      const oran = typeof oranHam === 'number' ? oranHam : typeof oranHam === 'string' ? Number(oranHam.replace(',', '.')) : NaN;
+      if (!hbSku || !Number.isFinite(oran) || oran < 0 || oran > 50) continue;
+      sonuc.set(hbSku, {
+        oranBp: Math.round(oran * 100), vadeGun: tamsayi(alan(x, 'paymentTermInDays')),
+        merchantSku: metin(alan(x, 'merchantSku')), fiyat: tutar(alan(x, 'price')),
+      });
+    }
+  }
+  return sonuc;
+}
+
 export async function kanalStokGonder(
   kanal: Kanal, kalemler: StokKalemi[], ilanlar: Map<string, KanalIlani>, sinyal: AbortSignal,
 ): Promise<string> {
@@ -527,6 +579,61 @@ export async function trendyolCagir(
     if (!govde.trim()) return {};
     try { return JSON.parse(govde); } catch { return { metin: govde.slice(0, 2000) }; }
   }
+}
+
+/**
+ * Trendyol'un kendi sunucusundaki dosyayı (ör. paketteki invoiceLink: https://apigw.trendyol.com/sapigw/customer-invoices/…)
+ * API kimliğiyle indirir. Bu bağlantılar tarayıcıda giriş istediği için doğrudan açılınca hata verir (25.11.2026).
+ * Yanıt dosyanın kendisi (PDF/JPEG/PNG) ya da dosya adresini taşıyan JSON olabilir; ikisi de işlenir. En fazla 8 MB.
+ */
+export async function trendyolDosyaIndir(link: string, sinyal: AbortSignal): Promise<{ veri: Buffer; tur: 'application/pdf' | 'image/jpeg' | 'image/png' }> {
+  const a = baglanti('trendyol');
+  const izinli = (u: URL) => u.protocol === 'https:' && ['apigw.trendyol.com', 'stageapigw.trendyol.com'].includes(u.hostname);
+  let url: URL;
+  try { url = new URL(link); } catch { throw new PazaryeriApiHatasi('Trendyol fatura bağlantısı geçersiz.'); }
+  if (!izinli(url)) throw new PazaryeriApiHatasi('Bağlantı Trendyol sunucusuna ait değil.');
+  const turBul = (b: Buffer) => b.subarray(0, 5).toString() === '%PDF-' ? 'application/pdf' as const
+    : b[0] === 0xff && b[1] === 0xd8 ? 'image/jpeg' as const : b.subarray(1, 4).toString() === 'PNG' ? 'image/png' as const : undefined;
+  for (let adim = 0; adim < 2; adim++) {
+    const kimlikli = izinli(url);
+    const y = await fetch(url, {
+      headers: {
+        Accept: 'application/pdf,image/jpeg,image/png,application/json;q=0.9,*/*;q=0.5', 'User-Agent': a.temsilci,
+        ...(kimlikli ? { Authorization: `Basic ${Buffer.from(`${a.kullanici}:${a.sifre}`).toString('base64')}` } : {}),
+      },
+      redirect: 'follow', cache: 'no-store', signal: AbortSignal.any([sinyal, AbortSignal.timeout(15_000)]),
+    }).catch(() => { throw new PazaryeriApiHatasi('Trendyol fatura dosyasına bağlanılamadı.'); });
+    if (!y.ok) {
+      await y.body?.cancel().catch(() => undefined);
+      throw new PazaryeriApiHatasi(`Trendyol fatura dosyası HTTP ${y.status} döndürdü.`, y.status);
+    }
+    if (Number(y.headers.get('content-length') ?? 0) > 8 * 1024 * 1024) throw new PazaryeriApiHatasi('Trendyol fatura dosyası 8 MB’tan büyük.');
+    const veri = Buffer.from(await y.arrayBuffer());
+    const tur = turBul(veri);
+    if (tur && veri.length <= 8 * 1024 * 1024) return { veri, tur };
+    // JSON yanıtta dosya adresi aranır (url/link/fileUrl/invoiceUrl…); yalnız https
+    let sonraki: string | undefined;
+    try {
+      const j = JSON.parse(veri.toString('utf8')) as unknown;
+      const ara = (v: unknown, derinlik = 0): string | undefined => {
+        if (derinlik > 3 || !v || typeof v !== 'object') return undefined;
+        for (const [k, d] of Object.entries(v as Record<string, unknown>)) {
+          if (typeof d === 'string' && /^https:\/\//.test(d) && /url|link|file|invoice|path/i.test(k)) return d;
+          const ic = ara(d, derinlik + 1);
+          if (ic) return ic;
+        }
+        return undefined;
+      };
+      sonraki = ara(j);
+    } catch { /* JSON değil */ }
+    if (!sonraki) throw new PazaryeriApiHatasi(`Trendyol fatura bağlantısı dosya döndürmedi (${(y.headers.get('content-type') ?? 'bilinmeyen tür').split(';')[0]}).`);
+    url = new URL(sonraki);
+    const host = url.hostname.toLowerCase();
+    if (url.protocol !== 'https:' || !host.includes('.') || host.startsWith('[') || /^\d+(\.\d+){3}$/.test(host) || /(^|\.)(local|internal|localhost)$/.test(host)) {
+      throw new PazaryeriApiHatasi('Trendyol fatura dosyası güvenli bir adreste değil.');
+    }
+  }
+  throw new PazaryeriApiHatasi('Trendyol fatura dosyası indirilemedi.');
 }
 
 /**

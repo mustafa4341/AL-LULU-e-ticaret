@@ -291,6 +291,29 @@ export async function kanalFiyatiniKoru(urunId: string): Promise<number> {
   return fiyat;
 }
 
+/**
+ * Trendyol'un ilan başına uyguladığı komisyon oranlarını (filterApprovedProducts variants[].commission) bağlı ürünlere yazar.
+ * Kâr hesapları (Finans › Trendyol kârlılık) bu oranı kullanır. `icerikler` verilmezse Trendyol'dan okunur.
+ */
+export async function tyKomisyonlariniGuncelle(icerikler?: Pick<TyIcerik, 'barkod' | 'komisyon'>[]): Promise<{ urunId: string; eski?: number; yeni: number }[]> {
+  const liste = icerikler ?? await tyOnayliIcerikler();
+  const oranlar = new Map(liste.filter((c) => c.komisyon !== undefined).map((c) => [c.barkod, Math.round(c.komisyon! * 100)]));
+  const ayar = await envanterAyarlariOku();
+  const degisen = Object.entries(ayar.kanallar.trendyol.urunler)
+    .filter(([, e]) => e.kod && oranlar.has(e.kod) && e.komisyonBp !== oranlar.get(e.kod))
+    .map(([urunId, e]) => ({ urunId, eski: e.komisyonBp, yeni: oranlar.get(e.kod!)! }));
+  const tarih = new Date().toISOString();
+  await envanterAyarlariGuncelle((a) => {
+    const k = a.kanallar.trendyol;
+    for (const e of Object.values(k.urunler)) {
+      const oran = e.kod ? oranlar.get(e.kod) : undefined;
+      if (oran !== undefined) { e.komisyonBp = oran; e.komisyonTarih = tarih; }
+    }
+    k.komisyonTarih = tarih;
+  });
+  return degisen;
+}
+
 /** Katalog satırlarından okunan güncel Trendyol fiyatlarını bağlı ürünlere yazar (panelde "kanaldaki fiyat"). */
 export async function kanalFiyatlariniKaydet(satirlar: TyKatalogSatiri[]): Promise<void> {
   const ayar = await envanterAyarlariOku();

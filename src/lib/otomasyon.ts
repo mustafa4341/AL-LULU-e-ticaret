@@ -16,16 +16,30 @@ import { faturaAdaylari } from './faturaMerkezi';
 import { faturaIlet } from './faturaIlet';
 import { BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, pazaryeriApiDurumu } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriGecmiseEkle, pazaryeriSiparisiOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
-import { trendyolEkstreCek, tyBuybox, tyPaketDurumu, tySorular, tyWebhookAktif, tyWebhooklar } from './trendyolApi';
+import { trendyolEkstreCek, tyBuybox, tyIadeler, tyPaketDurumu, tySorular, tyWebhookAktif, tyWebhooklar } from './trendyolApi';
+import { PY_DURUM_ADLARI } from './pazaryeri';
 import { trendyolEkstreSatirlari } from './trendyolFinans';
 import { ilanDurumlariniYenile } from './trendyolIlanIslem';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
 import { trendyolFaturalariniAl } from './faturaKanaldan';
+import { hbKomisyonlariniGuncelle } from './hepsiburadaKomisyon';
+import { tyKomisyonlariniGuncelle } from './trendyolIceAktar';
 
 const SITE = 'https://alluluhome.com';
 const mesaj = (e: unknown) => e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'bilinmeyen hata';
 
-export type OtomasyonSecenek = { yeniIdler?: string[]; gunlukZorla?: boolean; sureMs?: number };
+export type OtomasyonSecenek = {
+  yeniIdler?: string[]; gunlukZorla?: boolean; sureMs?: number;
+  /** Bu eşitlemede iptal / iade / teslim edilemedi durumuna geçen pazaryeri siparişleri */
+  donenler?: { id: string; eski: string; yeni: string }[];
+};
+
+/** Trendyol iade kalemi durumları (getClaims claimItemStatus) */
+const IADE_DURUMU: Record<string, string> = {
+  Created: 'müşteri iade başlattı (ürün yolda)', WaitingInAction: 'ürün depoya ulaştı, onayınız bekleniyor',
+  WaitingFraudCheck: 'Trendyol kontrol ediyor', Accepted: 'iade onaylandı', Rejected: 'iade reddedildi',
+  Cancelled: 'iade talebi iptal edildi', Unresolved: 'çözülemedi, Trendyol inceliyor', InAnalysis: 'Trendyol inceliyor',
+};
 
 export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]> {
   const bitis = Date.now() + (o.sureMs ?? 15_000);
@@ -52,6 +66,20 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
         ozet.push(`Trendyol ${s.siparisNo}: “toplanıyor” bildirildi`);
       }
     } catch (e) { ozet.push(`Sipariş ${id}: ${mesaj(e)}`); }
+  }
+
+  // 1b. İptal / iade edilen pazaryeri siparişleri: stok aktarımda zaten düzeltildi; günlüğe ne olduğu yazılır
+  for (const d of (o.donenler ?? []).slice(0, 10)) {
+    if (kaldi() < 3000) break;
+    try {
+      const s = await pazaryeriSiparisiOku(d.id);
+      if (!s || s.stokDisi) continue;
+      const urunler = s.kalemler.map((k) => `${k.adet}× ${k.ad.slice(0, 40)}`).join(', ');
+      const stok = d.yeni === 'iptal'
+        ? (s.kalemler.some((k) => k.stok === 'geri-alindi') ? 'stok depoya geri eklendi' : 'stok değişmedi')
+        : 'ürün depoya dönünce siparişte “satılabilir / satılamaz” seçin';
+      ozet.push(`${s.kanal === 'trendyol' ? 'Trendyol' : 'Hepsiburada'} ${s.siparisNo} ${PY_DURUM_ADLARI[s.durum].toLocaleLowerCase('tr')}: ${urunler} — ${stok}`);
+    } catch { /* günlük notu yazılamadı; sipariş zaten güncel */ }
   }
 
   // 3. İletilemeyen faturalar (30 dakikada bir, en fazla 3)
@@ -84,7 +112,8 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
   if (tyBagli && kaldi() > 7000) {
     try {
       const r = await trendyolFaturalariniAl({ enFazlaSorgu: o.gunlukZorla ? 10 : 3, sureMs: Math.min(20_000, kaldi() - 4000) });
-      for (const x of r.alinan) ozet.push(`Trendyol ${x.siparisNo}: Trendyol’a yüklenen fatura siteye alındı (${x.no}${x.dosya ? '' : ', yalnız bağlantı'})`);
+      for (const x of r.alinan) ozet.push(`Trendyol ${x.siparisNo}: Trendyol’a yüklenen fatura siteye alındı (${x.no}${x.dosya ? '' : ', dosyası sonra alınacak'})`);
+      for (const no of r.dosyasiTamamlanan) ozet.push(`Trendyol ${no}: fatura dosyası Trendyol’dan indirilip siteye eklendi`);
       for (const h of r.hatalar.slice(0, 2)) if (!(ot.sonOzet ?? []).some((x) => x.endsWith(h))) ozet.push(`Fatura alma: ${h}`);
     } catch (e) { ozet.push(`Trendyol faturalarını alma: ${mesaj(e)}`); }
   }
@@ -109,9 +138,81 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
     } catch (e) { ozet.push(`Müşteri soruları: ${mesaj(e)}`); }
   }
 
+  // 4c. Trendyol iade talepleri (claims): 30 dakikada bir çekilir. Her yeni talep/durum siparişin geçmişine ve günlüğe yazılır;
+  // depoya ulaşıp onay bekleyenler İş Merkezi'nde görünür (onay: Satış kanalları › Trendyol iade ve sorular).
+  const iadeTakip = ayar.kanallar.trendyol.iade;
+  if (tyBagli && kaldi() > 8000 && (o.gunlukZorla || Date.now() - Date.parse(iadeTakip.tarih ?? '') > 30 * 60_000)) {
+    try {
+      const [talepler, pySip] = await Promise.all([tyIadeler(30), pazaryeriSiparisleriOku().catch(() => [])]);
+      const islenen = new Set(iadeTakip.islenen);
+      const yeni: string[] = [];
+      let bekleyen = 0;
+      let acik = 0;
+      for (const c of talepler) {
+        const s = pySip.find((x) => x.kanal === 'trendyol' && x.siparisNo === c.siparisNo && (!c.paketId || x.paketNo === c.paketId))
+          ?? pySip.find((x) => x.kanal === 'trendyol' && x.siparisNo === c.siparisNo);
+        for (const k of c.kalemler) {
+          if (k.durum === 'WaitingInAction') bekleyen++;
+          else if (['Created', 'WaitingFraudCheck', 'InAnalysis'].includes(k.durum)) acik++;
+          const anahtar = `${k.kalemId}:${k.durum}`.slice(0, 160);
+          if (islenen.has(anahtar)) continue;
+          const not = `İade talebi: ${k.urun.slice(0, 60)} — ${IADE_DURUMU[k.durum] ?? k.durum}${k.sebep ? ` (sebep: ${k.sebep.slice(0, 60)})` : ''}`;
+          if (s && kaldi() > 4000) await pazaryeriGecmiseEkle(s.id, not).catch(() => undefined);
+          ozet.push(`Trendyol ${c.siparisNo}: ${not}`);
+          yeni.push(anahtar);
+        }
+      }
+      await envanterAyarlariGuncelle((a) => {
+        const x = a.kanallar.trendyol.iade;
+        x.bekleyen = bekleyen; x.acik = acik; x.tarih = new Date().toISOString();
+        x.islenen = [...yeni, ...x.islenen.filter((y) => !yeni.includes(y))].slice(0, 400);
+      });
+    } catch (e) {
+      const m = `Trendyol iadeleri: ${mesaj(e)}`;
+      if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m);
+    }
+  }
+
+  // 4c-2. Trendyol ilan başına komisyon oranları: hiç okunmadıysa hemen, sonra günde bir (kâr hesapları bunu kullanır)
+  const tyKom = ayar.kanallar.trendyol.komisyonTarih;
+  if (tyBagli && kaldi() > 10_000 && (o.gunlukZorla || Date.now() - Date.parse(tyKom ?? '') > 24 * 3600_000)) {
+    try {
+      const degisen = await tyKomisyonlariniGuncelle();
+      if (degisen.length) ozet.push(`Trendyol komisyon oranları okundu: ${degisen.length} ürün (${degisen.slice(0, 3).map((d) => `${d.urunId} %${(d.yeni / 100).toLocaleString('tr-TR')}`).join(', ')}${degisen.length > 3 ? '…' : ''})`);
+    } catch (e) { const m = `Trendyol komisyonları: ${mesaj(e)}`; if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m); }
+  }
+
+  // 4d. Hepsiburada ürün başına komisyon oranları: günde bir (canlı bağlantıda). Kâr hesaplayıcısı ve kârlılık bu oranı kullanır.
+  const hbKom = ayar.kanallar.hepsiburada.komisyonTarih;
+  if (pazaryeriApiDurumu('hepsiburada') === 'canli' && kaldi() > 10_000 && (o.gunlukZorla || Date.now() - Date.parse(hbKom ?? '') > 24 * 3600_000)) {
+    try {
+      const r = await hbKomisyonlariniGuncelle(Math.min(20_000, kaldi() - 4000));
+      const degisen = r.guncellenen.filter((g) => g.eski !== g.yeni);
+      if (degisen.length) ozet.push(`Hepsiburada komisyonları güncellendi: ${degisen.slice(0, 4).map((g) => `${g.ad} %${(g.yeni / 100).toLocaleString('tr-TR')}`).join(', ')}${degisen.length > 4 ? '…' : ''}`);
+      if (r.eslesmeyenIlanlar.length) {
+        const m = `Hepsiburada’da sitedeki ürüne eşleşmeyen ${r.eslesmeyenIlanlar.length} ilan var: Finans › Hepsiburada › Komisyonlar’dan görüp Ürün eşleştirme’de bağlayın`;
+        if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m);
+      }
+    } catch (e) { ozet.push(`Hepsiburada komisyonları: ${mesaj(e)}`); }
+  }
+
   // 5. Günlük işler
   const bugun = finansGunu();
+  // Türkçe işlem adıyla yanlış okunmuş eski hakediş satırı varsa (25.11.2026 düzeltmesi) hakediş bugün yeniden çekilir
+  // (yalnız hakediş çekilir; ilan/buybox gibi diğer günlük işler günde bir kalır)
   const gunluk = ot.gunlukIsler && tyBagli && (o.gunlukZorla || ot.sonGunluk !== bugun);
+  const hakedisDuzelt = !gunluk && tyBagli && kaldi() > 8000 && await finansOku()
+    .then((f) => f.trendyol.some((x) => Object.values(x.parcalar ?? {}).some((p) => !!p.tur && /[şıçğüöİ]/i.test(p.tur))), () => false);
+  if (hakedisDuzelt) {
+    try {
+      const son = Date.now();
+      const ham = await trendyolEkstreCek(son - 15 * 86_400_000, son, AbortSignal.timeout(Math.max(3000, Math.min(20_000, kaldi() - 2000))));
+      const e = trendyolEkstreSatirlari(ham.satislar, ham.diger);
+      if (e.satirlar.length) await trendyolKaydet(e.satirlar);
+      const m = `Trendyol hakedişi yeniden okundu ve düzeltildi (${e.satirlar.length} satır)`;
+      if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m);
+    } catch (e) { const m = `Trendyol hakedişi düzeltme: ${mesaj(e)}`; if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m); }
+  }
   let gunlukBitti = false;
   if (gunluk && kaldi() > 8000) {
     // Önce hakediş (günün tamamlandı sayılması buna bağlı), sonra ilan işleri: süre biterse ertesi güne kalırlar

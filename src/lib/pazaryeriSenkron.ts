@@ -240,6 +240,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
 
   const baslangic0 = Date.now();
   const yeniIdler: string[] = [];
+  const donenler: { id: string; eski: string; yeni: string }[] = [];
   try {
     const ilkAyar = await envanterAyarlariOku();
     const bitis = Date.now();
@@ -256,6 +257,8 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
         });
         kanallar[kanal] = { siparis: sonuc.yeni + sonuc.guncellenen };
         yeniIdler.push(...sonuc.yeniIdler);
+        // İptal / iade / teslim edilemedi olan siparişler otomatik işler günlüğüne yazılır (stok zaten aktarımda düzeltildi)
+        donenler.push(...sonuc.durumDegisen.filter((d) => ['iptal', 'iade', 'teslim-edilemedi'].includes(d.yeni)));
       } catch (e) {
         const hata = hataMesaji(e);
         kanallar[kanal] = { hata };
@@ -316,7 +319,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
     // Otomatik işler (bildirim, fatura iletimi, günlük hakediş…). Süre kalmadıysa bir sonraki çalışmaya kalır.
     let otomasyon: string[] | undefined;
     const kalan = 52_000 - (Date.now() - baslangic0);
-    if (kalan > 6000) otomasyon = await otomatikIsler({ yeniIdler, sureMs: kalan - 2000, gunlukZorla: tetikleyen === 'panel' && gunlukZorla }).catch(() => undefined);
+    if (kalan > 6000) otomasyon = await otomatikIsler({ yeniIdler, donenler, sureMs: kalan - 2000, gunlukZorla: tetikleyen === 'panel' && gunlukZorla }).catch(() => undefined);
     return { durum: hataVar ? 'hata' : 'tamam', kanallar, otomasyon };
   } finally {
     try {

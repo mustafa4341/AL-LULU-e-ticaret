@@ -21,6 +21,31 @@ const yazi = (v: unknown) => typeof v === 'string' && v.trim() ? v.trim() : type
 const kurus = (tl: number) => Math.round(tl * 100);
 
 type Parca = TrendyolParcasi;
+
+/**
+ * Trendyol ekstre yanıtında işlem türü TÜRKÇE gelir ("Satış", "İade", "Ödeme"…; belge: Cari Hesap Ekstresi Entegrasyonu
+ * örnek yanıtı ve tür tablosu). İstekte İngilizce ad gönderilir. Kod İngilizce adlarla çalıştığı için yanıt adı çevrilir.
+ * 25.11.2026'ya kadar yalnız "Sale" arandığı için satışlar "diğer" (eksi), komisyon 0 yazılıyordu.
+ */
+const TR_TURLER: Record<string, string> = {
+  'satış': 'Sale', 'iade': 'Return', 'indirim': 'Discount', 'indirim iptal': 'DiscountCancel',
+  'kupon': 'Coupon', 'kupon iptal': 'CouponCancel', 'provizyon +': 'ProvisionPositive', 'provizyon -': 'ProvisionNegative',
+  'kurumsal fatura - ty promosyon': 'TyDiscount', 'kurumsal fatura - ty promosyon iptali': 'TyDiscountCancel',
+  'kurumsal fatura - ty kupon': 'TyCoupon', 'kurumsal fatura - ty kupon iptali': 'TyCouponCancel',
+  'kısmi iade': 'ManualRefund', 'kısmi iade iptal': 'ManualRefundCancel',
+  'hakediş pozitif düzeltme': 'SellerRevenuePositive', 'hakediş negatif düzeltme': 'SellerRevenueNegative',
+  'komisyon pozitif düzeltme': 'CommissionPositive', 'komisyon negatif düzeltme': 'CommissionNegative',
+  'teslimat ücreti': 'DeliveryFee', 'teslimat ücreti iptal': 'DeliveryFeeCancel',
+  'ödeme': 'PaymentOrder', 'stopaj': 'Stoppage', 'kesinti faturası': 'DeductionInvoices', 'kesinti faturaları': 'DeductionInvoices',
+  'komisyon mutabakat faturası': 'CommissionAgreementInvoice', 'iade faturası': 'ReturnInvoice',
+};
+/** Ham işlem türü → İngilizce kod adı ("Discount Cancel" → "DiscountCancel", "ManuelRefund" → "ManualRefund") */
+export function tyIslemTuru(ham: string): string {
+  const tr = ham.toLocaleLowerCase('tr').replace(/\s+/g, ' ').trim();
+  const bulunan = TR_TURLER[tr]
+    ?? (tr.includes('stopaj') ? 'Stoppage' : tr.includes('kesinti') ? 'DeductionInvoices' : tr.includes('komisyon mutabakat') ? 'CommissionAgreementInvoice' : undefined);
+  return (bulunan ?? ham.replace(/\s+/g, '')).replace(/^ManuelRefund/, 'ManualRefund');
+}
 const bosParca = (tarih: number, tur?: string): Parca => ({ tarih, tur, odenen: true, brut: 0, indirim: 0, iade: 0, komisyon: 0, hizmet: 0, kargo: 0, diger: 0, banka: 0, stopaj: 0 });
 
 export type TyEkstreOzeti = { satirlar: TrendyolSatiri[]; odenen: number; kayit: number; atlanan: number; turler: Record<string, number> };
@@ -69,7 +94,7 @@ export function trendyolEkstreSatirlari(satislar: Ham[], diger: Ham[]): TyEkstre
   const turler: Record<string, number> = {};
   let atlanan = 0;
   for (const x of satislar) {
-    const tur = yazi(x.transactionType) ?? '';
+    const tur = tyIslemTuru(yazi(x.transactionType) ?? '');
     turler[tur] = (turler[tur] ?? 0) + 1;
     const anahtar = yazi(x.orderNumber) ?? yazi(x.shipmentPackageId) ?? yazi(x.id);
     const tarih = sayi(x.transactionDate);
@@ -97,7 +122,7 @@ export function trendyolEkstreSatirlari(satislar: Ham[], diger: Ham[]): TyEkstre
   for (const [no, parcalar] of siparisler) satirlar.push(parcalardanSatir(('TY-' + no).slice(0, 100), parcalar));
   let odenen = 0;
   for (const x of diger) {
-    const tur = yazi(x.transactionType) ?? '';
+    const tur = tyIslemTuru(yazi(x.transactionType) ?? '');
     turler[tur] = (turler[tur] ?? 0) + 1;
     const tarih = sayi(x.transactionDate);
     const id = yazi(x.id) ?? yazi(x.receiptId);

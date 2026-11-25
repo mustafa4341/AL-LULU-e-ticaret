@@ -311,6 +311,8 @@ const KanalAyarSema = z.object({
    * Siparişler anlık bildirimle (webhook) geldiği için ortak stok saniyeler içinde düşer.
    */
   guvenlikPayi: z.number().int().min(0).max(1000).default(0),
+  /** Ürün başına komisyon oranlarının kanaldan en son çekildiği an (Hepsiburada Komisyon Bilgisi Sorgulama) */
+  komisyonTarih: z.string().optional(),
   /** Stok eşitlemesinde engel olmayan notlar (ör. bağlı barkod kanalda henüz onaylı değil) — kırmızı uyarı sayılmaz */
   sonStokNot: z.string().max(1000).optional(),
   /** Aynı site ürününe düşen birden çok kanal ilanı (çift ilan). Trendyol ilanları ekranı ve günlük kontrol yazar. */
@@ -332,6 +334,9 @@ const KanalAyarSema = z.object({
      * Eşleştirme (bağlama) fiyata dokunmaz; kapalıyken fiyat yalnız panelde "Fiyatı gönder" düğmesiyle gider.
      */
     fiyatTakip: z.boolean().optional(),
+    /** Kanalın bu ilan için uyguladığı komisyon oranı (baz puan, 1300 = %13) ve okunduğu an — kâr hesapları kullanır */
+    komisyonBp: z.number().int().min(0).max(6000).optional(),
+    komisyonTarih: z.string().optional(),
     /** Kanalda en son okunan satış fiyatı (TL) ve zamanı — panelde "kanaldaki fiyat" olarak gösterilir */
     kanalFiyat: z.number().nonnegative().optional(),
     kanalFiyatTarih: z.string().optional(),
@@ -349,6 +354,16 @@ const KanalAyarSema = z.object({
   ilanlar: z.record(z.string(), IlanSema).default({}),
   /** Cevap bekleyen müşteri sorusu sayısı (otomatik işler 30 dakikada bir tazeler; İş Merkezi'nde görünür) */
   soru: bosIseVarsayilan(z.object({ bekleyen: z.number().int().min(0).default(0), tarih: z.string().optional() })),
+  /**
+   * Trendyol iade talepleri (claims) otomatik takibi (25.11.2026): `bekleyen` = depoya ulaşmış, onayınızı bekleyen kalem;
+   * `acik` = müşterinin başlattığı, henüz depoya ulaşmamış; `islenen` = siparişin geçmişine yazılmış "kalem:durum" anahtarları.
+   */
+  iade: bosIseVarsayilan(z.object({
+    bekleyen: z.number().int().min(0).default(0),
+    acik: z.number().int().min(0).default(0),
+    tarih: z.string().optional(),
+    islenen: z.array(z.string().max(160)).max(400).default([]),
+  })),
   /** Anlık sipariş bildirimi (webhook): kanalda kayıtlı abonelik ve son gelen bildirim */
   bildirim: bosIseVarsayilan(z.object({
     id: z.string().max(120).optional(),

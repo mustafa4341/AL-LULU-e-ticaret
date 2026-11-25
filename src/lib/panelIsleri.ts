@@ -71,6 +71,8 @@ export async function panelIsleriniOku() {
       aciklama: 'Satış kanalları sayfasından bağlantıyı ve son çekim zamanını kontrol edin.', eylem: 'Kanalı Aç', kanal: k,
       sayi: '!', url: '/yonetim/siparisler/kanallar#' + k, ton: 'turuncu' as const,
     })),
+    { ad: 'Trendyol iadesi depoya ulaştı, onayınız bekleniyor', aciklama: 'Ürünü kontrol edip iadeyi onaylayın; sonra siparişte “satılabilir / satılamaz” seçin.', eylem: 'İadeleri Aç', kanal: 'trendyol', sayi: envanter.kanallar.trendyol.iade?.bekleyen ?? 0, url: '/yonetim/siparisler/trendyol-iade-soru', ton: 'kirmizi' },
+    { ad: 'Yolda olan Trendyol iadesi', aciklama: 'Müşteri iade başlattı; ürün depoya ulaşınca onayınız istenecek.', eylem: 'İadeleri Gör', kanal: 'trendyol', sayi: envanter.kanallar.trendyol.iade?.acik ?? 0, url: '/yonetim/siparisler/trendyol-iade-soru', ton: 'gri' },
     { ad: 'Cevap bekleyen Trendyol müşteri sorusu', aciklama: 'Hızlı cevap mağaza puanını ve satışı etkiler; panelden cevaplayın.', eylem: 'Soruları Cevapla', kanal: 'trendyol', sayi: envanter.kanallar.trendyol.soru.bekleyen, url: '/yonetim/siparisler/trendyol-iade-soru#sorular', ton: 'turuncu' },
     { ad: 'Onay bekleyen müşteri değerlendirmesi', aciklama: 'Teslim edilen siparişlere yazılan müşteri yorumlarını inceleyin.', eylem: 'Yorumları İncele', sayi: bekleyenYorum, url: '/yonetim/yorumlar', ton: 'turuncu' },
     { ad: 'Tükenen ürün (sitede “stokta yok” görünüyor)', aciklama: 'Stok geldiyse adedi güncelleyin.', eylem: 'Stokları Güncelle', sayi: tukenen.length, url: '/yonetim/urunler?filtre=kritik', ton: 'kirmizi' },

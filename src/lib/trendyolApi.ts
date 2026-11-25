@@ -181,6 +181,8 @@ export type TyIcerik = {
   gorseller: string[]; ozellikler: { id?: number; degerIdler?: number[]; ad: string; deger: string }[];
   fiyat?: number; listeFiyati?: number; stok?: number; desi?: number; kdv?: number; url?: string;
   satista: boolean; kilit?: string; arsiv: boolean;
+  /** Bu ilan için Trendyol komisyon oranı (%, ör. 13) — filterApprovedProducts variants[].commission */
+  komisyon?: number;
 };
 
 function ozellikOku(a: Ham): TyIcerik['ozellikler'][number] | undefined {
@@ -232,6 +234,7 @@ function icerikSatirlari(c: Ham): TyIcerik[] {
       url: yazi(v.productUrl) ?? yazi(c.productUrl),
       satista: v.onSale !== false && v.archived !== true && v.locked !== true && v.blacklisted !== true,
       kilit: v.locked === true ? (yazi(v.lockReason) ?? 'Kilitli') : undefined, arsiv: v.archived === true,
+      komisyon: (() => { const k = para(v.commission) ?? para(c.commission); return k !== undefined && k <= 60 ? k : undefined; })(),
     }];
   });
 }

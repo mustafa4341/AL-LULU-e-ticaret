@@ -110,7 +110,9 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
           const api = pazaryeriApiDurumu(k);
           const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi']
             // API anahtarı silinmiş/eksikse eski "son çekim" tarihi bağlı gibi göstermesin (denetim AUD-029)
-            : (api === 'kapali' || api === 'eksik') ? (son ? ['Bağlantı kapalı', 'kirmizi'] : ['Kurulum bekliyor', 'gri'])
+            // Anahtar hiç tanımlı değilse (ör. Hepsiburada canlı bilgisi bekleniyor) bu bir hata değildir: gri; yarım/hatalı anahtar kırmızı
+            : api === 'eksik' ? ['Ayarı hatalı', 'kirmizi']
+            : api === 'kapali' ? (son ? ['Bağlı değil', 'gri'] : ['Kurulum bekliyor', 'gri'])
             : kanalGecikti.includes(k) ? [son ? 'Eşitleme gecikti' : 'İlk eşitleme bekleniyor', 'turuncu']
             : api === 'test' ? ['Test', 'gri'] : !son ? ['İlk çekim bekleniyor', 'turuncu'] : ['Bağlı', 'yesil'];
           return <li><a href={'/yonetim/siparisler/kanallar#' + k}>

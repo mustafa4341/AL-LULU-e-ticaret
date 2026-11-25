@@ -404,6 +404,16 @@ export function hbUrunKaydet(urunId: string, ayar: HbUrunAyar) {
   });
 }
 
+/** Birden çok ürünün Hepsiburada ayarını tek kayıtta günceller (ör. komisyonlar Hepsiburada'dan çekilince). */
+export function hbUrunleriGuncelle(degistir: (h: Record<string, HbUrunAyar>) => void) {
+  return sirala(async () => {
+    const f = await finansOku();
+    degistir(f.hbUrunler);
+    for (const [id, a] of Object.entries(f.hbUrunler)) f.hbUrunler[id] = HbUrunAyarSema.parse(a);
+    await kaydet(f);
+  });
+}
+
 /** Canlı sunucu (Vercel) tek istekte ~4,5 MB kabul eder; ekranlarda da bu sınır yazar. */
 export const EK_SINIRI_MB = 4;
 /**

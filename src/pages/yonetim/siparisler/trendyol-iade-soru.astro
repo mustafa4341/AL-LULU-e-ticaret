@@ -46,7 +46,16 @@ let iadeler: TyIade[] = [];
 let sorular: TySoru[] = [];
 if (apiHazir) {
   const [i, s] = await Promise.allSettled([tyIadeler(30), tySorular('WAITING_FOR_ANSWER', 14)]);
-  if (i.status === 'fulfilled') iadeler = i.value; else hatalar.push(hata(i.reason));
+  if (i.status === 'fulfilled') {
+    iadeler = i.value;
+    // İş Merkezi'ndeki iade sayıları sayfa açılınca da tazelenir (otomatik çekim 30 dakikada bir)
+    const kalemler = iadeler.flatMap((x) => x.kalemler);
+    await envanterAyarlariGuncelle((a) => {
+      const x = a.kanallar.trendyol.iade;
+      x.bekleyen = kalemler.filter((k) => k.durum === 'WaitingInAction').length;
+      x.acik = kalemler.filter((k) => ['Created', 'WaitingFraudCheck', 'InAnalysis'].includes(k.durum)).length;
+    }).catch(() => undefined);
+  } else hatalar.push(hata(i.reason));
   if (s.status === 'fulfilled') {
     sorular = s.value.sort((a, b) => a.tarih - b.tarih);
     // İş Merkezi'ndeki "cevap bekleyen soru" sayısı sayfa açılınca da tazelenir

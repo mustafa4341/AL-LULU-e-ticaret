@@ -11,7 +11,7 @@ import { evet, metin } from '../../../lib/form';
 import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
 import { faturaIlet } from '../../../lib/faturaIlet';
-import { trendyolFaturalariniAl } from '../../../lib/faturaKanaldan';
+import { faturaKanalLinki, trendyolFaturalariniAl } from '../../../lib/faturaKanaldan';
 import { yTarih } from '../../../lib/yonetimRapor';
 
 const yol = '/yonetim/finans/faturalar';
@@ -70,9 +70,12 @@ if (Astro.request.method === 'POST') {
       const r = await trendyolFaturalariniAl({ enFazlaSorgu: siparisNo ? 1 : 15, sureMs: 40_000, siparisNo });
       const mesaj = r.alinan.length
         ? `${r.alinan.length} faturanın Trendyol’daki kaydı siteye alındı: ${r.alinan.map((x) => `${x.siparisNo} (${x.no}${x.dosya ? '' : ', yalnız bağlantı'})`).join(', ')}.`
-        : `Trendyol’da yüklü yeni fatura bulunamadı (${r.kontrolEdilen} sipariş kontrol edildi).${siparisNo ? ' Faturayı Trendyol satıcı panelinden yüklediyseniz birkaç dakika sonra tekrar deneyin.' : ''}`;
+        : r.kontrolEdilen
+          ? `Kontrol edilen ${r.kontrolEdilen} Trendyol siparişinin faturası Trendyol’a henüz yüklenmemiş; bu bir hata değil. Faturayı GİB’de kesip buradan kaydedin ya da Trendyol satıcı panelinden yükleyin, site birkaç dakika içinde kendiliğinden alır.`
+          : 'Faturası beklenen Trendyol siparişi yok.';
+      const dosyaNotu = r.dosyasiTamamlanan.length ? ` ${r.dosyasiTamamlanan.length} faturanın dosyası Trendyol’dan indirilip eklendi.` : '';
       const hata = r.hatalar.length ? ' Sorun: ' + r.hatalar.slice(0, 2).join(' · ') : '';
-      return Astro.redirect(`${yol}?${r.alinan.length || !hata ? 'ok' : 'hata'}=${encodeURIComponent(mesaj + hata)}${siparisNo ? '&sec=' + encodeURIComponent('trendyol:' + (adaylar.find((x) => x.kanal === 'trendyol' && x.siparisNo === siparisNo)?.kayit ?? '')) + '#secili' : ''}`, 303);
+      return Astro.redirect(`${yol}?${r.alinan.length || !hata ? 'ok' : 'hata'}=${encodeURIComponent(mesaj + dosyaNotu + hata)}${siparisNo ? '&sec=' + encodeURIComponent('trendyol:' + (adaylar.find((x) => x.kanal === 'trendyol' && x.siparisNo === siparisNo)?.kayit ?? '')) + '#secili' : ''}`, 303);
     }
     const k = finans.faturalar.find((x) => x.id === metin(f, 'id'));
     if (!k) throw new Error('Fatura kaydı bulunamadı.');
@@ -240,9 +243,8 @@ const bugun = finansGunu();
     {secili.fatura ? <div class="fm-kesildi">
       <h3>Kesilen fatura ve iletim işlemleri</h3>
       <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
-        {secili.fatura.ek ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a></> : <span class="muted"> · Dosya eklenmedi</span>}</p>
+        {secili.fatura.ek || faturaKanalLinki(secili.fatura) ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a>{!secili.fatura.ek && <small class="muted"> (Trendyol’dan indirilir)</small>}</> : <span class="muted"> · Dosya eklenmedi</span>}</p>
       <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
-      {secili.py?.kanalFatura && <p><a class="y-link" href={secili.py.kanalFatura.link} target="_blank" rel="noopener noreferrer">Trendyol’daki faturayı aç ↗</a></p>}
       <details class="fm-dosya-yenile">
         <summary>Fatura numarasını düzelt{secili.fatura.no.startsWith('TY-') ? ' (Trendyol’dan alındı, numarayı faturadan yazın)' : ''}</summary>
         <form method="post" class="fm-dosya-kutu" style="margin-top:8px">
@@ -352,7 +354,7 @@ const bugun = finansGunu();
             </td>
             <td data-etiket="İşlem" class="y-sayi">
               <div class="fm-satir-butonlar">
-                {a.fatura?.ek && <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/fatura-dosya?id=' + a.fatura.id} target="_blank" rel="noopener">PDF ↗</a>}
+                {a.fatura && (a.fatura.ek || faturaKanalLinki(a.fatura)) && <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/fatura-dosya?id=' + a.fatura.id} target="_blank" rel="noopener">PDF ↗</a>}
                 {bekliyorMu && a.fatura && !a.fatura.ek && (
                   <a class="btn btn--sepet btn--kucuk" href={filtre({ sec: a.anahtar }) + '#secili'}>PDF Ekle</a>
                 )}

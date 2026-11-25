@@ -19,9 +19,17 @@ export type KarSatiri = {
 };
 export type KarRaporu = { satirlar: KarSatiri[]; toplam: KarSatiri; siparisDisi: number; ortalamaKomisyon?: number; ekstresiz: number };
 
-const KDV_KESINTI = 1.2; // komisyon/kargo/hizmet faturaları %20 KDV'li
+const KDV_KESINTI = 1.2; // kargo kesinti faturaları %20 KDV dahil gelir
 
-export function trendyolKarlilik(py: PazaryeriSiparisi[], f: Pick<Finans, 'trendyol' | 'hbUrunler'>, m: Pick<Magaza, 'urunler'>, gun: number, kdvOrani = (_urunId?: string) => 20): KarRaporu {
+/**
+ * `komisyonOrani`: ürünün Trendyol ilanındaki komisyon oranı (0,13 = %13). Ekstresi gelmemiş siparişte ortalama yerine bu kullanılır.
+ * Not (25.11.2026): ekstredeki commissionAmount KDV HARİÇTİR (belge örneği: 449,99 × %15 = 67,4985); KDV'si komisyon faturasında
+ * ayrıca kesilir ve indirilecek KDV olarak geri alınır. Eskiden 1,2'ye bölünüp komisyon olduğundan düşük sayılıyordu.
+ */
+export function trendyolKarlilik(
+  py: PazaryeriSiparisi[], f: Pick<Finans, 'trendyol' | 'hbUrunler'>, m: Pick<Magaza, 'urunler'>, gun: number,
+  kdvOrani = (_urunId?: string) => 20, komisyonOrani: (urunId?: string) => number | undefined = () => undefined,
+): KarRaporu {
   const sinir = Date.now() - gun * 86_400_000;
   const ekstre = new Map<string, TrendyolSatiri>();
   for (const x of f.trendyol) if (x.id.startsWith('TY-') && !x.id.startsWith('TY-K-')) ekstre.set(x.id.slice(3), x);
@@ -57,7 +65,8 @@ export function trendyolKarlilik(py: PazaryeriSiparisi[], f: Pick<Finans, 'trend
         if (k.durum === 'iade') { satir.set(anahtar, r); continue; }
         r.adet += k.adet;
         r.brut += k.tutar;
-        if (ortalamaKomisyon !== undefined) r.komisyon += Math.round(k.tutar * ortalamaKomisyon);
+        const oran = komisyonOrani(k.urunId) ?? ortalamaKomisyon;
+        if (oran !== undefined) r.komisyon += Math.round(k.tutar * oran);
         r.tahmini++;
       }
       satir.set(anahtar, r);
@@ -70,7 +79,7 @@ export function trendyolKarlilik(py: PazaryeriSiparisi[], f: Pick<Finans, 'trend
       r.maliyet = birimMaliyet * r.adet;
       const kdv = kdvOrani(r.urunId);
       const satisKdvHaric = (r.brut - r.indirim - r.iade) / (1 + kdv / 100);
-      const kesintiKdvHaric = (r.komisyon + r.kargo) / KDV_KESINTI + r.diger;
+      const kesintiKdvHaric = r.komisyon + r.kargo / KDV_KESINTI + r.diger;
       r.netKar = Math.round(satisKdvHaric - kesintiKdvHaric - r.maliyet);
       r.marj = satisKdvHaric > 0 ? r.netKar / satisKdvHaric : undefined;
     }
