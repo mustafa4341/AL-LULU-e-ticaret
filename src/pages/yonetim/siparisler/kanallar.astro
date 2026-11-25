@@ -598,6 +598,8 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
 
         {k.sonApiHata && <p class="y-uyari-satir" role="alert">Siparişler alınamadı: {k.sonApiHata}</p>}
         {k.sonStokHata && <p class="y-uyari-satir" role="alert">Stok gönderilemedi: {k.sonStokHata}</p>}
+        {k.sonStokNot && <p class="y-help" role="status">Bilgi: {k.sonStokNot}</p>}
+        {kanal === 'trendyol' && (k.ciftIlanlar?.length ?? 0) > 0 && <p class="y-uyari-satir" role="alert">Trendyol’da {k.ciftIlanlar.length} ürün birden fazla ilanla satışta (çift ilan). <a class="y-link" href="/yonetim/siparisler/trendyol-ilanlar#cift">Kalacak ilanı seçin</a>.</p>}
 
         <div class="y-izgara y-izgara--2" style="margin-top:10px">
           <form method="post" class="y-kart" style="margin:0;background:var(--y-surface-2,#faf7f2)">
@@ -610,7 +612,7 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
               </label>
               <label class="y-alan">Güvenlik payı (adet)
                 <input type="number" name="guvenlikPayi" min="0" max="1000" value={k.guvenlikPayi} required disabled={!depoHazir} inputmode="numeric" />
-                <small class="muted">Kanalda satışa açılan stoktan düşülür.</small>
+                <small class="muted">Depodaki adetten bu kadar düşülüp kanala gönderilir. 0 önerilir: 1 yazarsanız 1 adetlik ürünler kanalda 0 görünür ve pasife düşer.</small>
               </label>
             </div>
             <div style="margin-top:10px"><button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="kanal-ayari" disabled={!depoHazir}>Ayarları Kaydet</button></div>

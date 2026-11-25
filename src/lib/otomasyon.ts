@@ -20,6 +20,7 @@ import { trendyolEkstreCek, tyBuybox, tyPaketDurumu, tySorular, tyWebhookAktif, 
 import { trendyolEkstreSatirlari } from './trendyolFinans';
 import { ilanDurumlariniYenile } from './trendyolIlanIslem';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
+import { trendyolFaturalariniAl } from './faturaKanaldan';
 
 const SITE = 'https://alluluhome.com';
 const mesaj = (e: unknown) => e instanceof PazaryeriApiHatasi ? e.message : e instanceof Error ? e.message.slice(0, 200) : 'bilinmeyen hata';
@@ -44,7 +45,7 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
         const r = await pazaryeriSiparisBildir(s);
         if (r === 'gonderildi') ozet.push(`Yeni sipariş bildirildi: ${s.siparisNo}`);
       }
-      if (ot.otoToplama && tyBagli && s.kanal === 'trendyol' && s.paketNo && s.hamDurum === 'Created') {
+      if (ot.otoToplama && tyBagli && s.kanal === 'trendyol' && s.paketNo && ['Created', 'ReadyToShip'].includes(s.hamDurum)) {
         const satirlar = s.kalemler.filter((k) => k.satirId && /^\d+$/.test(k.satirId)).map((k) => ({ lineId: Number(k.satirId), quantity: k.adet }));
         await tyPaketDurumu(s.paketNo, satirlar, 'Picking');
         await pazaryeriGecmiseEkle(s.id, 'Otomatik: Trendyol’a “toplanıyor” bildirildi').catch(() => undefined);
@@ -76,6 +77,16 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
         }
       }
     } catch (e) { ozet.push(`Fatura iletimi: ${mesaj(e)}`); }
+  }
+
+  // 3b. Trendyol'a (satıcı panelinden de) yüklenmiş faturaları siteye al: Fatura merkezinde "kesildi + iletildi" görünsün.
+  // Bağlantısı sipariş akışında gelenler hemen; gelmeyenler için her çalışmada en fazla 3 sipariş Trendyol'a sorulur.
+  if (tyBagli && kaldi() > 7000) {
+    try {
+      const r = await trendyolFaturalariniAl({ enFazlaSorgu: o.gunlukZorla ? 10 : 3, sureMs: Math.min(20_000, kaldi() - 4000) });
+      for (const x of r.alinan) ozet.push(`Trendyol ${x.siparisNo}: Trendyol’a yüklenen fatura siteye alındı (${x.no}${x.dosya ? '' : ', yalnız bağlantı'})`);
+      for (const h of r.hatalar.slice(0, 2)) if (!(ot.sonOzet ?? []).some((x) => x.endsWith(h))) ozet.push(`Fatura alma: ${h}`);
+    } catch (e) { ozet.push(`Trendyol faturalarını alma: ${mesaj(e)}`); }
   }
 
   // 4. Fiyat: Trendyol/Hepsiburada fiyatı = sitedeki son fiyat. Aynı uyarı her 5 dakikada bir tekrar yazılmaz.
@@ -127,6 +138,8 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
         if (r.baglanan) ozet.push(`${r.baglanan} Trendyol ilanı sitedeki ürünüyle bağlandı (stok ortak, fiyat değişmedi)`);
         const bagsiz = r.satirlar.filter((s) => s.durum === 'yok').length;
         if (bagsiz) ozet.push(`Trendyol’da sitede karşılığı olmayan ${bagsiz} ilan var: Satış kanalları › Trendyol ilanları’ndan siteye çekebilir ya da bağlayabilirsiniz`);
+        const cift = r.satirlar.filter((s) => s.cift).length;
+        if (cift) ozet.push(`Trendyol’da aynı ürün için fazladan ${cift} ilan var (çift ilan): Satış kanalları › Trendyol ilanları › “Çift ilanlar”dan hangisinin kalacağını seçin`);
       } catch (e) { ozet.push(`İlan bağlama: ${mesaj(e)}`); }
     }
     // Buybox: bağlı ilanlardan başka mağazanın önde olduğu varsa haber ver (fiyat kendiliğinden değişmez)

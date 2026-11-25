@@ -16,9 +16,44 @@ import { finansOku } from './finansDepo';
 import { paytrAyari, paytrIstendi } from './paytr';
 import { eslesmeyenVar, KANALLAR, bosAyarlar } from './pazaryeri';
 import {
-  BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, hepsiburadaCagir, otomatikStokYazmaAcik,
+  BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, hepsiburadaCagir, kanalStokOku, otomatikStokYazmaAcik,
   pazaryeriApiDurumu, pazaryeriOrtam, trendyolTumIlanlar,
 } from './pazaryeriApi';
+import type { EnvanterAyarlari, Kanal } from './pazaryeri';
+import type { Urun } from './sema';
+
+/**
+ * Kanal eşleştirmesinin çevrimdışı denetimi (API gerekmez): aynı ilan kodunun iki ürüne bağlanması,
+ * silinmiş/taslak ürüne bağlı ilan, kodu boş ama satışta işaretli ürün.
+ */
+function eslestirmeBulgulari(kanal: Kanal, envanter: EnvanterAyarlari, urunler: Map<string, Urun>): TespitBulgu[] {
+  const bulgular: TespitBulgu[] = [];
+  const k = envanter.kanallar[kanal];
+  const kodSahibi = new Map<string, string[]>();
+  for (const [urunId, e] of Object.entries(k.urunler)) {
+    if (!e.kod || e.satista === false) continue;
+    const anahtar = e.kod.trim().toLocaleUpperCase('en-US');
+    kodSahibi.set(anahtar, [...(kodSahibi.get(anahtar) ?? []), urunId]);
+    const u = urunler.get(urunId);
+    if (u && u.durum !== 'yayinda') {
+      bulgular.push({
+        siddet: 'bilgi',
+        baslik: `${KANALLAR[kanal]} ilanı sitede yayında olmayan ürüne bağlı: ${u.marka} ${u.kisaAd}`,
+        detay: `Ürün sitede “${u.durum}”. Kanal stoğu yine depodaki adetle eşitlenir (${e.kod}).`,
+      });
+    }
+  }
+  for (const [kod, idler] of kodSahibi) {
+    if (idler.length < 2) continue;
+    bulgular.push({
+      siddet: 'hata',
+      baslik: `${KANALLAR[kanal]}: aynı ilan kodu (${kod}) ${idler.length} site ürününe bağlı`,
+      detay: `${idler.map((id) => { const u = urunler.get(id); return u ? `${u.marka} ${u.kisaAd}` : id; }).join(', ')}. Stok bu ilana gönderilemez; yanlış bağlantıyı düzeltin.`,
+      aksiyon: { ad: 'Eşleştirmeyi Aç', url: `/yonetim/siparisler/kanallar?eslestirme=${kanal}#eslestirme-${kanal}` },
+    });
+  }
+  return bulgular;
+}
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
 import { tyAdresler, tyWebhooklar } from './trendyolApi';
 import { yTarih } from './yonetimRapor';
@@ -155,7 +190,11 @@ export async function servisKontrolCalistir(secenek: { canliTest?: boolean; site
       const bas = Date.now();
       try {
         await hepsiburadaCagir('listing', '/listings/merchantid/{M}?limit=1&offset=0', 'Hepsiburada bağlantı testi', AbortSignal.timeout(10_000));
-        return { ok: true as const, sureMs: Date.now() - bas };
+        // Eşleştirilmiş satıcı stok kodları (merchantSku) Hepsiburada'da gerçekten var mı? (stok yalnız bunlara yazılabilir)
+        const ayar = await envanterAyarlariOku().catch(() => undefined);
+        const kodlar = Object.values(ayar?.kanallar.hepsiburada.urunler ?? {}).filter((e) => e.kod && e.satista !== false).map((e) => e.kod!);
+        const ilanlar = kodlar.length ? await kanalStokOku('hepsiburada', kodlar, AbortSignal.timeout(15_000)).catch(() => undefined) : new Map();
+        return { ok: true as const, sureMs: Date.now() - bas, ilanlar };
       } catch (e) {
         return { ok: false as const, sureMs: Date.now() - bas, hata: e instanceof PazaryeriApiHatasi ? e.message : String(e) };
       }
@@ -387,7 +426,8 @@ export async function servisKontrolCalistir(secenek: { canliTest?: boolean; site
           } else if (!onayliBarkodlar.has(bag.kod)) {
             const taslakDurumu = k.ilanlar[urunId]?.durum;
             bulgular.push({
-              siddet: 'hata',
+              // Onay/belge bekleyen ilan satılamaz, stok riski yok: kırmızı hata değil uyarı (25.11.2026)
+              siddet: 'uyari',
               baslik: `Trendyol’da onaylı ilanı olmayan barkod eşleşmesi: ${urunAd} (Kod: “${bag.kod}”)`,
               detay: taslakDurumu && taslakDurumu !== 'onaylandi'
                 ? `Bu ürünün Trendyol ilanı henüz “${taslakDurumu}” aşamasında olduğu için onaylı ilanlarda “${bag.kod}” barkodu bulunamadı. Ürün onaylanana kadar stok eşleşmesinden kaldırılmalı veya gerçek EAN barkoduyla Trendyol’a gönderilmelidir.`
@@ -414,6 +454,17 @@ export async function servisKontrolCalistir(secenek: { canliTest?: boolean; site
         aksiyon: { ad: 'Canlı API Testi Çalıştır', url: '/yonetim/servis-kontrol?canli=1#trendyol' },
       });
     }
+    if (k.sonStokNot) bulgular.push({ siddet: 'bilgi', baslik: 'Stok eşitleme notu', detay: k.sonStokNot });
+    if (k.ciftIlanlar?.length) {
+      bulgular.push({
+        siddet: 'hata',
+        baslik: `Trendyol’da ${k.ciftIlanlar.length} ürün birden fazla ilanla satışta (çift ilan)`,
+        detay: k.ciftIlanlar.slice(0, 5).map((c) => { const u = urunHaritasi.get(c.urunId); return `${u ? `${u.marka} ${u.kisaAd}` : c.urunId}: ${c.barkodlar.join(' + ')}`; }).join(' · '),
+        cozum: 'Depodaki adet yalnız ana ilana gider; fazla ilan da stoklu kalırsa aynı ürün iki kez satılabilir. Kalacak ilanı seçin, diğerinin stoğu 0 yapılır.',
+        aksiyon: { ad: 'Çift İlanları Çöz', url: '/yonetim/siparisler/trendyol-ilanlar#cift' },
+      });
+    }
+    bulgular.push(...eslestirmeBulgulari('trendyol', envanter, urunHaritasi));
 
     // Reddedilen veya gönderim hatası alan V2 ilan taslakları
     for (const [urunId, ilan] of Object.entries(k.ilanlar)) {
@@ -586,6 +637,29 @@ export async function servisKontrolCalistir(secenek: { canliTest?: boolean; site
         detay: hbCanli.hata,
         cozum: 'Merchant ID, entegratör kullanıcı adı/şifresi ve User-Agent bilgisini Hepsiburada Satıcı Paneli › Entegrasyon bölümünden doğrulayın.',
       });
+    }
+
+    bulgular.push(...eslestirmeBulgulari('hepsiburada', envanter, urunHaritasi));
+    if (hbDurum === 'test') {
+      bulgular.push({
+        siddet: 'bilgi',
+        baslik: 'Hepsiburada TEST (SIT) ortamına bağlı — canlı mağazanıza dokunulmuyor',
+        detay: 'Bu bağlantı Hepsiburada’nın entegrasyon test hesabıdır. Canlı Hepsiburada mağazanızın stok ve fiyatı bu siteden değiştirilmez; oradaki stok değişiklikleri bu siteden kaynaklanmaz. Canlı bilgiler gelince HEPSIBURADA_ORTAM=canli yapılır.',
+      });
+    }
+    if (hbCanli?.ok && hbCanli.ilanlar) {
+      const ilanlar = hbCanli.ilanlar;
+      const bulunamayan = Object.entries(k.urunler).filter(([, e]) => e.kod && e.satista !== false && !ilanlar.has(e.kod));
+      if (bulunamayan.length) {
+        bulgular.push({
+          siddet: hbDurum === 'canli' ? 'hata' : 'bilgi',
+          baslik: `${bulunamayan.length} eşleşmiş ürünün satıcı stok kodu Hepsiburada${hbDurum === 'test' ? ' test hesabında' : ''} bulunamadı`,
+          detay: bulunamayan.slice(0, 6).map(([id, e]) => { const u = urunHaritasi.get(id); return `${u ? `${u.marka} ${u.kisaAd}` : id} (${e.kod})`; }).join(' · ')
+            + '. Hepsiburada stoğu yalnız satıcı stok koduyla (merchantSku) eşleşen ilana yazılır.',
+          cozum: 'Hepsiburada satıcı panelinde ilanın “Satıcı stok kodu” alanını sitedeki eşleştirme koduyla aynı yapın ya da Satış kanalları › Ürün eşleştirme’de kodu Hepsiburada’daki stok koduyla değiştirin.',
+          aksiyon: { ad: 'Eşleştirmeyi Aç', url: '/yonetim/siparisler/kanallar?eslestirme=hepsiburada#eslestirme-hepsiburada' },
+        });
+      }
     }
 
     for (const [urunId, bag] of Object.entries(k.urunler)) {

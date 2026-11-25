@@ -11,6 +11,7 @@ import { evet, metin } from '../../../lib/form';
 import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
 import { faturaIlet } from '../../../lib/faturaIlet';
+import { trendyolFaturalariniAl } from '../../../lib/faturaKanaldan';
 import { yTarih } from '../../../lib/yonetimRapor';
 
 const yol = '/yonetim/finans/faturalar';
@@ -63,8 +64,25 @@ if (Astro.request.method === 'POST') {
       }
       return Astro.redirect(`${yol}?ok=${encodeURIComponent(mesaj)}`, 303);
     }
+    if (eylem === 'trendyoldan-al') {
+      if (!tyBagli) throw new Error('Bu işlem için Trendyol bağlantısı gerekir (canlı sitede çalışır).');
+      const siparisNo = metin(f, 'siparisNo') || undefined;
+      const r = await trendyolFaturalariniAl({ enFazlaSorgu: siparisNo ? 1 : 15, sureMs: 40_000, siparisNo });
+      const mesaj = r.alinan.length
+        ? `${r.alinan.length} faturanın Trendyol’daki kaydı siteye alındı: ${r.alinan.map((x) => `${x.siparisNo} (${x.no}${x.dosya ? '' : ', yalnız bağlantı'})`).join(', ')}.`
+        : `Trendyol’da yüklü yeni fatura bulunamadı (${r.kontrolEdilen} sipariş kontrol edildi).${siparisNo ? ' Faturayı Trendyol satıcı panelinden yüklediyseniz birkaç dakika sonra tekrar deneyin.' : ''}`;
+      const hata = r.hatalar.length ? ' Sorun: ' + r.hatalar.slice(0, 2).join(' · ') : '';
+      return Astro.redirect(`${yol}?${r.alinan.length || !hata ? 'ok' : 'hata'}=${encodeURIComponent(mesaj + hata)}${siparisNo ? '&sec=' + encodeURIComponent('trendyol:' + (adaylar.find((x) => x.kanal === 'trendyol' && x.siparisNo === siparisNo)?.kayit ?? '')) + '#secili' : ''}`, 303);
+    }
     const k = finans.faturalar.find((x) => x.id === metin(f, 'id'));
     if (!k) throw new Error('Fatura kaydı bulunamadı.');
+    if (eylem === 'no-duzelt') {
+      const no = metin(f, 'no').toUpperCase().replace(/\s+/g, ' ');
+      if (!/^[A-Z0-9][A-Z0-9 ./-]{0,39}$/.test(no)) throw new Error('Fatura numarasını faturada yazdığı gibi girin (ör. GIB2026000000012).');
+      if (finans.faturalar.some((x) => x.id !== k.id && !x.iptal && x.no.toUpperCase() === no)) throw new Error('Bu fatura numarası başka bir siparişte kayıtlı.');
+      await faturaGuncelle(k.id, (x) => { x.no = no; });
+      return Astro.redirect(`${yol}?ok=${encodeURIComponent(`Fatura numarası ${no} olarak düzeltildi.`)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+    }
     const a = adaylar.find((x) => x.kanal === k.kanal && x.kayit === k.kayit);
     if (eylem === 'dosya-yukle') {
       const dosya = f.get('dosya');
@@ -147,6 +165,14 @@ const bugun = finansGunu();
     <div class="y-metric"><PIkon ad="takvim" /><span>Bu ay kesilen toplam</span><strong>{adaylar.filter((a) => a.fatura && a.fatura.tarih.slice(0, 7) === bugun.slice(0, 7)).length}</strong><small>Seçili ayda düzenlenen</small></div>
   </div>
 
+  {tyBagli && kesilecek.some((a) => a.kanal === 'trendyol') && (
+    <form method="post" class="y-veri-not fm-ty-al">
+      <PIkon ad="indir" boyut={18} />
+      <p><strong>Faturayı Trendyol satıcı panelinden mi yüklediniz?</strong> Site, Trendyol’a yüklenen faturaları her 5 dakikada bir kendiliğinden alır ve burada “İletildi” olarak işaretler. Hemen görmek için düğmeye basın.</p>
+      <button class="btn btn--cizgi btn--kucuk" name="eylem" value="trendyoldan-al" type="submit">Trendyol’daki faturaları şimdi al</button>
+    </form>
+  )}
+
   {durum === 'iletilecek' && iletilecek.length > 0 && (
     <div class="y-veri-not" style="margin-bottom:14px">
       <PIkon ad="bilgi" boyut={18} />
@@ -216,6 +242,15 @@ const bugun = finansGunu();
       <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
         {secili.fatura.ek ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a></> : <span class="muted"> · Dosya eklenmedi</span>}</p>
       <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
+      {secili.py?.kanalFatura && <p><a class="y-link" href={secili.py.kanalFatura.link} target="_blank" rel="noopener noreferrer">Trendyol’daki faturayı aç ↗</a></p>}
+      <details class="fm-dosya-yenile">
+        <summary>Fatura numarasını düzelt{secili.fatura.no.startsWith('TY-') ? ' (Trendyol’dan alındı, numarayı faturadan yazın)' : ''}</summary>
+        <form method="post" class="fm-dosya-kutu" style="margin-top:8px">
+          <input type="hidden" name="id" value={secili.fatura.id} />
+          <label class="y-alan">Fatura numarası<input name="no" required maxlength="40" value={secili.fatura.no.startsWith('TY-') ? '' : secili.fatura.no} placeholder="GIB2026000000012" autocomplete="off" /></label>
+          <button class="btn btn--cizgi btn--kucuk" name="eylem" value="no-duzelt" type="submit">Numarayı kaydet</button>
+        </form>
+      </details>
 
       {!secili.fatura.ek ? (
         <form method="post" enctype="multipart/form-data" class="fm-dosya-kutu">
@@ -270,7 +305,15 @@ const bugun = finansGunu();
           <button class="btn btn--cizgi" name="eylem" value="iptal" type="submit">Kaydı iptal et</button>
         </form>
       </details>
-    </div> : <form method="post" enctype="multipart/form-data" class="fm-form">
+    </div> : <>{secili.kanal === 'trendyol' && tyBagli && (
+      <form method="post" class="fm-dosya-kutu" style="margin-top:14px">
+        <input type="hidden" name="siparisNo" value={secili.siparisNo} />
+        <strong>Bu siparişin faturasını Trendyol satıcı panelinden yüklediyseniz</strong>
+        <small class="muted">Tekrar kaydetmenize gerek yok: Trendyol’daki faturayı siteye alın (dosya ve bağlantı). Site bunu 5 dakikada bir kendiliğinden de yapar.</small>
+        <button class="btn btn--sepet btn--kucuk" name="eylem" value="trendyoldan-al" type="submit"><PIkon ad="indir" boyut={15} />Trendyol’daki faturayı siteye al</button>
+      </form>
+    )}
+    <form method="post" enctype="multipart/form-data" class="fm-form">
       <h3>Kestiğiniz faturayı kaydedin</h3>
       <input type="hidden" name="eylem" value="kaydet" />
       <input type="hidden" name="anahtar" value={secili.anahtar} />
@@ -282,7 +325,7 @@ const bugun = finansGunu();
       <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal === 'trendyol' ? tyBagli : secili.kanal === 'web' ? smtpAcik : false} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
       {secili.kanal !== 'hepsiburada' && <p class="y-help">Otomatik fatura iletimi açıksa PDF’i bulunan bekleyen kayıtlar da yeniden denenir. <a class="y-link" href="/yonetim/isler#otomatik-ayarlar">Otomatik iş ayarları</a></p>}
       <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Fatura kaydını oluştur</button></div>
-    </form>}
+    </form></>}
   </section>}
 
   <section class="y-kart">
@@ -355,4 +398,6 @@ const bugun = finansGunu();
   .fm-durum-notu { max-width: 360px; white-space: normal; line-height: 1.35; margin-top: 3px; }
   .fm-satir-butonlar { display: inline-flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; }
   tr.is-secili { background: var(--y-bg); }
+  .fm-ty-al { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .fm-ty-al p { flex: 1 1 320px; margin: 0; }
 </style>

@@ -27,7 +27,8 @@ export async function faturaIlet(
         iletim = { durum: 'gonderildi', mesaj: 'Trendyol’a yüklendi.', tarih: simdi };
       } catch (e) {
         const m = e instanceof PazaryeriApiHatasi ? e.message : 'Trendyol’a yüklenemedi.';
-        iletim = /önceden gönderilmiş|zaten/i.test(m)
+        // 409: pakete fatura daha önce yüklenmiş (ör. satıcı panelinden elle) — iletim tamam sayılır
+        iletim = (e instanceof PazaryeriApiHatasi && e.status === 409) || /önceden gönderilmiş|zaten/i.test(m)
           ? { durum: 'gonderildi', mesaj: 'Trendyol’da bu pakete fatura zaten yüklü.', tarih: simdi }
           : { durum: 'hata', mesaj: m.slice(0, 480), tarih: simdi };
       }

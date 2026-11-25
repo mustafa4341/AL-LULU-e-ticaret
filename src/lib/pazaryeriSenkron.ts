@@ -25,8 +25,12 @@ function kanalAyariYaz(kanal: Kanal, degistir: (a: KanalAyari) => void) {
   return envanterAyarlariGuncelle((a) => degistir(a.kanallar[kanal]));
 }
 
-async function stokHatasiYaz(kanal: Kanal, mesaj?: string) {
-  await kanalAyariYaz(kanal, (a) => { a.sonStokHata = mesaj; });
+/** `not` verilirse bilgi notu da güncellenir (kırmızı uyarı sayılmayan: ör. bağlı barkod kanalda henüz onaylı değil) */
+async function stokHatasiYaz(kanal: Kanal, mesaj?: string, not?: string | null) {
+  await kanalAyariYaz(kanal, (a) => {
+    a.sonStokHata = mesaj;
+    if (not !== undefined) a.sonStokNot = not ?? undefined;
+  });
 }
 
 function cekimBaslangici(kanal: Kanal, a: KanalAyari, bitis: number) {
@@ -145,22 +149,27 @@ async function stokSonuclandir(kanal: Kanal, bekleyen: BekleyenStok, sinyal: Abo
 async function stokHazirla(kanal: Kanal, a: KanalAyari, katalog: Awaited<ReturnType<typeof katalogStogu>>, sinyal: AbortSignal) {
   const { hedefler: adayHedefler, uyarilar } = stokHedefleri(kanal, a, katalog.satilabilir, katalog.urunAdlari);
   const ilanlar = adayHedefler.length ? await kanalStokOku(kanal, adayHedefler.map((k) => k.kod), sinyal) : new Map();
-  const bulunamayanlar = adayHedefler.filter((k) => !ilanlar.has(k.kod));
-  for (const b of bulunamayanlar) {
+  // Kanalda (henüz) onaylı ilanı olmayan bağlantı hata değildir: ilan onay/belge bekliyor olabilir, satılamadığı için
+  // stok riski de yoktur. Bunlar bilgi notu olarak yazılır, İş Merkezi'nde kırmızı uyarı üretmez (25.11.2026).
+  const notlar: string[] = [];
+  for (const b of adayHedefler.filter((k) => !ilanlar.has(k.kod))) {
     const ad = katalog.urunAdlari.get(b.urunId) ?? b.urunId;
-    uyarilar.push(`${ad} (kod: ${b.kod} — ${KANALLAR[kanal]} onaylı ilanlarında bulunamadı)`);
+    notlar.push(`${ad} (barkod ${b.kod})`);
   }
   const hedefler = adayHedefler.filter((k) => ilanlar.has(k.kod));
-  return { katalog, hedefler, ilanlar, uyarilar };
+  return { katalog, hedefler, ilanlar, uyarilar, notlar };
 }
 
 async function stokYayimla(
   kanal: Kanal, a: KanalAyari, hazir: Awaited<ReturnType<typeof stokHazirla>>, artisEngeli: boolean, sinyal: AbortSignal,
 ) {
-  const { katalog, hedefler, ilanlar, uyarilar } = hazir;
+  const { katalog, hedefler, ilanlar, uyarilar, notlar } = hazir;
   const uyariMetni = uyarilar.length
     ? `Atlanan eşleşme (${uyarilar.length}): ${uyarilar.slice(0, 3).join('; ')}${uyarilar.length > 3 ? '…' : ''}. Servis Tanılama ekranından düzeltin.`
     : undefined;
+  const notMetni = notlar.length
+    ? `${KANALLAR[kanal]}’da henüz onaylı ilanı görünmeyen ${notlar.length} bağlı ürün: ${notlar.slice(0, 4).join('; ')}${notlar.length > 4 ? '…' : ''}. İlan onaylanınca stoğu kendiliğinden eşitlenir.`
+    : null;
   const artisAcik = !artisEngeli && pazaryeriOrtam('PAZARYERI_STOK_ARTIR') === '1';
   const degisen = hedefler.filter((k) => {
     const gercek = ilanlar.get(k.kod)!.stok;
@@ -183,8 +192,9 @@ async function stokYayimla(
   }
   if (!degisen.length) {
     const farkVar = hedefler.some((k) => ilanlar.get(k.kod)!.stok < k.stok);
-    const mesaj = uyariMetni ?? (farkVar ? 'Bazı ilanlarda kanalın stoğu hedefin altında. Artış koşullarını ve satıcı panelini kontrol edin.' : undefined);
-    await stokHatasiYaz(kanal, mesaj);
+    // Kanal adedi hedefin altında kalıyorsa (artış bu turda engelli) bu bir hata değil, bilgi notudur
+    const farkNotu = farkVar && !artisAcik ? 'Bazı ilanlarda kanal adedi depodan az; artış bir sonraki uygun eşitlemede gönderilecek.' : null;
+    await stokHatasiYaz(kanal, uyariMetni, [notMetni, farkNotu].filter(Boolean).join(' ') || null);
     return 0;
   }
   const [tazeKatalog, tazeAyarlar] = await Promise.all([katalogStogu(), envanterAyarlariOku()]);
@@ -207,7 +217,7 @@ async function stokYayimla(
     throw e;
   }
   await bekleyenSatiriYaz(kanal, bekleyen, { ...bekleyen, id });
-  await stokHatasiYaz(kanal, uyariMetni);
+  await stokHatasiYaz(kanal, uyariMetni, notMetni);
   return undefined;
 }
 

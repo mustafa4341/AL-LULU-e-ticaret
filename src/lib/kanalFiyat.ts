@@ -166,6 +166,10 @@ export type IlanEslesmesi = {
   /** bagli: zaten bağlı · yeni: bağlanabilir · cakisma: ürün başka koda bağlı ya da iki ilan aynı ürüne düştü · yok: sitede karşılığı yok */
   durum: 'bagli' | 'yeni' | 'cakisma' | 'yok';
   not?: string;
+  /** Çift ilan: bu ilan sitedeki ürüne uyuyor ama ürün Trendyol'da BAŞKA bir ilana bağlı (aynı ürün iki kez satışta) */
+  cift?: boolean;
+  /** Çift ilanda ürünün şu an bağlı olduğu barkod */
+  bagliBarkod?: string;
 };
 
 /**
@@ -198,14 +202,32 @@ export async function trendyolIlanlariniEsle(bagla: boolean, yalniz?: string[]):
     Object.assign(satir, { urunId, urunAdi: `${u.marka} ${u.kisaAd}`, siteFiyat: kanalHedefFiyati(u, k).hedef });
     const mevcut = k.urunler[urunId]?.kod;
     if (mevcut === i.barkod) satir.durum = 'bagli';
-    else if (mevcut) { satir.durum = 'cakisma'; satir.not = `Ürün başka bir barkoda bağlı (${mevcut}).`; }
+    else if (mevcut) {
+      satir.durum = 'cakisma'; satir.cift = true; satir.bagliBarkod = mevcut;
+      satir.not = `Çift ilan: bu ürün Trendyol’da ${mevcut} barkodlu ilana bağlı. Aynı ürün iki ilanla satılırsa tek stok iki kez satılabilir; hangisinin kalacağını seçin.`;
+    }
     else satir.durum = 'yeni';
     return satir;
   });
-  // Aynı ürüne birden çok yeni ilan düştüyse hiçbiri otomatik bağlanmaz
+  // Aynı ürüne birden çok yeni ilan düştüyse hiçbiri otomatik bağlanmaz (bunlar da çift ilandır)
   const sayac = new Map<string, number>();
   for (const s of satirlar) if (s.durum === 'yeni') sayac.set(s.urunId!, (sayac.get(s.urunId!) ?? 0) + 1);
-  for (const s of satirlar) if (s.durum === 'yeni' && sayac.get(s.urunId!)! > 1) { s.durum = 'cakisma'; s.not = 'Birden çok Trendyol ilanı bu ürüne uyuyor; doğru barkodu elle seçin.'; }
+  for (const s of satirlar) if (s.durum === 'yeni' && sayac.get(s.urunId!)! > 1) {
+    s.durum = 'cakisma'; s.cift = true;
+    s.not = 'Çift ilan: birden çok Trendyol ilanı bu ürüne uyuyor. Hangisinin kalacağını seçin; diğerinin stoğu 0 yapılır.';
+  }
+  // Çift ilan listesini kaydet (İş Merkezi uyarısı için); yalnız değiştiyse yazılır
+  const ciftler = new Map<string, Set<string>>();
+  for (const s of satirlar) if (s.cift && s.urunId) {
+    const g = ciftler.get(s.urunId) ?? new Set<string>();
+    if (s.bagliBarkod) g.add(s.bagliBarkod);
+    g.add(s.barkod);
+    ciftler.set(s.urunId, g);
+  }
+  const ciftListe = [...ciftler].map(([urunId, b]) => ({ urunId, barkodlar: [...b].sort().slice(0, 20) })).sort((a, b) => a.urunId.localeCompare(b.urunId));
+  if (JSON.stringify(ciftListe) !== JSON.stringify(k.ciftIlanlar ?? [])) {
+    await envanterAyarlariGuncelle((a) => { a.kanallar.trendyol.ciftIlanlar = ciftListe; }).catch(() => undefined);
+  }
   const sira = { yeni: 0, cakisma: 1, yok: 2, bagli: 3 } as const;
   satirlar.sort((a, b) => sira[a.durum] - sira[b.durum] || (a.urunAdi ?? a.barkod).localeCompare(b.urunAdi ?? b.barkod, 'tr'));
   const yeniler = satirlar.filter((s) => s.durum === 'yeni' && (!yalniz || yalniz.includes(s.barkod)));

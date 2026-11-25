@@ -9,8 +9,12 @@ import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from '..
 import { bosAyarlar, kanalHedefStok } from '../../../lib/pazaryeri';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, pazaryeriHazirMi } from '../../../lib/pazaryeriDepo';
-import { kanalFiyatiniKoru, kanalFiyatlariniKaydet, trendyolIlaniniBagla, trendyolKatalogu, trendyoldanUrunCek, type TyKatalogSatiri } from '../../../lib/trendyolIceAktar';
+import {
+  kanalFiyatiniKoru, kanalFiyatlariniKaydet, trendyolAnaIlaniSec, trendyolIlaniniBagla, trendyolIlaniSatistanKaldir, trendyolKatalogu,
+  trendyoldanUrunCek, type TyKatalogSatiri,
+} from '../../../lib/trendyolIceAktar';
 import { tyBuybox, type TyBuybox } from '../../../lib/trendyolApi';
+import { gtinGecerli } from '../../../lib/urunKimlik';
 
 /**
  * Trendyol ilanları: Trendyol'daki her onaylı ilanın sitedeki karşılığı.
@@ -44,6 +48,17 @@ if (Astro.request.method === 'POST') {
       if (!urunId) throw new DogrulamaHatasi(['Bağlanacak site ürününü seçin.']);
       await trendyolIlaniniBagla(barkod, urunId);
       return geri(`${barkod} barkodlu ilan seçtiğiniz ürüne bağlandı. Stok ortak depodan gider; fiyat değişmedi.`, '#liste');
+    }
+    if (eylem === 'ana-ilan') {
+      const barkod = metin(f, 'barkod');
+      const urunId = metin(f, 'urun');
+      const r = await trendyolAnaIlaniSec(urunId, barkod);
+      return geri(`${barkod} barkodlu ilan bu ürünün tek (ana) Trendyol ilanı yapıldı; depodaki adet 5 dakika içinde bu ilana yazılır.${r.kapatilan.length ? ` Fazla ilan${r.kapatilan.length > 1 ? 'lar' : ''} (${r.kapatilan.join(', ')}) Trendyol’da 0 stoğa çekildi; isterseniz Trendyol satıcı panelinden arşivleyin.` : ''}`, '#cift');
+    }
+    if (eylem === 'ilan-kapat') {
+      const barkod = metin(f, 'barkod');
+      await trendyolIlaniSatistanKaldir(barkod);
+      return geri(`${barkod} barkodlu fazla ilanın Trendyol stoğu 0 yapıldı (birkaç dakika içinde uygulanır). Fiyatına dokunulmadı.`, '#cift');
     }
     if (eylem === 'cek') {
       const kategori = metin(f, 'kategori');
@@ -117,6 +132,19 @@ const DURUM: Record<TyKatalogSatiri['durum'], [string, 'yesil' | 'turuncu' | 'ki
   bagli: ['Bağlı · stok ortak', 'yesil'], eslesir: ['Sitede var · bağlanabilir', 'turuncu'], cakisma: ['Elle kontrol edin', 'kirmizi'], yeni: ['Sitede yok · çekilebilir', 'gri'],
 };
 const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum === d).length ?? 0;
+// Çift ilanlar: aynı site ürününe düşen birden çok Trendyol ilanı (ana ilan + fazlalar) ürün başına gruplanır
+const ciftGruplari = (() => {
+  if (!satirlar) return [];
+  const idler = [...new Set(satirlar.filter((s) => s.cift && s.urunId).map((s) => s.urunId!))];
+  return idler.map((urunId) => {
+    const ilanlar = satirlar!.filter((s) => s.urunId === urunId);
+    const bagli = k.urunler[urunId]?.kod;
+    // Öneri: zaten bağlı olan; o yoksa gerçek barkodlu (EAN-13) ve satışta olan; sonra stoğu olan
+    const puan = (s: TyKatalogSatiri) => (s.barkod === bagli ? 8 : 0) + (gtinGecerli(s.barkod) ? 4 : 0) + (s.satista ? 2 : 0) + ((s.stok ?? 0) > 0 ? 1 : 0);
+    const oneri = [...ilanlar].sort((a, b) => puan(b) - puan(a))[0]?.barkod;
+    return { urunId, urun: urunMap.get(urunId), ilanlar, bagli, oneri };
+  });
+})();
 ---
 <Yonetim baslik="Trendyol İlanları" altBaslik="Trendyol'daki ilanlarınızı siteye bağlayın veya sitede olmayanları taslak ürün olarak çekin." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
   <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
@@ -132,12 +160,43 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
   <section class="y-kart">
     <h2><PIkon ad="bilgi" /> Nasıl çalışır?</h2>
     <ol class="tyi-kural">
-      <li><strong>Bağla:</strong> Trendyol ilanı sitedeki ürüne bağlanır. Stok ortak olur: hangi kanaldan satılırsa satılsın depodaki adet düşer, Trendyol stoğu 5 dakikada bir depodaki satılabilir adet − {k.guvenlikPayi} (güvenlik payı) olur. <strong>Fiyata dokunulmaz.</strong></li>
+      <li><strong>Bağla:</strong> Trendyol ilanı sitedeki ürüne bağlanır. Stok ortak olur: hangi kanaldan satılırsa satılsın depodaki adet düşer, Trendyol stoğu 5 dakikada bir depodaki satılabilir adede {k.guvenlikPayi > 0 ? `− ${k.guvenlikPayi} (güvenlik payı)` : ''} eşitlenir. <strong>Fiyata dokunulmaz.</strong></li>
+      <li><strong>Stoğu sitede değiştirin:</strong> bağlı ilanın adedini Trendyol panelinden elle değiştirirseniz sistem birkaç dakika içinde depodaki adede geri çeker. Adedi ürünün site sayfasından ya da Ürünler › Toplu fiyat ve stok ekranından girin.</li>
+      <li><strong>Çift ilan:</strong> aynı ürün Trendyol’da iki ayrı ilanla (farklı barkodla) açıldıysa yalnız biri depoya bağlanabilir. “Çift ilanlar” bölümünden kalacak ilanı seçin; diğerinin stoğu 0 yapılır.</li>
       <li><strong>Siteye çek:</strong> Sitede olmayan ilan; başlık, açıklama, özellikler, barkod ve görselleriyle sitede <strong>taslak</strong> ürün olur ve aynı anda bağlanır. Kontrol edip yayınlayana kadar sitede görünmez.</li>
       <li><strong>Fiyat:</strong> “Fiyatı gönder” sitedeki (ya da ürüne özel) hedef fiyatı Trendyol’a yollar. “Trendyol fiyatını koru” ise Trendyol’daki fiyatı o ürünün Trendyol’a özel fiyatı yapar.</li>
       <li><strong>Buybox:</strong> aynı ürünü başka mağazalar da satıyorsa “Sepete ekle” en uygun teklife gider. “Buybox durumunu getir” hangi üründe kaçıncı sırada olduğunuzu ve en iyi fiyatı gösterir; fiyatı siz karar verip değiştirirsiniz (otomatik düşürme yok). Her gün kendiliğinden kontrol edilir, kaybedilen buybox “Bugünkü işler”e yazılır.</li>
     </ol>
   </section>
+
+  {ciftGruplari.length > 0 && <section class="y-kart tyi-cift" id="cift">
+    <div class="y-kart__bas"><h2><PIkon ad="uyari" /> Çift ilanlar ({ciftGruplari.length} ürün)</h2></div>
+    <p class="y-help">Bu ürünler Trendyol’da birden fazla ilanla satışta görünüyor. Depodaki adet yalnız <strong>ana ilana</strong> gider; diğer ilanlar ayrıca stoklu kalırsa aynı ürün iki kez satılabilir. Kalacak ilanı seçin: diğerlerinin stoğu Trendyol’da 0 yapılır (ilan silinmez, fiyatı değişmez).</p>
+    <div class="tyi-cift__liste">
+      {ciftGruplari.map((g) => <article class="tyi-cift__grup">
+        <h3>{g.urun ? `${g.urun.marka} ${g.urun.kisaAd}` : g.urunId} <small class="muted">· depoda {g.urun?.stok ?? '—'} adet</small></h3>
+        <ul>
+          {g.ilanlar.map((s) => <li class:list={['tyi-cift__ilan', { 'tyi-cift__ilan--ana': s.barkod === g.bagli }]}>
+            <div class="tyi-cift__bilgi">
+              <strong>{s.baslik}</strong>
+              <small class="muted">Barkod {s.barkod}{gtinGecerli(s.barkod) ? '' : ' (gerçek EAN değil)'}{s.stokKodu && s.stokKodu !== s.barkod ? ` · stok kodu ${s.stokKodu}` : ''}</small>
+              <small>{para(s.fiyat)} · Trendyol’da {s.stok ?? '—'} adet{!s.satista ? ' · satışta değil' : ''}</small>
+              <span>
+                {s.barkod === g.bagli && <span class="y-chip y-chip--yesil">Ana ilan · depoya bağlı</span>}
+                {s.barkod !== g.bagli && s.barkod === g.oneri && <span class="y-chip y-chip--turuncu">Önerilen</span>}
+              </span>
+            </div>
+            {s.barkod !== g.bagli && <div class="tyi-cift__eylem">
+              <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><input type="hidden" name="urun" value={g.urunId} />
+                <button class="btn btn--sepet btn--kucuk" name="eylem" value="ana-ilan" data-onayla={`${s.barkod} barkodlu ilan bu ürünün ana ilanı olsun mu? Diğer ilan${g.ilanlar.length > 2 ? 'lar' : ''} Trendyol’da 0 stoğa çekilir.`}>Bu ilan kalsın</button></form>
+              <form method="post"><input type="hidden" name="barkod" value={s.barkod} />
+                <button class="btn btn--cizgi btn--kucuk" name="eylem" value="ilan-kapat" data-onayla={`${s.barkod} barkodlu fazla ilanın Trendyol stoğu 0 yapılsın mı?`}>Bu fazlayı kapat (stok 0)</button></form>
+            </div>}
+          </li>)}
+        </ul>
+      </article>)}
+    </div>
+  </section>}
 
   {satirlar && <div class="y-metrics y-metrics--finans">
     <div class="y-metric y-metric--altin"><PIkon ad="kutu" /><span>Trendyol’daki ilan</span><strong>{satirlar.length}</strong></div>
@@ -171,15 +230,15 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
       <input class="y-girdi" type="search" placeholder="Başlık, barkod veya marka ara" aria-label="İlan ara" data-tyi-ara />
       <select class="y-girdi" aria-label="Durum" data-tyi-durum><option value="">Tüm durumlar</option>{Object.entries(DURUM).map(([id, [ad]]) => <option value={id}>{ad}</option>)}</select>
     </div>
-    <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo tyi-tablo">
-      <thead><tr><th>Seç</th><th>Trendyol ilanı</th><th class="y-sayi">Trendyol fiyat / stok</th><th>Sitedeki ürün</th><th>Durum</th><th class="y-islem">İşlem</th></tr></thead>
+    <div class="y-tablo-kap y-tablo-kap--kart tyi-kap"><table class="y-tablo tyi-tablo">
+      <thead><tr><th class="tyi-sec">Seç</th><th>Trendyol ilanı</th><th class="y-sayi tyi-fiyat">Fiyat / stok</th><th class="tyi-site">Sitedeki ürün</th><th class="tyi-durum">Durum</th><th class="tyi-islem">İşlem</th></tr></thead>
       <tbody>{satirlar.map((s) => {
         const [ad, renk] = DURUM[s.durum];
         const u = s.urunId ? urunMap.get(s.urunId) : undefined;
         const e = s.urunId ? k.urunler[s.urunId] : undefined;
         const fiyatFarkli = s.durum === 'bagli' && s.siteFiyat !== undefined && s.fiyat !== undefined && Math.abs(s.siteFiyat - s.fiyat) >= 0.005;
         return <tr data-tyi-kayit={s.durum} data-tyi-aranan={[s.baslik, s.barkod, s.stokKodu ?? '', s.marka?.ad ?? '', u?.kisaAd ?? ''].join(' ')}>
-          <td data-etiket="Seç"><input type="checkbox" name="secili" value={s.barkod} form="toplu" aria-label={'Seç: ' + s.baslik} data-tyi-secim /></td>
+          <td data-etiket="Seç" class="tyi-sec"><input type="checkbox" name="secili" value={s.barkod} form="toplu" aria-label={'Seç: ' + s.baslik} data-tyi-secim /></td>
           <td data-etiket="Trendyol ilanı" class="tyi-ilan">
             <div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{s.gorseller[0] && <img src={s.gorseller[0]} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" />}</span>
               <span><strong>{s.baslik}</strong><small class="y-table-note">{[s.marka?.ad, `Barkod ${s.barkod}`, s.stokKodu && s.stokKodu !== s.barkod ? `Stok kodu ${s.stokKodu}` : ''].filter(Boolean).join(' · ')}</small>
@@ -188,27 +247,29 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
                 {guvenliBaglanti(s.url) && <a class="y-link" href={guvenliBaglanti(s.url)} target="_blank" rel="noopener noreferrer">Trendyol’da gör ↗</a>}
               </span></div>
           </td>
-          <td data-etiket="Trendyol fiyat / stok" class="y-sayi y-nowrap"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small>{e?.fiyatHata && <small class="y-table-note" style="color:var(--y-kirmizi, #b42318);white-space:normal">Son fiyat reddedildi: {e.fiyatHata}</small>}
+          <td data-etiket="Trendyol fiyat / stok" class="y-sayi tyi-fiyat"><strong>{para(s.fiyat)}</strong><small class="y-table-note">{s.stok ?? '—'} adet</small>{e?.fiyatHata && <small class="y-table-note" style="color:var(--y-kirmizi, #b42318);white-space:normal">Son fiyat reddedildi: {e.fiyatHata}</small>}
             {(() => { const b = buybox?.get(s.barkod); if (!b) return null;
               if (!b.cokSatici || b.sira === 1) return <small class="y-table-note y-yazi-yesil" title="Buybox: ürün sayfasında “Sepete ekle” sizin mağazanızda">Buybox sizde{b.cokSatici ? '' : ' (tek satıcı)'}</small>;
               return <small class="y-table-note y-yazi-kirmizi" title="Aynı ürünü başka mağazalar da satıyor">Buybox {b.sira ?? '?'}. sırada · en iyi {para(b.fiyat)}</small>; })()}
           </td>
-          <td data-etiket="Sitedeki ürün">
+          <td data-etiket="Sitedeki ürün" class="tyi-site">
             {u ? <><a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>{u.marka} {u.kisaAd}</a>
-              <small class="y-table-note">Depo {u.stok} · Trendyol hedefi {kanalHedefStok(u.stok, k)} adet</small>
+              <small class="y-table-note">Depo {u.stok}{s.durum === 'bagli' ? ` · Trendyol’a giden ${kanalHedefStok(u.stok, k)} adet` : ''}</small>
               <small class="y-table-note">Hedef fiyat {para(s.siteFiyat)}{fiyatFarkli ? ' (Trendyol’dan farklı)' : ''}</small>
               {s.durum === 'bagli' && <small class="y-table-note">{e?.fiyatTakip ? 'Fiyat otomatik takipte' : 'Fiyat elle yönetiliyor'}</small>}</>
             : <span class="muted">—</span>}
           </td>
-          <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + renk]}>{ad}</span>{s.not && <small class="y-table-note">{s.not}</small>}</td>
-          <td data-etiket="İşlem" class="y-islem tyi-islemler">
+          <td data-etiket="Durum" class="tyi-durum"><span class:list={['y-chip', 'y-chip--' + (s.cift ? 'turuncu' : renk)]}>{s.cift ? 'Çift ilan' : ad}</span>{s.not && <small class="y-table-note">{s.not}</small>}</td>
+          <td data-etiket="İşlem" class="tyi-islem tyi-islemler">
+            {s.cift && s.urunId && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="ana-ilan" data-onayla={`${s.barkod} barkodlu ilan bu ürünün ana ilanı olsun mu? Aynı ürünün diğer ilanları Trendyol’da 0 stoğa çekilir.`}>Bu ilan kalsın</button></form>}
+            {s.cift && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="ilan-kapat" data-onayla={`${s.barkod} barkodlu fazla ilanın Trendyol stoğu 0 yapılsın mı?`}>Fazlayı kapat (stok 0)</button></form>}
             {s.durum === 'eslesir' && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="bagla">Bağla</button></form>}
             {s.durum === 'bagli' && s.urunId && <>
               {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="fiyat-gonder" title={`Trendyol fiyatını ${para(s.siteFiyat)} yapar`} data-onayla={`Trendyol fiyatı ${para(s.siteFiyat)} yapılsın mı? Birkaç dakika içinde canlıda değişir.`}>Fiyatı gönder</button></form>}
               {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="fiyat-koru" title="Trendyol’daki fiyatı bu ürünün Trendyol’a özel fiyatı yapar">Trendyol fiyatını koru</button></form>}
               <form method="post"><input type="hidden" name="urun" value={s.urunId} /><input type="hidden" name="deger" value={e?.fiyatTakip ? 'kapat' : 'ac'} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="takip">{e?.fiyatTakip ? 'Fiyat takibini kapat' : 'Fiyatı otomatik takip et'}</button></form>
             </>}
-            {(s.durum === 'yeni' || s.durum === 'cakisma') && <details class="tyi-elle">
+            {(s.durum === 'yeni' || (s.durum === 'cakisma' && !s.cift)) && <details class="tyi-elle">
               <summary class:list={['btn', s.durum === 'yeni' ? 'btn--sepet' : 'btn--cizgi', 'btn--kucuk']}>{s.durum === 'yeni' ? 'Siteye Çek / Bağla' : 'Elle bağla'}</summary>
               {s.durum === 'yeni' && <form method="post" class="tyi-mini">
                 <input type="hidden" name="barkod" value={s.barkod} />
@@ -277,12 +338,54 @@ const say = (d: TyKatalogSatiri['durum']) => satirlar?.filter((s) => s.durum ===
   .tyi-toplu { display: grid; gap: 8px; margin-bottom: 10px; padding: 10px 12px; border: 1px dashed var(--y-border); border-radius: 10px; background: var(--y-bg); }
   .tyi-toplu__satir { display: flex; flex-wrap: wrap; align-items: end; gap: 8px; }
   .tyi-cek > summary { cursor: pointer; font-weight: 700; min-height: 40px; padding-block: 8px; }
-  .tyi-tablo :is(.tyi-ilan, small.y-table-note) { white-space: normal; overflow-wrap: anywhere; }
-  .tyi-tablo .tyi-ilan { max-width: 380px; }
-  .tyi-islemler { display: grid; gap: 6px; justify-items: end; }
+  /* Tablo kartın içine sığar: sütun genişlikleri sabit, uzun metin ve düğmeler alt satıra iner (25.11.2026 — "İşlem" sütunu taşıyordu) */
+  .tyi-tablo { table-layout: fixed; width: 100%; }
+  .tyi-tablo :is(td, th) { white-space: normal; overflow-wrap: break-word; vertical-align: top; }
+  .tyi-tablo :global(small.y-table-note) { white-space: normal !important; overflow-wrap: break-word; }
+  .tyi-tablo th.tyi-sec { width: 44px; }
+  .tyi-tablo th.tyi-fiyat { width: 104px; }
+  .tyi-tablo th.tyi-site { width: 19%; }
+  .tyi-tablo th.tyi-durum { width: 16%; }
+  .tyi-tablo th.tyi-islem { width: 168px; }
+  .tyi-tablo .tyi-ilan :global(.y-tablo-urun) { align-items: flex-start; }
+  .tyi-tablo .tyi-ilan :global(.y-tablo-urun > span:last-child) { min-width: 0; }
+  .tyi-islemler { display: grid; gap: 6px; align-content: start; }
   .tyi-islemler form { margin: 0; }
-  .tyi-elle > summary { list-style: none; display: inline-flex; }
-  .tyi-elle[open] { min-width: 260px; }
-  .tyi-mini { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--y-border); justify-items: start; text-align: left; }
-  @media (max-width: 760px) { .tyi-islemler { justify-items: start; } }
+  .tyi-islemler :global(.btn) { width: 100%; white-space: normal; text-align: center; justify-content: center; line-height: 1.25; }
+  .tyi-elle > summary { list-style: none; display: flex; }
+  .tyi-elle > summary::-webkit-details-marker { display: none; }
+  .tyi-mini { display: grid; gap: 6px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--y-border); text-align: left; }
+  .tyi-mini :is(select, input) { width: 100%; max-width: 100%; min-width: 0; }
+  .tyi-mini .y-alan { min-width: 0; }
+
+  /* Dar ekranda (tablet, küçük dizüstü, telefon) her ilan bir kart */
+  @media (max-width: 1180px) {
+    .tyi-kap { border: 0 !important; overflow: visible !important; background: transparent !important; }
+    .tyi-tablo, .tyi-tablo tbody { display: block; background: transparent; }
+    .tyi-tablo thead { display: none; }
+    .tyi-tablo tr { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px 14px; margin-bottom: 10px; padding: 14px; border: 1px solid var(--y-border); border-radius: 14px; background: #fff; }
+    .tyi-tablo td { display: block; padding: 0 !important; border: 0 !important; text-align: left !important; min-width: 0; }
+    .tyi-tablo td[data-etiket]::before { content: attr(data-etiket); display: block; margin-bottom: 2px; font-size: 11.5px; color: #8a7f70; font-weight: 600; }
+    .tyi-tablo td.tyi-sec { position: absolute; top: 12px; right: 12px; padding: 0 !important; }
+    .tyi-tablo td.tyi-sec::before { display: none; }
+    .tyi-tablo td.tyi-ilan { grid-column: 1 / -1; max-width: none; padding-right: 36px !important; }
+    .tyi-tablo td.tyi-ilan::before { display: none; }
+    .tyi-tablo td.tyi-islem { grid-column: 1 / -1; }
+    .tyi-islemler { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); }
+    .tyi-islemler > details { grid-column: 1 / -1; }
+  }
+  @media (max-width: 520px) { .tyi-tablo tr { grid-template-columns: minmax(0, 1fr); } }
+
+  .tyi-cift { border-color: #f0c38a; }
+  .tyi-cift__liste { display: grid; gap: 12px; margin-top: 10px; }
+  .tyi-cift__grup { padding: 12px 14px; border: 1px solid var(--y-border); border-radius: 12px; background: #fffaf3; }
+  .tyi-cift__grup h3 { margin: 0 0 8px; font-size: 16px; }
+  .tyi-cift__grup ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .tyi-cift__ilan { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border: 1px solid var(--y-border); border-radius: 10px; background: #fff; }
+  .tyi-cift__ilan--ana { border-color: #9fd3b4; background: #f4fbf6; }
+  .tyi-cift__bilgi { display: grid; gap: 3px; min-width: 0; flex: 1 1 280px; }
+  .tyi-cift__bilgi strong { overflow-wrap: break-word; }
+  .tyi-cift__bilgi small { font-size: 13px; overflow-wrap: break-word; }
+  .tyi-cift__eylem { display: flex; flex-wrap: wrap; gap: 6px; }
+  .tyi-cift__eylem form { margin: 0; }
 </style>

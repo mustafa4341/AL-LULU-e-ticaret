@@ -132,7 +132,8 @@ export function durumCoz(ham: unknown, kanal: Kanal): PyDurum {
   if (var_('undelivered', 'teslimedilemedi', 'ulastirilamadi', 'teslimatbasarisiz')) return 'teslim-edilemedi';
   if (var_('return', 'iade', 'claim')) return 'iade';
   if (var_('kargoyateslim', 'kargoyaverildi', 'shipped', 'intransit', 'kargoda', 'dagitim', 'yolda', 'atcollectionpoint', 'teslimatnoktasi', 'transfer')) return 'kargoda';
-  if (var_('hazirlanacak', 'paketlenecek', 'islemebekliyor')) return 'yeni';
+  // Trendyol yeni paketleri "ReadyToShip" ile de bildiriyor (canlıda görüldü, 24.11.2026): hazırlanmayı bekleyen yeni sipariş.
+  if (var_('hazirlanacak', 'paketlenecek', 'islemebekliyor', 'readytoship')) return 'yeni';
   if (d === 'packed' || d === 'package' || var_('kargoyaverilecek', 'kargoyahazir', 'packaged', 'paketlendi', 'picking', 'invoiced', 'faturalan', 'hazirlan', 'islemealin', 'toplan', 'preparing')) return 'hazirlaniyor';
   if (var_('delivered', 'teslimedildi', 'tamamlandi', 'completed')) return 'teslim-edildi';
   if (var_('created', 'yeni', 'open', 'olusturuldu', 'paketlenecek', 'onaylandi', 'approved', 'new')) return 'yeni';
@@ -179,6 +180,8 @@ export interface GelenSiparis {
   kalemler: GelenKalem[];
   /** Fatura kesmek için alıcı bilgisi (kanalın verdiği kadarı) */
   fatura?: FaturaAlicisi;
+  /** Kanalda pakete yüklenmiş faturanın bağlantısı (Trendyol invoiceLink: satıcı panelinden ya da API ile yüklenen) */
+  faturaLink?: string;
 }
 
 /** Faturadaki alıcı: bireyselde ad + TCKN (yoksa 11111111111), kurumsalda unvan + vergi dairesi/no */
@@ -243,6 +246,11 @@ export const PazaryeriSiparisSema = z.object({
   not: z.string().max(1000).optional(),
   gecmis: z.array(z.object({ tarih: z.string(), durum: z.enum(PY_DURUMLAR), not: z.string().optional() })).default([]),
   fatura: FaturaAlicisiSema.optional(),
+  /**
+   * Kanalda bu pakete yüklenmiş fatura (Trendyol paketindeki invoiceLink). Fatura satıcı panelinden elle yüklense de dolar;
+   * site bunu görünce faturayı kendi Fatura merkezine alır (bkz. lib/faturaKanaldan.ts).
+   */
+  kanalFatura: z.object({ link: z.string().max(1000), tarih: z.string() }).optional(),
   /** Veritabanı sürümü (çakışma denetimi); kayıtta saklanmaz, okurken eklenir */
   surum: z.number().int().min(0).default(0),
 });
@@ -297,8 +305,16 @@ const KanalAyarSema = z.object({
   }).optional(),
   /** Excel sütun eşleştirmesi: alan → başlığın normal() hali */
   sutunlar: z.record(z.string(), z.string()).default({}),
-  /** Pazaryerine bildirilen stok = gerçek stok − güvenlik payı (aktarımlar arası aşırı satışa karşı) */
-  guvenlikPayi: z.number().int().min(0).max(1000).default(1),
+  /**
+   * Pazaryerine bildirilen stok = gerçek stok − güvenlik payı. Varsayılan 0 (25.11.2026): mağazada çoğu ürün 1–3 adet;
+   * pay 1 iken 1 adetlik ürün kanala hep 0 gidiyor, elle 1 yapılan ilan 5 dk içinde yeniden 0'a çekilip pasife düşüyordu.
+   * Siparişler anlık bildirimle (webhook) geldiği için ortak stok saniyeler içinde düşer.
+   */
+  guvenlikPayi: z.number().int().min(0).max(1000).default(0),
+  /** Stok eşitlemesinde engel olmayan notlar (ör. bağlı barkod kanalda henüz onaylı değil) — kırmızı uyarı sayılmaz */
+  sonStokNot: z.string().max(1000).optional(),
+  /** Aynı site ürününe düşen birden çok kanal ilanı (çift ilan). Trendyol ilanları ekranı ve günlük kontrol yazar. */
+  ciftIlanlar: z.array(z.object({ urunId: z.string(), barkodlar: z.array(z.string().max(120)).max(20) })).max(200).default([]),
   /** Ürün bazında: pazaryerinde satışta mı, en son oraya hangi stok yazıldı */
   urunler: z.record(z.string(), z.object({
     satista: z.boolean().default(true),
@@ -580,11 +596,19 @@ export function trendyolPaketi(p: Ham): GelenSiparis | undefined {
     sonKargoTarihi: tarihOku(sonKargo),
     toplam: paraKurus(p.packageTotalPrice, p.totalPrice),
     kalemler,
+    faturaLink: guvenliHttps(p.invoiceLink),
     fatura: faturaAlicisi(nesne(p.invoiceAddress), {
       tckn: p.tcIdentityNumber ?? nesne(p.invoiceAddress).identityNumber, eposta: p.customerEmail,
       ad: [p.customerFirstName, p.customerLastName].filter(Boolean).join(' '),
     }),
   };
+}
+
+/** Yalnız https bağlantı (en fazla 1000 karakter); değilse undefined */
+function guvenliHttps(v: unknown): string | undefined {
+  const s = yazi(v);
+  if (!s || s.length > 1000) return undefined;
+  try { return new URL(s).protocol === 'https:' ? s : undefined; } catch { return undefined; }
 }
 
 /** Kanal adresi → fatura alıcısı. Boş alanlar atlanır; hiçbir bilgi yoksa undefined. */
@@ -894,6 +918,9 @@ export function birlestir(
       sonKargoTarihi: g.sonKargoTarihi ?? eski?.sonKargoTarihi, toplam, kalemler, kaynak, stokDisi,
       ilkAktarim: eski?.ilkAktarim ?? simdi, sonAktarim: simdi, not: eski?.not, kanalGuncelleme: g.guncelleme ?? eski?.kanalGuncelleme,
       gecmis: eski?.gecmis ?? [], surum: eski?.surum ?? 0, fatura: g.fatura ?? eski?.fatura,
+      kanalFatura: g.faturaLink
+        ? { link: g.faturaLink, tarih: eski?.kanalFatura?.link === g.faturaLink ? eski.kanalFatura.tarih : simdi }
+        : eski?.kanalFatura,
     });
     if (!eski || eski.durum !== durum) {
       // Tanınmayan durumda kanalın ham durum adı geçmişe yazılır: eşleme tablosu buna göre genişletilir.

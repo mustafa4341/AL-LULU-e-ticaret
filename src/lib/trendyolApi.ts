@@ -353,6 +353,37 @@ export async function tyFaturaLinki(paketId: string, link: string, faturaNo?: st
   });
 }
 
+/**
+ * Siparişin paketlerine Trendyol'da yüklenmiş fatura bağlantıları (getShipmentPackages ?orderNumber= → invoiceLink).
+ * Fatura satıcı panelinden elle yüklense de bu alan dolar (belge: Sipariş Paketlerini Çekme, invoiceLink).
+ * Dönüş: paket no → bağlantı (yalnız https).
+ */
+export async function tyPaketFaturaLinkleri(siparisNo: string): Promise<Map<string, string>> {
+  if (!/^\d{1,20}$/.test(siparisNo)) throw new PazaryeriApiHatasi('Trendyol sipariş numarası geçersiz.');
+  const y = nesne(await trendyolCagir((id) => `/order/sellers/${id}/orders`, 'Trendyol fatura bilgisi', sinyal(), { sorgu: { orderNumber: siparisNo, size: 50 } }));
+  const sonuc = new Map<string, string>();
+  for (const p of dizi(y.content)) {
+    const paket = yazi(p.shipmentPackageId) ?? yazi(p.id);
+    const link = yazi(p.invoiceLink);
+    if (!paket || !link || link.length > 1000) continue;
+    try { if (new URL(link).protocol === 'https:') sonuc.set(paket, link); } catch { /* geçersiz bağlantı */ }
+  }
+  return sonuc;
+}
+
+/**
+ * Tek ilanın Trendyol stoğunu 0 yapar (çift/fazla ilanı satıştan kaldırmak için). Fiyata dokunmaz.
+ * updatePriceAndInventory yalnız barcode + quantity ile çağrılır; sonuç Trendyol kuyruğunda birkaç dakikada uygulanır.
+ */
+export async function tyIlanStokSifirla(barkodlar: string[]): Promise<string | undefined> {
+  const temiz = [...new Set(barkodlar.map((b) => b.trim()).filter((b) => b && b.length <= 120 && !/[,\s]/.test(b)))];
+  if (!temiz.length) throw new PazaryeriApiHatasi('Stoğu sıfırlanacak geçerli barkod yok.');
+  const y = nesne(await trendyolCagir((id) => `/inventory/sellers/${id}/products/price-and-inventory`, 'Trendyol ilan stoğu sıfırlama', sinyal(), {
+    json: { items: temiz.map((barcode) => ({ barcode, quantity: 0 })) },
+  }));
+  return yazi(y.batchRequestId);
+}
+
 /* ---------------- Cari hesap ekstresi (hakediş) ---------------- */
 
 export const TY_SATIS_TURLERI = ['Sale', 'Return', 'Discount', 'DiscountCancel', 'Coupon', 'CouponCancel', 'ProvisionPositive', 'ProvisionNegative', 'ManualRefund', 'ManualRefundCancel', 'DeliveryFee', 'DeliveryFeeCancel'] as const;

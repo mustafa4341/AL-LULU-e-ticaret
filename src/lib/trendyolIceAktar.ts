@@ -14,11 +14,11 @@ import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
 import { trendyolIlanlariniEsle, type IlanEslesmesi } from './kanalFiyat';
 import { BOS_URUN } from './yonetimUrun';
 import { fiyatUygula } from './urunIslem';
-import { tyOnayliIcerikler, type TyIcerik } from './trendyolApi';
+import { tyIlanStokSifirla, tyOnayliIcerikler, type TyIcerik } from './trendyolApi';
 import { gtinGecerli } from './urunKimlik';
 import type { Urun } from './sema';
 
-export type TyKatalogSatiri = TyIcerik & Pick<IlanEslesmesi, 'urunId' | 'urunAdi' | 'siteFiyat' | 'not'> & {
+export type TyKatalogSatiri = TyIcerik & Pick<IlanEslesmesi, 'urunId' | 'urunAdi' | 'siteFiyat' | 'not' | 'cift' | 'bagliBarkod'> & {
   stok?: number;
   /** bagli · eslesir (sitede aynı barkod/SKU var, bağlanabilir) · cakisma · yeni (sitede yok, çekilebilir) */
   durum: 'bagli' | 'eslesir' | 'cakisma' | 'yeni';
@@ -31,7 +31,7 @@ export async function trendyolKatalogu(): Promise<TyKatalogSatiri[]> {
   const satirlar: TyKatalogSatiri[] = icerikler.map((c) => {
     const e = durumlar.get(c.barkod);
     const durum = !e || e.durum === 'yok' ? 'yeni' : e.durum === 'yeni' ? 'eslesir' : e.durum;
-    return { ...c, stok: e?.kanalStok ?? c.stok, fiyat: e?.kanalFiyat ?? c.fiyat, urunId: e?.urunId, urunAdi: e?.urunAdi, siteFiyat: e?.siteFiyat, not: e?.not, durum };
+    return { ...c, stok: e?.kanalStok ?? c.stok, fiyat: e?.kanalFiyat ?? c.fiyat, urunId: e?.urunId, urunAdi: e?.urunAdi, siteFiyat: e?.siteFiyat, not: e?.not, cift: e?.cift, bagliBarkod: e?.bagliBarkod, durum };
   });
   // Stok/fiyat listesinde olup içerik listesinde gelmeyen (nadiren) ilanlar da görünsün
   const gorulen = new Set(satirlar.map((s) => s.barkod));
@@ -40,6 +40,7 @@ export async function trendyolKatalogu(): Promise<TyKatalogSatiri[]> {
     satirlar.push({
       barkod: e.barkod, stokKodu: e.stokKodu, baslik: e.urunAdi ?? e.barkod, gorseller: [], ozellikler: [], satista: true, arsiv: false,
       fiyat: e.kanalFiyat, stok: e.kanalStok, urunId: e.urunId, urunAdi: e.urunAdi, siteFiyat: e.siteFiyat, not: e.not,
+      cift: e.cift, bagliBarkod: e.bagliBarkod,
       durum: e.durum === 'yok' ? 'yeni' : e.durum === 'yeni' ? 'eslesir' : e.durum,
     });
   }
@@ -60,11 +61,57 @@ export async function trendyolIlaniniBagla(barkod: string, urunId: string): Prom
     if (baska) throw new DogrulamaHatasi(['Bu barkod başka bir site ürününe bağlı. Önce o bağlantıyı değiştirin.']);
     const onceki = k.urunler[urunId];
     if (onceki?.kod && onceki.kod !== kod && (onceki.bildirilen ?? 0) > 0) {
-      throw new DogrulamaHatasi(['Bu site ürünü başka bir Trendyol ilanına bağlı ve o ilanda stok var. Önce eski ilanı satışa kapatın.']);
+      throw new DogrulamaHatasi(['Bu site ürünü başka bir Trendyol ilanına bağlı ve o ilanda stok var. Sayfanın üstündeki “Çift ilanlar” bölümünden “Bu ilan kalsın” deyin: eski ilanın stoğu 0 yapılıp bu ilan bağlanır.']);
     }
     k.urunler[urunId] = onceki?.kod === kod ? onceki : { satista: true, kod, fiyatTakip: false };
     a.eslesmeler[kodNormal(kod)] = urunId;
   });
+}
+
+/**
+ * Çift ilan çözümü: bir site ürününe birden çok Trendyol ilanı düşüyorsa seçilen ilan "ana ilan" olur (stok ortak, depo
+ * adedi buna gider), aynı ürüne uyan diğer ilanların Trendyol stoğu 0 yapılır (aynı adet iki kez satılmasın).
+ * Eski barkodun elle eşleşmesi korunur: o ilandan önceden gelen/iptal olan siparişler yine bu ürüne düşer.
+ * Fiyata dokunulmaz.
+ */
+export async function trendyolAnaIlaniSec(urunId: string, barkod: string): Promise<{ kapatilan: string[] }> {
+  const kod = barkod.trim();
+  if (!kod || kod.length > 120 || /[,\s]/.test(kod)) throw new DogrulamaHatasi(['Trendyol barkodu geçersiz.']);
+  const m = await magazaOku(true);
+  if (!m.urunler.some((u) => u.id === urunId)) throw new DogrulamaHatasi(['Site ürünü bulunamadı.']);
+  const { satirlar } = await trendyolIlanlariniEsle(false);
+  if (!satirlar.some((s) => s.barkod === kod)) throw new DogrulamaHatasi([`${kod} barkodu Trendyol’daki onaylı ilanlarınız arasında yok. Listeyi yenileyin.`]);
+  const digerleri = satirlar.filter((s) => s.urunId === urunId && s.barkod !== kod).map((s) => s.barkod);
+  let eskiKod: string | undefined;
+  await envanterAyarlariGuncelle((a) => {
+    const k = a.kanallar.trendyol;
+    if (k.bekleyenStok) throw new DogrulamaHatasi(['Trendyol’un önceki stok işlemi onaylanınca tekrar deneyin (birkaç dakika).']);
+    const baska = Object.entries(k.urunler).find(([id, e]) => id !== urunId && e.kod === kod);
+    if (baska) throw new DogrulamaHatasi([`Bu ilan başka bir site ürününe (${baska[0]}) bağlı. Önce o bağlantıyı değiştirin.`]);
+    const onceki = k.urunler[urunId];
+    eskiKod = onceki?.kod;
+    // Yeni ilanın adedi ve fiyatı ayrıca okunur: eski ilana ait bildirilen/son hedef/fiyat kayıtları taşınmaz
+    k.urunler[urunId] = {
+      satista: onceki?.satista ?? true, kod, fiyatTakip: onceki?.fiyatTakip ?? false,
+      ...(onceki?.ozelFiyat !== undefined ? { ozelFiyat: onceki.ozelFiyat } : {}),
+    };
+    a.eslesmeler[kodNormal(kod)] = urunId;
+    k.ciftIlanlar = (k.ciftIlanlar ?? []).filter((c) => c.urunId !== urunId);
+  });
+  const kapat = [...new Set([...(eskiKod && eskiKod !== kod ? [eskiKod] : []), ...digerleri])]
+    .filter((b) => b !== kod);
+  if (kapat.length) await tyIlanStokSifirla(kapat);
+  return { kapatilan: kapat };
+}
+
+/** Hiçbir site ürününe bağlı olmayan (fazla/çift) bir Trendyol ilanının stoğunu 0 yapar. */
+export async function trendyolIlaniSatistanKaldir(barkod: string): Promise<void> {
+  const kod = barkod.trim();
+  if (!kod || kod.length > 120 || /[,\s]/.test(kod)) throw new DogrulamaHatasi(['Trendyol barkodu geçersiz.']);
+  const ayar = await envanterAyarlariOku();
+  const bagli = Object.entries(ayar.kanallar.trendyol.urunler).find(([, e]) => e.kod === kod);
+  if (bagli) throw new DogrulamaHatasi(['Bu ilan sitedeki bir ürünün ana ilanı; stoğu depodan eşitlenir. Önce başka bir ilanı ana ilan yapın.']);
+  await tyIlanStokSifirla([kod]);
 }
 
 const TR_KUCUK = (s: string) => s.toLocaleLowerCase('tr');

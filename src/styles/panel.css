@@ -304,7 +304,8 @@ a.y-chip:hover { filter: brightness(.96); }
 .y-kopya { display: inline-grid; place-items: center; width: 24px; height: 24px; margin-left: 2px; padding: 0; vertical-align: -6px; border: 0; border-radius: 6px; background: none; color: #8a7f70; cursor: pointer; }
 .y-kopya:hover { background: #f0ebe1; color: #30291f; }
 .y-tablo tr.is-secili td { background: #fcf8ee; }
-.y-panel .y-tablo td small.y-table-note { white-space: nowrap; }
+/* Tablo notları alt satıra inebilir: tek satıra zorlanan uzun notlar tabloyu kartın dışına taşırıyordu (25.11.2026) */
+.y-panel .y-tablo td small.y-table-note { white-space: normal; overflow-wrap: break-word; }
 .y-bos { text-align: center; padding: 26px 16px; display: grid; gap: 8px; justify-items: center; }
 .y-bos p { margin: 0; }
 .y-toplu { position: fixed; z-index: 40; left: calc(var(--y-side) + 16px); right: 16px; bottom: 14px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 980px; margin: 0 auto; padding: 10px 12px; border-radius: 12px; background: #242019; color: #f8f4ec; box-shadow: 0 14px 40px #0004; }
