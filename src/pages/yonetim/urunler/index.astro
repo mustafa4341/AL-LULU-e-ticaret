@@ -136,12 +136,10 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
 ---
 <Yonetim baslik="Ürünler ve Stok" altBaslik="Kataloğu, fiyatları ve depodaki ürün adetlerini yönetin." aktif="urunler" basari={basari} hatalar={hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="indir" boyut={18} />Trendyol’dan çek</a>
+    <a class="btn btn--sepet" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyat ve Kâr Tablosu</a>
     <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a gönder</a>
-    <a class="btn btn--cizgi" href="#stok-gecmisi" data-ac="stok-gecmisi"><PIkon ad="gecmis" boyut={18} />Stok hareketleri</a>
     <a class="btn btn--cizgi" href="/yonetim/setler"><PIkon ad="set" boyut={18} />Setler</a>
-    <a class="btn btn--cizgi" href="/yonetim/kategoriler"><PIkon ad="kategori" boyut={18} />Kategoriler</a>
-    <a class="btn btn--sepet" href="/yonetim/urunler/yeni"><PIkon ad="arti" boyut={18} />Yeni ürün</a>
+    <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="arti" boyut={18} />Yeni ürün</a>
   </div>
   <div class="y-metrics y-metrics--finans">
     <a class="y-metric" href="?filtre=tumu"><PIkon ad="kutu" /><span>Toplam ürün</span><strong>{m.urunler.length}</strong><small>Katalogdaki tüm kayıtlar</small></a>
@@ -227,10 +225,10 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
         </dl>
         <form method="post" class="y-izgara" data-editor>
           <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />
-          <label class="y-alan">Satış fiyatı (TL)<input name="fiyat" type="number" min="1" step="1" inputmode="numeric" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
-          <label class="y-alan">Depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
-          <label class="y-alan">Sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
-          <p class="y-bilgi-satiri urun-hizli-not"><PIkon ad="bilgi" boyut={16} /><span>{bagliKanallar.length ? `Bu ürün ${bagliKanallar.map((kn) => KANALLAR[kn]).join(' ve ')} kanalına bağlı. Fiyat/stok kaydı sonrası bağlı kanallara otomatik eşitleme başlatılır.` : 'Bu ürün henüz hiçbir pazaryeri ilanına bağlanmamış; değişiklik yalnız web sitesine yansır.'} <a class="y-link" href="/yonetim/siparisler/kanallar#eslestirmeler">Ürün eşleştirme</a></span></p>
+          <label class="y-alan">Web satış fiyatı (TL)<input name="fiyat" type="number" min="1" step="1" inputmode="numeric" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
+          <label class="y-alan">Ortak depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
+          <label class="y-alan">Web sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
+          <p class="y-bilgi-satiri urun-hizli-not"><PIkon ad="bilgi" boyut={16} /><span>Stok tüm kanallarda ortaktır; buradaki fiyat ise <strong>yalnız Web sitesi</strong> içindir ({bagliKanallar.length ? `bağlı: ${bagliKanallar.map((kn) => KANALLAR[kn]).join(', ')}` : 'pazaryerine bağlı değil'}). Kanal fiyatlarını ve kârı <a class="y-link" href={'/yonetim/fiyatlar#f-' + encodeURIComponent(u.id)}>Fiyat ve Kâr Tablosu</a>ndan yönetin.</span></p>
           <div class="y-ust-aksiyonlar"><a class="btn btn--cizgi" href={'/yonetim/urunler/' + u.id}>Tüm alanları düzenle</a><button class="btn btn--sepet" type="submit">Değişiklikleri kaydet</button></div>
         </form>
       </section>;

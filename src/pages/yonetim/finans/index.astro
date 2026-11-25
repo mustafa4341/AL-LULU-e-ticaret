@@ -3,7 +3,7 @@ import Yonetim from '../../../layouts/Yonetim.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import Ikon from '../../../components/Ikon.astro';
 import { siparisleriOku } from '../../../lib/depo';
-import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, kalanTutar, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
+import { BELGE_DURUMLARI, BELGE_TURLERI, GIDER_KATEGORILERI, MANUEL_GIDER_KATEGORILERI, TRENDYOL_TUTARLARI, belgeGecerli, donem, finansGunu, finansPara, gecerliGun, hakEdis, kalanTutar, paraOku, raporla, type BelgeTuru, type Gider } from '../../../lib/finans';
 import { finansOku, giderEkle, giderGuncelle, giderSil, trendyolKaydet } from '../../../lib/finansDepo';
 import { aylar } from '../../../lib/finansDisari';
 import { metin } from '../../../lib/form';
@@ -107,22 +107,22 @@ const bugun = finansGunu();
 const ay = /^\d{4}-\d{2}$/.test(q0.get('ay') ?? '') && q0.get('ay')! <= bugun.slice(0, 7) ? q0.get('ay')! : bugun.slice(0, 7);
 const ayDonemi = aylar(ay + '-01', ay === bugun.slice(0, 7) ? bugun : new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7), 0)).toISOString().slice(0, 10))[0]!;
 const ayKaydir = (n: number) => { const d = new Date(Date.UTC(+ay.slice(0, 4), +ay.slice(5, 7) - 1 + n, 1)); return d.toISOString().slice(0, 7); };
-const ayRaporu = raporla(finans, siparisler, ayDonemi.bas, ayDonemi.son);
+const ayRaporu = raporla(finans, siparisler, ayDonemi.bas, ayDonemi.son, pySiparisler);
 const ayTySiparis = pyDonemOzet(ayDonemi.bas, ayDonemi.son, 'trendyol');
 const ayHbSiparis = pyDonemOzet(ayDonemi.bas, ayDonemi.son, 'hepsiburada');
 const bugunPySiparis = pyDonemOzet(bugun, bugun);
 const kalan = (r: ReturnType<typeof raporla>) => kalanTutar(r);
-const bugunSatis = raporla(finans, siparisler, bugun, bugun);
-const buAy = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
+const bugunSatis = raporla(finans, siparisler, bugun, bugun, pySiparisler);
+const buAy = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun, pySiparisler);
 const buAyPySiparis = pyDonemOzet(bugun.slice(0, 7) + '-01', bugun);
 const son6 = aylar(ayKaydir(-5) + '-01', ayDonemi.son).map((a) => ({
   ...a,
-  r: raporla(finans, siparisler, a.bas, a.son),
+  r: raporla(finans, siparisler, a.bas, a.son, pySiparisler),
   py: pyDonemOzet(a.bas, a.son),
 })).reverse();
 
 const { bas, son } = donem(q0);
-const rapor = raporla(finans, siparisler, bas, son);
+const rapor = raporla(finans, siparisler, bas, son, pySiparisler);
 const donemTySiparis = pyDonemOzet(bas, son, 'trendyol');
 const donemHbSiparis = pyDonemOzet(bas, son, 'hepsiburada');
 const tyBulutAktif = !['canli', 'test'].includes(pazaryeriApiDurumu('trendyol')) && Boolean(envAyar?.kanallar.trendyol.sonApi);
@@ -280,13 +280,19 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
           </div>
         )}
 
-        <div class="eksi"><dt>Giderler <small><a class="y-link" href={'?sekme=giderler&ay=' + ay}>{ayRaporu.giderler.length} kayıt · gör</a></small></dt><dd>−{finansPara(ayRaporu.gider)}</dd></div>
+        <div class="eksi"><dt>Dış giderler <small><a class="y-link" href={'?sekme=giderler&ay=' + ay}>{ayRaporu.giderler.length} kayıt · gör</a></small></dt><dd>−{finansPara(ayRaporu.gider)}</dd></div>
         {Object.entries(ayRaporu.kategori).filter(([, n]) => n > 0).map(([id, n]) => <div class="alt"><dt>{GIDER_KATEGORILERI[id as Gider['kategori']]}</dt><dd>−{finansPara(n)}</dd></div>)}
-        <div class="sonuc"><dt>Kalan (tahmini) <small>Net web satışı + kesinleşen pazaryeri hakedişi − giderler</small></dt><dd>{finansPara(kalan(ayRaporu))}</dd></div>
+        {ayRaporu.otoUrunMaliyeti > 0 && (
+          <div class="eksi">
+            <dt>Satılan ürünlerin alış maliyeti <small>Birim alış maliyetinden otomatik · <a class="y-link" href="/yonetim/fiyatlar">fiyat tablosu</a></small></dt>
+            <dd>−{finansPara(ayRaporu.otoUrunMaliyeti)}</dd>
+          </div>
+        )}
+        <div class="sonuc"><dt>Kalan (tahmini) <small>Net web satışı + kesinleşen pazaryeri hakedişi − giderler ve ürün maliyeti</small></dt><dd>{finansPara(kalan(ayRaporu))}</dd></div>
       </dl>
       {ayRaporu.tahmini === undefined
-        ? <p class="y-uyari">Bu ay için “Ürün alış maliyeti” gideri girilmedi. Kalan tutar ürün maliyeti düşülmeden hesaplandı; gerçek kazanç daha düşüktür. <a class="y-link" href={'?sekme=giderler&ay=' + ay + '&yeni=urun'}>Ürün maliyeti ekle</a></p>
-        : <p class="y-help">Yönetim tahminidir: KDV, banka tahsilatı ve muhasebe kârı ayrıca hesaplanır. Kargo tahsilatı satış tutarına dahildir ({finansPara(ayRaporu.kargo)}).</p>}
+        ? <p class="y-uyari">Satılan ürünlerden bazılarının birim alış maliyeti girilmemiş. <a class="y-link" href="/yonetim/fiyatlar">Fiyat ve Kâr Tablosu</a>ndan alış maliyetini girin.</p>
+        : <p class="y-help">Pazaryeri komisyonu, kargo kesintisi ve ürün alış maliyetleri otomatik düşülür; dış giderleri (reklam, koli vb.) Giderler sekmesinden ekleyebilirsiniz.</p>}
     </section>
 
     <section class="y-kart">
@@ -626,9 +632,9 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
               </div>
               <label class="y-alan">Kategori
                 <select name="kategori" required>
-                  {Object.entries(GIDER_KATEGORILERI).map(([id, ad]) => <option value={id} selected={(acikPencere === 'gider-ekle' ? taslak?.get('kategori') : q0.get('yeni')) === id}>{ad}</option>)}
+                  {Object.entries(MANUEL_GIDER_KATEGORILERI).map(([id, ad]) => <option value={id} selected={(acikPencere === 'gider-ekle' ? taslak?.get('kategori') : q0.get('yeni')) === id}>{ad}</option>)}
                 </select>
-                <small class="muted">Pazaryeri komisyonu ve kargo kesintisi hakediş kayıtlarından zaten düşülür; buraya yalnızca hakedişte görünmeyen giderleri girin.</small>
+                <small class="muted">Pazaryeri komisyonu, kargo kesintisi ve satılan ürünlerin birim alış maliyeti otomatik hesaplanır; buraya yalnız reklam, koli, muhasebe gibi dış giderleri ekleyin.</small>
               </label>
               <label class="y-alan">Açıklama<input name="not" maxlength="300" placeholder="Ör. Toptan porselen alımı / Kasım kargo faturası" value={String(acikPencere === 'gider-ekle' ? taslak?.get('not') ?? '' : '')} /></label>
               <label class="fn-dosya-kutu">
@@ -835,14 +841,10 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
           </section>
         )}
 
-        <section class="y-kart">
-          <div class="y-kart__bas">
-            <div>
-              <h2><PIkon ad="belge" /> Dosyadan Ekstre Yükle (CSV / XLSX)</h2>
-              <p class="y-kart__alt">Trendyol satıcı panelinden indirdiğiniz hakediş tablosunu içe aktarın.</p>
-            </div>
-          </div>
-          <form class="y-izgara" method="post" enctype="multipart/form-data">
+        <details class="y-kart">
+          <summary style="cursor:pointer;font-weight:700;list-style:none;display:flex;align-items:center;gap:8px"><PIkon ad="belge" boyut={18} /> Yedek: Dosyadan Ekstre Yükle (CSV / XLSX)</summary>
+          <p class="y-kart__alt" style="margin-top:8px">API otomatik çekim yaptığı için normalde gerekmez; geçmiş dönem tablosu yüklemek isterseniz kullanın.</p>
+          <form class="y-izgara" method="post" enctype="multipart/form-data" style="margin-top:10px">
             <input type="hidden" name="eylem" value="trendyol-al" />
             <label class="fn-dosya-kutu">
               <PIkon ad="indir" boyut={20} />
@@ -857,7 +859,7 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
               <button class="btn btn--cizgi" type="submit">İçe Aktar</button>
             </div>
           </form>
-        </section>
+        </details>
       </aside>
     </div>
   </>}

@@ -71,7 +71,7 @@ async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: num
     const hedef = kanalHedefFiyati(u, k, simdi).hedef;
     const ilan = ilanlar.get(e.kod!);
     if (!ilan) { sonuc.bulunamayan.push(e.kod!); continue; }
-    if (ilan.fiyat !== undefined) okunan.set(urunId, ilan.fiyat);
+    if (ilan.fiyat !== undefined && ilan.fiyat > 0) okunan.set(urunId, ilan.fiyat);
     // Trendyol'da üstü çizili (liste) fiyat da satış fiyatına eşitlenir: başka kanalın indirimi esas alınamaz.
     const listeFarkli = kanal === 'trendyol' && ilan.listeFiyati !== undefined && !yakin(ilan.listeFiyati, hedef);
     if (yakin(ilan.fiyat, hedef) && !listeFarkli) { sonuc.ayni++; continue; }

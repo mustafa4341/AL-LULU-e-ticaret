@@ -1,6 +1,7 @@
 import { z } from 'astro/zod';
 import { bosIseVarsayilan } from './zodUyum';
 import type { Siparis } from './sema';
+import { SATIS_DURUMLARI, type PazaryeriSiparisi } from './pazaryeri';
 import { iadeEdildi, IADE_ISLEMI } from './siparisAkisi';
 
 export const BELGE_TURLERI = {
@@ -18,6 +19,15 @@ export const belgeGecerli = (b: { durum: string }) => b.durum === 'duzenlendi' |
 export const GIDER_KATEGORILERI = {
   urun: 'Ürün alış maliyeti', kargo: 'Kargo', paket: 'Paketleme', komisyon: 'Trendyol komisyonu',
   hizmet: 'Pazaryeri hizmet bedeli', reklam: 'Reklam', iade: 'İade ve hasar', diger: 'Diğer',
+} as const;
+/** Elle gider formunda gösterilen dış giderler (pazaryeri komisyon ve hizmet bedelleri ekstreden otomatik çekilir). */
+export const MANUEL_GIDER_KATEGORILERI = {
+  reklam: 'Reklam ve pazarlama',
+  paket: 'Koli, bant ve paketleme',
+  kargo: 'Web kargo faturası (pazaryeri dışı)',
+  iade: 'Hasar ve zayi',
+  diger: 'Muhasebe, yazılım ve diğer dış giderler',
+  urun: 'Toplu mal alım faturası (isteğe bağlı)',
 } as const;
 export const TRENDYOL_TUTARLARI = {
   brut: 'Brüt satış', indirim: 'Satıcı indirimi', iade: 'İadeler', komisyon: 'Komisyon',
@@ -198,8 +208,8 @@ export const hbKayitGunu = (x: HbKayit) => {
   return t && !Number.isNaN(Date.parse(t)) ? finansGunu(Date.parse(t)) : '';
 };
 /** Özet ve raporlardaki "kalan (tahmini)" */
-export const kalanTutar = (r: { webSatis: number; webIade: number; trendyolBeklenen: number; hepsiburadaBeklenen: number; gider: number }) =>
-  r.webSatis - r.webIade + r.trendyolBeklenen + r.hepsiburadaBeklenen - r.gider;
+export const kalanTutar = (r: { webSatis: number; webIade: number; trendyolBeklenen: number; hepsiburadaBeklenen: number; gider: number; otoUrunMaliyeti?: number }) =>
+  r.webSatis - r.webIade + r.trendyolBeklenen + r.hepsiburadaBeklenen - r.gider - (r.otoUrunMaliyeti ?? 0);
 export function donem(q: URLSearchParams) {
   const bugun = finansGunu();
   const bas = q.get('baslangic') ?? bugun.slice(0, 7) + '-01';
@@ -208,7 +218,7 @@ export function donem(q: URLSearchParams) {
 }
 export const aralikta = (gun: string, bas: string, son: string) => gun >= bas && gun <= son;
 const gunu = (t: string) => Number.isNaN(Date.parse(t)) ? '' : finansGunu(Date.parse(t));
-export function raporla(f: Finans, siparisler: Siparis[], bas: string, son: string) {
+export function raporla(f: Finans, siparisler: Siparis[], bas: string, son: string, pySiparisler: PazaryeriSiparisi[] = []) {
   const satislar: { siparis: Siparis; gun: string }[] = [];
   const iadeler: { siparis: Siparis; gun: string; tutar: number }[] = [];
   for (const s of siparisler) {
@@ -236,10 +246,47 @@ export function raporla(f: Finans, siparisler: Siparis[], bas: string, son: stri
   giderler.forEach((x) => { kategori[x.kategori] += x.tutar; });
   const gider = giderler.reduce((t, x) => t + x.tutar, 0);
   const belge = f.belgeler.filter((x) => aralikta(gunu(x.olusturma), bas, son));
+
+  // Ürün bazlı kayıtlı alış maliyetlerinden satılan ürünlerin otomatik maliyeti (elle toplu alım gideri girilmediyse kullanılır)
+  const iadeNoSet = new Set(iadeler.map((x) => x.siparis.no));
+  let satilanMaliyet = 0;
+  let maliyetiEksikSatis = false;
+  for (const { siparis } of satislar) {
+    if (iadeNoSet.has(siparis.no)) continue;
+    for (const k of siparis.kalemler) {
+      if (k.tip === 'set') {
+        for (const p of k.parcalar) {
+          const m = f.hbUrunler[p.urunId]?.maliyet;
+          if (m !== undefined) satilanMaliyet += m * p.adet * k.adet;
+          else maliyetiEksikSatis = true;
+        }
+      } else {
+        const m = f.hbUrunler[k.id]?.maliyet;
+        if (m !== undefined) satilanMaliyet += m * k.adet;
+        else maliyetiEksikSatis = true;
+      }
+    }
+  }
+  const ekstreSiparisNolar = new Set(
+    trendyol.filter((x) => x.id.startsWith('TY-') && !x.id.startsWith('TY-K-') && x.brut > x.iade).map((x) => x.id.slice(3)),
+  );
+  for (const py of pySiparisler) {
+    if (py.kanal === 'trendyol' && !py.stokDisi && ekstreSiparisNolar.has(py.siparisNo)) {
+      for (const k of py.kalemler) {
+        if (!SATIS_DURUMLARI.has(k.durum)) continue;
+        const m = k.urunId ? f.hbUrunler[k.urunId]?.maliyet : undefined;
+        if (m !== undefined) satilanMaliyet += m * k.adet;
+        else maliyetiEksikSatis = true;
+      }
+    }
+  }
+  const birimMaliyetTanimli = Object.values(f.hbUrunler).some((u) => u.maliyet !== undefined);
+  const otoUrunMaliyeti = kategori.urun === 0 ? satilanMaliyet : 0;
+  const maliyetTamam = kategori.urun > 0 || (!maliyetiEksikSatis && (satilanMaliyet > 0 || birimMaliyetTanimli || (!satislar.length && !trendyol.length && !hepsiburada.length)));
+
   return {
-    satislar, iadeler, giderler, kategori, gider, belge, trendyol, webSatis, webIade, webIndirim, kargo, trendyolBeklenen,
+    satislar, iadeler, giderler, kategori, gider, otoUrunMaliyeti, belge, trendyol, webSatis, webIade, webIndirim, kargo, trendyolBeklenen,
     hepsiburada, hepsiburadaBeklenen,
-    tahmini: kategori.urun > 0 || (!satislar.length && !trendyol.length && !hepsiburada.length)
-      ? webSatis - webIade + trendyolBeklenen + hepsiburadaBeklenen - gider : undefined,
+    tahmini: maliyetTamam ? webSatis - webIade + trendyolBeklenen + hepsiburadaBeklenen - gider - otoUrunMaliyeti : undefined,
   };
 }

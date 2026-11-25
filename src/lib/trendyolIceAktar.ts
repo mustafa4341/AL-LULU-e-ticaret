@@ -319,7 +319,7 @@ export async function kanalFiyatlariniKaydet(satirlar: TyKatalogSatiri[]): Promi
   const ayar = await envanterAyarlariOku();
   const urunler = ayar.kanallar.trendyol.urunler;
   // Yalnız fiyatı değişen ya da 1 saatten eski okunan kayıtlar yazılır (her sayfa açılışında ayar sürümü artmasın)
-  const okunan = satirlar.filter((s) => s.durum === 'bagli' && s.urunId && s.fiyat !== undefined && (() => {
+  const okunan = satirlar.filter((s) => s.durum === 'bagli' && s.urunId && s.fiyat !== undefined && s.fiyat > 0 && (() => {
     const e = urunler[s.urunId!];
     return !e || e.kanalFiyat !== s.fiyat || Date.now() - Date.parse(e.kanalFiyatTarih ?? '') > 3600_000 || !e.kanalFiyatTarih;
   })());

@@ -302,7 +302,7 @@ const fotoTamam = u.gorseller.length > 0;
 
         <div class="y-izgara y-izgara--2">
           <div class="y-alan">
-            <label for="fiyat">Satış Fiyatı (KDV dahil) </label>
+            <label for="fiyat">Web Sitesi Satış Fiyatı (KDV dahil) </label>
             <div class="y-tl">
               <input
                 id="fiyat"
@@ -311,7 +311,7 @@ const fotoTamam = u.gorseller.length > 0;
                 value={u.fiyat || ''}
                 required
                 data-fiyat-girdi
-                data-alan-ipucu={`Satış Fiyatı: Müşterinin ödeyeceği KDV dahil fiyattır. ${formatTL(m.site.kargo.ucretsizEsik)} ve üzeri olduğunda ürüne otomatik 'Kargo Bedava' şeridi eklenir.`}
+                data-alan-ipucu={`Web Satış Fiyatı: Müşterinin sitede ödeyeceği KDV dahil fiyattır (Trendyol ve Hepsiburada fiyatlarını etkilemez). ${formatTL(m.site.kargo.ucretsizEsik)} ve üzeri olduğunda ürüne otomatik 'Kargo Bedava' şeridi eklenir.`}
                 data-hedef-eleman="fiyat"
               />
             </div>
@@ -330,6 +330,19 @@ const fotoTamam = u.gorseller.length > 0;
             <span class="y-ipucu">0 girildiğinde sepet indirimi uygulanmaz.</span>
           </div>
         </div>
+
+        {!yeni && (
+          <div class="y-veri-not" style="margin-top:12px">
+            <PIkon ad="etiket" boyut={18} />
+            <p>
+              <strong>Trendyol ve Hepsiburada fiyatları bu ekrandan bağımsızdır:</strong>
+              Trendyol: <strong>{(envanter.kanallar.trendyol.urunler[u.id]?.ozelFiyat ?? envanter.kanallar.trendyol.urunler[u.id]?.kanalFiyat)?.toLocaleString('tr-TR') ?? 'Tanımsız'} TL</strong> ·
+              Hepsiburada: <strong>{(envanter.kanallar.hepsiburada.urunler[u.id]?.ozelFiyat ?? envanter.kanallar.hepsiburada.urunler[u.id]?.kanalFiyat)?.toLocaleString('tr-TR') ?? 'Tanımsız'} TL</strong>.
+              <a class="y-link" href={'/yonetim/fiyatlar#f-' + encodeURIComponent(u.id)}>Fiyat ve Kâr Tablosunda düzenle</a> ·
+              <a class="y-link" href={'/yonetim/siparisler/trendyol-urunler?urun=' + encodeURIComponent(u.id)}>Trendyol ilan / taslak ekranı</a>
+            </p>
+          </div>
+        )}
 
         <div class="y-kampanya-panel" style="margin-top:14px;padding:14px;border-radius:12px;border:1.5px solid var(--line);background:#FAF9F5">
           <label class="y-secim" style="border:0;padding:0;background:transparent">

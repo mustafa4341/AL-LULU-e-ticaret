@@ -261,6 +261,10 @@ const tutar = (v: unknown) => {
   const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v.replace(',', '.')) : NaN;
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
 };
+const pozitifTutar = (v: unknown) => {
+  const t = tutar(v);
+  return t !== undefined && t > 0 ? t : undefined;
+};
 
 export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: AbortSignal): Promise<Map<string, KanalIlani>> {
   const a = baglanti(kanal);
@@ -278,7 +282,7 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
           // Belge (filterApprovedProductsInventoryAndPrice): salePrice/listPrice varyantta; eski yanıtta price nesnesinde.
           const fiyat = nesne(varyant.price);
           if (kod && stok !== undefined) sonuc.set(kod, {
-            stok, fiyat: tutar(varyant.salePrice) ?? tutar(fiyat.salePrice), listeFiyati: tutar(varyant.listPrice) ?? tutar(fiyat.listPrice),
+            stok, fiyat: pozitifTutar(varyant.salePrice) ?? pozitifTutar(fiyat.salePrice), listeFiyati: pozitifTutar(varyant.listPrice) ?? pozitifTutar(fiyat.listPrice),
           });
         }
       }
@@ -479,7 +483,7 @@ export async function trendyolTumIlanlar(sinyal: AbortSignal): Promise<TrendyolI
         const fiyat = nesne(v.price);
         sonuc.set(barkod, {
           barkod, stokKodu: metin(v.stockCode), anaKod: metin(urun.productMainId),
-          fiyat: tutar(v.salePrice) ?? tutar(fiyat.salePrice), listeFiyati: tutar(v.listPrice) ?? tutar(fiyat.listPrice), stok: tamsayi(v.quantity),
+          fiyat: pozitifTutar(v.salePrice) ?? pozitifTutar(fiyat.salePrice), listeFiyati: pozitifTutar(v.listPrice) ?? pozitifTutar(fiyat.listPrice), stok: tamsayi(v.quantity),
         });
       }
     }

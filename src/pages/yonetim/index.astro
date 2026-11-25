@@ -15,8 +15,8 @@ import { panelIsleriniOku } from '../../lib/panelIsleri';
 
 const { magaza, siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, isler, pazarHazirlanacak } = await panelIsleriniOku();
 const bugun = finansGunu();
-const bugunRapor = raporla(finans, siparisler, bugun, bugun);
-const ayRapor = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun);
+const bugunRapor = raporla(finans, siparisler, bugun, bugun, pazar);
+const ayRapor = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun, pazar);
 const ayKalan = kalanTutar(ayRapor);
 
 const ayOzeti = kanalToplamlari(siparisler, pazar, bugun.slice(0, 7) + '-01', bugun);
@@ -61,8 +61,8 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
 ---
 <Yonetim baslik="İş Merkezi" altBaslik={`${tarihBaslik} · Siparişler, stok, kanallar ve satışlar tek ekranda.`} aktif="ozet">
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyat ve Kâr Tablosu</a>
     <a class="btn btn--cizgi" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Servis Tanılama</a>
-    <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="arti" boyut={18} />Yeni ürün</a>
     <a class="btn btn--sepet" href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={18} />Bugünkü işler</a>
   </div>
 
@@ -149,12 +149,12 @@ const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
   <section class="y-kart" aria-label="Hızlı işlemler">
     <div class="y-kart__bas"><h2><PIkon ad="simsek" /> Hızlı işlemler</h2></div>
     <div class="y-hizli-islemler">
-      <a class="btn btn--sepet" href="/yonetim/siparisler?durum=islem"><PIkon ad="sepet" boyut={19} />Siparişleri işle</a>
-      <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="kutu" boyut={19} />Yeni ürün</a>
-      <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar"><PIkon ad="yenile" boyut={19} />Stok ve kanal eşitleme</a>
+      <a class="btn btn--sepet" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={19} />Fiyat ve kâr tablosu</a>
+      <a class="btn btn--cizgi" href="/yonetim/siparisler?durum=islem"><PIkon ad="sepet" boyut={19} />Siparişleri işle</a>
+      <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="zincir" boyut={19} />Trendyol ilanları</a>
+      <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={19} />Trendyol’a ürün gönder</a>
       <a class="btn btn--cizgi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" boyut={19} />Fatura kaydı</a>
-      <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="etiket" boyut={19} />Trendyol ürünleri</a>
-      <a class="btn btn--cizgi" href="/yonetim/finans?sekme=giderler&amp;yeni=diger"><PIkon ad="cuzdan" boyut={19} />Gider ekle</a>
+      <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="kutu" boyut={19} />Yeni ürün</a>
       <a class="btn btn--cizgi" href="/yonetim/finans?sekme=raporlar"><PIkon ad="indir" boyut={19} />Muhasebeci raporu</a>
     </div>
   </section>

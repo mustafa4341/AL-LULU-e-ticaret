@@ -22,9 +22,9 @@ export type KarRaporu = { satirlar: KarSatiri[]; toplam: KarSatiri; siparisDisi:
 const KDV_KESINTI = 1.2; // kargo kesinti faturaları %20 KDV dahil gelir
 
 /**
- * `komisyonOrani`: ürünün Trendyol ilanındaki komisyon oranı (0,13 = %13). Ekstresi gelmemiş siparişte ortalama yerine bu kullanılır.
- * Not (25.11.2026): ekstredeki commissionAmount KDV HARİÇTİR (belge örneği: 449,99 × %15 = 67,4985); KDV'si komisyon faturasında
- * ayrıca kesilir ve indirilecek KDV olarak geri alınır. Eskiden 1,2'ye bölünüp komisyon olduğundan düşük sayılıyordu.
+ * `komisyonOrani`: ürünün Trendyol ilanındaki komisyon oranı (0,13 = %13, KDV dahil). Ekstresi gelmemiş siparişte ortalama yerine bu kullanılır.
+ * Not: Trendyol'da komisyon KDV DAHİL kesilir (doğrulama: TY-11861062951 satış 1.100,00 TL − komisyon 31,90 TL = hakediş 1.068,10 TL);
+ * komisyon mutabakat faturası ile gelen %20 KDV indirilecek KDV olduğu için net kâr hesabında 1,2'ye bölünür.
  */
 export function trendyolKarlilik(
   py: PazaryeriSiparisi[], f: Pick<Finans, 'trendyol' | 'hbUrunler'>, m: Pick<Magaza, 'urunler'>, gun: number,
@@ -79,7 +79,7 @@ export function trendyolKarlilik(
       r.maliyet = birimMaliyet * r.adet;
       const kdv = kdvOrani(r.urunId);
       const satisKdvHaric = (r.brut - r.indirim - r.iade) / (1 + kdv / 100);
-      const kesintiKdvHaric = r.komisyon + r.kargo / KDV_KESINTI + r.diger;
+      const kesintiKdvHaric = (r.komisyon + r.kargo) / KDV_KESINTI + r.diger;
       r.netKar = Math.round(satisKdvHaric - kesintiKdvHaric - r.maliyet);
       r.marj = satisKdvHaric > 0 ? r.netKar / satisKdvHaric : undefined;
     }

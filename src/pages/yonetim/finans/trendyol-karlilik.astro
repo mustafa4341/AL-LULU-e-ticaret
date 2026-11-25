@@ -30,11 +30,15 @@ const birimSatirlar = magaza.urunler
   .filter((u) => tyUrunler[u.id]?.kod && tyUrunler[u.id]?.satista !== false)
   .map((u) => {
     const e = tyUrunler[u.id]!;
-    const fiyatTL = e.kanalFiyat && e.kanalFiyat > 0 ? e.kanalFiyat : kanalHedefFiyati(u, ayar?.kanallar.trendyol).hedef;
+    const fiyatTL = e.kanalFiyat && e.kanalFiyat > 0
+      ? e.kanalFiyat
+      : e.ozelFiyat && e.ozelFiyat > 0
+        ? e.ozelFiyat
+        : kanalHedefFiyati(u, ayar?.kanallar.trendyol).hedef;
     const fiyat = Math.round(fiyatTL * 100);
     const hb = finans?.hbUrunler[u.id];
     const girdi = e.komisyonBp === undefined ? undefined : {
-      oranBp: e.komisyonBp, urunKdv: kdv(u.id), desi: ayar?.kanallar.trendyol.ilanlar[u.id]?.desi ?? hb?.desi ?? 3, kargoFirmasi,
+      oranBp: e.komisyonBp, komisyonKdvDahil: true, urunKdv: kdv(u.id), desi: ayar?.kanallar.trendyol.ilanlar[u.id]?.desi ?? hb?.desi ?? 3, kargoFirmasi,
       islemBedeli: 0, hizmetBedeli: 0, stopajBp: 100, maliyet: hb?.maliyet,
     };
     const h = girdi ? satisHesabi({ ...girdi, fiyat }) : undefined;
@@ -81,7 +85,7 @@ const maliyetsiz = rapor?.satirlar.filter((r) => r.urunId && r.maliyet === undef
 
     {(rapor.ekstresiz > 0 || maliyetsiz > 0) && <div class="y-veri-not" role="status"><PIkon ad="bilgi" boyut={18} /><p>
       {rapor.ekstresiz > 0 && <>{rapor.ekstresiz} siparişin Trendyol ekstresi henüz gelmedi; komisyonu {rapor.ortalamaKomisyon !== undefined ? `ortalama ${yuzde(rapor.ortalamaKomisyon)} oranla tahmin edildi` : 'henüz tahmin edilemiyor (ilk ekstre bekleniyor)'} (“tahmini” işaretli). Ekstre her gün otomatik çekilir. </>}
-      {maliyetsiz > 0 && <>{maliyetsiz} ürünün alış maliyeti girilmemiş; net kâr için <a class="y-link" href="/yonetim/finans/hepsiburada">Finans › Hepsiburada kâr hesaplayıcısı</a>nda ürünü seçip “Desi ve maliyeti bu ürün için kaydet” deyin (maliyet tüm kanallarda kullanılır).</>}
+      {maliyetsiz > 0 && <>{maliyetsiz} ürünün alış maliyeti girilmemiş; net kâr için <a class="y-link" href="/yonetim/fiyatlar">Fiyat, Maliyet ve Kâr Tablosu</a>ndan ürünün alış maliyetini kaydedin (tüm kanallarda ortak kullanılır).</>}
     </p></div>}
 
     <section class="y-kart">

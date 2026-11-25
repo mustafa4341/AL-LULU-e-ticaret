@@ -80,7 +80,9 @@ export const CEZALAR = {
 
 export type HesapGirdisi = {
   fiyat: number;          // müşterinin ödediği, KDV dahil
-  oranBp: number;         // komisyon oranı
+  oranBp: number;         // komisyon oranı (1800 = %18)
+  /** Trendyol komisyonu KDV dahildir (true); Hepsiburada komisyonu +KDV hesaplanır (false, varsayılan). */
+  komisyonKdvDahil?: boolean;
   urunKdv: number;        // ürünün KDV oranı (%)
   desi: number;
   kargoFirmasi: string;
@@ -95,11 +97,13 @@ const kdvEkle = (kurus: number) => Math.round(kurus * HIZMET_KDV / 100);
 export function satisHesabi(g: HesapGirdisi) {
   const kdvHaricSatis = Math.round(g.fiyat * 100 / (100 + g.urunKdv));
   const satisKdv = g.fiyat - kdvHaricSatis;
-  const komisyon = Math.round(g.fiyat * g.oranBp / 10_000);
+  const hamKomisyon = Math.round(g.fiyat * g.oranBp / 10_000);
+  const komisyonNet = g.komisyonKdvDahil ? Math.round(hamKomisyon * 100 / (100 + HIZMET_KDV)) : hamKomisyon;
+  const komisyonKdv = g.komisyonKdvDahil ? hamKomisyon - komisyonNet : kdvEkle(komisyonNet);
   const kargo = kargoUcreti(g.kargoFirmasi, g.desi);
   const kargoNet = kargo ?? 0;
   const kalemler = [
-    { ad: 'Komisyon', net: komisyon, kdv: kdvEkle(komisyon) },
+    { ad: 'Komisyon', net: komisyonNet, kdv: komisyonKdv },
     { ad: 'Kargo', net: kargoNet, kdv: kdvEkle(kargoNet) },
     { ad: 'İşlem bedeli', net: g.islemBedeli, kdv: kdvEkle(g.islemBedeli) },
     { ad: 'Hizmet bedeli', net: g.hizmetBedeli, kdv: kdvEkle(g.hizmetBedeli) },
@@ -130,7 +134,10 @@ export function hedefFiyat(g: Omit<HesapGirdisi, 'fiyat'>, hedefKar: number): nu
   const kargo = kargoUcreti(g.kargoFirmasi, g.desi);
   if (kargo === undefined) return undefined;
   const pay = hedefKar + kargo + g.islemBedeli + g.hizmetBedeli + g.maliyet;
-  const payda = 100 / (100 + g.urunKdv) - g.oranBp / 10_000;
+  const komisyonKdvHaricOran = g.komisyonKdvDahil
+    ? (g.oranBp / 10_000) * (100 / (100 + HIZMET_KDV))
+    : g.oranBp / 10_000;
+  const payda = 100 / (100 + g.urunKdv) - komisyonKdvHaricOran;
   if (payda <= 0) return undefined;
   let fiyat = Math.ceil(pay / payda / 100) * 100;
   for (let i = 0; i < 5 && (satisHesabi({ ...g, fiyat }).netKar ?? -1) < hedefKar; i++) fiyat += 100;

@@ -167,7 +167,8 @@ export async function tyOnayliUrun(barkod: string): Promise<{ stok?: number; fiy
     for (const v of dizi(icerik.variants)) {
       if (yazi(v.barcode) !== barkod) continue;
       const fiyat = nesne(v.price);
-      return { stok: tam(v.quantity), fiyat: typeof fiyat.salePrice === 'number' ? fiyat.salePrice : typeof v.salePrice === 'number' ? v.salePrice : undefined };
+      const satisFiyati = [fiyat.salePrice, v.salePrice].find((x): x is number => typeof x === 'number' && Number.isFinite(x) && x > 0);
+      return { stok: tam(v.quantity), fiyat: satisFiyati };
     }
   }
   return undefined;
@@ -209,6 +210,10 @@ function icerikSatirlari(c: Ham): TyIcerik[] {
     const n = typeof x === 'number' ? x : typeof x === 'string' && x.trim() ? Number(x.replace(',', '.')) : NaN;
     return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
   };
+  const pozitifPara = (x: unknown) => {
+    const p = para(x);
+    return p !== undefined && p > 0 ? p : undefined;
+  };
   const ortak = {
     anaKod: yazi(c.productMainId), baslik: yazi(c.title) ?? 'Ürün', aciklama: yazi(c.description),
     marka: markaId && markaAd ? { id: markaId, ad: markaAd } : markaAd ? { id: 0, ad: markaAd } : undefined,
@@ -226,8 +231,8 @@ function icerikSatirlari(c: Ham): TyIcerik[] {
     return [{
       ...ortak, ozellikler: [...ortak.ozellikler, ...varyantOz].slice(0, 40),
       barkod, stokKodu: yazi(v.stockCode) ?? yazi(c.stockCode),
-      fiyat: para(v.salePrice) ?? para(fiyat.salePrice) ?? para(c.salePrice),
-      listeFiyati: para(v.listPrice) ?? para(fiyat.listPrice) ?? para(c.listPrice),
+      fiyat: pozitifPara(v.salePrice) ?? pozitifPara(fiyat.salePrice) ?? pozitifPara(c.salePrice),
+      listeFiyati: pozitifPara(v.listPrice) ?? pozitifPara(fiyat.listPrice) ?? pozitifPara(c.listPrice),
       stok: tam(v.quantity) ?? tam(c.quantity),
       desi: para(v.dimensionalWeight) ?? para(c.dimensionalWeight),
       kdv: tam(v.vatRate) ?? tam(c.vatRate),

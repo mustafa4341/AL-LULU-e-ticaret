@@ -153,10 +153,11 @@ const ciftGruplari = (() => {
 <Yonetim baslik="Trendyol İlanları" altBaslik="Trendyol'daki ilanlarınızı siteye bağlayın veya sitede olmayanları taslak ürün olarak çekin." aktif="siparisler" basari={q.get('ok')} hatalar={hatalar}>
   <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/siparisler/kanallar#trendyol"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
-    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Siteden Trendyol’a gönder</a>
-    <a class="btn btn--cizgi" href={yol}><PIkon ad="yenile" boyut={18} />Listeyi yenile</a>
-    {apiHazir && <a class="btn btn--cizgi" href={yol + '?buybox=1#liste'} data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Buybox durumunu getir</a>}
+    <a class="btn btn--sepet" href="/yonetim/fiyatlar?gorunum=trendyol"><PIkon ad="etiket" boyut={18} />Trendyol Fiyat ve Kâr Tablosu</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Siteden Trendyol’a Gönder</a>
+    <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru">İade ve Sorular</a>
+    <a class="btn btn--cizgi" href={yol}><PIkon ad="yenile" boyut={18} />Yenile</a>
+    {apiHazir && <a class="btn btn--cizgi" href={yol + '?buybox=1#liste'} data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Buybox</a>}
   </div>
 
   {!apiHazir && <div class="y-veri-not" role="status"><PIkon ad="bilgi" boyut={18} /><p><strong>Bu ekran canlı sitede çalışır.</strong> Trendyol anahtarları yalnız canlı sunucuda (Vercel) tanımlı; bu bilgisayarda Trendyol’a bağlanılamaz.</p></div>}
