@@ -447,7 +447,7 @@ export function paytrSonuclandir(bildirim: NonNullable<ReturnType<typeof import(
     const s = liste.find((x) => x.paytr?.ref === bildirim.ref);
     const p = s?.paytr;
     if (!s || !p) return { durum: 'bulunamadi' } as const;
-    const kurus = s.toplam * 100;
+    const kurus = Math.round(s.toplam * 100); // lib/paytr.ts ile aynı yuvarlama
     if ((bildirim.test && !p.test) || (bildirim.basarili &&
       // payment_amount sipariş tutarıyla birebir aynı olmalı; total_amount taksitli ödemede vade farkıyla büyük olabilir
       // (PayTR belgesi). Eksik tahsilat yine reddedilir (denetim AUD-033).

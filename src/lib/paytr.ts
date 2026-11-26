@@ -36,19 +36,21 @@ export async function paytrFormUrl(a: PaytrAyari, siparis: Siparis, ip: string):
   const sepet: [string, string, number][] = siparis.kalemler.map((k) => [k.ad, (k.toplam / k.adet).toFixed(2), k.adet]);
   if (siparis.kargo) sepet.push(['Kargo', siparis.kargo.toFixed(2), 1]);
   const sepetKod = Buffer.from(JSON.stringify(sepet)).toString('base64');
-  const kurus = String(siparis.toplam * 100);
+  const kurus = String(Math.round(siparis.toplam * 100)); // 19.99*100 = 1998.9999… olmasın
   const test = odeme.test ? '1' : '0';
+  const taksitYok = TAKSIT_ACIK ? '0' : '1';
+  const enCokTaksit = '0';
   const donus = new URL('/odeme/sonuc', a.origin);
   donus.searchParams.set('ref', odeme.ref);
   const teslimat = siparis.teslimat;
   const govde = new URLSearchParams({
     merchant_id: a.id, user_ip: kullaniciIp, merchant_oid: odeme.ref, email: eposta,
-    payment_amount: kurus, user_basket: sepetKod, no_installment: TAKSIT_ACIK ? '0' : '1', max_installment: '0',
+    payment_amount: kurus, user_basket: sepetKod, no_installment: taksitYok, max_installment: enCokTaksit,
     currency: 'TL', test_mode: test, debug_on: '0', timeout_limit: String(PAYTR_SURE_DK), lang: 'tr',
     user_name: Array.from(`${siparis.musteri.ad} ${siparis.musteri.soyad}`).slice(0, 60).join(''),
     user_address: Array.from(`${teslimat.il} / ${teslimat.ilce}, ${teslimat.adres}`).slice(0, 400).join(''),
     user_phone: siparis.musteri.tel, merchant_ok_url: donus.href, merchant_fail_url: donus.href,
-    paytr_token: imza(a.key, a.id + kullaniciIp + odeme.ref + eposta + kurus + sepetKod + '10TL' + test + a.salt),
+    paytr_token: imza(a.key, a.id + kullaniciIp + odeme.ref + eposta + kurus + sepetKod + taksitYok + enCokTaksit + 'TL' + test + a.salt),
   });
   const yanit = await fetch(`${PAYTR_ORIGIN}/odeme/api/get-token`, {
     method: 'POST', body: govde, redirect: 'error', signal: AbortSignal.timeout(10_000),
