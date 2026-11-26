@@ -115,7 +115,8 @@ for (const alan of document.querySelectorAll<HTMLElement>('[data-panel-secim]'))
     form.dispatchEvent(new Event('input', { bubbles: true }));
     return true;
   };
-  const sec = (id?: string) => {
+  const sec = (id?: string, adresGuncelle = false) => {
+    const aktifKayit = kayitlar.find((k) => k.id === id);
     for (const kayit of kayitlar) kayit.hidden = kayit.id !== id;
     for (const dugme of dugmeler) {
       const secili = dugme.dataset.panelSec === id;
@@ -124,6 +125,13 @@ for (const alan of document.querySelectorAll<HTMLElement>('[data-panel-secim]'))
     }
     if (bos) bos.hidden = !!id;
     alan.classList.toggle('has-secim', !!id);
+    if (adresGuncelle && alan.classList.contains('sm-calisma-duzeni')) {
+      const u = new URL(location.href);
+      u.searchParams.delete('hizli');
+      if (aktifKayit?.dataset.siparisAnahtar) u.searchParams.set('sec', aktifKayit.dataset.siparisAnahtar);
+      else u.searchParams.delete('sec');
+      history.replaceState(null, '', u.pathname + u.search + u.hash);
+    }
   };
   const ilk = kayitlar.find((x) => !x.hidden);
   sec(ilk?.id);
@@ -136,20 +144,62 @@ for (const alan of document.querySelectorAll<HTMLElement>('[data-panel-secim]'))
       if (!kayit) return;
       e.preventDefault();
       if (!kaydiBirak()) return;
-      sec(kayit.hidden ? kayit.id : undefined);
+      sec(kayit.hidden ? kayit.id : undefined, true);
       if (!kayit.hidden) {
         if (matchMedia('(max-width: 1199px)').matches) kayit.scrollIntoView({ block: 'start' });
         kayit.querySelector<HTMLElement>('[data-panel-kapat]')?.focus({ preventScroll: true });
       }
     });
   }
-  for (const kayit of kayitlar) kayit.querySelector('[data-panel-kapat]')?.addEventListener('click', (e) => {
-    e.preventDefault();
-    if (!kaydiBirak()) return;
-    sec();
-    dugmeler.find((x) => x.dataset.panelSec === kayit.id)?.focus();
-  });
+  for (const kayit of kayitlar) {
+    kayit.querySelector('[data-panel-kapat]')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (!kaydiBirak()) return;
+      sec(undefined, true);
+      dugmeler.find((x) => x.dataset.panelSec === kayit.id)?.focus();
+    });
+    kayit.querySelectorAll<HTMLButtonElement>('[data-panel-gecis]').forEach((gecis) => {
+      gecis.addEventListener('click', () => {
+        const hedefId = gecis.dataset.panelGecis;
+        if (!hedefId || !kaydiBirak()) return;
+        sec(hedefId, true);
+      });
+    });
+    const sekmeDugmeleri = [...kayit.querySelectorAll<HTMLButtonElement>('[data-sp-sekme]')];
+    const sekmeIcerikleri = [...kayit.querySelectorAll<HTMLElement>('[data-sp-icerik]')];
+    const sekmeAc = (ad: string) => {
+      for (const b of sekmeDugmeleri) b.setAttribute('aria-selected', String(b.dataset.spSekme === ad));
+      for (const c of sekmeIcerikleri) c.hidden = c.dataset.spIcerik !== ad;
+    };
+    for (const b of sekmeDugmeleri) {
+      b.addEventListener('click', () => { if (b.dataset.spSekme) sekmeAc(b.dataset.spSekme); });
+    }
+    kayit.querySelectorAll<HTMLButtonElement>('[data-sp-odak]').forEach((odakBtn) => {
+      odakBtn.addEventListener('click', () => {
+        if (odakBtn.dataset.spHedefSekme) sekmeAc(odakBtn.dataset.spHedefSekme);
+        const kutu = odakBtn.dataset.spOdak ? document.getElementById(odakBtn.dataset.spOdak) : null;
+        if (kutu) {
+          kutu.classList.add('is-vurgulu');
+          kutu.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          kutu.querySelector<HTMLElement>('input:not([type="hidden"]), select, button')?.focus({ preventScroll: true });
+          window.setTimeout(() => kutu.classList.remove('is-vurgulu'), 1800);
+        }
+      });
+    });
+  }
 }
+
+/* ---------- Çift tıklama koruması: tek-gönderimli işlem formları ---------- */
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  if (!(form instanceof HTMLFormElement) || !form.hasAttribute('data-tek-gonder')) return;
+  if (form.dataset.gonderiliyor === '1') { e.preventDefault(); return; }
+  form.dataset.gonderiliyor = '1';
+  const gonderen = (e as SubmitEvent).submitter;
+  if (gonderen instanceof HTMLButtonElement) {
+    window.setTimeout(() => { gonderen.disabled = true; }, 0);
+  }
+});
 
 /* ---------- Sipariş listesi: toplu işlem çubuğu (yalnızca seçim yapınca görünür) ---------- */
 const toplu = document.querySelector<HTMLElement>('[data-y-toplu]');

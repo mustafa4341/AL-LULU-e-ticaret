@@ -1,519 +1,532 @@
 ---
 import Yonetim from '../../../layouts/Yonetim.astro';
 import Ikon from '../../../components/Ikon.astro';
-import { magazaOku, siparisleriOku } from '../../../lib/depo';
-import { finansOku } from '../../../lib/finansDepo';
-import { BELGE_TURLERI, belgeGecerli, finansGunu, gecerliGun } from '../../../lib/finans';
-import { gonderilecek, odemeEtiketi, onayliSatis, yTarih } from '../../../lib/yonetimRapor';
-import { gonderildi, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../../lib/siparisAkisi';
-import { siparisKargoBaglantisi } from '../../../lib/kargoTakip';
-import { formatTL } from '../../../lib/fiyat';
-import type { Siparis } from '../../../lib/sema';
-import { KANALLAR, KANAL_LISTESI, PY_DURUM_ADLARI, PY_DURUM_RENK, kanalMi, kurusTL, type PazaryeriSiparisi } from '../../../lib/pazaryeri';
-import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
-import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
-import { pazaryeriDurumu } from '../../../components/yonetim/pazaryeriGorunumu';
-import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
-import KanalOzeti from '../../../components/yonetim/KanalOzeti.astro';
-import { kanalToplamlari } from '../../../lib/kanalOzeti';
-import SiparisSonraki from '../../../components/yonetim/SiparisSonraki.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
+import SiparisCalismaPaneli from '../../../components/yonetim/SiparisCalismaPaneli.astro';
 import type { PanelIkonAdi } from '../../../components/yonetim/panelIkon';
+import { magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../lib/depo';
+import { BELGE_TURLERI, finansGunu, gecerliGun } from '../../../lib/finans';
+import { finansOku } from '../../../lib/finansDepo';
+import { KANALLAR, KANAL_LISTESI, kanalMi, kurusTL } from '../../../lib/pazaryeri';
+import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
+import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
+import {
+  siparisMerkeziOlustur,
+  siparisSekmesiCoz,
+  siparisSekmeyeUyar,
+  type SiparisSekmesi,
+} from '../../../lib/siparisMerkezi';
+import { yTarih } from '../../../lib/yonetimRapor';
 
-/* Adres boşsa son seçilen filtre (kanal, sıralama) çerezden okunur. Eskiden sayfa açıldıktan sonra tarayıcı
-   filtreli adrese ikinci kez gidiyordu; artık tek açılışta doğru liste gelir. */
-const p = new URLSearchParams(!Astro.url.search ? (Astro.cookies.get('y-filtre-siparis')?.value ?? '').slice(0, 300) : Astro.url.search);
+/* Adres boşsa son seçilen kanal ve sıralama çerezden okunur; varsayılan sekme her zaman "İşlem Bekleyen"dir. */
+const cerezSorgusu = !Astro.url.search ? (Astro.cookies.get('y-filtre-siparis')?.value ?? '').slice(0, 300) : Astro.url.search;
+const p = new URLSearchParams(cerezSorgusu);
 const q = (p.get('q') ?? '').trim();
-const sira = p.get('sira') ?? 'yeni';
+const sira = p.get('sira') ?? 'oncelik';
 const bas = p.get('baslangic') ?? '';
 const son = p.get('bitis') ?? '';
 const secilenKanal = p.get('kanal');
 const kanal = secilenKanal === 'web' || kanalMi(secilenKanal) ? secilenKanal : 'tumu';
-const aranan = q.toLocaleLowerCase('tr');
-const [tum, finans, magaza, pazaryeri, envanter] = await Promise.all([
-  siparisleriOku(), finansOku(), magazaOku(), pazaryeriSiparisleriOku().catch(() => undefined), envanterAyarlariOku().catch(() => undefined),
+const secParam = Astro.url.searchParams.get('sec') ?? '';
+const hizliParam = Astro.url.searchParams.get('hizli');
+
+const [webSiparisleri, finans, magaza, pazaryeri, envanter] = await Promise.all([
+  siparisleriOku(),
+  finansOku(),
+  magazaOku(),
+  pazaryeriSiparisleriOku().catch(() => undefined),
+  envanterAyarlariOku().catch(() => undefined),
 ]);
-const { site } = magaza;
-const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
-const urunKimlikleri = new Set(urunler.keys());
+
 const simdi = Date.now();
+const ayrilan = webAyrilanAdetleri(webSiparisleri, simdi, magaza.paytrStokIslemleri);
+const urunSecenekleri = [...magaza.urunler].sort((a, b) => a.kisaAd.localeCompare(b.kisaAd, 'tr'));
+const kullanilabilirStok = (u: { id: string; stok: number }) => Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0));
+
 const sorunluKanallar = envanter ? KANAL_LISTESI.filter((k) => {
   const a = envanter.kanallar[k];
   return a.sonApiHata || a.sonStokHata || (pazaryeriApiDurumu(k) === 'canli' && a.stokBaslangic && (!a.sonOtomatikApi || simdi - Date.parse(a.sonOtomatikApi) > 30 * 60_000));
 }) : [];
-/* Listede siparişin içeriği açıkça görünsün: ilk ürünün fotoğrafı + "1 × Ürün adı, 2 × ..." */
-function urunOzeti(s: Siparis) {
-  const ilk = s.kalemler[0];
-  const gorsel = !ilk ? undefined : ilk.tip === 'set'
-    ? magaza.setler.find((x) => x.id === ilk.id)?.gorsel?.src ?? urunler.get(ilk.parcalar[0]?.urunId ?? '')?.gorseller[0]?.src
-    : urunler.get(ilk.id)?.gorseller[0]?.src;
-  const metin = s.kalemler.map((k) => `${k.adet} × ${k.tip === 'set' ? 'Set: ' : ''}${k.ad}`).join(', ');
-  return { gorsel, metin };
-}
-const gercek = tum.filter((s) => !s.paytr?.test);
-const pazaryeriDetayi = (id: string) => '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(id);
 
-/* Barkod okuyucu / numara ile doğrudan açma ("AL" ve tire yazılmasa da bulunur) */
-const numara = (v: string) => { const m = /^(?:AL)?(\d{6})-?(\d{4})$/.exec(v.toUpperCase().replace(/[\s#]/g, '')); return m ? `AL${m[1]}-${m[2]}` : undefined; };
+const tumKayitlar = siparisMerkeziOlustur({
+  webSiparisleri,
+  pazaryeriSiparisleri: pazaryeri ?? [],
+  magaza,
+  finans,
+  envanter,
+  simdi,
+});
+
+/* Barkod okuyucu / sipariş numarası ile doğrudan çalışma panelinde açma */
+const numaraCoz = (v: string) => {
+  const m = /^(?:AL)?(\d{6})-?(\d{4})$/.exec(v.toUpperCase().replace(/[\s#]/g, ''));
+  return m ? `AL${m[1]}-${m[2]}` : undefined;
+};
 const tarama = p.get('tara') === '1';
 let taramaUyarisi = 'Bu numarayla eşleşen sipariş bulunamadı.';
 if (tarama && q) {
-  const no = numara(q);
-  const secim = no && tum.find((s) => s.no === no);
-  if (secim) return Astro.redirect('/yonetim/siparisler/' + secim.no);
-  const eslesenler = pazaryeri?.filter((s) => [s.siparisNo, s.paketNo, s.kargoTakip].includes(q)) ?? [];
-  if (eslesenler.length === 1) return Astro.redirect(pazaryeriDetayi(eslesenler[0]!.id));
-  if (eslesenler.length > 1) taramaUyarisi = 'Bu numara birden çok siparişle eşleşiyor. Listeden kanalı ve paketi seçin.';
+  const webNo = numaraCoz(q);
+  const eslesenWeb = webNo && tumKayitlar.find((x) => x.kanal === 'web' && x.no === webNo);
+  if (eslesenWeb) {
+    return Astro.redirect(`/yonetim/siparisler?durum=tumu&sec=${encodeURIComponent(eslesenWeb.anahtar)}`, 303);
+  }
+  const eslesenPy = tumKayitlar.filter((x) => x.kanal !== 'web' && [x.no, x.paketNo, x.kargo.takipNo].includes(q));
+  if (eslesenPy.length === 1) {
+    return Astro.redirect(`/yonetim/siparisler?durum=tumu&sec=${encodeURIComponent(eslesenPy[0]!.anahtar)}`, 303);
+  }
+  if (eslesenPy.length > 1) taramaUyarisi = 'Bu numara birden çok paketle eşleşiyor; listeden paketi seçin.';
   else if (!pazaryeri) taramaUyarisi = 'Web siparişi bulunamadı ve pazaryeri siparişleri okunamadı.';
 }
 
-const belgesiVar = (no: string) => finans.belgeler.some((b) => b.siparisNo === no && belgeGecerli(b));
-type Durum = ReturnType<typeof pazaryeriDurumu>;
-const FILTRELER: [string, string, (s: Siparis) => boolean, (s: PazaryeriSiparisi, d: Durum) => boolean][] = [
-  ['tumu', 'Tümü', () => true, () => true],
-  ['islem', 'İşlem bekleyen', (s) => gonderilecek(s) || (s.durum === 'odeme-bekliyor' && !s.paytr) || !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip),
-    (_, d) => d.hazirlanacak || d.hazirlaniyor || d.uyari.length > 0],
-  // Kenar menü rozeti ve Genel Bakış'taki "Sipariş kuyruğu" sayısı bu tanımla aynı (denetim AUD-029)
-  ['kuyruk', 'Hazırlanacak + kargolanacak', (s) => gonderilecek(s) && !s.paytr?.test, (s, d) => !s.stokDisi && (d.hazirlanacak || d.hazirlaniyor)],
-  ['kontrol', 'Kontrol gerekli', (s) => !!s.paytr?.stokEksik || (s.durum === 'iptal' && !!s.kargoTakip), (_, d) => d.uyari.length > 0],
-  ['odendi', 'Hazırlanacak', (s) => s.durum === 'odendi', (_, d) => d.hazirlanacak],
-  ['hazirlaniyor', 'Kargoya verilecek', (s) => s.durum === 'hazirlaniyor', (_, d) => d.hazirlaniyor],
-  ['kargoda', 'Kargoda', (s) => s.durum === 'kargoda' && !iadeEdildi(s), (s) => s.kalemler.some((k) => k.durum === 'kargoda')],
-  ['belgesiz', 'Belgesi eksik · Web', (s) => onayliSatis(s) && !belgesiVar(s.no), () => false],
-  ['odeme-bekliyor', 'Ödeme bekleyen', (s) => s.durum === 'odeme-bekliyor', (s) => s.kalemler.some((k) => k.durum === 'onay-bekliyor')],
-  ['teslim-edildi', 'Teslim edilen', (s) => s.durum === 'teslim-edildi' && !iadeEdildi(s), (s) => s.kalemler.some((k) => k.durum === 'teslim-edildi')],
-  ['iptal', 'İptal / İade', (s) => s.durum === 'iptal' || iadeEdildi(s), (s) => s.kalemler.some((k) => ['iptal', 'iade', 'teslim-edilemedi', 'bolundu'].includes(k.durum))],
-];
-const FILTRE_IKONU: Record<string, PanelIkonAdi> = {
-  tumu: 'liste', islem: 'simsek', kontrol: 'uyari', odendi: 'kutu', hazirlaniyor: 'kargo', kargoda: 'kargo',
-  belgesiz: 'belge', 'odeme-bekliyor': 'cuzdan', 'teslim-edildi': 'tik-daire', iptal: 'iade',
-};
-const gorunumler = FILTRELER.filter(([id]) => kanal === 'web' || kanal === 'tumu' || id !== 'belgesiz');
-const filtre = gorunumler.find(([id]) => id === p.get('durum'))?.[0]
-  ?? (p.get('durum') === 'gonderilecek' ? 'islem' : q ? 'tumu' : 'islem');
+const acikDurumParam = Astro.url.searchParams.get('durum') ?? p.get('durum');
+const sekme: SiparisSekmesi = acikDurumParam ? siparisSekmesiCoz(acikDurumParam) : (q ? 'tumu' : 'islem');
+
+const aranan = q.toLocaleLowerCase('tr-TR');
 const rakam = /^(?:al)?[\s()+#\d-]+$/.test(aranan) ? aranan.replace(/\D/g, '') : '';
-const basGecerli = gecerliGun(bas), sonGecerli = gecerliGun(son);
-function aramayaUygun(tarih: string, metinler: (string | undefined)[]) {
-  const gun = finansGunu(new Date(tarih));
+const basGecerli = gecerliGun(bas);
+const sonGecerli = gecerliGun(son);
+
+const kanalVeAramaUygun = tumKayitlar.filter((k) => {
+  if (kanal !== 'tumu' && k.kanal !== kanal) return false;
+  const gun = finansGunu(new Date(k.tarih));
   if ((basGecerli && gun < bas) || (sonGecerli && gun > son)) return false;
-  return !aranan || metinler.some((m) => m?.toLocaleLowerCase('tr').includes(aranan)
-    || (rakam.length >= 4 && m?.replace(/\D/g, '').includes(rakam)));
+  if (!aranan) return true;
+  if (k.aramaMetni.includes(aranan)) return true;
+  return rakam.length >= 4 && k.aramaMetni.replace(/\D/g, '').includes(rakam);
+});
+
+const ANA_SEKMELER: { id: SiparisSekmesi; ad: string; ikon: PanelIkonAdi }[] = [
+  { id: 'islem', ad: 'İşlem Bekleyen', ikon: 'simsek' },
+  { id: 'hazirlanacak', ad: 'Hazırlanacak', ikon: 'kutu' },
+  { id: 'hazirlaniyor', ad: 'Hazırlanıyor', ikon: 'saat' },
+  { id: 'kargoya-hazir', ad: 'Kargoya Hazır', ikon: 'yazici' },
+  { id: 'kargoda', ad: 'Kargoda', ikon: 'kargo' },
+  { id: 'tamamlandi', ad: 'Tamamlandı', ikon: 'tik-daire' },
+];
+
+const DIGER_SEKMELER: { id: SiparisSekmesi; ad: string }[] = [
+  { id: 'kontrol', ad: 'Kontrol / Sorunlu' },
+  { id: 'faturasiz', ad: 'Faturası Bekleyen (1-2/3)' },
+  { id: 'odeme-bekleyen', ad: 'Ödeme / Onay Bekleyen' },
+  { id: 'iptal', ad: 'İptal / İade' },
+  { id: 'tumu', ad: 'Tüm Siparişler (Test Dahil)' },
+];
+
+const tumSekmeTanimlari = [...ANA_SEKMELER, ...DIGER_SEKMELER];
+const sayilar = Object.fromEntries(
+  tumSekmeTanimlari.map((t) => [t.id, kanalVeAramaUygun.filter((s) => siparisSekmeyeUyar(s, t.id)).length]),
+) as Record<SiparisSekmesi, number>;
+
+const seciliDigerSekme = DIGER_SEKMELER.find((d) => d.id === sekme);
+
+/* Eğer `sec` ile istenen sipariş işlem tamamlandığı için mevcut sekmeden çıktıysa (ör. faturası 3/3 olduysa),
+   kullanıcı sonucu sağ panelde görebilsin diye görünür listeye korunarak eklenir. */
+const filtrelenmis = kanalVeAramaUygun.filter((s) => siparisSekmeyeUyar(s, sekme));
+if (secParam && !filtrelenmis.some((x) => x.anahtar === secParam)) {
+  const seciliKayit = tumKayitlar.find((x) => x.anahtar === secParam);
+  if (seciliKayit) filtrelenmis.unshift(seciliKayit);
 }
 
-const webSatirlari = kanal === 'tumu' || kanal === 'web' ? gercek
-  .filter((s) => aramayaUygun(s.tarih, [s.no, `${s.musteri.ad} ${s.musteri.soyad}`, s.musteri.tel, s.kargoTakip, ...s.kalemler.map((k) => k.ad)]))
-  .map((siparis) => ({ kanal: 'web' as const, siparis, sonKargo: Infinity, tutar: siparis.toplam, tarih: Date.parse(siparis.tarih) })) : [];
-const pazarSatirlari = (pazaryeri ?? [])
-  .filter((s) => (kanal === 'tumu' || kanal === s.kanal) && aramayaUygun(s.tarih, [
-    s.siparisNo, s.paketNo, s.musteri, s.kargoTakip, ...s.kalemler.flatMap((k) => [k.ad, k.barkod, k.stokKodu]),
-  ]))
-  .map((siparis) => {
-    const durum = pazaryeriDurumu(siparis, simdi, urunKimlikleri);
-    return { kanal: siparis.kanal, siparis, durum, sonKargo: Number.isFinite(durum.sonKargo) ? durum.sonKargo : Infinity,
-      tutar: siparis.toplam / 100, tarih: Date.parse(siparis.tarih) };
-  });
-const sayilar = Object.fromEntries(gorunumler.map(([id, , web, pazar]) => [id,
-  webSatirlari.filter(({ siparis }) => web(siparis)).length + pazarSatirlari.filter(({ siparis, durum }) => pazar(siparis, durum)).length,
-]));
-const [, , webUygun, pazarUygun] = gorunumler.find(([id]) => id === filtre)!;
-const liste = [...webSatirlari.filter(({ siparis }) => webUygun(siparis)),
-  ...pazarSatirlari.filter(({ siparis, durum }) => pazarUygun(siparis, durum))];
-liste.sort((a, b) => {
-  if (sira === 'tutar') return b.tutar - a.tutar || b.tarih - a.tarih;
-  if (sira === 'eski') return a.tarih - b.tarih;
-  if (sira === 'son-kargo' && a.sonKargo !== b.sonKargo) return a.sonKargo - b.sonKargo;
-  return b.tarih - a.tarih;
+filtrelenmis.sort((a, b) => {
+  if (secParam && a.anahtar === secParam) return -1;
+  if (secParam && b.anahtar === secParam) return 1;
+  if (sira === 'tutar') return b.tutarKurus - a.tutarKurus || b.zamanMs - a.zamanMs;
+  if (sira === 'eski') return a.zamanMs - b.zamanMs;
+  if (sira === 'son-kargo') {
+    const aSon = a.kargo.kalanSaat ?? Number.POSITIVE_INFINITY;
+    const bSon = b.kargo.kalanSaat ?? Number.POSITIVE_INFINITY;
+    if (aSon !== bSon) return aSon - bSon;
+  }
+  if (sira === 'oncelik' && sekme === 'islem' && a.oncelikPuani !== b.oncelikPuani) {
+    return b.oncelikPuani - a.oncelikPuani;
+  }
+  return b.zamanMs - a.zamanMs;
 });
+
 const SAYFA_BOYUTU = 30;
-const sonSayfa = Math.max(1, Math.ceil(liste.length / SAYFA_BOYUTU));
+const sonSayfa = Math.max(1, Math.ceil(filtrelenmis.length / SAYFA_BOYUTU));
 const istenenSayfa = Number(p.get('sayfa'));
 const sayfa = Number.isSafeInteger(istenenSayfa) ? Math.max(1, Math.min(sonSayfa, istenenSayfa)) : 1;
 const ilkSatir = (sayfa - 1) * SAYFA_BOYUTU;
-const gorunen = liste.slice(ilkSatir, ilkSatir + SAYFA_BOYUTU);
-const webSecilebilir = gorunen.some((satir) => satir.kanal === 'web');
+const gorunen = filtrelenmis.slice(ilkSatir, ilkSatir + SAYFA_BOYUTU);
+const webSecilebilir = gorunen.some((s) => s.kanal === 'web' && !s.entegrasyon.testSiparisi);
 
-function odemeChip(s: Siparis) {
-  const renk = s.paytr ? (s.paytr.sonuc === 'odendi' ? 'yesil' : s.paytr.sonuc === 'basarisiz' ? 'kirmizi' : 'turuncu')
-    : s.durum === 'iptal' ? 'gri' : s.durum === 'odeme-bekliyor' ? 'turuncu' : 'yesil';
-  return { yazi: odemeEtiketi(s), renk };
-}
-function kargoChip(s: Siparis) {
-  if (iadeEdildi(s)) return { yazi: 'İade edildi', renk: 'gri' };
-  if (s.durum === 'iptal') return { yazi: s.kargoTakip ? 'İptal · takip var!' : 'İptal', renk: s.kargoTakip ? 'kirmizi' : 'gri' };
-  if (s.durum === 'kargoda') return { yazi: 'Kargoda', renk: 'yesil' };
-  if (s.durum === 'teslim-edildi') return { yazi: 'Teslim edildi', renk: 'yesil' };
-  if (s.durum === 'hazirlaniyor') return { yazi: 'Kargoya verilecek', renk: 'turuncu' };
-  if (s.durum === 'odendi') return { yazi: 'Hazırlanacak', renk: 'turuncu' };
-  return { yazi: '—', renk: 'gri' };
-}
-function belgeChip(s: Siparis) {
-  const b = finans.belgeler.filter((d) => d.siparisNo === s.no);
-  if (b.some((d) => d.durum === 'hata')) return { yazi: 'Hata', renk: 'kirmizi' };
-  const gecerli = b.filter(belgeGecerli);
-  if (gecerli.length) return { yazi: gecerli.some((d) => d.durum === 'gonderildi') ? 'Gönderildi' : 'Düzenlendi', renk: 'yesil', baslik: gecerli.map((d) => (d.belgeNo ?? '') + ' ' + BELGE_TURLERI[d.tur]).join(', ') };
-  return onayliSatis(s) ? { yazi: 'Hazırlanmadı', renk: 'turuncu' } : { yazi: '—', renk: 'gri' };
-}
-const filtreAdresi = (id: string, tarihler = true) => '?' + new URLSearchParams({ durum: id,
-  ...(kanal !== 'tumu' ? { kanal } : {}), ...(q ? { q } : {}), ...(tarihler && bas ? { baslangic: bas } : {}),
-  ...(tarihler && son ? { bitis: son } : {}), ...(sira !== 'yeni' ? { sira } : {}),
-});
-const tarihAcik = !!(bas || son);
+const filtreAdresi = (hedefSekme: string, tarihler = true) =>
+  '/yonetim/siparisler?' + new URLSearchParams({
+    durum: hedefSekme,
+    ...(kanal !== 'tumu' ? { kanal } : {}),
+    ...(q ? { q } : {}),
+    ...(tarihler && bas ? { baslangic: bas } : {}),
+    ...(tarihler && son ? { bitis: son } : {}),
+    ...(sira !== 'oncelik' ? { sira } : {}),
+  }).toString();
 
-/* Kanal özeti: seçili tarih aralığı, yoksa bu ay. İptal/iade ve ödemesi onaylanmamış siparişler sayılmaz. */
-const bugun = finansGunu();
-const ozetBas = basGecerli ? bas : bugun.slice(0, 7) + '-01';
-const ozetSon = sonGecerli ? son : bugun;
-const ozet = kanalToplamlari(gercek, pazaryeri ?? [], ozetBas, ozetSon);
-const ozetDonemi = basGecerli || sonGecerli ? `${ozetBas.split('-').reverse().join('.')} – ${ozetSon.split('-').reverse().join('.')}` : 'Bu ay';
-const kanalAdresi = (k: string) => '?' + new URLSearchParams({ durum: 'tumu', kanal: k, ...(bas ? { baslangic: bas } : {}), ...(son ? { bitis: son } : {}) });
+const sayfaBazAdresi = filtreAdresi(sekme) + (sayfa > 1 ? `&sayfa=${sayfa}` : '');
+const tarihAcik = Boolean(bas || son);
+
+const acikIndeks = secParam
+  ? gorunen.findIndex((x) => x.anahtar === secParam)
+  : hizliParam !== null && /^\d+$/.test(hizliParam)
+    ? Number(hizliParam)
+    : -1;
 ---
-<Yonetim baslik="Siparişler" altBaslik="Siparişleri hazırlayın, kargo ve belge durumunu takip edin." aktif="siparisler" basari={Astro.url.searchParams.get('ok')} hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}>
+
+<Yonetim
+  baslik="Siparişler"
+  altBaslik="Web sitesi, Trendyol ve Hepsiburada siparişlerini tek kuyruktan hazırlayın, faturalandırın ve kargolayın."
+  aktif="siparisler"
+  basari={Astro.url.searchParams.get('ok')}
+  hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}
+  genis
+>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a href="/yonetim/siparisler/kanallar" class="btn btn--cizgi"><PIkon ad="zincir" boyut={18} />Satış kanalları</a>
-    <button type="button" class="btn btn--sepet" data-y-dialog="barkod-oku"><PIkon ad="barkod" boyut={18} />Barkod / numarayla aç</button>
+    <a href="/yonetim/siparisler/hazirlik" class="btn btn--cizgi"><PIkon ad="barkod" boyut={17} />Toplu Hazırlık</a>
+    <a href="/yonetim/siparisler/kanallar" class="btn btn--cizgi"><PIkon ad="zincir" boyut={17} />Satış Kanalları</a>
+    <button type="button" class="btn btn--sepet" data-y-dialog="barkod-oku"><PIkon ad="buyutec" boyut={17} />Barkod / No ile Aç</button>
   </div>
 
   <dialog class="y-modal" id="barkod-oku" data-hata-ac={tarama ? '1' : undefined} aria-labelledby="barkod-baslik">
-    <div class="y-modal__bas"><strong id="barkod-baslik">Siparişi aç</strong><form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form></div>
+    <div class="y-modal__bas">
+      <strong id="barkod-baslik">Siparişi Doğrudan Aç</strong>
+      <form method="dialog"><button class="y-icon-button" aria-label="Kapat"><Ikon ad="kapat" boyut={18} /></button></form>
+    </div>
     <form method="get" class="y-izgara">
       <input type="hidden" name="tara" value="1" />
-      <label class="y-alan">Barkodu okutun veya sipariş numarasını yazın
-        <input name="q" placeholder="Sipariş, paket veya takip no" required autocomplete="off" autocapitalize="characters" value={tarama ? q : ''} />
+      <label class="y-alan">Barkodu okutun veya sipariş / paket / takip numarasını yazın
+        <input name="q" placeholder="Örn: AL202611-0001 veya kargo takip no" required autocomplete="off" autocapitalize="characters" value={tarama ? q : ''} />
       </label>
       {tarama && <p class="y-uyari" role="status">{taramaUyarisi}</p>}
-      <p class="y-help">Web hazırlık etiketini panelin herhangi bir sayfasında okutabilirsiniz.</p>
-      <button class="btn btn--sepet">Siparişi aç</button>
+      <p class="y-help">Sipariş çalışma paneli doğrudan açılır; sayfadan ayrılmadan işlem yapabilirsiniz.</p>
+      <button class="btn btn--sepet">Siparişi Aç</button>
     </form>
   </dialog>
 
-  {!pazaryeri && <p class="y-uyari-satir" role="alert"><Ikon ad="kalkan" boyut={16} /><span>Pazaryeri siparişleri okunamadı. <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanallarını kontrol edin</a></span></p>}
-  {pazaryeri && sorunluKanallar.length > 0 && <div class="y-uyari-satir uyari--turuncu siparis-kanal-uyari" role="status">
-    <PIkon ad="uyari" boyut={18} />
-    <span><strong>{sorunluKanallar.length} pazaryerinde eşitleme uyarısı var ({sorunluKanallar.map((k) => KANALLAR[k]).join(', ')}).</strong> Sipariş veya stok senkronizasyonu kontrol bekliyor.</span>
-    <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/siparisler/kanallar#' + sorunluKanallar[0]}>Detayı Gör →</a>
-  </div>}
+  {!pazaryeri && (
+    <p class="y-uyari-satir" role="alert">
+      <Ikon ad="kalkan" boyut={16} />
+      <span>Pazaryeri siparişleri şu an okunamadı; yalnız Web siparişleri listeleniyor. <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanallarını kontrol edin</a></span>
+    </p>
+  )}
+  {pazaryeri && sorunluKanallar.length > 0 && (
+    <div class="y-uyari-satir uyari--turuncu siparis-kanal-uyari" role="status">
+      <PIkon ad="uyari" boyut={18} />
+      <span>
+        <strong>{sorunluKanallar.map((k) => KANALLAR[k]).join(' ve ')} eşitlemesinde uyarı var.</strong> Sipariş veya stok senkronizasyonunu kontrol edin.
+      </span>
+      <a class="btn btn--cizgi btn--kucuk" href={'/yonetim/siparisler/kanallar#' + sorunluKanallar[0]}>Kanal Durumu →</a>
+    </div>
+  )}
 
-  <div class="y-siparis-govde">
-  <div class="y-siparis-ozet">
-  <KanalOzeti ozet={ozet} donem={ozetDonemi} adres={kanalAdresi} secili={kanal} kompakt={true} aciklama="İptal ve iadeler hariç. Karta tıklayarak kanala göre filtreleyin." />
+  {/* 1. SADELEŞTİRİLMİŞ 6 ANA AŞAMA ÇUBUĞU + DİĞER DURUMLAR MENÜSÜ */}
+  <div class="sm-sekme-cubugu">
+    <nav class="y-filtreler sm-ana-sekmeler" aria-label="Sipariş aşamaları">
+      {ANA_SEKMELER.map((t) => (
+        <a href={filtreAdresi(t.id)} aria-current={sekme === t.id ? 'page' : undefined} class={'y-filtre--' + t.id}>
+          <PIkon ad={t.ikon} boyut={17} />
+          <span>{t.ad}</span>
+          {sayilar[t.id] > 0 && <b>{sayilar[t.id]}</b>}
+        </a>
+      ))}
+    </nav>
 
-  <BilgiKutusu baslik="Sipariş işlemleri rehberi" anahtar="siparisler" acik={false}>
-    <p>Web sitesinden, Trendyol'dan ve Hepsiburada'dan gelen siparişler aynı listede. Her siparişin altında <strong>hangi kanaldan geldiği</strong> yazar.</p>
-    <p>Web siparişlerinin hazırlık ve kargo adımlarını panelden tamamlayın. Trendyol ve Hepsiburada işlemlerinin nerede yapılacağı sipariş ayrıntılarında gösterilir.</p>
-  </BilgiKutusu>
+    <details class:list={['sm-diger-menu', { 'is-secili': Boolean(seciliDigerSekme) }]}>
+      <summary class="btn btn--cizgi btn--kucuk">
+        <PIkon ad={seciliDigerSekme ? 'uyari' : 'liste'} boyut={16} />
+        <span>{seciliDigerSekme ? seciliDigerSekme.ad : 'Diğer Görünümler'}</span>
+        {(sayilar.kontrol > 0 && !seciliDigerSekme) && <b class="sm-diger-uyari">{sayilar.kontrol}</b>}
+        <PIkon ad="asagi" boyut={14} />
+      </summary>
+      <div class="sm-diger-liste" role="menu">
+        {DIGER_SEKMELER.map((d) => (
+          <a href={filtreAdresi(d.id)} role="menuitem" aria-current={sekme === d.id ? 'page' : undefined}>
+            <span>{d.ad}</span>
+            <b>{sayilar[d.id]}</b>
+          </a>
+        ))}
+      </div>
+    </details>
   </div>
 
-  <div class="y-siparis-kuyruk">
-  <nav class="y-filtreler" aria-label="Sipariş görünümleri">
-    {gorunumler.map(([id, ad]) => <a href={filtreAdresi(id)} aria-current={filtre === id ? 'page' : undefined} class={'y-filtre--' + id}>
-      <PIkon ad={FILTRE_IKONU[id] ?? 'liste'} boyut={18} />{ad}{id !== 'tumu' && sayilar[id] > 0 && <b>{sayilar[id]}</b>}
-    </a>)}
-  </nav>
-
-  <form class="y-toolbar" method="get" data-filtre-form="siparis">
-    <input type="hidden" name="durum" value={filtre} />
-    <input class="y-girdi" name="q" type="search" value={q} placeholder="Sipariş no, müşteri, ürün veya takip no" aria-label="Sipariş ara" />
+  {/* 2. TEK SATIR ARAMA VE KANAL ÇUBUĞU */}
+  <form class="y-toolbar sm-toolbar" method="get" data-filtre-form="siparis">
+    <input type="hidden" name="durum" value={sekme} />
+    <input class="y-girdi" name="q" type="search" value={q} placeholder="Sipariş no, müşteri, telefon, ürün, barkod veya takip no…" aria-label="Sipariş ara" />
     <select class="y-girdi" name="kanal" aria-label="Satış kanalı">
-      <option value="tumu" selected={kanal === 'tumu'}>Tüm kanallar</option>
-      <option value="web" selected={kanal === 'web'}>Web sitesi</option>
+      <option value="tumu" selected={kanal === 'tumu'}>Tüm Kanallar</option>
+      <option value="web" selected={kanal === 'web'}>Web Sitesi</option>
       {Object.entries(KANALLAR).map(([id, ad]) => <option value={id} selected={kanal === id}>{ad}</option>)}
     </select>
     <select class="y-girdi" name="sira" aria-label="Sıralama">
-      <option value="yeni" selected={sira === 'yeni'}>En yeni</option>
-      <option value="eski" selected={sira === 'eski'}>En eski</option>
-      <option value="son-kargo" selected={sira === 'son-kargo'}>Son kargolama tarihine göre</option>
-      <option value="tutar" selected={sira === 'tutar'}>En yüksek tutar</option>
+      <option value="oncelik" selected={sira === 'oncelik'}>Önceliğe Göre (Önerilen)</option>
+      <option value="yeni" selected={sira === 'yeni'}>En Yeni Sipariş</option>
+      <option value="son-kargo" selected={sira === 'son-kargo'}>Son Kargo Süresine Göre</option>
+      <option value="tutar" selected={sira === 'tutar'}>En Yüksek Tutar</option>
+      <option value="eski" selected={sira === 'eski'}>En Eski Sipariş</option>
     </select>
     <details class="y-tarih" open={tarihAcik}>
-      <summary class="btn btn--cizgi">{tarihAcik ? (bas || '…') + ' – ' + (son || '…') : 'Tarih'}</summary>
+      <summary class="btn btn--cizgi">{tarihAcik ? `${bas || '…'} – ${son || '…'}` : 'Tarih'}</summary>
       <div>
         <label class="y-alan">Başlangıç<input name="baslangic" type="date" value={bas} /></label>
         <label class="y-alan">Bitiş<input name="bitis" type="date" value={son} /></label>
-        {tarihAcik && <a class="y-link" href={filtreAdresi(filtre, false)}>Temizle</a>}
+        {tarihAcik && <a class="y-link" href={filtreAdresi(sekme, false)}>Temizle</a>}
       </div>
     </details>
-    <button class="btn btn--cizgi" type="submit">Filtrele</button>
+    <button class="btn btn--cizgi" type="submit">Uygula</button>
   </form>
 
-  {liste.length ? <>
-    <div class="y-liste-detay" data-panel-secim>
-    <div class="y-liste-ana">
-    <div class="y-tablo-kap y-tablo-kap--kart">
-      <table class="y-tablo y-siparis-tablo">
-        <thead><tr>
-          <th class="y-sec">{webSecilebilir && <label class="y-siparis-sec-kutusu"><input type="checkbox" data-y-tumu aria-label="Görünen web siparişlerinin tümünü seç" /></label>}</th>
-          <th>Sipariş / kanal</th><th>Müşteri</th><th>Ürünler</th><th class="y-sayi">Tutar</th><th>Durum</th><th class="y-sayi"><span class="visually-hidden">İşlemler</span></th>
-        </tr></thead>
-        <tbody>{gorunen.map((satir, i) => {
-          if (satir.kanal !== 'web') {
-            const { siparis: s, durum } = satir;
-            const detay = pazaryeriDetayi(s.id);
-            const ilk = s.kalemler[0];
-            const gorsel = ilk?.urunId ? urunler.get(ilk.urunId)?.gorseller[0]?.src : undefined;
-            const metin = s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join(', ');
-            const kent = [s.ilce, s.il].filter(Boolean).join(' / ');
-            const adim = durum.hazirlanacak ? 'yeni' : durum.hazirlaniyor ? 'hazirlaniyor' : s.durum;
-            return <tr>
-              <td class="y-sec"></td>
-              <td data-etiket="Sipariş" class="y-siparis-no">
-                <a class="y-link" href={detay}>{s.siparisNo}</a>
-                <small class="y-table-note"><span class:list={['kanal-etiket', 'kanal-etiket--' + s.kanal]}>{KANALLAR[s.kanal]}</span> · {yTarih.format(new Date(s.tarih))}</small>
-                {s.paketNo && s.paketNo !== s.siparisNo && <small class="y-table-note">Paket {s.paketNo}</small>}
-              </td>
-              <td data-etiket="Müşteri">{s.musteri ?? '—'}{kent && <small class="y-table-note">{kent}</small>}</td>
-              <td data-etiket="Ürünler" class="y-urunler"><a class="y-urun-ozet" href={detay} title={metin}>
-                {gorsel ? <img src={gorsel} alt="" width="36" height="36" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={18} /></span>}
-                <span>{metin}</span>
-              </a></td>
-              <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{kurusTL(s.toplam)}</strong></td>
-              <td data-etiket="Durum">
-                <div class="durum-ozeti">
-                  <span class:list={['y-chip', 'y-chip--' + PY_DURUM_RENK[adim]]}>{PY_DURUM_ADLARI[adim]}</span>
-                  {durum.uyari.map((u) => <a href={detay} class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</a>)}
-                </div>
-                {Number.isFinite(durum.sonKargo) && <small class="y-table-note">Son kargolama {yTarih.format(durum.sonKargo)}</small>}
-              </td>
-              <td class="y-sayi y-islem"><div class="y-row-actions"><a class="btn btn--cizgi btn--kucuk y-secim-ac" href={filtreAdresi(filtre) + '&hizli=' + i} data-astro-prefetch="false" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded={p.get('hizli') === String(i) ? 'true' : 'false'} aria-label={s.siparisNo + ' hızlı işlem'}>Hızlı işlem</a><a class="y-link detay-link" href={detay} aria-label={KANALLAR[s.kanal] + ' sipariş detayı ' + s.siparisNo}>Detay</a></div></td>
-            </tr>;
-          }
-          const { siparis: s } = satir;
-          const detay = '/yonetim/siparisler/' + s.no;
-          const o = odemeChip(s), k = kargoChip(s), b = belgeChip(s);
-          const takip = siparisKargoBaglantisi(s, site.kargo);
-          const hazirlanabilir = s.durum !== 'iptal' && !iadeEdildi(s);
-          const uo = urunOzeti(s);
-          return <tr data-satir={s.no}>
-            <td class="y-sec"><label class="y-siparis-sec-kutusu"><input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} /></label></td>
-            <td data-etiket="Sipariş" class="y-siparis-no">
-              <a class="y-link" href={detay}>{s.no}</a>
-              <button type="button" class="y-kopya" data-kopyala={s.no} title="Numarayı kopyala" aria-label={s.no + ' kopyala'}><svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg></button>
-              <small class="y-table-note"><span class="kanal-etiket">Web sitesi</span> · {yTarih.format(new Date(s.tarih))}</small>
-            </td>
-            <td data-etiket="Müşteri">{s.musteri.ad} {s.musteri.soyad}<small class="y-table-note">{s.teslimat.ilce} / {s.teslimat.il}</small></td>
-            <td data-etiket="Ürünler" class="y-urunler"><a class="y-urun-ozet" href={detay} title={uo.metin}>
-              {uo.gorsel ? <img src={uo.gorsel} alt="" width="36" height="36" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={18} /></span>}
-              <span>{uo.metin}</span>
-            </a></td>
-            <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{formatTL(s.toplam)}</strong></td>
-            <td data-etiket="Durum">
-              <div class="durum-ozeti">
-                {k.yazi !== '—' && <span class:list={['y-chip', 'y-chip--' + k.renk]}>{k.yazi}</span>}
-                {s.paytr?.stokEksik && <a href={detay} class="y-chip y-chip--kirmizi">Stok ayrılamadı</a>}
-              </div>
-              <small class:list={['y-table-note', { 'kritik-not': o.renk === 'kirmizi' }]}>Ödeme: {o.yazi}</small>
-              {b.yazi !== '—' && <small class:list={['y-table-note', { 'kritik-not': b.renk === 'kirmizi' }]} title={b.baslik}>Belge: {b.yazi}</small>}
-            </td>
-            <td class="y-sayi y-islem"><div class="y-row-actions">
-              <a class="btn btn--cizgi btn--kucuk y-secim-ac" href={filtreAdresi(filtre) + '&hizli=' + i} data-astro-prefetch="false" data-panel-sec={'siparis-hizli-' + i} aria-controls={'siparis-hizli-' + i} aria-expanded={p.get('hizli') === String(i) ? 'true' : 'false'} aria-label={s.no + ' hızlı işlem'}>Hızlı işlem</a>
-              <details class="y-row-menu y-row-menu--sag"><summary aria-label={s.no + ' işlemleri'}>•••</summary>
-                <div>
-                  <a href={detay}>Detayı aç</a>
-                  {onayliSatis(s) && <form method="post" action="/yonetim/finans/belge">
-                    <input type="hidden" name="islem" value="olustur" /><input type="hidden" name="tur" value="ozet" /><input type="hidden" name="no" value={s.no} />
-                    <input type="hidden" name="geri" value={Astro.url.pathname + Astro.url.search} />
-                    <button type="submit">Sipariş özeti PDF indir</button>
-                  </form>}
-                  {hazirlanabilir && <a href={'/yonetim/finans/etiket?no=' + encodeURIComponent(s.no)} target="_blank" rel="noopener">Hazırlık etiketi yazdır ↗</a>}
-                  <a href={detay + '#belgeler'}>Belge durumunu gör</a>
-                  <a href={detay + '#kargo'}>Kargoyu yönet</a>
-                  {takip && <a href={takip.url} target="_blank" rel="noopener">Kargo takibini aç ↗</a>}
-                  {(iptalEdilebilir(s) || (gonderildi(s) && !iadeEdildi(s))) && <a href={detay + (iptalEdilebilir(s) ? '#iptal' : '#iade')}>İade / iptal işlemi</a>}
-                </div>
-              </details>
-            </div></td>
-          </tr>;
-        })}</tbody>
-      </table>
+  {/* 3. BİRLEŞİK SİPARİŞ TABLOSU + SAĞ ÇALIŞMA PANELİ */}
+  {gorunen.length > 0 ? (
+    <>
+      <div class="y-liste-detay sm-calisma-duzeni" data-panel-secim>
+        <div class="y-liste-ana">
+          <div class="y-tablo-kap y-tablo-kap--kart">
+            <table class="y-tablo y-siparis-tablo sm-tablo">
+              <thead>
+                <tr>
+                  <th class="y-sec">
+                    {webSecilebilir && (
+                      <label class="y-siparis-sec-kutusu">
+                        <input type="checkbox" data-y-tumu aria-label="Görünen web siparişlerinin tümünü seç" />
+                      </label>
+                    )}
+                  </th>
+                  <th>Sipariş &amp; Kanal</th>
+                  <th>Ürün &amp; Adet</th>
+                  <th>Müşteri</th>
+                  <th class="y-sayi">Tutar</th>
+                  <th>Sipariş Aşaması</th>
+                  <th>Eksik / Bekleyen İş</th>
+                  <th class="y-sayi">Sıradaki İşlem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gorunen.map((s, i) => {
+                  const panelId = 'siparis-hizli-' + i;
+                  const seciliMi = i === acikIndeks;
+                  const secAdresi = `${sayfaBazAdresi}&sec=${encodeURIComponent(s.anahtar)}`;
+                  return (
+                    <tr data-satir={s.kanal === 'web' ? s.no : undefined} class:list={{ 'is-inceleme': seciliMi, 'sm-satir--test': s.entegrasyon.testSiparisi }}>
+                      <td class="y-sec">
+                        {s.kanal === 'web' && !s.entegrasyon.testSiparisi && (
+                          <label class="y-siparis-sec-kutusu">
+                            <input type="checkbox" name="no" value={s.no} data-y-secim-kutusu aria-label={s.no + ' seç'} />
+                          </label>
+                        )}
+                      </td>
+
+                      <td data-etiket="Sipariş" class="y-siparis-no">
+                        <div class="sm-no-satir">
+                          <KanalLogo kanal={s.kanal} boyut="kucuk" />
+                          <a class="y-link sm-no-link" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId}>
+                            <strong>{s.no}</strong>
+                          </a>
+                          <button type="button" class="y-kopya" data-kopyala={s.no} title="Numarayı kopyala" aria-label={s.no + ' kopyala'}>
+                            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                          </button>
+                        </div>
+                        <small class="y-table-note">
+                          {s.kanalAdi} · {yTarih.format(new Date(s.tarih))}
+                          {s.paketNo && s.paketNo !== s.no ? ` · Pkt ${s.paketNo}` : ''}
+                        </small>
+                      </td>
+
+                      <td data-etiket="Ürünler" class="y-urunler">
+                        <a class="y-urun-ozet" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId} title={s.kalemOzeti}>
+                          {s.ilkGorsel ? (
+                            <img src={s.ilkGorsel} alt="" width="36" height="36" loading="lazy" decoding="async" />
+                          ) : (
+                            <span class="y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={17} /></span>
+                          )}
+                          <span>{s.kalemOzeti}</span>
+                        </a>
+                      </td>
+
+                      <td data-etiket="Müşteri">
+                        <span class="sm-musteri">{s.musteriAdi}</span>
+                        {s.konum && <small class="y-table-note">{s.konum}</small>}
+                      </td>
+
+                      <td data-etiket="Tutar" class="y-sayi y-nowrap">
+                        <strong>{kurusTL(s.tutarKurus)}</strong>
+                        {s.kazanc.tahminiNetKar !== undefined && (
+                          <small class:list={['y-table-note', s.kazanc.tahminiNetKar < 0 ? 'y-yazi-kirmizi' : 'y-yazi-yesil']}>
+                            Net {s.kazanc.tahminiNetKar < 0 ? '−' : '+'}{kurusTL(Math.abs(s.kazanc.tahminiNetKar))}
+                          </small>
+                        )}
+                      </td>
+
+                      <td data-etiket="Aşama">
+                        <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
+                        {s.entegrasyon.etiket && <small class="y-table-note">{s.entegrasyon.etiket}</small>}
+                      </td>
+
+                      <td data-etiket="Bekleyen İş">
+                        {s.eksikIsler.length > 0 ? (
+                          <div class="durum-ozeti">
+                            {s.eksikIsler.slice(0, 2).map((ek) => (
+                              <span class:list={['y-chip', 'y-chip--' + ek.renk]}>{ek.etiket}</span>
+                            ))}
+                            {s.eksikIsler.length > 2 && <small class="muted">+{s.eksikIsler.length - 2}</small>}
+                          </div>
+                        ) : s.entegrasyon.testSiparisi ? (
+                          <span class="muted">Test kaydı</span>
+                        ) : (
+                          <span class="y-chip y-chip--yesil">Tamamlandı</span>
+                        )}
+                      </td>
+
+                      <td class="y-sayi y-islem">
+                        <div class="y-row-actions">
+                          <a
+                            class:list={[
+                              'btn',
+                              'btn--kucuk',
+                              'y-secim-ac',
+                              s.birincilIslem.tur === 'birincil' || s.birincilIslem.tur === 'uyari' ? 'btn--sepet' : 'btn--cizgi',
+                            ]}
+                            href={secAdresi}
+                            data-astro-prefetch="false"
+                            data-panel-sec={panelId}
+                            aria-controls={panelId}
+                            aria-expanded={seciliMi ? 'true' : 'false'}
+                          >
+                            {s.birincilIslem.etiket}
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="sayfa-alt">
+            <p class="y-help">
+              {sonSayfa > 1 ? `${ilkSatir + 1}–${ilkSatir + gorunen.length} / ` : ''}{filtrelenmis.length} sipariş
+              {webSecilebilir ? ' · Web kutularını işaretleyerek toplu etiket/belge indirebilirsiniz.' : ''}
+            </p>
+            {sonSayfa > 1 && (
+              <nav class="y-ust-aksiyonlar" aria-label="Sipariş liste sayfaları">
+                {sayfa > 1 && <a href={filtreAdresi(sekme) + '&sayfa=' + (sayfa - 1)} rel="prev" class="btn btn--cizgi">Önceki</a>}
+                {sayfa < sonSayfa && <a href={filtreAdresi(sekme) + '&sayfa=' + (sayfa + 1)} rel="next" class="btn btn--cizgi">Sonraki</a>}
+              </nav>
+            )}
+          </div>
+        </div>
+
+        <aside class="y-kart y-liste-secim y-siparis-secim sm-calisma-paneli" aria-label="Sipariş çalışma paneli">
+          <div data-panel-bos hidden={acikIndeks >= 0}>
+            <h2><PIkon ad="simsek" /> Sipariş Çalışma Paneli</h2>
+            <p class="y-help">
+              Listeden ayrılmadan hazırlama, etiket, 3 aşamalı fatura, kargo ve kâr işlemlerini yapmak için satırdaki işlem düğmesine tıklayın.
+            </p>
+          </div>
+          {gorunen.map((s, i) => (
+            <SiparisCalismaPaneli
+              kayit={s}
+              panelId={'siparis-hizli-' + i}
+              acik={i === acikIndeks}
+              geriBazAdresi={sayfaBazAdresi}
+              kapatAdresi={sayfaBazAdresi}
+              oncekiPanelId={i > 0 ? 'siparis-hizli-' + (i - 1) : undefined}
+              sonrakiPanelId={i < gorunen.length - 1 ? 'siparis-hizli-' + (i + 1) : undefined}
+              siraBilgisi={`${ilkSatir + i + 1}/${filtrelenmis.length}`}
+              kargoAyar={magaza.site.kargo}
+              urunSecenekleri={urunSecenekleri}
+              kullanilabilirStok={kullanilabilirStok}
+              origin={Astro.url.origin}
+            />
+          ))}
+        </aside>
+      </div>
+
+      {webSecilebilir && (
+        <div class="y-toplu" data-y-toplu hidden role="region" aria-label="Toplu web siparişi işlemleri">
+          <strong data-y-secim>0 seçili</strong>
+          <details class="y-toplu-onizleme"><summary>Seçilen siparişler</summary><p data-y-secim-onizleme></p></details>
+          <label class="y-toplu__tur">Belge
+            <select data-y-toplu-tur aria-label="Toplu belge türü">
+              {Object.entries(BELGE_TURLERI).map(([id, ad]) => <option value={id}>{ad}</option>)}
+            </select>
+          </label>
+          <button class="btn btn--sepet" type="button" data-y-toplu-eylem="belge"><PIkon ad="indir" boyut={17} />PDF / ZIP indir</button>
+          <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="a4"><PIkon ad="yazici" boyut={17} />Etiket A4</button>
+          <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="etiket"><PIkon ad="yazici" boyut={17} />Etiket 10×15</button>
+          <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="toplama"><PIkon ad="liste" boyut={17} />Toplama listesi</button>
+          <button class="y-icon-button" type="button" data-y-toplu-temizle aria-label="Seçimi temizle"><Ikon ad="kapat" boyut={16} /></button>
+        </div>
+      )}
+      {webSecilebilir && (
+        <dialog class="y-modal" data-y-toplu-onay aria-labelledby="toplu-onay-baslik">
+          <div class="y-modal__bas"><strong id="toplu-onay-baslik">Toplu işlem özeti</strong></div>
+          <p data-y-toplu-ozet></p>
+          <p class="y-help">Seçilen web siparişleri</p>
+          <p class="y-toplu-onay-listesi" data-y-toplu-siparisler></p>
+          <form method="dialog" class="y-modal__alt">
+            <button class="btn btn--cizgi" value="vazgec" autofocus>Vazgeç</button>
+            <button class="btn btn--sepet" value="indir">İndir</button>
+          </form>
+        </dialog>
+      )}
+    </>
+  ) : (
+    <div class="y-kart y-bos">
+      <p>
+        <strong>
+          {!pazaryeri && kanal !== 'web'
+            ? 'Pazaryeri sipariş listesi şu an kullanılamıyor.'
+            : q
+              ? `“${q}” aramasıyla eşleşen sipariş bulunamadı.`
+              : sekme === 'islem'
+                ? 'Şu an işlem bekleyen sipariş yok.'
+                : 'Bu aşamada sipariş bulunmuyor.'}
+        </strong>
+      </p>
+      {sekme === 'islem' && !q && sayilar.kargoda > 0 && (
+        <p class="muted">Yolda olan {sayilar.kargoda} siparişi görmek için <a class="y-link" href={filtreAdresi('kargoda')}>Kargoda</a> sekmesine geçebilirsiniz.</p>
+      )}
+      {q && sekme !== 'tumu' && <a class="y-link" href={filtreAdresi('tumu')}>Tüm siparişlerde ara</a>}
+      {(sekme !== 'tumu' || kanal !== 'tumu' || q || tarihAcik) && <a class="y-link" href="/yonetim/siparisler?durum=tumu">Tüm siparişleri göster ({sayilar.tumu})</a>}
     </div>
-    <div class="sayfa-alt">
-      <p class="y-help">{sonSayfa > 1 ? `${ilkSatir + 1}–${ilkSatir + gorunen.length} / ` : ''}{liste.length} kayıt{webSecilebilir && ' · Web siparişlerini seçerek toplu işlem yapabilirsiniz.'}</p>
-      {sonSayfa > 1 && <nav class="y-ust-aksiyonlar" aria-label="Sipariş liste sayfaları">
-        {sayfa > 1 && <a href={filtreAdresi(filtre) + '&sayfa=' + (sayfa - 1)} rel="prev" class="btn btn--cizgi">Önceki</a>}
-        {sayfa < sonSayfa && <a href={filtreAdresi(filtre) + '&sayfa=' + (sayfa + 1)} rel="next" class="btn btn--cizgi">Sonraki</a>}
-      </nav>}
-    </div>
-
-    </div>
-    <aside class="y-kart y-liste-secim y-siparis-secim" aria-label="Sipariş hızlı işlem">
-      <div data-panel-bos><h2><PIkon ad="simsek" /> Hızlı işlem paneli</h2><p class="y-help">Listeden ayrılmadan siparişin sıradaki işlemini yapmak, müşteri ve ürün detaylarını görmek için satırdaki <strong>İşlem</strong> düğmesine basın.</p></div>
-      {gorunen.map((satir, i) => {
-        const web = satir.kanal === 'web';
-        const detay = web ? '/yonetim/siparisler/' + satir.siparis.no : pazaryeriDetayi(satir.siparis.id);
-        const no = web ? satir.siparis.no : satir.siparis.siparisNo;
-        const musteri = web ? `${satir.siparis.musteri.ad} ${satir.siparis.musteri.soyad}` : satir.siparis.musteri;
-        const pazarDurumu = !web && (satir.durum.hazirlanacak ? 'yeni' : satir.durum.hazirlaniyor ? 'hazirlaniyor' : satir.siparis.durum);
-        const durum = web ? kargoChip(satir.siparis) : { yazi: PY_DURUM_ADLARI[pazarDurumu || satir.siparis.durum], renk: PY_DURUM_RENK[pazarDurumu || satir.siparis.durum] };
-        const odeme = web ? odemeChip(satir.siparis) : undefined;
-        const stokSorunu = web && !!satir.siparis.paytr?.stokEksik && satir.siparis.durum !== 'iptal';
-        const tyToplamaUygun = !web && satir.kanal === 'trendyol' && (satir.siparis.hamDurum === 'Created' || satir.siparis.hamDurum === 'Awaiting') && !satir.durum.uyari.some((u) => u.renk === 'kirmizi');
-        const pazarKontrolGerekli = !web && satir.durum.uyari.some((u) => u.renk === 'kirmizi');
-        const faturaAdresi = '/yonetim/finans/faturalar?sec=' + encodeURIComponent(web ? 'web:' + no : satir.kanal + ':' + satir.siparis.id) + '#secili';
-        const kalemler = web
-          ? satir.siparis.kalemler.map((k) => ({
-              ad: `${k.tip === 'set' ? 'Set: ' : ''}${k.ad}`,
-              adet: k.adet,
-              kod: k.sku,
-              tutar: formatTL(k.toplam),
-              gorsel: k.tip === 'set'
-                ? magaza.setler.find((x) => x.id === k.id)?.gorsel?.src ?? urunler.get(k.parcalar[0]?.urunId ?? '')?.gorseller[0]?.src
-                : urunler.get(k.id)?.gorseller[0]?.src,
-            }))
-          : satir.siparis.kalemler.map((k) => ({
-              ad: k.ad,
-              adet: k.adet,
-              kod: k.barkod || k.stokKodu,
-              tutar: kurusTL(k.tutar),
-              gorsel: k.urunId ? urunler.get(k.urunId)?.gorseller[0]?.src : undefined,
-            }));
-        const sonGecmis = satir.siparis.gecmis.at(-1);
-        const hizliAcik = Astro.url.searchParams.get('hizli') === String(i);
-        return <section id={'siparis-hizli-' + i} data-panel-kayit hidden={!hizliAcik}>
-          <div class="y-kart__bas">
-            <h2 class="hizli-baslik"><KanalLogo kanal={satir.kanal} boyut="kucuk" /><span>{no}</span></h2>
-            <div class="hizli-ust-dugmeler">
-              <a class="y-icon-button" href={detay} title="Tam sipariş detayını aç" aria-label={no + ' detay sayfasını aç'}><PIkon ad="dis-baglanti" boyut={17} /></a>
-              <a href={filtreAdresi(filtre)} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat aria-label="Hızlı işlemi kapat"><Ikon ad="kapat" boyut={17} /></a>
-            </div>
-          </div>
-          <p class="muted hizli-alt">{web ? 'Web sitesi' : KANALLAR[satir.kanal]} · {yTarih.format(new Date(satir.siparis.tarih))}{!web && satir.siparis.paketNo && satir.siparis.paketNo !== no ? ` · Paket ${satir.siparis.paketNo}` : ''}</p>
-          <div class="y-durumlar hizli-durum-seridi">
-            {odeme && <span class:list={['y-chip', 'y-chip--' + odeme.renk]}>{odeme.yazi}</span>}
-            {durum.yazi !== '—' && <span class:list={['y-chip', 'y-chip--' + durum.renk]}>{durum.yazi}</span>}
-            {stokSorunu && <span class="y-chip y-chip--kirmizi">Stok ayrılamadı</span>}
-            <strong class="hizli-tutar">{web ? formatTL(satir.siparis.toplam) : kurusTL(satir.siparis.toplam)}</strong>
-          </div>
-
-          <div class="hizli-siradaki">
-            <h3><PIkon ad="simsek" boyut={17} /> Sıradaki adım</h3>
-            {web && stokSorunu && <>
-              <p class="y-help y-yazi-kirmizi">Ödeme alındı fakat stok ayrılamadı. Hazırlamaya geçmeden önce stoğu ayırın.</p>
-              <form method="post" action={detay}><button class="btn btn--sepet hizli-ana-dugme" type="submit" name="eylem" value="stok-tamamla">Stoğu Ayır →</button></form>
-            </>}
-            {web && !stokSorunu && siradakiDurum(satir.siparis) && <SiparisSonraki siparis={satir.siparis} kargo={site.kargo} action={detay} />}
-            {web && !stokSorunu && !siradakiDurum(satir.siparis) && <p class="y-help">Bu sipariş için bekleyen hazırlık/kargo adımı yok.</p>}
-            {!web && pazarKontrolGerekli && <>
-              <div class="hizli-uyarilar">{satir.durum.uyari.map((u) => <span class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</span>)}</div>
-              <p class="y-help">Hazırlığa geçmeden önce ürün eşleştirmesini veya eksik stoğu kontrol edin.</p>
-              <a class="btn btn--sepet hizli-ana-dugme" href={detay + '#urunler'}>Ürün ve Stok Kontrolünü Aç →</a>
-            </>}
-            {!web && !pazarKontrolGerekli && tyToplamaUygun && <>
-              <p class="y-help">Trendyol’a siparişin işleme alındığını bildirin.</p>
-              <form method="post" action={detay}><button class="btn btn--sepet hizli-ana-dugme" type="submit" name="eylem" value="ty-toplama">Toplamaya Başla →</button></form>
-            </>}
-            {!web && !pazarKontrolGerekli && !tyToplamaUygun && <>
-              {satir.durum.uyari.length > 0 && <div class="hizli-uyarilar">{satir.durum.uyari.map((u) => <span class:list={['y-chip', 'y-chip--' + u.renk]}>{u.yazi}</span>)}</div>}
-              <a class="btn btn--sepet hizli-ana-dugme" href={detay}>Sipariş ve Stok Detayını Aç →</a>
-            </>}
-          </div>
-
-          <div class="hizli-aksiyon-listesi">
-            <a class="hizli-aksiyon" href={faturaAdresi}><PIkon ad="fatura" boyut={17} /><span>Fatura / Resmi Belge</span><PIkon ad="sag" boyut={16} /></a>
-            {web && <a class="hizli-aksiyon" href={detay + '#belgeler'}><PIkon ad="belge" boyut={17} /><span>Sipariş Özeti / Paket İçi Fiş</span><PIkon ad="sag" boyut={16} /></a>}
-            {web && satir.siparis.durum !== 'iptal' && !iadeEdildi(satir.siparis) && <a class="hizli-aksiyon" href={'/yonetim/finans/etiket?no=' + encodeURIComponent(no)} target="_blank" rel="noopener"><PIkon ad="yazici" boyut={17} /><span>Hazırlık Etiketi Yazdır ↗</span><PIkon ad="sag" boyut={16} /></a>}
-            {!web && <a class="hizli-aksiyon" href={detay + '#urunler'}><PIkon ad="katman" boyut={17} /><span>Ürün Eşleştirme ve Stok</span><PIkon ad="sag" boyut={16} /></a>}
-            <a class="hizli-aksiyon" href={detay}><PIkon ad="liste" boyut={17} /><span>Tüm Sipariş Detayı ve Geçmiş</span><PIkon ad="sag" boyut={16} /></a>
-          </div>
-
-          <div class="hizli-bilgi-izgara">
-            <div class="hizli-kutu">
-              <h4><PIkon ad="kullanici" boyut={15} /> Müşteri</h4>
-              <strong>{musteri || 'Müşteri bilgisi yok'}</strong>
-              {web && <small><a class="y-link" href={'tel:' + satir.siparis.musteri.tel}>{satir.siparis.musteri.tel}</a></small>}
-              {web && satir.siparis.musteri.eposta && <small><a class="y-link" href={'mailto:' + satir.siparis.musteri.eposta}>{satir.siparis.musteri.eposta}</a></small>}
-            </div>
-            <div class="hizli-kutu">
-              <h4><PIkon ad="kargo" boyut={15} /> Teslimat</h4>
-              {web ? <small>{satir.siparis.teslimat.adres}<br /><strong>{satir.siparis.teslimat.ilce} / {satir.siparis.teslimat.il}</strong></small>
-                : <small><strong>{[satir.siparis.ilce, satir.siparis.il].filter(Boolean).join(' / ') || 'Adres satıcı panelinde'}</strong></small>}
-              {satir.siparis.kargoFirma && <small class="y-chip y-chip--gri">{satir.siparis.kargoFirma}{satir.siparis.kargoTakip ? ' · ' + satir.siparis.kargoTakip : ''}</small>}
-            </div>
-          </div>
-
-          <div class="hizli-kutu">
-            <h4><PIkon ad="kutu" boyut={15} /> Ürünler ({kalemler.length})</h4>
-            <ul class="hizli-urunler">{kalemler.map((k) => <li>
-              {k.gorsel ? <img src={k.gorsel} alt="" width="36" height="36" loading="lazy" /> : <span class="y-kalem-gorsel--yok"><Ikon ad="kutu" boyut={16} /></span>}
-              <div><strong>{k.ad}</strong><small>{k.adet} adet{k.kod ? ' · ' + k.kod : ''}</small></div>
-              <b>{k.tutar}</b>
-            </li>)}</ul>
-          </div>
-
-          {(web && (satir.siparis.teslimat.not || satir.siparis.yoneticiNotu || satir.siparis.fatura.tip === 'kurumsal') || sonGecmis) && <div class="hizli-kutu hizli-notlar">
-            <h4><PIkon ad="gecmis" boyut={15} /> Notlar ve Son İşlem</h4>
-            {web && satir.siparis.teslimat.not && <p class="hizli-not"><strong>Müşteri notu:</strong> {satir.siparis.teslimat.not}</p>}
-            {web && satir.siparis.fatura.tip === 'kurumsal' && <p class="hizli-not"><strong>Kurumsal fatura:</strong> {satir.siparis.fatura.firma}</p>}
-            {web && satir.siparis.yoneticiNotu && <p class="hizli-not"><strong>İç not:</strong> {satir.siparis.yoneticiNotu}</p>}
-            {sonGecmis && <small class="muted">Son kayıt: {yTarih.format(new Date(sonGecmis.tarih))}{sonGecmis.not ? ' · ' + sonGecmis.not : ''}</small>}
-          </div>}
-        </section>;
-      })}
-    </aside>
-    </div>
-
-    {webSecilebilir && <div class="y-toplu" data-y-toplu hidden role="region" aria-label="Toplu web siparişi işlemleri">
-      <strong data-y-secim>0 seçili</strong>
-      <details class="y-toplu-onizleme"><summary>Seçilen siparişler</summary><p data-y-secim-onizleme></p></details>
-      <label class="y-toplu__tur">Belge
-        <select data-y-toplu-tur aria-label="Toplu belge türü">{Object.entries(BELGE_TURLERI).map(([id, ad]) => <option value={id}>{ad}</option>)}</select>
-      </label>
-      <button class="btn btn--sepet" type="button" data-y-toplu-eylem="belge"><PIkon ad="indir" boyut={17} />PDF / ZIP indir</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="a4"><PIkon ad="yazici" boyut={17} />Etiket A4</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="etiket" data-bicim="etiket"><PIkon ad="yazici" boyut={17} />Etiket 10×15</button>
-      <button class="btn btn--cizgi" type="button" data-y-toplu-eylem="toplama"><PIkon ad="liste" boyut={17} />Toplama listesi</button>
-      <button class="y-icon-button" type="button" data-y-toplu-temizle aria-label="Seçimi temizle"><Ikon ad="kapat" boyut={16} /></button>
-    </div>}
-    {webSecilebilir && <dialog class="y-modal" data-y-toplu-onay aria-labelledby="toplu-onay-baslik">
-      <div class="y-modal__bas"><strong id="toplu-onay-baslik">Toplu işlem özeti</strong></div>
-      <p data-y-toplu-ozet></p>
-      <p class="y-help">Seçilen web siparişleri</p><p class="y-toplu-onay-listesi" data-y-toplu-siparisler></p>
-      <form method="dialog" class="y-modal__alt"><button class="btn btn--cizgi" value="vazgec" autofocus>Vazgeç</button><button class="btn btn--sepet" value="indir">İndir</button></form>
-    </dialog>}
-  </> : <div class="y-kart y-bos">
-    <p><strong>{!pazaryeri && kanal !== 'web' ? 'Pazaryeri sipariş listesi kullanılamıyor.' : q ? '“' + q + '” için sipariş bulunamadı.' : filtre === 'islem' ? 'Bekleyen iş yok.' : 'Bu görünümde sipariş yok.'}</strong></p>
-    {filtre === 'islem' && !q && (sayilar.belgesiz ?? 0) > 0 && <p class="muted">Belgesi hazırlanmamış {sayilar.belgesiz} web siparişi var. <a class="y-link" href={filtreAdresi('belgesiz')}>Belgesi eksik siparişleri aç</a></p>}
-    {q && filtre !== 'tumu' && <a class="y-link" href={filtreAdresi('tumu')}>Tüm durumlarda ara</a>}
-    {(filtre !== 'tumu' || kanal !== 'tumu' || q || tarihAcik) && <a class="y-link" href="?durum=tumu">Tüm siparişleri göster</a>}
-  </div>}
-  </div>
-  </div>
+  )}
 </Yonetim>
 
 <style>
+  .sm-sekme-cubugu { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .sm-ana-sekmeler { flex: 1 1 auto; margin-bottom: 0 !important; }
+  .sm-diger-menu { position: relative; }
+  .sm-diger-menu > summary { list-style: none; display: inline-flex; align-items: center; gap: 6px; }
+  .sm-diger-menu > summary::-webkit-details-marker { display: none; }
+  .sm-diger-menu.is-secili > summary { border-color: #c69749; background: #fffaf0; color: var(--y-ink); }
+  .sm-diger-uyari { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: var(--y-kirmizi); color: #fff; font-size: 11px; }
+  .sm-diger-liste { position: absolute; right: 0; top: calc(100% + 6px); min-width: 245px; padding: 6px; border-radius: 12px; background: #fff; border: 1px solid var(--y-border); box-shadow: 0 12px 28px rgba(28, 21, 15, 0.14); z-index: 45; display: grid; gap: 2px; }
+  .sm-diger-liste a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--y-ink); font-size: 13px; font-weight: 550; }
+  .sm-diger-liste a:hover, .sm-diger-liste a[aria-current="page"] { background: var(--y-surface-2); font-weight: 700; }
+  .sm-diger-liste b { font-size: 12px; color: var(--y-muted); font-variant-numeric: tabular-nums; }
+  .sm-toolbar { margin-bottom: 14px; }
   .y-siparis-no { white-space: normal; overflow-wrap: anywhere; }
-  /* .y-panel düzen bileşeninde (body); kapsamlı CSS'te eşleşmesi için :global gerekir */
+  .sm-no-satir { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sm-no-link { text-decoration: none; font-variant-numeric: tabular-nums; }
+  .sm-musteri { font-weight: 600; display: block; }
+  .sm-satir--test { opacity: 0.76; }
   :global(.y-panel) .y-tablo.y-siparis-tablo td small.y-table-note { white-space: normal; overflow-wrap: anywhere; }
   .durum-ozeti { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
   .durum-ozeti .y-chip { white-space: normal; }
-  .kritik-not { color: var(--y-kirmizi); font-weight: 650; }
-  .detay-link { display: inline-flex; padding: 4px 6px; white-space: nowrap; }
   .sayfa-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
   .sayfa-alt .y-help { margin: 0; }
   .siparis-kanal-uyari { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 14px; background: var(--y-turuncu-zemin); color: var(--y-turuncu); border-color: #efd5a4; }
   .siparis-kanal-uyari > span { flex: 1 1 280px; }
-  .hizli-baslik { display: inline-flex; align-items: center; gap: 10px; font-size: 18px !important; }
-  .hizli-ust-dugmeler { display: inline-flex; align-items: center; gap: 4px; }
-  .hizli-alt { margin: -8px 0 10px !important; font-size: 13px; }
-  .hizli-durum-seridi { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 12px !important; }
-  .hizli-tutar { margin-left: auto; font-size: 18px; }
-  .hizli-siradaki { padding: 14px; border: 1px solid #ecd9bd; border-radius: 13px; background: #fffaf2; margin-bottom: 12px; }
-  .hizli-siradaki h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px !important; font-size: 14.5px !important; color: var(--y-gold-ink); }
-  .hizli-siradaki :global(.btn--sepet), .hizli-ana-dugme { width: 100%; }
-  .hizli-uyarilar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
-  .hizli-aksiyon-listesi { display: grid; gap: 6px; margin-bottom: 12px; }
-  .hizli-aksiyon { display: flex; align-items: center; gap: 10px; min-height: 42px; padding: 8px 12px; border: 1px solid var(--y-border); border-radius: 11px; background: #fff; color: var(--y-ink); text-decoration: none; font-size: 14px; font-weight: 600; }
-  .hizli-aksiyon:hover { background: var(--y-surface-2); border-color: #d2b996; }
-  .hizli-aksiyon > span { flex: 1; }
-  .hizli-bilgi-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 10px; }
-  .hizli-kutu { display: grid; align-content: start; gap: 4px; padding: 11px 13px; border: 1px solid var(--y-border); border-radius: 12px; background: var(--y-surface-2); margin-bottom: 10px; }
-  .hizli-bilgi-izgara .hizli-kutu { margin-bottom: 0; }
-  .hizli-kutu h4 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 13px; font-weight: 700; color: var(--y-muted); text-transform: uppercase; letter-spacing: .03em; }
-  .hizli-kutu small { font-size: 13px; color: var(--y-ink-2); line-height: 1.4; overflow-wrap: anywhere; }
-  .hizli-urunler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .hizli-urunler li { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding-top: 6px; border-top: 1px solid var(--y-border); font-size: 13.5px; }
-  .hizli-urunler li:first-child { padding-top: 0; border-top: 0; }
-  .hizli-urunler img { width: 36px; height: 36px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--y-border); }
-  .hizli-urunler small { display: block; color: var(--y-muted); font-size: 12px; }
-  .hizli-not { margin: 0; padding: 7px 10px; border-radius: 9px; background: #fff4e4; font-size: 13px; }
-  @media (max-width: 760px) { .detay-link { min-height: 36px; align-items: center; } .hizli-bilgi-izgara { grid-template-columns: 1fr; } }
+
+  @media (min-width: 1100px) {
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) {
+      grid-template-columns: minmax(0, 1fr) minmax(400px, 42%) !important;
+    }
+    .sm-calisma-paneli {
+      max-height: calc(100dvh - var(--y-top-height) - 32px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+  }
 </style>

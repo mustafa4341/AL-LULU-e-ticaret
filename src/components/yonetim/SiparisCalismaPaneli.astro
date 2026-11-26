@@ -1,0 +1,910 @@
+---
+/**
+ * Siparişler ekranındaki sağ çalışma paneli (Slide-over Workspace).
+ * Mağaza sahibinin sipariş listesinden ayrılmadan:
+ *  - Hazırlama / Toplamaya Başla / Paketle
+ *  - Kargo etiketi, barkodla paketleme, takip numarası ve iç belgeler
+ *  - 3 aşamalı e-Arşiv fatura (1. GİB Kopyala -> 2. Kaydet -> 3. İlet)
+ *  - Eşleşmeyen ürün bağlama, stok açığı tamamlama, iade depo kontrolü
+ *  - Sipariş bazlı gerçek kazanç / hakediş / mutabakat ve zaman çizelgesi
+ * işlemlerini yürütmesini sağlar. Tüm mutasyonlar mevcut tek-sahip POST uçlarına `geri` ile döner.
+ */
+import Ikon from '../Ikon.astro';
+import KanalLogo from './KanalLogo.astro';
+import PIkon from './PIkon.astro';
+import SiparisSonraki from './SiparisSonraki.astro';
+import { epostaBagli } from '../../lib/altyapi';
+import { BELGE_DURUMLARI, BELGE_TURLERI, belgeGecerli, finansGunu, finansPara, type BelgeTuru } from '../../lib/finans';
+import { faturaKanalLinki } from '../../lib/faturaKanaldan';
+import { GENEL_TCKN, GIB_PORTAL, sayiYaz, tlYaz } from '../../lib/faturaMerkezi';
+import { hbOrtakEtiketVar } from '../../lib/hepsiburadaApi';
+import { PY_DURUM_ADLARI, kurusTL } from '../../lib/pazaryeri';
+import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
+import { SIPARIS_DURUM_ADLARI, type SiteAyarlari, type Urun } from '../../lib/sema';
+import { gonderildi, iadeEdildi, iptalEdilebilir, siradakiDurum } from '../../lib/siparisAkisi';
+import type { SiparisMerkeziKaydi } from '../../lib/siparisMerkezi';
+import { tyOrtakEtiketVar } from '../../lib/trendyolApi';
+import { yTarih } from '../../lib/yonetimRapor';
+
+interface Props {
+  kayit: SiparisMerkeziKaydi;
+  panelId: string;
+  acik: boolean;
+  geriBazAdresi: string;
+  kapatAdresi: string;
+  oncekiPanelId?: string;
+  sonrakiPanelId?: string;
+  siraBilgisi: string;
+  kargoAyar: SiteAyarlari['kargo'];
+  urunSecenekleri: Urun[];
+  kullanilabilirStok: (u: Urun) => number;
+  origin: string;
+}
+
+const {
+  kayit: s,
+  panelId,
+  acik,
+  geriBazAdresi,
+  kapatAdresi,
+  oncekiPanelId,
+  sonrakiPanelId,
+  siraBilgisi,
+  kargoAyar,
+  urunSecenekleri,
+  kullanilabilirStok,
+  origin,
+} = Astro.props;
+
+const geriAdresi = `${geriBazAdresi}${geriBazAdresi.includes('?') ? '&' : '?'}sec=${encodeURIComponent(s.anahtar)}`;
+const bugun = finansGunu();
+const tyBagli = ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'));
+const hbBagli = ['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada'));
+const smtpAcik = epostaBagli();
+
+const KANAL_PANELI = {
+  trendyol: 'https://partner.trendyol.com/account/login',
+  hepsiburada: 'https://merchant.hepsiburada.com/',
+} as const;
+
+const py = s.py;
+const web = s.web;
+const faturaAdayi = s.fatura.aday;
+const kesilenFatura = s.fatura.kayit;
+
+const tyIslemAcik = Boolean(
+  py && py.kanal === 'trendyol' && py.paketNo && !s.entegrasyon.testSiparisi && tyBagli
+  && !['Cancelled', 'UnSupplied', 'Returned'].includes(py.hamDurum),
+);
+const hbIslemAcik = Boolean(
+  py && py.kanal === 'hepsiburada' && !s.entegrasyon.testSiparisi && hbBagli
+  && !['iptal', 'iade', 'teslim-edilemedi', 'onay-bekliyor'].includes(py.durum),
+);
+const stokEngeli = s.stok.durum === 'eslesmeyen' || s.stok.durum === 'eksik';
+
+const waFaturaLinki = (() => {
+  if (!web || !kesilenFatura) return undefined;
+  const tel = web.musteri.tel.replace(/\D/g, '');
+  if (!tel) return undefined;
+  const tamTel = tel.startsWith('90') ? tel : tel.startsWith('0') ? '9' + tel : '90' + tel;
+  if (!/^90\d{10}$/.test(tamTel)) return undefined;
+  const mesaj = `Merhaba ${web.musteri.ad}, ${web.no} numaralı Al Lulu Home siparişinizin ${kesilenFatura.no} numaralı e-Arşiv faturası hazırlanmıştır. Sipariş durumunuzu ${origin}/siparis-takip adresinden görüntüleyebilirsiniz.`;
+  return `https://wa.me/${tamTel}?text=${encodeURIComponent(mesaj)}`;
+})();
+
+const siraliBelgeler = [...s.belgeler].sort((a, b) => b.olusturma.localeCompare(a.olusturma));
+const mevcutBelge = Object.fromEntries(siraliBelgeler.filter(belgeGecerli).map((b) => [b.tur, b])) as Partial<Record<BelgeTuru, (typeof s.belgeler)[number]>>;
+const webIptalMi = web ? web.durum === 'iptal' || iadeEdildi(web) : false;
+
+const gecmisListesi = web
+  ? [...web.gecmis].reverse().map((g) => ({
+      tarih: g.tarih,
+      baslik: g.islem === 'iade' ? 'İade tamamlandı' : g.durum ? SIPARIS_DURUM_ADLARI[g.durum] : (g.islem ?? 'İşlem'),
+      not: g.not,
+    }))
+  : py
+    ? [...py.gecmis].reverse().map((g) => ({
+        tarih: g.tarih,
+        baslik: PY_DURUM_ADLARI[g.durum],
+        not: g.not,
+      }))
+    : [];
+
+const varsayilanSekme = s.birincilIslem.sekme;
+---
+
+<section id={panelId} class="sp-panel" data-panel-kayit data-siparis-anahtar={s.anahtar} hidden={!acik}>
+  {/* 1. ÜST ÖZET VE GEÇİŞ ÇUBUĞU */}
+  <header class="sp-ust">
+    <div class="sp-ust__kimlik">
+      <KanalLogo kanal={s.kanal} boyut="kucuk" />
+      <div>
+        <div class="sp-ust__no-satir">
+          <h2>{s.no}</h2>
+          <button type="button" class="y-kopya" data-kopyala={s.no} title="Sipariş numarasını kopyala" aria-label={s.no + ' kopyala'}>
+            <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          </button>
+          {s.entegrasyon.etiket && <span class="y-chip y-chip--gri">{s.entegrasyon.etiket}</span>}
+        </div>
+        <small class="muted">
+          {s.kanalAdi} · {yTarih.format(new Date(s.tarih))}
+          {s.paketNo && s.paketNo !== s.no ? ` · Paket ${s.paketNo}` : ''}
+        </small>
+      </div>
+    </div>
+
+    <div class="sp-ust__sag">
+      <div class="sp-gecis" role="group" aria-label="Siparişler arası geçiş">
+        <button type="button" class="y-icon-button" data-panel-gecis={oncekiPanelId} disabled={!oncekiPanelId} title="Önceki sipariş" aria-label="Önceki sipariş">
+          <PIkon ad="ok-sol" boyut={16} />
+        </button>
+        <span class="sp-gecis__sira">{siraBilgisi}</span>
+        <button type="button" class="y-icon-button" data-panel-gecis={sonrakiPanelId} disabled={!sonrakiPanelId} title="Sonraki sipariş" aria-label="Sonraki sipariş">
+          <PIkon ad="sag" boyut={16} />
+        </button>
+      </div>
+      <a class="y-icon-button" href={s.detayHref} title="Tam sayfa sipariş detayını aç" aria-label={s.no + ' tam detay sayfası'}>
+        <PIkon ad="dis-baglanti" boyut={16} />
+      </a>
+      <a href={kapatAdresi} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat title="Paneli kapat" aria-label="Paneli kapat">
+        <Ikon ad="kapat" boyut={17} />
+      </a>
+    </div>
+  </header>
+
+  {/* 2. TEK BAKIŞTA AŞAMA ÇİZGİSİ VE TUTAR */}
+  <div class="sp-ozet-serit">
+    <div class="sp-ozet-serit__sol">
+      <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
+      <span class:list={['y-chip', 'y-chip--' + s.fatura.renk]}>{s.fatura.kisaEtiket}</span>
+      {s.stok.durum !== 'ayrildi' && s.stok.durum !== 'bekliyor' && (
+        <span class:list={['y-chip', 'y-chip--' + s.stok.renk]}>{s.stok.etiket}</span>
+      )}
+    </div>
+    <strong class="sp-tutar">{kurusTL(s.tutarKurus)}</strong>
+  </div>
+
+  <ol class="sp-adimlar" aria-label="Sipariş aşamaları">
+    {s.adimlar.map((a) => (
+      <li class:list={['sp-adim', 'is-' + a.durum]}>
+        <span class="sp-adim__nokta" aria-hidden="true"></span>
+        <span class="sp-adim__ad">{a.ad}</span>
+      </li>
+    ))}
+  </ol>
+
+  {/* 3. UYARILAR VE TEK BİRİNCİL EYLEM KUTUSU */}
+  {s.uyarilar.length > 0 && (
+    <div class="sp-uyari-kutusu" role="status">
+      <PIkon ad="uyari" boyut={17} />
+      <ul>{s.uyarilar.map((u) => <li>{u}</li>)}</ul>
+    </div>
+  )}
+
+  <div class:list={['sp-birincil', 'is-' + s.birincilIslem.tur]}>
+    <div class="sp-birincil__metin">
+      <span class="sp-birincil__ust"><PIkon ad="simsek" boyut={15} /> Sıradaki İşlem</span>
+      <strong>{s.birincilIslem.etiket}</strong>
+      <small>{s.birincilIslem.aciklama}</small>
+    </div>
+
+    {/* Doğrudan tek tıkla çalışabilen birincil aksiyonlar (ek girdi istemeyenler) hemen burada; girdi isteyenler altındaki ilgili karta odaklanır */}
+    <div class="sp-birincil__aksiyon">
+      {s.birincilIslem.kod === 'ty-toplama' && tyIslemAcik && !stokEngeli ? (
+        <form method="post" action={s.detayHref} data-tek-gonder>
+          <input type="hidden" name="geri" value={geriAdresi} />
+          <button class="btn btn--sepet" type="submit" name="eylem" value="ty-toplama">Toplamaya Başla →</button>
+        </form>
+      ) : s.birincilIslem.kod === 'hb-paketle' && hbIslemAcik && !stokEngeli ? (
+        <form method="post" action={s.detayHref} data-tek-gonder>
+          <input type="hidden" name="geri" value={geriAdresi} />
+          <button class="btn btn--sepet" type="submit" name="eylem" value="hb-paketle">Kargoya Hazırla →</button>
+        </form>
+      ) : s.birincilIslem.kod === 'web-hazirla' && web && !stokEngeli ? (
+        <form method="post" action={s.detayHref} data-tek-gonder>
+          <input type="hidden" name="geri" value={geriAdresi} />
+          <input type="hidden" name="eylem" value="durum" />
+          <input type="hidden" name="durum" value="hazirlaniyor" />
+          <button class="btn btn--sepet" type="submit">Hazırlamaya Al →</button>
+        </form>
+      ) : s.birincilIslem.kod === 'stok-coz' && web && web.paytr?.stokEksik ? (
+        <form method="post" action={s.detayHref} data-tek-gonder>
+          <input type="hidden" name="geri" value={geriAdresi} />
+          <button class="btn btn--sepet" type="submit" name="eylem" value="stok-tamamla">Stoğu Ayır →</button>
+        </form>
+      ) : s.birincilIslem.odak ? (
+        <button
+          type="button"
+          class="btn btn--sepet"
+          data-sp-odak={`${panelId}-${s.birincilIslem.odak}`}
+          data-sp-hedef-sekme={s.birincilIslem.sekme}
+        >
+          {s.birincilIslem.etiket} ↓
+        </button>
+      ) : (
+        <a class="btn btn--cizgi" href={s.detayHref}>Tam Detayı Aç →</a>
+      )}
+    </div>
+  </div>
+
+  {/* 4. İÇERİK SEKMELERİ: İŞLEMLER | KAZANÇ | GEÇMİŞ */}
+  <div class="sp-sekmeler" role="tablist" aria-label="Sipariş çalışma bölümleri">
+    <button type="button" role="tab" aria-selected={varsayilanSekme === 'islemler' ? 'true' : 'false'} data-sp-sekme="islemler">
+      <PIkon ad="kutu" boyut={15} /> İşlemler
+    </button>
+    <button type="button" role="tab" aria-selected={varsayilanSekme === 'kazanc' ? 'true' : 'false'} data-sp-sekme="kazanc">
+      <PIkon ad="para" boyut={15} /> Kazanç
+    </button>
+    <button type="button" role="tab" aria-selected={varsayilanSekme === 'gecmis' ? 'true' : 'false'} data-sp-sekme="gecmis">
+      <PIkon ad="gecmis" boyut={15} /> Müşteri &amp; Geçmiş
+    </button>
+  </div>
+
+  {/* ==================== SEKME 1: İŞLEMLER ==================== */}
+  <div class="sp-icerik" data-sp-icerik="islemler" hidden={varsayilanSekme !== 'islemler'}>
+    {/* A) ÜRÜN LİSTESİ + EŞLEŞTİRME / STOK / İADE KONTROLÜ */}
+    <div class="sp-kart" id={`${panelId}-eslestir`}>
+      <div class="sp-kart__bas">
+        <h3><PIkon ad="kutu" boyut={15} /> Sipariş Kalemleri ({s.toplamAdet} adet)</h3>
+        {s.paketleHref && (
+          <a class="btn btn--cizgi btn--kucuk" href={s.paketleHref}>
+            <PIkon ad="barkod" boyut={15} /> Barkodla Paketle
+          </a>
+        )}
+      </div>
+
+      <ul class="sp-kalemler" id={`${panelId}-stok`}>
+        {s.kalemler.map((k) => (
+          <li class="sp-kalem">
+            <div class="sp-kalem__satir">
+              {k.gorsel ? (
+                <img src={k.gorsel} alt="" width="40" height="40" loading="lazy" />
+              ) : (
+                <span class="y-kalem-gorsel--yok"><Ikon ad="kutu" boyut={16} /></span>
+              )}
+              <div class="sp-kalem__bilgi">
+                <strong>{k.ad}</strong>
+                <small>
+                  {k.adet} adet × {kurusTL(k.birimKurus)}
+                  {k.sku ? ` · ${k.sku}` : ''}
+                  {k.barkod && k.barkod !== k.sku ? ` · Barkod: ${k.barkod}` : ''}
+                </small>
+              </div>
+              <b class="sp-kalem__tutar">{kurusTL(k.toplamKurus)}</b>
+            </div>
+
+            {/* Pazaryeri eşleşmeyen ürün bağlama formu */}
+            {py && k.eslesmeyen && (
+              <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <input type="hidden" name="surum" value={py.surum} />
+                <input type="hidden" name="kalem" value={k.anahtar} />
+                <label class="y-alan">Katalog ürününe bağla (stok otomatik düşer ve kod kaydedilir)
+                  <select name="urun" required class="y-girdi">
+                    <option value="">Ürün seçin…</option>
+                    {urunSecenekleri.map((u) => (
+                      <option value={u.id}>{u.marka} {u.kisaAd} (Stok: {kullanilabilirStok(u)})</option>
+                    ))}
+                  </select>
+                </label>
+                <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="eslestir">Ürünü Eşleştir ve Stoğu Düş</button>
+              </form>
+            )}
+
+            {/* Pazaryeri eksik stok tamamlama */}
+            {py && k.eksikStok > 0 && (
+              <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <input type="hidden" name="surum" value={py.surum} />
+                <input type="hidden" name="kalem" value={k.anahtar} />
+                <p class="y-help y-yazi-kirmizi" style="margin:0">{k.eksikStok} adet stok açığı var. Depo stoğunu artırdıktan sonra buradan tamamlayın.</p>
+                <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="stogu-tamamla">Eksik Stoğu Tamamla</button>
+              </form>
+            )}
+
+            {/* Pazaryeri iade depo kontrolü */}
+            {py && k.iadeBekliyor && (
+              <form method="post" action={s.detayHref} class="sp-alt-form" id={`${panelId}-iade`} data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <input type="hidden" name="surum" value={py.surum} />
+                <input type="hidden" name="kalem" value={k.anahtar} />
+                <label class="y-alan">İade gelen ürünün durumu
+                  <select name="iade-karari" required class="y-girdi">
+                    <option value="satilabilir">Satılabilir durumda — ortak stoğa geri ekle</option>
+                    <option value="satilamaz">Hasarlı / kullanılmış — stoğa ekleme</option>
+                  </select>
+                </label>
+                <label class="y-secim">
+                  <input type="checkbox" name="iade-onay" required />
+                  <span>Paketi depoda kontrol ettim</span>
+                </label>
+                <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="iade">İade Kararını Kaydet</button>
+              </form>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+
+    {/* B) HAZIRLAMA, KARGO VE ETİKET İŞLEMLERİ (KANAL GERÇEKLERİNE GÖRE) */}
+    <div class="sp-kart" id={`${panelId}-durum`}>
+      <div class="sp-kart__bas">
+        <h3><PIkon ad="kargo" boyut={15} /> Hazırlama, Etiket ve Kargo</h3>
+        {s.kargo.takipUrl && (
+          <a class="y-link" href={s.kargo.takipUrl} target="_blank" rel="noopener">Kargo Takibi ↗</a>
+        )}
+      </div>
+
+      {stokEngeli && (
+        <p class="y-uyari" style="margin:0 0 8px">
+          Yukarıdaki ürün eşleştirme / stok açığı çözülmeden hazırlama ve kargo adımları güvenlik için kilitlidir.
+        </p>
+      )}
+
+      {/* WEB KANAL İŞLEMLERİ */}
+      {web && !s.entegrasyon.testSiparisi && (
+        <div class="sp-kanal-blok">
+          {!stokEngeli && siradakiDurum(web) && (
+            <SiparisSonraki siparis={web} kargo={kargoAyar} action={s.detayHref} geri={geriAdresi} />
+          )}
+          {web.kargoTakip && (
+            <p class="sp-bilgi-satir">
+              <span>Kargo: <strong>{web.kargoFirma || kargoAyar.firma}</strong> · <code>{web.kargoTakip}</code></span>
+              <button type="button" class="y-kopya" data-kopyala={web.kargoTakip} title="Takip numarasını kopyala">Kopyala</button>
+            </p>
+          )}
+          {!webIptalMi && (
+            <div class="sp-buton-grup">
+              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=etiket`} target="_blank" rel="noopener">
+                <PIkon ad="yazici" boyut={15} /> 10×15 Etiket
+              </a>
+              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=a4`} target="_blank" rel="noopener">
+                <PIkon ad="yazici" boyut={15} /> A4 Etiket
+              </a>
+              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=a4&tur=toplama`} target="_blank" rel="noopener">
+                <PIkon ad="liste" boyut={15} /> Toplama Fişi
+              </a>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TRENDYOL KANAL İŞLEMLERİ */}
+      {py && py.kanal === 'trendyol' && (
+        <div class="sp-kanal-blok" id={`${panelId}-kanal`}>
+          {py.kargoTakip ? (
+            <p class="sp-bilgi-satir">
+              <span>Kargo Kodu ({py.kargoFirma || 'Trendyol'}): <code>{py.kargoTakip}</code></span>
+              <button type="button" class="y-kopya" data-kopyala={py.kargoTakip}>Kopyala</button>
+            </p>
+          ) : (
+            <p class="y-help" style="margin:0">“Toplamaya Başla” bildirildikten sonra Trendyol kargo barkodunu oluşturur.</p>
+          )}
+          <div class="sp-buton-grup">
+            {tyIslemAcik && py.hamDurum === 'Created' && (
+              <form method="post" action={s.detayHref} data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="ty-toplama" disabled={stokEngeli}>
+                  Toplamaya Başla
+                </button>
+              </form>
+            )}
+            {tyIslemAcik && py.kargoTakip && tyOrtakEtiketVar(py.kargoFirma) && (
+              <form method="post" action={s.detayHref}>
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="ty-etiket">
+                  <PIkon ad="yazici" boyut={15} /> Termal Etiket (ZPL) İndir
+                </button>
+              </form>
+            )}
+            <a class="btn btn--cizgi btn--kucuk" href={KANAL_PANELI.trendyol} target="_blank" rel="noopener">
+              Trendyol Paneli (PDF Etiket) ↗
+            </a>
+          </div>
+          {py.kargoTakip && !tyOrtakEtiketVar(py.kargoFirma) && (
+            <small class="muted">Not: {py.kargoFirma || 'Bu kargo firması'} için barkodlu A4/PDF etiketi Trendyol Satıcı Paneli’nden yazdırılır; görevli barkodu okutunca durum otomatik “Kargoda” olur.</small>
+          )}
+        </div>
+      )}
+
+      {/* HEPSİBURADA KANAL İŞLEMLERİ */}
+      {py && py.kanal === 'hepsiburada' && (
+        <div class="sp-kanal-blok" id={`${panelId}-kanal`}>
+          {py.kargoTakip && (
+            <p class="sp-bilgi-satir">
+              <span>Kargo ({py.kargoFirma || 'Hepsiburada'}): <code>{py.kargoTakip}</code></span>
+              <button type="button" class="y-kopya" data-kopyala={py.kargoTakip}>Kopyala</button>
+            </p>
+          )}
+          {hbIslemAcik && s.asama === 'hazirlanacak' && (
+            <form method="post" action={s.detayHref} class="sp-satir-form" data-tek-gonder>
+              <input type="hidden" name="geri" value={geriAdresi} />
+              <input class="y-girdi" name="desi" inputmode="decimal" placeholder="Desi (opsiyonel)" style="max-width:130px" />
+              <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="hb-paketle" disabled={stokEngeli}>
+                Kargoya Hazırla (Paketle)
+              </button>
+            </form>
+          )}
+          <div class="sp-buton-grup">
+            {hbIslemAcik && hbOrtakEtiketVar(py.kargoFirma) && (
+              <form method="post" action={s.detayHref}>
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="hb-etiket">
+                  <PIkon ad="yazici" boyut={15} /> Kargo Etiketi (PDF) İndir
+                </button>
+              </form>
+            )}
+            <a class="btn btn--cizgi btn--kucuk" href={KANAL_PANELI.hepsiburada} target="_blank" rel="noopener">
+              Hepsiburada Paneli ↗
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+
+    {/* C) 3 AŞAMALI RESMÎ FATURA AKIŞI (1. KESİLECEK -> 2. KAYDEDİLDİ -> 3. İLETİLDİ) */}
+    {s.fatura.asama !== 'gerekmez' && (
+      <div class="sp-kart sp-fatura-kart" id={`${panelId}-fatura`}>
+        <div class="sp-kart__bas">
+          <h3><PIkon ad="fatura" boyut={15} /> e-Arşiv Fatura (3 Aşamalı)</h3>
+          <span class:list={['y-chip', 'y-chip--' + s.fatura.renk]}>{s.fatura.etiket}</span>
+        </div>
+
+        <ol class="sp-fatura-adimlar" aria-label="Fatura aşamaları">
+          <li class:list={{ 'is-tamam': s.fatura.adimNo > 1, 'is-aktif': s.fatura.adimNo === 1 }}>1. GİB’de Kes</li>
+          <li class:list={{ 'is-tamam': s.fatura.adimNo > 2, 'is-aktif': s.fatura.adimNo === 2 }}>2. Kaydet</li>
+          <li class:list={{ 'is-tamam': s.fatura.adimNo === 3 }}>3. İletildi</li>
+        </ol>
+
+        {/* AŞAMA 1: GİB KOPYALA + KAYDET FORMU */}
+        {s.fatura.asama === 'kesilecek' && faturaAdayi && (
+          <div class="sp-fatura-govde">
+            <div class="sp-gib-kutu">
+              <div class="sp-gib-baslik">
+                <strong>1. Adım: GİB e-Arşiv Bilgileri</strong>
+                <a class="btn btn--cizgi btn--kucuk" href={GIB_PORTAL} target="_blank" rel="noopener">GİB Portalını Aç ↗</a>
+              </div>
+              {faturaAdayi.eksikler.length > 0 && (
+                <p class="y-uyari" style="margin:4px 0">Eksik bilgi: {faturaAdayi.eksikler.join('; ')}</p>
+              )}
+              <dl class="sp-kopya-liste">
+                <div>
+                  <dt>{faturaAdayi.alici.tip === 'kurumsal' ? 'Unvan' : 'Ad Soyad'}</dt>
+                  <dd>
+                    <span>{faturaAdayi.alici.firma || faturaAdayi.alici.ad || '—'}</span>
+                    {(faturaAdayi.alici.firma || faturaAdayi.alici.ad) && (
+                      <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.firma || faturaAdayi.alici.ad}>Kopyala</button>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>{faturaAdayi.alici.tip === 'kurumsal' ? 'VKN / VD' : 'TCKN'}</dt>
+                  <dd>
+                    <span>
+                      {faturaAdayi.alici.tip === 'kurumsal'
+                        ? `${faturaAdayi.alici.vergiNo || '—'} (${faturaAdayi.alici.vergiDairesi || '—'})`
+                        : `${faturaAdayi.alici.tckn || GENEL_TCKN}${faturaAdayi.alici.tcknBilinmiyor ? ' (genel)' : ''}`}
+                    </span>
+                    <button
+                      type="button"
+                      class="y-kopya"
+                      data-kopyala={faturaAdayi.alici.tip === 'kurumsal' ? (faturaAdayi.alici.vergiNo || '') : (faturaAdayi.alici.tckn || GENEL_TCKN)}
+                    >
+                      Kopyala
+                    </button>
+                  </dd>
+                </div>
+                {faturaAdayi.alici.adres && (
+                  <div>
+                    <dt>Adres</dt>
+                    <dd>
+                      <span>{faturaAdayi.alici.adres}</span>
+                      <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.adres}>Kopyala</button>
+                    </dd>
+                  </div>
+                )}
+                <div>
+                  <dt>Fatura Notu</dt>
+                  <dd>
+                    <span>{faturaAdayi.aciklama}</span>
+                    <button type="button" class="y-kopya" data-kopyala={faturaAdayi.aciklama}>Kopyala</button>
+                  </dd>
+                </div>
+              </dl>
+
+              <div class="sp-fatura-satirlar">
+                {faturaAdayi.satirlar.map((st) => (
+                  <div class="sp-fatura-satir">
+                    <span>{st.adet}× {st.ad} <small class="muted">(KDV %{st.kdvOrani})</small></span>
+                    <span>
+                      KDV hrç birim: <strong>{sayiYaz(st.birimHaric)}</strong>
+                      <button type="button" class="y-kopya" data-kopyala={sayiYaz(st.birimHaric)}>Kopyala</button>
+                    </span>
+                  </div>
+                ))}
+                <div class="sp-fatura-toplam">
+                  <span>KDV Hariç: {tlYaz(faturaAdayi.toplam.matrah)} TL · KDV: {tlYaz(faturaAdayi.toplam.kdv)} TL</span>
+                  <strong>Genel Toplam: {finansPara(faturaAdayi.toplam.genel)}</strong>
+                </div>
+              </div>
+            </div>
+
+            {s.kanal === 'trendyol' && tyBagli && (
+              <form method="post" action="/yonetim/finans/faturalar" class="sp-alt-form" data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <input type="hidden" name="siparisNo" value={s.no} />
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="trendyoldan-al">
+                  <PIkon ad="indir" boyut={15} /> Faturayı Trendyol Panelinden Yüklediysem Çek
+                </button>
+              </form>
+            )}
+
+            <form method="post" action="/yonetim/finans/faturalar" enctype="multipart/form-data" class="sp-alt-form" data-tek-gonder>
+              <input type="hidden" name="geri" value={geriAdresi} />
+              <input type="hidden" name="eylem" value="kaydet" />
+              <input type="hidden" name="anahtar" value={faturaAdayi.anahtar} />
+              <strong>2. Adım: Kestiğiniz Faturayı Kaydedin</strong>
+              <div class="sp-ikili">
+                <label class="y-alan">Fatura No
+                  <input class="y-girdi" name="no" required maxlength="40" placeholder="GIB2026000000012" autocomplete="off" />
+                </label>
+                <label class="y-alan">Tarih
+                  <input class="y-girdi" type="date" name="tarih" value={bugun} max={bugun} required />
+                </label>
+              </div>
+              <label class="y-alan">Fatura PDF / Görsel (en fazla 4 MB)
+                <input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" />
+              </label>
+              {s.kanal !== 'hepsiburada' && (
+                <label class="y-secim">
+                  <input type="checkbox" name="ilet" checked={s.kanal === 'trendyol' ? tyBagli : smtpAcik} />
+                  <span>{s.kanal === 'trendyol' ? 'Kaydedince Trendyol’a otomatik yükle' : 'Kaydedince müşteriye e-posta ile gönder'}</span>
+                </label>
+              )}
+              <button class="btn btn--sepet btn--kucuk" type="submit">
+                <PIkon ad="tik" boyut={15} /> Faturayı Kaydet{s.kanal !== 'hepsiburada' ? ' ve İlet' : ''}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* AŞAMA 2 VE 3: KAYDEDİLMİŞ FATURA YÖNETİMİ VE İLETİM */}
+        {kesilenFatura && (
+          <div class="sp-fatura-govde">
+            <div class="sp-bilgi-satir">
+              <span>
+                <strong>{kesilenFatura.no}</strong> · {kesilenFatura.tarih.split('-').reverse().join('.')} · {finansPara(kesilenFatura.toplam)}
+              </span>
+              {kesilenFatura.ek ? (
+                <a class="y-link" href={`/yonetim/finans/fatura-dosya?id=${encodeURIComponent(kesilenFatura.id)}`} target="_blank" rel="noopener">
+                  PDF Aç ↗
+                </a>
+              ) : faturaKanalLinki(kesilenFatura) ? (
+                <a class="y-link" href={`/yonetim/finans/fatura-dosya?id=${encodeURIComponent(kesilenFatura.id)}`} target="_blank" rel="noopener">
+                  Trendyol’dan Aç ↗
+                </a>
+              ) : (
+                <span class="y-chip y-chip--turuncu">PDF eklenmedi</span>
+              )}
+            </div>
+
+            {s.fatura.hataMesaji && (
+              <p class="y-uyari" style="margin:0">{s.fatura.hataMesaji}</p>
+            )}
+
+            {!kesilenFatura.ek && (
+              <form method="post" action="/yonetim/finans/faturalar" enctype="multipart/form-data" class="sp-alt-form" data-tek-gonder>
+                <input type="hidden" name="geri" value={geriAdresi} />
+                <input type="hidden" name="eylem" value="dosya-yukle" />
+                <input type="hidden" name="id" value={kesilenFatura.id} />
+                <label class="y-alan">Eksik Fatura PDF Dosyasını Yükle
+                  <input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" required />
+                </label>
+                {s.kanal !== 'hepsiburada' && (
+                  <label class="y-secim">
+                    <input type="checkbox" name="ilet" checked={s.kanal === 'trendyol' ? tyBagli : smtpAcik} />
+                    <span>Yükleyince otomatik ilet</span>
+                  </label>
+                )}
+                <button class="btn btn--sepet btn--kucuk" type="submit">Dosyayı Kaydet</button>
+              </form>
+            )}
+
+            <div class="sp-buton-grup">
+              {s.kanal === 'trendyol' && kesilenFatura.ek && (
+                <form method="post" action="/yonetim/finans/faturalar" data-tek-gonder>
+                  <input type="hidden" name="geri" value={geriAdresi} />
+                  <input type="hidden" name="id" value={kesilenFatura.id} />
+                  <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="ilet" disabled={!tyBagli}>
+                    <PIkon ad="gonder" boyut={15} /> {s.fatura.asama === 'iletildi' ? 'Trendyol’a Tekrar Yükle' : 'Trendyol’a Otomatik Yükle'}
+                  </button>
+                </form>
+              )}
+              {s.kanal === 'web' && kesilenFatura.ek && smtpAcik && (
+                <form method="post" action="/yonetim/finans/faturalar" data-tek-gonder>
+                  <input type="hidden" name="geri" value={geriAdresi} />
+                  <input type="hidden" name="id" value={kesilenFatura.id} />
+                  <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="ilet">
+                    <PIkon ad="gonder" boyut={15} /> {s.fatura.asama === 'iletildi' ? 'E-postayı Tekrar Gönder' : 'Müşteriye E-posta Gönder'}
+                  </button>
+                </form>
+              )}
+              {waFaturaLinki && (
+                <a class="btn btn--cizgi btn--kucuk" href={waFaturaLinki} target="_blank" rel="noopener">
+                  <PIkon ad="whatsapp" boyut={15} /> WhatsApp ile Bildir ↗
+                </a>
+              )}
+              {s.kanal === 'hepsiburada' && (
+                <a class="btn btn--cizgi btn--kucuk" href={KANAL_PANELI.hepsiburada} target="_blank" rel="noopener">
+                  Hepsiburada Paneli ↗
+                </a>
+              )}
+              {s.fatura.asama !== 'iletildi' && (
+                <form method="post" action="/yonetim/finans/faturalar" data-tek-gonder>
+                  <input type="hidden" name="geri" value={geriAdresi} />
+                  <input type="hidden" name="id" value={kesilenFatura.id} />
+                  <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="elle">
+                    <PIkon ad="tik" boyut={15} /> {s.kanal === 'hepsiburada' ? 'HB’ye Yükledim (3/3 Tamamla)' : 'Elle İlettim (3/3 Tamamla)'}
+                  </button>
+                </form>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )}
+
+    {/* D) WEB İÇ SİPARİŞ BELGELERİ VE İADE / İPTAL (KATLANIR) */}
+    {web && !s.entegrasyon.testSiparisi && (
+      <details class="sp-detay-kart">
+        <summary><PIkon ad="belge" boyut={15} /> Koli İçi Belgeler ve İptal / İade İşlemleri</summary>
+        <div class="sp-detay-icerik">
+          <div class="sp-belgeler">
+            {(['ozet', 'fis', 'paket', 'iade'] as BelgeTuru[]).filter((t) => !webIptalMi || t === 'iade').map((t) => {
+              const b = mevcutBelge[t];
+              return (
+                <div class="sp-belge-satir">
+                  <span><strong>{BELGE_TURLERI[t]}</strong> {b && <small class="muted">({BELGE_DURUMLARI[b.durum]})</small>}</span>
+                  <div class="sp-buton-grup">
+                    {b && ['duzenlendi', 'gonderildi'].includes(b.durum) ? (
+                      <>
+                        <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/belge?goster=1&id=${encodeURIComponent(b.id)}`} target="_blank" rel="noopener">Aç ↗</a>
+                        <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/belge?id=${encodeURIComponent(b.id)}`}>İndir</a>
+                      </>
+                    ) : (
+                      <form method="post" action="/yonetim/finans/belge" data-tek-gonder>
+                        <input type="hidden" name="geri" value={geriAdresi} />
+                        <input type="hidden" name="no" value={web.no} />
+                        <input type="hidden" name="tur" value={t} />
+                        <input type="hidden" name="indir" value="0" />
+                        <button class="btn btn--cizgi btn--kucuk" type="submit" name="islem" value="olustur">Oluştur</button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {iptalEdilebilir(web) && (
+            <form method="post" action={s.detayHref} class="sp-alt-form" data-tek-gonder>
+              <input type="hidden" name="geri" value={geriAdresi} />
+              <input type="hidden" name="eylem" value="durum" />
+              <input type="hidden" name="durum" value="iptal" />
+              <label class="y-alan">Siparişi İptal Et (stok geri eklenir)
+                <input class="y-girdi" name="iptalNotu" placeholder="İptal sebebi (isteğe bağlı)" maxlength="240" />
+              </label>
+              <button class="btn btn--cizgi btn--kucuk y-yazi-kirmizi" type="submit" data-onayla={`${web.no} numaralı siparişi iptal etmek istediğinize emin misiniz?`}>
+                Siparişi İptal Et
+              </button>
+            </form>
+          )}
+
+          {gonderildi(web) && !iadeEdildi(web) && (
+            <form method="post" action={s.detayHref} class="sp-alt-form" data-tek-gonder>
+              <input type="hidden" name="geri" value={geriAdresi} />
+              <input type="hidden" name="eylem" value="iade" />
+              <label class="y-secim">
+                <input type="checkbox" name="iadeOnay" required />
+                <span>Ürün depoya sağlam döndü ve ücret iadesi yapıldı (stok geri eklenir)</span>
+              </label>
+              <button class="btn btn--cizgi btn--kucuk" type="submit">İadeyi Tamamla</button>
+            </form>
+          )}
+        </div>
+      </details>
+    )}
+  </div>
+
+  {/* ==================== SEKME 2: KAZANÇ VE MUTABAKAT ==================== */}
+  <div class="sp-icerik" data-sp-icerik="kazanc" hidden={varsayilanSekme !== 'kazanc'}>
+    <div class="sp-kart">
+      <div class="sp-kart__bas">
+        <h3><PIkon ad="para" boyut={15} /> Sipariş Ekonomisi ve Net Kâr</h3>
+        <span class="y-chip y-chip--gri">
+          {s.kazanc.kaynak === 'kesinlesen-ekstre' ? 'Kesinleşen Ekstre' : s.kazanc.kaynak === 'web-hesabi' ? 'Web Satışı' : s.kazanc.kaynak === 'tahmini-tarife' ? 'Tarife Tahmini' : 'Bilgi'}
+        </span>
+      </div>
+
+      <dl class="sp-hesap">
+        <div><dt>Müşterinin Ödediği (KDV dahil)</dt><dd><strong>{kurusTL(s.kazanc.musteriOdedigi)}</strong></dd></div>
+        {s.kazanc.indirim > 0 && <div><dt>Uygulanan İndirim</dt><dd>−{kurusTL(s.kazanc.indirim)}</dd></div>}
+        {s.kazanc.komisyon !== undefined && s.kazanc.komisyon > 0 && <div><dt>Kanal Komisyonu</dt><dd>−{kurusTL(s.kazanc.komisyon)}</dd></div>}
+        {s.kazanc.kargoKesintisi !== undefined && <div><dt>Kargo Kesintisi / Maliyeti</dt><dd>−{kurusTL(s.kazanc.kargoKesintisi)}</dd></div>}
+        {s.kazanc.hizmetKesintisi !== undefined && s.kazanc.hizmetKesintisi > 0 && <div><dt>Hizmet / İşlem Bedeli</dt><dd>−{kurusTL(s.kazanc.hizmetKesintisi)}</dd></div>}
+        {s.kazanc.stopaj !== undefined && s.kazanc.stopaj > 0 && <div><dt>E-Ticaret Stopajı (%1)</dt><dd>−{kurusTL(s.kazanc.stopaj)}</dd></div>}
+        <div>
+          <dt>Kayıtlı Ürün Alış Maliyeti (KDV hrç)</dt>
+          <dd>
+            {s.kazanc.urunMaliyeti !== undefined ? `−${kurusTL(s.kazanc.urunMaliyeti)}` : <span class="y-yazi-kirmizi">Eksik</span>}
+          </dd>
+        </div>
+
+        <div class="sp-hesap__vurgulu">
+          <dt>Tahmini Net Kâr (KDV hariç)</dt>
+          <dd class:list={[s.kazanc.tahminiNetKar !== undefined ? (s.kazanc.tahminiNetKar < 0 ? 'y-yazi-kirmizi' : 'y-yazi-yesil') : 'muted']}>
+            {s.kazanc.tahminiNetKar !== undefined ? (
+              <strong>
+                {s.kazanc.tahminiNetKar < 0 ? '−' : '+'}{kurusTL(Math.abs(s.kazanc.tahminiNetKar))}
+                {s.kazanc.netMarj !== undefined ? ` (%${(s.kazanc.netMarj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })})` : ''}
+              </strong>
+            ) : (
+              <span>Hesaplanmadı ({s.kazanc.eksikNeden || 'veri eksik'})</span>
+            )}
+          </dd>
+        </div>
+
+        {s.kazanc.beklenenHakedis !== undefined && (
+          <div><dt>Beklenen Hakediş / Tahsilat</dt><dd><strong>{kurusTL(s.kazanc.beklenenHakedis)}</strong></dd></div>
+        )}
+        {s.kazanc.kesinlesenHakedis !== undefined && (
+          <div><dt>Kesinleşen Hakediş (Ekstre)</dt><dd><strong>{kurusTL(s.kazanc.kesinlesenHakedis)}</strong></dd></div>
+        )}
+        {s.kazanc.mutabakatFarki !== undefined && s.kazanc.mutabakatFarki !== 0 && (
+          <div>
+            <dt>Mutabakat Farkı</dt>
+            <dd class="y-yazi-kirmizi">{s.kazanc.mutabakatFarki < 0 ? '−' : '+'}{kurusTL(Math.abs(s.kazanc.mutabakatFarki))}</dd>
+          </div>
+        )}
+      </dl>
+
+      {s.kazanc.maliyetEksik && (
+        <p class="y-help" style="margin:8px 0 0">
+          Doğru kâr hesabı için <a class="y-link" href="/yonetim/fiyatlar">Fiyat, Stok ve Kâr Tablosu</a>’ndan alış maliyeti ve kargo/komisyon bilgilerini tamamlayın.
+        </p>
+      )}
+      {s.kazanc.not && <small class="muted" style="display:block;margin-top:6px">{s.kazanc.not}</small>}
+    </div>
+  </div>
+
+  {/* ==================== SEKME 3: MÜŞTERİ, NOT VE GEÇMİŞ ==================== */}
+  <div class="sp-icerik" data-sp-icerik="gecmis" hidden={varsayilanSekme !== 'gecmis'}>
+    <div class="sp-kart">
+      <h3><PIkon ad="kullanici" boyut={15} /> Müşteri ve Teslimat</h3>
+      <p style="margin:0"><strong>{s.musteriAdi}</strong></p>
+      {s.telefon && <small class="sp-iletisim"><a class="y-link" href={'tel:' + s.telefon}>{s.telefon}</a></small>}
+      {s.eposta && <small class="sp-iletisim"><a class="y-link" href={'mailto:' + s.eposta}>{s.eposta}</a></small>}
+      <small class="muted" style="display:block;margin-top:4px">{s.adres || s.konum || 'Adres satıcı panelinde'}</small>
+      {web?.teslimat.not && <p class="sp-musteri-notu"><strong>Müşteri notu:</strong> {web.teslimat.not}</p>}
+    </div>
+
+    {web && (
+      <div class="sp-kart">
+        <h3><PIkon ad="kalem" boyut={15} /> Mağaza İç Notu</h3>
+        <form method="post" action={s.detayHref} class="sp-alt-form" data-tek-gonder>
+          <input type="hidden" name="geri" value={geriAdresi} />
+          <input type="hidden" name="eylem" value="not" />
+          <textarea class="y-girdi" name="yoneticiNotu" rows="2" maxlength="500" placeholder="Yalnız yönetim panelinde görünür…">{web.yoneticiNotu ?? ''}</textarea>
+          <button class="btn btn--cizgi btn--kucuk" type="submit">Notu Kaydet</button>
+        </form>
+      </div>
+    )}
+
+    <div class="sp-kart">
+      <div class="sp-kart__bas">
+        <h3><PIkon ad="gecmis" boyut={15} /> İşlem Zaman Çizelgesi</h3>
+        <a class="y-link" href={s.detayHref}>Tam Sayfa Detay →</a>
+      </div>
+      {gecmisListesi.length ? (
+        <ul class="sp-zaman-listesi">
+          {gecmisListesi.map((g) => (
+            <li>
+              <strong>{g.baslik}</strong>
+              <small class="muted">{yTarih.format(new Date(g.tarih))}</small>
+              {g.not && <p>{g.not}</p>}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p class="y-help" style="margin:0">Henüz kayıtlı işlem geçmişi yok.</p>
+      )}
+    </div>
+  </div>
+</section>
+
+<style>
+  .sp-panel { display: grid; gap: 11px; }
+  .sp-ust { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--y-border); }
+  .sp-ust__kimlik { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+  .sp-ust__no-satir { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+  .sp-ust__no-satir h2 { margin: 0 !important; font-size: 17px !important; line-height: 1.2; }
+  .sp-ust__sag { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
+  .sp-gecis { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--y-border); border-radius: 9px; background: var(--y-surface-2); }
+  .sp-gecis__sira { font-size: 11.5px; font-weight: 600; color: var(--y-muted); padding: 0 4px; font-variant-numeric: tabular-nums; }
+  .sp-ozet-serit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .sp-ozet-serit__sol { display: flex; flex-wrap: wrap; gap: 5px; }
+  .sp-tutar { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--y-ink); }
+  .sp-adimlar { list-style: none; margin: 0; padding: 8px 10px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; background: var(--y-surface-2); border: 1px solid var(--y-border); border-radius: 11px; }
+  .sp-adim { display: grid; justify-items: center; text-align: center; gap: 4px; font-size: 10.5px; color: var(--y-muted); line-height: 1.15; }
+  .sp-adim__nokta { width: 9px; height: 9px; border-radius: 999px; background: #d6cec2; border: 2px solid #fff; box-shadow: 0 0 0 1px #cdc3b4; }
+  .sp-adim.is-tamam { color: var(--y-yesil); font-weight: 600; }
+  .sp-adim.is-tamam .sp-adim__nokta { background: var(--y-yesil); box-shadow: 0 0 0 1px var(--y-yesil); }
+  .sp-adim.is-aktif { color: var(--y-ink); font-weight: 700; }
+  .sp-adim.is-aktif .sp-adim__nokta { background: var(--y-gold, #b88a44); transform: scale(1.2); box-shadow: 0 0 0 2px rgba(184, 138, 68, 0.28); }
+  .sp-uyari-kutusu { display: flex; align-items: flex-start; gap: 8px; padding: 9px 11px; border-radius: 10px; background: #fff4f2; border: 1px solid #f0c2bc; color: var(--y-kirmizi); font-size: 12.5px; }
+  .sp-uyari-kutusu ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
+  .sp-birincil { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 13px; border-radius: 12px; border: 1px solid #e7d3b3; background: #fffaf1; }
+  .sp-birincil.is-uyari { border-color: #f0c2bc; background: #fff6f5; }
+  .sp-birincil.is-ikincil, .sp-birincil.is-bilgi { border-color: var(--y-border); background: var(--y-surface-2); }
+  .sp-birincil__metin { display: grid; gap: 2px; flex: 1 1 200px; }
+  .sp-birincil__ust { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--y-gold-ink); }
+  .sp-birincil__metin strong { font-size: 14.5px; }
+  .sp-birincil__metin small { font-size: 12.5px; color: var(--y-ink-2); line-height: 1.35; }
+  .sp-sekmeler { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 11px; background: var(--y-surface-2); border: 1px solid var(--y-border); }
+  .sp-sekmeler button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 35px; padding: 5px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--y-muted); font-size: 12.5px; font-weight: 650; cursor: pointer; }
+  .sp-sekmeler button[aria-selected="true"] { background: #fff; color: var(--y-ink); box-shadow: 0 1px 2px rgba(28, 21, 15, 0.08); }
+  .sp-icerik { display: grid; gap: 10px; }
+  .sp-icerik[hidden] { display: none !important; }
+  .sp-kart { padding: 11px 13px; border: 1px solid var(--y-border); border-radius: 12px; background: #fff; display: grid; gap: 8px; scroll-margin-top: 16px; }
+  .sp-kart.is-vurgulu { outline: 2px solid #c69749; background: #fffdf8; }
+  .sp-kart__bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .sp-kart h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0 !important; font-size: 13.5px !important; font-weight: 750; color: var(--y-ink); }
+  .sp-kalemler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+  .sp-kalem { padding-top: 8px; border-top: 1px solid var(--y-border); display: grid; gap: 8px; }
+  .sp-kalem:first-child { padding-top: 0; border-top: 0; }
+  .sp-kalem__satir { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 9px; font-size: 13px; }
+  .sp-kalem__satir img { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; border: 1px solid var(--y-border); background: #fff; }
+  .sp-kalem__bilgi { min-width: 0; }
+  .sp-kalem__bilgi strong { display: block; line-height: 1.3; }
+  .sp-kalem__bilgi small { display: block; font-size: 12px; color: var(--y-muted); }
+  .sp-kalem__tutar { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .sp-alt-form { display: grid; gap: 8px; padding: 10px; border-radius: 10px; background: var(--y-surface-2); border: 1px solid var(--y-border); }
+  .sp-alt-form--uyari { background: #fff8f6; border-color: #f0c2bc; }
+  .sp-kanal-blok { display: grid; gap: 8px; }
+  .sp-satir-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .sp-buton-grup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .sp-bilgi-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin: 0; padding: 7px 9px; border-radius: 9px; background: var(--y-surface-2); font-size: 12.5px; }
+  .sp-fatura-adimlar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; font-size: 11.5px; font-weight: 650; }
+  .sp-fatura-adimlar li { padding: 5px 7px; border-radius: 8px; text-align: center; background: var(--y-surface-2); color: var(--y-muted); border: 1px solid var(--y-border); }
+  .sp-fatura-adimlar li.is-aktif { background: #fff6e6; color: var(--y-gold-ink); border-color: #e6c994; }
+  .sp-fatura-adimlar li.is-tamam { background: #edf8f1; color: var(--y-yesil); border-color: #bfe3cc; }
+  .sp-fatura-govde { display: grid; gap: 9px; }
+  .sp-gib-kutu { padding: 9px 10px; border-radius: 10px; background: var(--y-surface-2); border: 1px solid var(--y-border); display: grid; gap: 7px; font-size: 12.5px; }
+  .sp-gib-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
+  .sp-kopya-liste { margin: 0; display: grid; gap: 5px; }
+  .sp-kopya-liste > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 6px; align-items: baseline; }
+  .sp-kopya-liste dt { color: var(--y-muted); font-size: 11.5px; font-weight: 600; }
+  .sp-kopya-liste dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; overflow-wrap: anywhere; }
+  .sp-fatura-satirlar { border-top: 1px dashed var(--y-border); padding-top: 6px; display: grid; gap: 4px; }
+  .sp-fatura-satir, .sp-fatura-toplam { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; }
+  .sp-fatura-toplam { padding-top: 4px; border-top: 1px solid var(--y-border); }
+  .sp-ikili { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+  .sp-detay-kart { border: 1px solid var(--y-border); border-radius: 12px; background: #fff; padding: 9px 12px; }
+  .sp-detay-kart > summary { cursor: pointer; font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
+  .sp-detay-icerik { margin-top: 10px; display: grid; gap: 10px; }
+  .sp-belgeler { display: grid; gap: 6px; }
+  .sp-belge-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--y-surface-2); }
+  .sp-hesap { margin: 0; display: grid; gap: 6px; font-size: 13px; }
+  .sp-hesap > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--y-border); }
+  .sp-hesap > div:last-child { border-bottom: 0; padding-bottom: 0; }
+  .sp-hesap dt { color: var(--y-ink-2); }
+  .sp-hesap dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
+  .sp-hesap__vurgulu { padding: 8px 10px !important; border-radius: 9px; background: var(--y-surface-2); border: 1px solid var(--y-border) !important; }
+  .sp-iletisim { display: block; margin-top: 2px; }
+  .sp-musteri-notu { margin: 6px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff4e4; font-size: 12.5px; }
+  .sp-zaman-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 12.5px; }
+  .sp-zaman-listesi li { padding-left: 10px; border-left: 2px solid var(--y-border); display: grid; gap: 2px; }
+  .sp-zaman-listesi p { margin: 0 !important; color: var(--y-ink-2); font-size: 12px; }
+  @media (max-width: 560px) {
+    .sp-adimlar { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; }
+    .sp-ikili { grid-template-columns: 1fr; }
+  }
+</style>
