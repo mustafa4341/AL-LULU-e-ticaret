@@ -65,6 +65,7 @@ if (Astro.request.method === 'POST') {
       const webDegisenler: { id: string; ad: string; yeniFiyat?: number; eskiFiyat: number; yeniStok?: number; eskiStok: number }[] = [];
       const maliyetDegisenler: { id: string; maliyet?: number; desi: number; kdv: number; oranBp?: number; kategori: string; oranKaynak?: 'hepsiburada' | 'elle'; oranTarih?: string; vadeGun?: number }[] = [];
       const kanalDegisenler: { id: string; tyOzel?: number | null; hbOzel?: number | null }[] = [];
+      const bilerekSifirDegisenler: { id: string; deger: boolean }[] = [];
       const gonderilecekTy = new Set<string>();
       const gonderilecekHb = new Set<string>();
       const riskUyarilari: string[] = [];
@@ -96,6 +97,13 @@ if (Astro.request.method === 'POST') {
 
         if (yeniStok !== undefined || yeniFiyat !== undefined) {
           webDegisenler.push({ id, ad, yeniFiyat, eskiFiyat: eskiWeb, yeniStok, eskiStok });
+        }
+
+        if (f.has('bilerekSifirMevcut_' + id)) {
+          const sonStok = yeniStok ?? eskiStok;
+          const yeniBilerek = sonStok === 0 && f.get('bilerekSifir_' + id) === 'on';
+          const eskiBilerek = Boolean(mevcutAyar.bilerekStoktaYok[id]);
+          if (yeniBilerek !== eskiBilerek) bilerekSifirDegisenler.push({ id, deger: yeniBilerek });
         }
 
         // 2. Alış maliyeti, desi ve Hepsiburada komisyonu
@@ -251,9 +259,12 @@ if (Astro.request.method === 'POST') {
         });
       }
 
-      // Kayıt 3: Kanal özel fiyatları (kanallar birbirinden bağımsız)
-      if (kanalDegisenler.length) {
+      // Kayıt 3: Kanal özel fiyatları ve bilerek 0 stok işaretleri (kanallar birbirinden bağımsız)
+      if (kanalDegisenler.length || bilerekSifirDegisenler.length) {
         await envanterAyarlariGuncelle((a) => {
+          for (const b of bilerekSifirDegisenler) {
+            a.bilerekStoktaYok[b.id] = b.deger;
+          }
           for (const d of kanalDegisenler) {
             if (d.tyOzel !== undefined) {
               const mevcut = a.kanallar.trendyol.urunler[d.id] ?? { satista: true, fiyatTakip: false };
@@ -275,6 +286,7 @@ if (Astro.request.method === 'POST') {
       if (webDegisenler.length) parcalar.push(`${webDegisenler.length} üründe Web fiyatı/stok güncellendi.`);
       if (maliyetDegisenler.length) parcalar.push(`${maliyetDegisenler.length} üründe alış maliyeti/desi/oran kaydedildi.`);
       if (kanalDegisenler.length) parcalar.push(`${kanalDegisenler.length} üründe kanal özel fiyatı kaydedildi.`);
+      if (bilerekSifirDegisenler.length) parcalar.push(`${bilerekSifirDegisenler.length} üründe sıfır stok uyarı tercihi güncellendi.`);
 
       // İstenirse kanallara anında API ile gönder
       if (eylem.startsWith('tek-gonder:')) {
@@ -383,9 +395,20 @@ const satirlar = urunler.map((u) => {
 
   return {
     u, urunKdv, desi, maliyet, kargoNet,
+    bilerekSifir: Boolean(envanter.bilerekStoktaYok[u.id]),
     webNetKar, webMarj,
-    ty: { bagli: tyBagli, disi: tyDisi, bekliyor: tyBekliyor, kod: tyKayit?.kod, ozelFiyat: tyKayit?.ozelFiyat, kanalFiyat: tyKayit?.kanalFiyat, fiyatTL: tyFiyatTL, oranBp: tyOranBp, hesap: tyHesap, basaBas: tyBasaBas, farkVar: tyFarkVar },
-    hb: { bagli: hbBagli, disi: hbDisi, kod: hbKayit?.kod, ozelFiyat: hbKayit?.ozelFiyat, kanalFiyat: hbKayit?.kanalFiyat, fiyatTL: hbFiyatTL, oranBp: hbOranBp, oranKaynak: hbBilgi?.oranKaynak, hesap: hbHesap, basaBas: hbBasaBas },
+    ty: {
+      bagli: tyBagli, disi: tyDisi, bekliyor: tyBekliyor, kod: tyKayit?.kod,
+      ozelFiyat: tyKayit?.ozelFiyat, kanalFiyat: tyKayit?.kanalFiyat, fiyatTL: tyFiyatTL,
+      fiyatIstek: tyKayit?.fiyatIstek, fiyatHata: tyKayit?.fiyatHata,
+      oranBp: tyOranBp, hesap: tyHesap, basaBas: tyBasaBas, farkVar: tyFarkVar,
+    },
+    hb: {
+      bagli: hbBagli, disi: hbDisi, kod: hbKayit?.kod,
+      ozelFiyat: hbKayit?.ozelFiyat, kanalFiyat: hbKayit?.kanalFiyat, fiyatTL: hbFiyatTL,
+      fiyatIstek: hbKayit?.fiyatIstek, fiyatHata: hbKayit?.fiyatHata,
+      oranBp: hbOranBp, oranKaynak: hbBilgi?.oranKaynak, hesap: hbHesap, basaBas: hbBasaBas,
+    },
   };
 });
 
@@ -449,14 +472,19 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
       <a href="?gorunum=trendyol" aria-current={gorunum === 'trendyol' ? 'page' : undefined}>Yalnız Trendyol</a>
       <a href="?gorunum=hepsiburada" aria-current={gorunum === 'hepsiburada' ? 'page' : undefined}>Yalnız Hepsiburada</a>
     </nav>
-    {['canli', 'test'].includes(tyApi) && (
-      <form method="post">
-        <input type="hidden" name="gorunum" value={gorunum} />
-        <button type="submit" name="eylem" value="ty-komisyon-yenile" class="btn btn--cizgi btn--kucuk">
-          <PIkon ad="yenile" boyut={15} />Trendyol komisyonlarını şimdi çek
-        </button>
-      </form>
-    )}
+    <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+      <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/kanallar?gorunum=fiyatlar#fiyatlar">
+        <PIkon ad="ayar" boyut={15} />Genel Kanal Fiyat Kuralları
+      </a>
+      {['canli', 'test'].includes(tyApi) && (
+        <form method="post">
+          <input type="hidden" name="gorunum" value={gorunum} />
+          <button type="submit" name="eylem" value="ty-komisyon-yenile" class="btn btn--cizgi btn--kucuk">
+            <PIkon ad="yenile" boyut={15} />Trendyol komisyonlarını çek
+          </button>
+        </form>
+      )}
+    </div>
   </div>
 
   <form method="post" class="fkm-form" data-fkm-form>
@@ -508,16 +536,24 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
 
                   <td data-etiket="Ortak Stok" class="y-sayi">
                     <input type="hidden" name={'eskiStok_' + u.id} value={u.stok} />
+                    <input type="hidden" name={'bilerekSifirMevcut_' + u.id} value="1" />
                     <input
                       type="number"
                       min="0"
                       max="100000"
                       name={'stok_' + u.id}
                       value={u.stok}
-                      class:list={['y-girdi', 'fkm-kutu', 'fkm-kutu--dar', { 'fkm-kutu--uyari': u.stok === 0 }]}
+                      class:list={['y-girdi', 'fkm-kutu', 'fkm-kutu--dar', { 'fkm-kutu--uyari': u.stok === 0 && !s.bilerekSifir }]}
                       aria-label={`${u.kisaAd} ortak depo stoğu`}
                     />
-                    <small class="y-table-note">{u.stok === 0 ? 'Stokta yok (0)' : 'adet'}</small>
+                    {u.stok === 0 ? (
+                      <label class="y-check" style="justify-content:flex-end;margin-top:4px;font-size:11.5px" title="İşaretlenirse rutin 0 stok uyarısı göstermez; gerçek sipariş/stok uyuşmazlıkları gizlenmez">
+                        <input type="checkbox" name={'bilerekSifir_' + u.id} value="on" checked={s.bilerekSifir} />
+                        <span>Bilerek 0</span>
+                      </label>
+                    ) : (
+                      <small class="y-table-note">adet</small>
+                    )}
                   </td>
 
                   <td data-etiket="Alış & Desi" class="y-sayi">
@@ -609,7 +645,15 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
                             />
                             <span class="fkm-birim">TL</span>
                           </div>
-                          {ty.farkVar && <small class="y-table-note y-yazi-turuncu">Trendyol’da şu an: {ty.kanalFiyat?.toLocaleString('tr-TR')} TL</small>}
+                          {ty.fiyatHata ? (
+                            <small class="y-table-note y-yazi-kirmizi">Trendyol reddetti: {ty.fiyatHata}</small>
+                          ) : ty.fiyatIstek ? (
+                            <small class="y-table-note y-yazi-turuncu">Trendyol onayı bekleniyor…</small>
+                          ) : ty.farkVar ? (
+                            <small class="y-table-note y-yazi-turuncu">Panele kaydedildi · Trendyol’da şu an: {ty.kanalFiyat?.toLocaleString('tr-TR')} TL</small>
+                          ) : ty.bagli && ty.kanalFiyat ? (
+                            <small class="y-table-note y-yazi-yesil">Trendyol’da doğrulandı ({ty.kanalFiyat.toLocaleString('tr-TR')} TL)</small>
+                          ) : null}
                           <div class="fkm-kar-satir" data-fkm-ty-ozet>
                             {ty.hesap ? (
                               <>
@@ -674,6 +718,15 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
                             />
                             <span class="fkm-birim">TL</span>
                           </div>
+                          {hb.fiyatHata ? (
+                            <small class="y-table-note y-yazi-kirmizi">HB reddetti: {hb.fiyatHata}</small>
+                          ) : hbApi === 'test' ? (
+                            <small class="y-table-note muted">Panele kaydedilir · HB şu an test (SIT) ortamında</small>
+                          ) : hb.fiyatIstek ? (
+                            <small class="y-table-note y-yazi-turuncu">Hepsiburada onayı bekleniyor…</small>
+                          ) : hb.bagli && hb.kanalFiyat ? (
+                            <small class="y-table-note y-yazi-yesil">HB’de doğrulandı ({hb.kanalFiyat.toLocaleString('tr-TR')} TL)</small>
+                          ) : null}
                           <div class="fkm-kar-satir" data-fkm-hb-ozet>
                             {hb.hesap ? (
                               <>

@@ -8,7 +8,7 @@ import { metin, sayi } from '../../../lib/form';
 import { fiyatDegisimleriListesi, fiyatUygula, urunBazliSatislar } from '../../../lib/urunIslem';
 import { Katalog } from '../../../lib/katalog';
 import { YAYIN_ADLARI, stokSebebi, yTarih } from '../../../lib/yonetimRapor';
-import { KANALLAR, KANAL_LISTESI, bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
+import { KANALLAR, bosAyarlar, kanalHedefFiyati, kritikEsik, pazaryerindeYanlisStokKanallari, rutinStokUyarisiVarMi } from '../../../lib/pazaryeri';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
 import { stokDegisimiKuyrugaAl } from '../../../lib/pazaryeriSenkron';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
@@ -87,6 +87,16 @@ if (Astro.request.method === 'POST') {
       if (fiyat !== eskiFiyat) fiyatUygula(u, fiyat);
       u.sepetteIndirim = indirim;
     }, 'Panel: hızlı stok düzeltme');
+    const ozelEsikHam = metin(f, 'urunKritik');
+    const ozelEsik = ozelEsikHam === '' ? undefined : sayi(f, 'urunKritik', -1);
+    if (ozelEsik !== undefined && (ozelEsik < 0 || ozelEsik > 100_000)) throw new Error('Ürüne özel uyarı eşiği 0 ile 100.000 arasında olmalı.');
+    const bilerekSifir = f.get('bilerekStoktaYok') === 'on';
+    await envanterAyarlariGuncelle((a) => {
+      if (!duzenle) return;
+      if (ozelEsik === undefined) delete a.urunKritik[duzenle];
+      else a.urunKritik[duzenle] = ozelEsik;
+      a.bilerekStoktaYok[duzenle] = Boolean(bilerekSifir && sayi(f, 'stok', -1) === 0);
+    });
     if (sayi(f, 'stok', -1) !== sayi(f, 'eskiStok', -1)) stokDegisimiKuyrugaAl('Ürünler hızlı stok düzeltme');
     const q = new URLSearchParams({ filtre, q: soru, sira, ok: 'Fiyat ve stok kaydedildi.' });
     return Astro.redirect('/yonetim/urunler?' + q + '#u-' + duzenle, 303);
@@ -105,7 +115,7 @@ const ayrilanMap = webAyrilanAdetleri(siparisler, Date.now(), m.paytrStokIslemle
 const aranan = soru.toLocaleLowerCase('tr').trim();
 const esik = (id: string) => kritikEsik(envanter, id);
 const urunAdi = new Map(m.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`]));
-const kritikUrunler = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= esik(u.id)).sort((a, b) => a.stok - b.stok);
+const kritikUrunler = m.urunler.filter((u) => rutinStokUyarisiVarMi(u, envanter)).sort((a, b) => a.stok - b.stok);
 const azalan = kritikUrunler.length;
 const barkodsuz = m.urunler.filter((u) => u.durum === 'yayinda' && !urunGtin(u)).length;
 const fotosuz = m.urunler.filter((u) => !u.gorseller.length).length;
@@ -113,17 +123,26 @@ const fotosuz = m.urunler.filter((u) => !u.gorseller.length).length;
 const fiyatGirilmedi = (u: (typeof m.urunler)[number]) => u.fiyat <= 1;
 const fiyatsiz = m.urunler.filter(fiyatGirilmedi).length;
 /* Şablonda "<=" yazılırsa Astro derleyicisi etiket sanıyor; rozet metni burada hesaplanır */
-const stokYazisi = (u: (typeof m.urunler)[number]) => u.durum !== 'yayinda' ? undefined
-  : u.stok === 0 ? 'Tükendi' : u.stok <= esik(u.id) ? `${u.stok} · Azalıyor` : undefined;
-/* Stok hücresi: yeşil stokta, turuncu azalıyor, kırmızı tükendi (yalnız yayındaki ürünlerde uyarı) */
-const stokGorunumu = (u: (typeof m.urunler)[number]): [string, string] => u.durum !== 'yayinda' ? [`${u.stok} adet`, 'gri']
-  : u.stok === 0 ? ['Tükendi', 'tukendi'] : u.stok <= esik(u.id) ? [`${u.stok} adet · Azalıyor`, 'kritik'] : [`${u.stok} adet`, 'normal'];
-const tukenenSayisi = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0).length;
+const stokYazisi = (u: (typeof m.urunler)[number]) => {
+  if (pazaryerindeYanlisStokKanallari(u, envanter).length > 0) return 'Pazaryerinde hâlâ stoklu görünüyor!';
+  if (u.durum !== 'yayinda') return undefined;
+  if (u.stok === 0 && envanter.bilerekStoktaYok[u.id]) return 'Bilerek 0 stokta tutuluyor';
+  return u.stok === 0 ? 'Tükendi' : u.stok <= esik(u.id) ? `${u.stok} · Azalıyor` : undefined;
+};
+/* Stok hücresi: yeşil stokta, turuncu azalıyor, kırmızı tükendi / yanlış stok, gri bilerek 0 */
+const stokGorunumu = (u: (typeof m.urunler)[number]): [string, string] => {
+  const yanlis = pazaryerindeYanlisStokKanallari(u, envanter);
+  if (yanlis.length > 0) return [`0 · ${yanlis.map((kn) => KANALLAR[kn]).join('+')} stoklu!`, 'tukendi'];
+  if (u.durum !== 'yayinda') return [`${u.stok} adet`, 'gri'];
+  if (u.stok === 0 && envanter.bilerekStoktaYok[u.id]) return ['0 · Bilerek yok', 'gri'];
+  return u.stok === 0 ? ['Tükendi', 'tukendi'] : u.stok <= esik(u.id) ? [`${u.stok} adet · Azalıyor`, 'kritik'] : [`${u.stok} adet`, 'normal'];
+};
+const tukenenSayisi = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0 && !envanter.bilerekStoktaYok[u.id]).length;
 const toplamStok = m.urunler.filter((u) => u.durum === 'yayinda').reduce((n, u) => n + u.stok, 0);
 const liste = m.urunler.filter((u) => {
   const gtin = urunGtin(u);
   const uygun = filtre === 'tumu' || u.durum === filtre
-    || (filtre === 'kritik' && u.durum === 'yayinda' && u.stok <= esik(u.id))
+    || (filtre === 'kritik' && rutinStokUyarisiVarMi(u, envanter))
     || (filtre === 'barkod' && u.durum === 'yayinda' && !gtin)
     || (filtre === 'fotosuz' && !u.gorseller.length)
     || (filtre === 'fiyatsiz' && fiyatGirilmedi(u));
@@ -210,7 +229,6 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
     {liste.map((u) => {
       const ayrilan = ayrilanMap.get(u.id) ?? 0;
       const satilabilir = Math.max(0, u.stok - ayrilan);
-      const bagliKanallar = KANAL_LISTESI.filter((kn) => envanter.kanallar[kn].urunler[u.id]?.kod);
       return <section id={'urun-hizli-' + u.id} data-panel-kayit hidden={duzenle !== u.id}>
         <div class="y-kart__bas"><h2><PIkon ad="kalem" /> Hızlı düzenleme</h2><a href={url()} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat aria-label="Hızlı düzenlemeyi kapat"><Ikon ad="kapat" boyut={17} /></a></div>
         <div class="urun-hizli-baslik">
@@ -227,10 +245,23 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
         </dl>
         <form method="post" class="y-izgara" data-editor>
           <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />
-          <label class="y-alan">Web satış fiyatı (TL)<input name="fiyat" type="number" min="1" step="1" inputmode="numeric" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
-          <label class="y-alan">Ortak depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
-          <label class="y-alan">Web sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
-          <p class="y-bilgi-satiri urun-hizli-not"><PIkon ad="bilgi" boyut={16} /><span>Stok tüm kanallarda ortaktır; buradaki fiyat ise <strong>yalnız Web sitesi</strong> içindir ({bagliKanallar.length ? `bağlı: ${bagliKanallar.map((kn) => KANALLAR[kn]).join(', ')}` : 'pazaryerine bağlı değil'}). Kanal fiyatlarını ve kârı <a class="y-link" href={'/yonetim/fiyatlar#f-' + encodeURIComponent(u.id)}>Fiyat ve Kâr Tablosu</a>ndan yönetin.</span></p>
+          <div class="y-izgara y-izgara--2">
+            <label class="y-alan">Web satış fiyatı (TL)<input name="fiyat" type="number" min="1" step="1" inputmode="numeric" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
+            <label class="y-alan">Ortak depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <label class="y-alan">Web sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
+            <label class="y-alan">Ürüne özel stok eşiği<input name="urunKritik" type="number" min="0" max="100000" placeholder={`Varsayılan (${envanter.kritikVarsayilan})`} value={envanter.urunKritik[u.id] ?? ''} /></label>
+          </div>
+          <label class="y-secim">
+            <input type="checkbox" name="bilerekStoktaYok" checked={Boolean(envanter.bilerekStoktaYok[u.id])} />
+            <span>Stok 0 iken bilerek stokta tutmuyorum (rutin “tükendi” uyarısı gösterme)</span>
+          </label>
+          <div class="urun-hizli-kanallar" style="padding:8px 10px;border-radius:10px;background:var(--y-surface-2);border:1px solid var(--y-border);font-size:12.5px;display:grid;gap:4px">
+            <strong>3 Kanal Fiyat Özeti (Ortak Stok: {u.stok} adet)</strong>
+            <span>Web: <strong>{formatTL(u.fiyat)}</strong> · Trendyol: <strong>{envanter.kanallar.trendyol.urunler[u.id]?.kod ? formatTL(kanalHedefFiyati(u, envanter.kanallar.trendyol).hedef) : 'Bağlı değil'}</strong> · Hepsiburada: <strong>{envanter.kanallar.hepsiburada.urunler[u.id]?.kod ? formatTL(kanalHedefFiyati(u, envanter.kanallar.hepsiburada).hedef) : 'Bağlı değil'}</strong></span>
+            <a class="y-link" href={'/yonetim/fiyatlar#f-' + encodeURIComponent(u.id)}>Kanal fiyatlarını ve net kârı düzenle →</a>
+          </div>
           <div class="y-ust-aksiyonlar"><a class="btn btn--cizgi" href={'/yonetim/urunler/' + u.id}>Tüm alanları düzenle</a><button class="btn btn--sepet" type="submit">Değişiklikleri kaydet</button></div>
         </form>
       </section>;

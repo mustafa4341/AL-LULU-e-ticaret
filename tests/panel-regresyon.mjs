@@ -51,6 +51,7 @@ try {
   const finansDisari = await vite.ssrLoadModule('/src/lib/finansDisari.ts');
   const istekMod = await vite.ssrLoadModule('/src/lib/istek.ts');
   const siparisMerkezi = await vite.ssrLoadModule('/src/lib/siparisMerkezi.ts');
+  const hbApiMod = await vite.ssrLoadModule('/src/lib/hepsiburadaApi.ts');
 
   const magazaHam = JSON.parse(fs.readFileSync(path.join(repoKoku, 'veri', 'magaza.json'), 'utf8'));
 
@@ -338,6 +339,36 @@ try {
     // Ürün bazlı özel eşik (8):
     assert.equal(pazaryeri.rutinStokUyarisiVarMi({ id: 'ozel-esikli', durum: 'yayinda', stok: 6 }, ayar), true);
     assert.equal(pazaryeri.rutinStokUyarisiVarMi({ id: 'ozel-esikli', durum: 'yayinda', stok: 9 }, ayar), false);
+    // Fissler Vitaquick Premium 6L varsayılan olarak bilerekStoktaYok=true gelir ve istendiğinde false ile kapatılabilir:
+    const varsayilanAyar = pazaryeri.bosAyarlar();
+    assert.equal(varsayilanAyar.bilerekStoktaYok['fissler-vitaquick-premium-6l'], true);
+    const kapatilmis = pazaryeri.EnvanterAyarSema.parse({ bilerekStoktaYok: { 'fissler-vitaquick-premium-6l': false } });
+    assert.equal(kapatilmis.bilerekStoktaYok['fissler-vitaquick-premium-6l'], false);
+
+    // Hepsiburada paket bozma ve kalem iptal nedenleri tanımlı olmalı:
+    assert.equal(typeof hbApiMod.hbPaketBoz, 'function');
+    assert.equal(typeof hbApiMod.hbKalemIptal, 'function');
+    assert.equal(hbApiMod.HB_IPTAL_NEDENLERI[12], 'Stok yok');
+  });
+
+  // 10. FAZ 5: 3 Kanal ayrı fiyat + otomatik kanal kuralı + manuel istisna önceliği (ozel > kural > site)
+  await test('Faz 5: Web, Trendyol ve Hepsiburada ayrı fiyatları, otomatik kanal kuralları ve manuel istisnalar birbirini ezmemeli', () => {
+    const ayar = pazaryeri.bosAyarlar();
+    ayar.kanallar.trendyol.fiyatKurali = { yuzde: 15, ekTL: 50, yuvarla: true };
+    ayar.kanallar.hepsiburada.fiyatKurali = { yuzde: 10, ekTL: 0, yuvarla: false };
+    ayar.kanallar.hepsiburada.urunler['urun-a'] = { kod: 'HB-A', satista: true, ozelFiyat: 2499 };
+
+    const urun = { id: 'urun-a', fiyat: 2000, sepetteIndirim: 10 };
+    const tyHedef = pazaryeri.kanalHedefFiyati(urun, ayar.kanallar.trendyol);
+    // 2000 * 1.15 + 50 = 2350 -> ,90 yuvarlama = 2350.90 (kaynak: kural)
+    assert.equal(tyHedef.kaynak, 'kural');
+    assert.equal(tyHedef.hedef, 2350.9);
+
+    const hbHedef = pazaryeri.kanalHedefFiyati(urun, ayar.kanallar.hepsiburada);
+    // Manuel ozelFiyat (2499) kanal kuralını (%10 = 2200) ezer ve kaybolmaz:
+    assert.equal(hbHedef.kaynak, 'ozel');
+    assert.equal(hbHedef.hedef, 2499);
+    assert.equal(urun.fiyat, 2000);
   });
 
   console.log(`\nSonuç: ${gecen} geçti, ${kalan} başarısız.`);

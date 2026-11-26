@@ -17,7 +17,7 @@ import { epostaBagli } from '../../lib/altyapi';
 import { BELGE_DURUMLARI, BELGE_TURLERI, belgeGecerli, finansGunu, finansPara, type BelgeTuru } from '../../lib/finans';
 import { faturaKanalLinki } from '../../lib/faturaKanaldan';
 import { GENEL_TCKN, GIB_PORTAL, sayiYaz, tlYaz } from '../../lib/faturaMerkezi';
-import { hbOrtakEtiketVar } from '../../lib/hepsiburadaApi';
+import { HB_IPTAL_NEDENLERI, hbOrtakEtiketVar } from '../../lib/hepsiburadaApi';
 import { PY_DURUM_ADLARI, kurusTL } from '../../lib/pazaryeri';
 import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
 import { SIPARIS_DURUM_ADLARI, type SiteAyarlari, type Urun } from '../../lib/sema';
@@ -436,6 +436,44 @@ const varsayilanSekme = s.birincilIslem.sekme;
               Hepsiburada Paneli ↗
             </a>
           </div>
+          {hbIslemAcik && !['kargoda', 'tamamlandi', 'iptal-iade'].includes(s.asama) && (
+            <details class="sp-detay-kart" style="border-color:#f0c2bc;background:#fff9f8;margin-top:4px">
+              <summary style="color:var(--y-kirmizi)">Tehlikeli İşlemler · Paket Boz / Kalem İptali</summary>
+              <div class="sp-detay-icerik">
+                {s.asama === 'kargoya-hazir' && (
+                  <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
+                    <input type="hidden" name="geri" value={geriAdresi} />
+                    <input type="hidden" name="eylem" value="hb-paket-boz" />
+                    {py.paketNo && <input type="hidden" name="paket" value={py.paketNo} />}
+                    <label class="y-secim"><input type="checkbox" name="hb-onay" required /><span>Paketi boz (mevcut kargo barkodu iptal olur)</span></label>
+                    <button class="btn btn--cizgi btn--kucuk" type="submit">Paketi Boz (Unpack)</button>
+                  </form>
+                )}
+                <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
+                  <input type="hidden" name="geri" value={geriAdresi} />
+                  <input type="hidden" name="eylem" value="hb-kalem-iptal" />
+                  {py.kalemler.length > 1 ? (
+                    <label class="y-alan">İptal edilecek kalem
+                      <select name="satirId" required class="y-girdi">
+                        <option value="">Kalem seçin…</option>
+                        {py.kalemler.filter((k) => k.satirId).map((k) => <option value={k.satirId}>{k.adet}× {k.ad}</option>)}
+                      </select>
+                    </label>
+                  ) : py.kalemler[0]?.satirId ? (
+                    <input type="hidden" name="satirId" value={py.kalemler[0].satirId} />
+                  ) : null}
+                  <label class="y-alan">Hepsiburada iptal nedeni
+                    <select name="nedenId" required class="y-girdi">
+                      <option value="">Neden seçin…</option>
+                      {Object.entries(HB_IPTAL_NEDENLERI).map(([kod, ad]) => <option value={kod}>{ad}</option>)}
+                    </select>
+                  </label>
+                  <label class="y-secim"><input type="checkbox" name="hb-iptal-onay" required /><span>Cezai yaptırımı biliyorum, kalemi iptal et</span></label>
+                  <button class="btn btn--cizgi btn--kucuk y-yazi-kirmizi" type="submit" data-onayla="Bu Hepsiburada kalemi kalıcı olarak iptal edilsin mi?">Kalemi İptal Et</button>
+                </form>
+              </div>
+            </details>
+          )}
         </div>
       )}
     </div>

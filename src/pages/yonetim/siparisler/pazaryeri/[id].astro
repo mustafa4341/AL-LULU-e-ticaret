@@ -14,7 +14,7 @@ import { urunGtin } from '../../../../lib/urunKimlik';
 import { yTarih } from '../../../../lib/yonetimRapor';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../lib/pazaryeriApi';
 import { tyFaturaLinki, tyKargoEtiketi, tyOrtakEtiketVar, tyPaketDurumu } from '../../../../lib/trendyolApi';
-import { hbFaturaLinki, hbOrtakEtiket, hbOrtakEtiketVar, hbPaketle, hbSiparisPaketleri } from '../../../../lib/hepsiburadaApi';
+import { HB_IPTAL_NEDENLERI, hbFaturaLinki, hbKalemIptal, hbOrtakEtiket, hbOrtakEtiketVar, hbPaketBoz, hbPaketle, hbSiparisKalemleri, hbSiparisPaketleri } from '../../../../lib/hepsiburadaApi';
 import SiparisAdimlari from '../../../../components/yonetim/SiparisAdimlari.astro';
 import { pazaryeriYolculugu } from '../../../../lib/siparisAdimlari';
 
@@ -101,6 +101,30 @@ if (kayit && Astro.request.method === 'POST') {
           for (const p of paketler) await hbFaturaLinki(p, link);
           await pazaryeriGecmiseEkle(id, 'Fatura bağlantısı Hepsiburada’ya gönderildi').catch(() => undefined);
           mesaj = 'Fatura bağlantısı Hepsiburada’ya gönderildi; müşteri siparişinde görür.';
+        } else if (tur === 'hb-paket-boz') {
+          if (!evet(f, 'hb-onay')) throw new DogrulamaHatasi(['Paketi bozmak için onay kutusunu işaretleyin.']);
+          const paketler = await hbSiparisPaketleri(kayit.siparisNo);
+          const istenen = metin(f, 'paket');
+          const paket = paketler.includes(istenen) ? istenen : paketler[0];
+          if (!paket) throw new DogrulamaHatasi(['Bozulacak aktif paket bulunamadı.']);
+          await hbPaketBoz(paket);
+          await pazaryeriGecmiseEkle(id, `Panelden Hepsiburada paketi bozuldu (${paket})`).catch(() => undefined);
+          mesaj = `Hepsiburada paketi (${paket}) bozuldu; kalemler tekrar paketlenmemiş duruma döndü.`;
+        } else if (tur === 'hb-kalem-iptal') {
+          if (!evet(f, 'hb-iptal-onay')) throw new DogrulamaHatasi(['Satıcı kaynaklı iptal cezai yaptırım doğurabilir; devam etmek için onay kutusunu işaretleyin.']);
+          const nedenId = Number(metin(f, 'nedenId'));
+          if (!HB_IPTAL_NEDENLERI[nedenId]) throw new DogrulamaHatasi(['Geçerli bir Hepsiburada iptal nedeni seçin.']);
+          const canliKalemler = await hbSiparisKalemleri(kayit.siparisNo);
+          const istenenSatir = metin(f, 'satirId');
+          const hedefKalem = istenenSatir
+            ? canliKalemler.find((k) => k.id === istenenSatir)
+            : canliKalemler.length === 1 ? canliKalemler[0] : undefined;
+          if (!hedefKalem) throw new DogrulamaHatasi(['İptal edilecek sipariş kalemi seçilmedi veya Hepsiburada’da bulunamadı.']);
+          if (hedefKalem.paketNo) throw new DogrulamaHatasi([`Kalem paketli (${hedefKalem.paketNo}). Hepsiburada kuralı gereği önce paketi bozun, ardından kalemi iptal edin.`]);
+          if (!hedefKalem.iptalEdilebilir) throw new DogrulamaHatasi(['Bu kalem şu an Hepsiburada tarafından iptale kapalı (kargolanmış veya zaten iptal edilmiş olabilir).']);
+          await hbKalemIptal(hedefKalem.id, nedenId);
+          await pazaryeriGecmiseEkle(id, `Panelden Hepsiburada kalemi iptal edildi (${hedefKalem.ad ?? hedefKalem.id} · ${HB_IPTAL_NEDENLERI[nedenId]})`).catch(() => undefined);
+          mesaj = `Hepsiburada kalemi iptal edildi (${HB_IPTAL_NEDENLERI[nedenId]}). Sonraki eşitlemede stok otomatik geri eklenir.`;
         } else throw new DogrulamaHatasi(['Geçersiz işlem.']);
       } catch (e) {
         if (e instanceof PazaryeriApiHatasi) throw new DogrulamaHatasi([e.message]);
@@ -508,6 +532,44 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
                 <button class="btn btn--cizgi btn--kucuk" type="submit">Bağlantıyı gönder</button>
               </form>
               <p class="y-help" style="margin:6px 0 0">Faturayı Faturalar ekranında PDF olarak kaydederseniz bağlantı Hepsiburada’ya kendiliğinden gönderilir; bu alan yalnız başka bir yerde duran fatura içindir.</p>
+            </details>
+          )}
+          {hbIslemAcik && !['kargoda', 'teslim-edildi', 'iptal', 'iade'].includes(s.durum) && (
+            <details class="y-danger" style="margin-top:12px;padding:10px 12px;border:1px solid #f0c2bc;border-radius:11px;background:#fff8f7">
+              <summary style="cursor:pointer;font-weight:700;font-size:.86rem;color:var(--y-kirmizi)">Tehlikeli İşlemler · Paket Bozma ve Kalem İptali</summary>
+              <div style="display:grid;gap:12px;margin-top:10px">
+                {hbPaketli && (
+                  <form method="post" style="display:grid;gap:8px;padding-bottom:10px;border-bottom:1px solid #f0c2bc">
+                    <input type="hidden" name="eylem" value="hb-paket-boz" />
+                    {s.paketNo && <input type="hidden" name="paket" value={s.paketNo} />}
+                    <small class="muted">Paketi bozduğunuzda mevcut kargo barkodu geçersiz olur ve kalemler tekrar paketlenmemiş duruma döner.</small>
+                    <label class="y-secim"><input type="checkbox" name="hb-onay" required /> Paketi bozmak istediğimi onaylıyorum.</label>
+                    <div><button class="btn btn--cizgi btn--kucuk" type="submit">Paketi Boz (Unpack)</button></div>
+                  </form>
+                )}
+                <form method="post" style="display:grid;gap:8px">
+                  <input type="hidden" name="eylem" value="hb-kalem-iptal" />
+                  <small class="y-yazi-kirmizi">Dikkat: Satıcı kaynaklı iptallerde Hepsiburada tedarik edememe cezası uygulayabilir. Paketlenmiş kalemleri iptal etmeden önce yukarıdan paketi bozmanız gerekir.</small>
+                  {s.kalemler.length > 1 ? (
+                    <label class="y-alan">İptal edilecek kalem
+                      <select name="satirId" required>
+                        <option value="">Kalem seçin…</option>
+                        {s.kalemler.filter((k) => k.satirId).map((k) => <option value={k.satirId}>{k.adet}× {k.ad}</option>)}
+                      </select>
+                    </label>
+                  ) : s.kalemler[0]?.satirId ? (
+                    <input type="hidden" name="satirId" value={s.kalemler[0].satirId} />
+                  ) : null}
+                  <label class="y-alan">İptal nedeni
+                    <select name="nedenId" required>
+                      <option value="">Neden seçin…</option>
+                      {Object.entries(HB_IPTAL_NEDENLERI).map(([kod, ad]) => <option value={kod}>{ad}</option>)}
+                    </select>
+                  </label>
+                  <label class="y-secim"><input type="checkbox" name="hb-iptal-onay" required /> Cezai sorumluluğu biliyorum, kalemi Hepsiburada’da kalıcı olarak iptal et.</label>
+                  <div><button class="btn btn--tehlike btn--kucuk" type="submit" data-onayla="Bu sipariş kalemi Hepsiburada'da kalıcı olarak iptal edilsin mi?">Kalemi İptal Et</button></div>
+                </form>
+              </div>
             </details>
           )}
         </section>

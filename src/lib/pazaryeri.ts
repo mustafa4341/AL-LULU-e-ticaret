@@ -417,7 +417,7 @@ export const EnvanterAyarSema = z.object({
   kritikVarsayilan: z.number().int().min(0).max(100000).default(3),
   urunKritik: z.record(z.string(), z.number().int().min(0).max(100000)).default({}),
   /** Mağaza sahibinin bilerek 0 stokta tuttuğu ürünler: rutin stok bitti uyarısı üretmez, ancak gerçek stok/sipariş hatalarını gizlemez */
-  bilerekStoktaYok: z.record(z.string(), z.boolean()).default({}),
+  bilerekStoktaYok: z.record(z.string(), z.boolean()).default({}).transform((r): Record<string, boolean> => ({ 'fissler-vitaquick-premium-6l': true, ...r })),
   /** Pazaryeri ürün kodu (kodNormal) → mağaza ürün kimliği */
   eslesmeler: z.record(z.string(), z.string()).default({}),
   epostaBildirimi: z.boolean().default(true),

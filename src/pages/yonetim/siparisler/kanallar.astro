@@ -364,8 +364,10 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         const ist = kanalIstatistik(kanal);
         const bekleyen = pyBekleyen(kanal);
         const sorunSayisi = ist.eslesmeyen + ist.stokFarkli;
-        const rozetRenk = k.sonApiHata || k.sonStokHata ? 'kirmizi' : otomatikGecikti ? 'turuncu' : (apiHazir || bulutBagli) ? 'yesil' : 'gri';
-        const rozetYazi = k.sonApiHata || k.sonStokHata ? '⚠ Bağlantı Hatası' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? (api === 'test' ? '● Test Bağlantısı' : '● Bağlı ve Aktif') : bulutBagli ? '● Canlıda Aktif' : k.sonApi ? '○ Bağlantı Kapalı' : '○ Kurulum Bekliyor';
+        const rozetRenk = k.sonApiHata || k.sonStokHata ? 'kirmizi' : api === 'test' ? 'turuncu' : otomatikGecikti ? 'turuncu' : (apiHazir || bulutBagli) ? 'yesil' : 'gri';
+        const rozetYazi = k.sonApiHata || k.sonStokHata ? '⚠ Bağlantı Hatası' : api === 'test' ? '● Test Ortamı (SIT)' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? '● Canlı · Bağlı' : bulutBagli ? '● Canlıda Aktif' : k.sonApi ? '○ Bağlantı Kapalı' : '○ Kurulum Bekliyor';
+        const siparisGuncellik = api === 'test' ? `SIT test · son ${zaman(k.sonApi)}` : otomatikGecikti ? `Gecikti · son ${zaman(k.sonApi)}` : k.sonApi ? `Güncel · ${zaman(k.sonApi)}` : 'Henüz çekilmedi';
+        const stokFiyatDurum = api === 'test' ? 'İzole test (canlı stoğa dokunmaz)' : ist.stokFarkli > 0 ? `${ist.stokFarkli} üründe stok farkı` : `${ist.eslesen}/${urunler.length} ürün bağlı · ortak stok`;
         return (
           <section class:list={['y-kart', 'sk-ozet-kart', 'sk-ozet-kart--' + kanal]}>
             <div class="sk-ozet-ust">
@@ -373,69 +375,49 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
                 <KanalLogo kanal={kanal} boyut="orta" />
                 <div>
                   <h2>{KANALLAR[kanal]}</h2>
-                  <small>Mağaza: AL LULU HOME · {ist.eslesen}/{urunler.length} bağlı</small>
+                  <small>1. Bağlantı: {rozetYazi.replace(/^[⚠●○]\s*/, '')}</small>
                 </div>
               </div>
               <span class:list={['y-chip', 'y-chip--' + rozetRenk]}>{rozetYazi}</span>
             </div>
             <a class="sk-son-esitleme" href={`?gorunum=${kanal}`}>
-              <span><PIkon ad="yenile" boyut={15} /> Son başarılı eşitleme: {zaman(k.sonApi)}</span>
+              <span><PIkon ad="yenile" boyut={15} /> 2. Sipariş: {siparisGuncellik} · 3. Stok: {stokFiyatDurum}</span>
               <span>›</span>
             </a>
             <div class="sk-sayac-ikili">
               <a href={`/yonetim/siparisler?kanal=${kanal}&durum=islem`} class="sk-sayac-kutu">
                 <strong><PIkon ad="sepet" boyut={18} /> {bekleyen}</strong>
-                <small>Bekleyen Sipariş</small>
+                <small>İşlem Bekleyen Sipariş</small>
               </a>
               <a href={`?gorunum=eslestirme#eslestirme-${kanal}`} class:list={['sk-sayac-kutu', { 'is-uyari': sorunSayisi > 0 }]}>
                 <strong><PIkon ad="katman" boyut={18} /> {sorunSayisi}</strong>
                 <small>{ist.eslesmeyen > 0 ? `${ist.eslesmeyen} ürün eşleşmiyor` : ist.stokFarkli > 0 ? `${ist.stokFarkli} stok farkı` : 'Stok uyumlu'}</small>
               </a>
             </div>
-            <a class="btn btn--cizgi sk-detay-btn" href={`?gorunum=${kanal}`}>Detayı Aç ↗</a>
+            <a class="btn btn--cizgi sk-detay-btn" href={`?gorunum=${kanal}`}>Kanal Ayarları ve Eşleştirme ↗</a>
           </section>
         );
       })}
     </div>
 
-    <form method="post" class="y-kart sk-otomasyon-bant">
-      <input type="hidden" name="eylem" value="otomasyon-kaydet" />
-      <div class="y-kart__bas" style="margin-bottom:10px">
-        <div>
-          <h2><PIkon ad="simsek" /> Genel Otomasyonlar</h2>
-          <p class="y-kart__alt">5 dakikada bir tüm bağlı kanallarda kendiliğinden çalışan senkronizasyon kuralları.</p>
-        </div>
-        <button class="btn btn--cizgi btn--kucuk" type="submit" disabled={!depoHazir}><PIkon ad="tik" boyut={15} />Tercihleri Kaydet</button>
+    <section class="y-kart sk-otomasyon-bant" style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px">
+      <div>
+        <h2 style="margin:0 0 4px"><PIkon ad="simsek" /> Otomasyonlar ve 3 Kanal Fiyat Tablosu</h2>
+        <p class="y-kart__alt" style="margin:0">
+          5 dakikalık arka plan kuralları tek yerden <strong>İş Merkezi</strong>’nde, ürün bazlı 3 kanal fiyatları ve net kâr ise <strong>Fiyat, Stok ve Kâr Tablosu</strong>’nda yönetilir.
+        </p>
       </div>
-      <div class="sk-otomasyon-izgara">
-        <label class="sk-oto-kutu">
-          <div><strong><PIkon ad="zil" boyut={16} /> Sipariş Bildirimi</strong><input type="checkbox" name="yeniSiparisBildir" checked={ayar.otomasyon.yeniSiparisBildir} disabled={!depoHazir} /></div>
-          <small>Yeni pazaryeri siparişinde mağazaya anında e-posta bildirimi gönderir.</small>
-        </label>
-        <label class="sk-oto-kutu">
-          <div><strong><PIkon ad="kutu" boyut={16} /> Trendyol Oto-Toplama</strong><input type="checkbox" name="otoToplama" checked={ayar.otomasyon.otoToplama} disabled={!depoHazir} /></div>
-          <small>Yeni Trendyol paketini otomatik toplamaya alır ve kargo sürecini başlatır.</small>
-        </label>
-        <label class="sk-oto-kutu">
-          <div><strong><PIkon ad="etiket" boyut={16} /> Fiyat Senkronizasyonu</strong><input type="checkbox" name="otoFiyat" checked={ayar.otomasyon.otoFiyat} disabled={!depoHazir} /></div>
-          <small>Fiyat takibi açık ürünlerin fiyat değişikliklerini kanallara yansıtır.</small>
-        </label>
-        <label class="sk-oto-kutu">
-          <div><strong><PIkon ad="fatura" boyut={16} /> Fatura Yeniden Deneme</strong><input type="checkbox" name="faturaYenidenDene" checked={ayar.otomasyon.faturaYenidenDene} disabled={!depoHazir} /></div>
-          <small>Kaydedilmiş ancak iletilememiş e-Arşiv faturalarını otomatik tekrar dener.</small>
-        </label>
-        <label class="sk-oto-kutu">
-          <div><strong><PIkon ad="takvim" boyut={16} /> Günlük Kontroller</strong><input type="checkbox" name="gunlukIsler" checked={ayar.otomasyon.gunlukIsler} disabled={!depoHazir} /></div>
-          <small>Her gün cari hakediş ve ilan onay durumlarını otomatik yeniler.</small>
-        </label>
+      <div class="y-ust-aksiyonlar">
+        <a class="btn btn--cizgi btn--kucuk" href="/yonetim#otomasyon"><PIkon ad="ayar" boyut={15} />Otomasyon Ayarları ({[ayar.otomasyon.yeniSiparisBildir, ayar.otomasyon.otoToplama, ayar.otomasyon.faturaYenidenDene, ayar.otomasyon.gunlukIsler, ayar.otomasyon.otoBagla, ayar.otomasyon.otoFiyat].filter(Boolean).length}/6 açık)</a>
+        <a class="btn btn--sepet btn--kucuk" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={15} />Fiyat, Stok ve Kâr Tablosu</a>
       </div>
-    </form>
+    </section>
 
     <div class="sk-alt-ikili">
       <section class="y-kart" id="hareketler">
         <div class="y-kart__bas">
           <h2><PIkon ad="gecmis" /> Son İşlem ve Stok Kayıtları</h2>
-          <a class="y-link" href="/yonetim/isler">Otomasyon günlüğü →</a>
+          <a class="y-link" href="/yonetim#otomasyon">Otomasyon günlüğü →</a>
         </div>
         {hareketler.length > 0 ? (
           <div class="y-tablo-kap y-tablo-kap--kart">
@@ -527,7 +509,8 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         <div class="y-metric"><PIkon ad="katman" /><span>Ayrılan (rezerve) stok</span><strong>{ayrilan ? [...ayrilan.values()].reduce((a, b) => a + b, 0) : 0} adet</strong><small>Açık web siparişleri için</small></div>
       </div>
       <div class="y-ust-aksiyonlar">
-        <a class="btn btn--sepet" href="/yonetim/siparisler?kanal=web&durum=tumu"><PIkon ad="sepet" boyut={18} />Web Siparişlerini Aç</a>
+        <a class="btn btn--sepet" href="/yonetim/siparisler?kanal=web&durum=islem"><PIkon ad="sepet" boyut={18} />Web Siparişlerini Aç</a>
+        <a class="btn btn--cizgi" href="/yonetim/fiyatlar?gorunum=web"><PIkon ad="etiket" boyut={18} />Web Fiyat ve Kâr Tablosu</a>
         <a class="btn btn--cizgi" href="/yonetim/urunler"><PIkon ad="kutu" boyut={18} />Ürün Kataloğu</a>
         <a class="btn btn--cizgi" href="/yonetim/site-duzeni"><PIkon ad="magaza" boyut={18} />Mağaza Görünümü Ayarları</a>
         <a class="btn btn--cizgi" href="/" target="_blank" rel="noopener"><PIkon ad="dis-baglanti" boyut={18} />Canlı Mağazayı Aç ↗</a>
@@ -582,18 +565,18 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         <div class="kanal-kisayol">
           {kanal === 'trendyol' ? (
             <>
-              <a class="btn btn--sepet" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a Ürün Gönder / İlan Aç</a>
-              <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="indir" boyut={18} />Trendyol İlanları (Bağla / Siteye Çek)</a>
-              <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru"><PIkon ad="iade" boyut={18} />Trendyol İadeleri</a>
-              <a class="btn btn--cizgi" href="/yonetim/siparisler?kanal=trendyol&durum=tumu"><PIkon ad="sepet" boyut={18} />Trendyol Siparişleri</a>
-              <a class="btn btn--cizgi" href="/yonetim/finans?sekme=trendyol"><PIkon ad="banka" boyut={18} />Trendyol Hakedişleri</a>
+              <a class="btn btn--sepet" href="/yonetim/siparisler?kanal=trendyol&durum=islem"><PIkon ad="sepet" boyut={18} />Trendyol Siparişleri</a>
+              <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a Ürün Gönder / İlan Aç</a>
+              <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="indir" boyut={18} />Trendyol İlanları (Bağla / Çek)</a>
+              <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-iade-soru"><PIkon ad="iade" boyut={18} />Trendyol İadeleri &amp; Sorular</a>
+              <a class="btn btn--cizgi" href="/yonetim/fiyatlar?gorunum=trendyol"><PIkon ad="etiket" boyut={18} />Trendyol Fiyat &amp; Kâr</a>
             </>
           ) : (
             <>
-              <a class="btn btn--sepet" href="/yonetim/siparisler?kanal=hepsiburada&durum=tumu"><PIkon ad="sepet" boyut={18} />Hepsiburada Siparişleri</a>
-              <a class="btn btn--cizgi" href="/yonetim/finans/hepsiburada"><PIkon ad="grafik" boyut={18} />Hepsiburada Kâr & Hakedişler</a>
-              <a class="btn btn--cizgi" href="/yonetim/finans/faturalar?kanal=hepsiburada"><PIkon ad="fatura" boyut={18} />Hepsiburada Faturaları</a>
-              <a class="btn btn--cizgi" href="?gorunum=fiyatlar"><PIkon ad="etiket" boyut={18} />Hepsiburada Fiyat Kuralı</a>
+              <a class="btn btn--sepet" href="/yonetim/siparisler?kanal=hepsiburada&durum=islem"><PIkon ad="sepet" boyut={18} />Hepsiburada Siparişleri</a>
+              <a class="btn btn--cizgi" href="/yonetim/fiyatlar?gorunum=hepsiburada"><PIkon ad="etiket" boyut={18} />Hepsiburada Fiyat &amp; Kâr</a>
+              <a class="btn btn--cizgi" href="/yonetim/finans/hepsiburada"><PIkon ad="grafik" boyut={18} />Hepsiburada Hakedişler</a>
+              <a class="btn btn--cizgi" href="?gorunum=fiyatlar"><PIkon ad="ayar" boyut={18} />Genel Fiyat Kuralı</a>
             </>
           )}
         </div>
@@ -619,37 +602,40 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         {k.sonStokNot && <p class="y-help" role="status">Bilgi: {k.sonStokNot}</p>}
         {kanal === 'trendyol' && (k.ciftIlanlar?.length ?? 0) > 0 && <p class="y-uyari-satir" role="alert">Trendyol’da {k.ciftIlanlar.length} ürün birden fazla ilanla satışta (çift ilan). <a class="y-link" href="/yonetim/siparisler/trendyol-ilanlar#cift">Kalacak ilanı seçin</a>.</p>}
 
-        <div class="y-izgara y-izgara--2" style="margin-top:10px">
-          <form method="post" class="y-kart" style="margin:0;background:var(--y-surface-2,#faf7f2)">
-            <input type="hidden" name="kanal" value={kanal} />
-            <h3 style="margin:0 0 8px;font-size:15px">Başlangıç sayımı ve güvenlik payı</h3>
-            <div class="y-izgara y-izgara--2">
-              <label class="y-alan">Sayım tarihi ve saati
-                <input type="datetime-local" name="stokBaslangic" value={yerelSaat(k.stokBaslangic)} disabled={!depoHazir || Boolean(k.sonAktarim)} />
-                <small class="muted">İlk aktarımdan sonra kilitlenir.</small>
-              </label>
-              <label class="y-alan">Güvenlik payı (adet)
-                <input type="number" name="guvenlikPayi" min="0" max="1000" value={k.guvenlikPayi} required disabled={!depoHazir} inputmode="numeric" />
-                <small class="muted">Depodaki adetten bu kadar düşülüp kanala gönderilir. 0 önerilir: 1 yazarsanız 1 adetlik ürünler kanalda 0 görünür ve pasife düşer.</small>
-              </label>
-            </div>
-            <div style="margin-top:10px"><button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="kanal-ayari" disabled={!depoHazir}>Ayarları Kaydet</button></div>
-          </form>
+        <details style="margin-top:10px;padding:12px;border:1px solid var(--y-border,#e5dec9);border-radius:12px;background:var(--y-surface-2,#faf7f2)" open={!k.stokBaslangic || Boolean(k.bekleyenStok && senkronZamani(k.bekleyenStok))}>
+          <summary style="cursor:pointer;font-weight:650;font-size:14px">Gelişmiş Kurulum Ayarları (Başlangıç Sayımı, Güvenlik Payı ve API Rehberi)</summary>
+          <div class="y-izgara y-izgara--2" style="margin-top:12px">
+            <form method="post" class="y-kart" style="margin:0;background:#fff">
+              <input type="hidden" name="kanal" value={kanal} />
+              <h3 style="margin:0 0 8px;font-size:15px">Başlangıç sayımı ve güvenlik payı</h3>
+              <div class="y-izgara y-izgara--2">
+                <label class="y-alan">Sayım tarihi ve saati
+                  <input type="datetime-local" name="stokBaslangic" value={yerelSaat(k.stokBaslangic)} disabled={!depoHazir || Boolean(k.sonAktarim)} />
+                  <small class="muted">İlk aktarımdan sonra kilitlenir.</small>
+                </label>
+                <label class="y-alan">Güvenlik payı (adet)
+                  <input type="number" name="guvenlikPayi" min="0" max="1000" value={k.guvenlikPayi} required disabled={!depoHazir} inputmode="numeric" />
+                  <small class="muted">Depodaki adetten bu kadar düşülüp kanala gönderilir. 0 önerilir: 1 yazarsanız 1 adetlik ürünler kanalda 0 görünür ve pasife düşer.</small>
+                </label>
+              </div>
+              <div style="margin-top:10px"><button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="kanal-ayari" disabled={!depoHazir}>Ayarları Kaydet</button></div>
+            </form>
 
-          <div class="y-kart" style="margin:0;background:var(--y-surface-2,#faf7f2)">
-            <h3 style="margin:0 0 8px;font-size:15px">Bağlantı Rehberi</h3>
-            <p class="y-help" style="margin:0">{bulutBagli ? `${KANALLAR[kanal]} bağlantınız canlı sunucuda (Vercel) aktif (Son çekim: ${zaman(k.sonApi)}). Yerel bilgisayardan anlık API çağrısı için anahtarları yerel .env dosyanıza da ekleyebilirsiniz.` : API_YARDIM[kanal]}</p>
-            {depoHazir && k.bekleyenStok && senkronZamani(k.bekleyenStok) && (
-              <form method="post" class="kanal-kurtarma" style="margin-top:10px">
-                <input type="hidden" name="kanal" value={kanal} />
-                <input type="hidden" name="bekleyenId" value={k.bekleyenStok.id} />
-                <input type="hidden" name="bekleyenTarih" value={k.bekleyenStok.tarih} />
-                <label class="y-secim"><input type="checkbox" name="dogrulandi" required /> Bekleyen stok isteğini satıcı panelinde kontrol ettim.</label>
-                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="stok-islemini-kapat">Önceki işlemi kapat</button>
-              </form>
-            )}
+            <div class="y-kart" style="margin:0;background:#fff">
+              <h3 style="margin:0 0 8px;font-size:15px">Bağlantı Rehberi</h3>
+              <p class="y-help" style="margin:0">{bulutBagli ? `${KANALLAR[kanal]} bağlantınız canlı sunucuda (Vercel) aktif (Son çekim: ${zaman(k.sonApi)}). Yerel bilgisayardan anlık API çağrısı için anahtarları yerel .env dosyanıza da ekleyebilirsiniz.` : API_YARDIM[kanal]}</p>
+              {depoHazir && k.bekleyenStok && senkronZamani(k.bekleyenStok) && (
+                <form method="post" class="kanal-kurtarma" style="margin-top:10px">
+                  <input type="hidden" name="kanal" value={kanal} />
+                  <input type="hidden" name="bekleyenId" value={k.bekleyenStok.id} />
+                  <input type="hidden" name="bekleyenTarih" value={k.bekleyenStok.tarih} />
+                  <label class="y-secim"><input type="checkbox" name="dogrulandi" required /> Bekleyen stok isteğini satıcı panelinde kontrol ettim.</label>
+                  <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="stok-islemini-kapat">Önceki işlemi kapat</button>
+                </form>
+              )}
+            </div>
           </div>
-        </div>
+        </details>
       </section>
     );
   })()}
