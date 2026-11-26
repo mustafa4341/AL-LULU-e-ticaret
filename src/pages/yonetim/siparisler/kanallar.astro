@@ -3,7 +3,7 @@ import Yonetim from '../../../layouts/Yonetim.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../lib/depo';
-import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle, type IlanEslesmesi } from '../../../lib/kanalFiyat';
+import { fiyatOzeti, hepsiburadaIlanlariniEsle, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle, type IlanEslesmesi } from '../../../lib/kanalFiyat';
 import { KANALLAR, KANAL_LISTESI, bosAyarlar, kanalHedefFiyati, kanalHedefStok, kanalMi, kodNormal, tarihOku } from '../../../lib/pazaryeri';
 import { BILDIRIM_YOLU, PazaryeriApiHatasi, bildirimAnahtari, otomatikStokYazmaAcik, pazaryeriApiDurumu, pazaryeriOrtam } from '../../../lib/pazaryeriApi';
 import { tyWebhookAktif, tyWebhookGuncelle, tyWebhookKur, tyWebhooklar } from '../../../lib/trendyolApi';
@@ -66,6 +66,15 @@ if (Astro.request.method === 'POST' && depoHazir) {
     if (eylem === 'ilan-bagla') {
       const r = await trendyolIlanlariniEsle(true);
       return Astro.redirect(`${yol}?ilanlar=1&m=${encodeURIComponent(r.baglanan ? `${r.baglanan} Trendyol ilanı sitedeki ürünüyle bağlandı. Stok artık ortak depodan gider; Trendyol’daki fiyatlara dokunulmadı (fiyatı istediğiniz ürün için “Fiyatı şimdi gönder”le eşitleyin).` : 'Bağlanacak yeni ilan bulunamadı.')}#ty-ilanlar`, 303);
+    }
+    if (eylem === 'hb-oto-bagla') {
+      if (!['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada'))) throw new DogrulamaHatasi(['Hepsiburada otomatik eşleştirme için Hepsiburada API anahtarları tanımlı olmalıdır.']);
+      const r = await hepsiburadaIlanlariniEsle(true);
+      const metin = [
+        r.baglanan ? `${r.baglanan} Hepsiburada ilanı sitedeki ürünüyle otomatik bağlandı (stok ortak, fiyat değişmedi).` : 'Bağlanacak yeni Hepsiburada ilanı bulunamadı.',
+        r.eslesmeyenIlanlar.length ? `Hepsiburada’da sitedeki SKU/barkodla eşleşmeyen ${r.eslesmeyenIlanlar.length} ilan: ${r.eslesmeyenIlanlar.slice(0, 6).join(', ')}.` : '',
+      ].filter(Boolean).join(' ');
+      return Astro.redirect(`${yol}?gorunum=hepsiburada&m=${encodeURIComponent(metin)}#eslestirme-hepsiburada`, 303);
     }
     if (eylem === 'bildirim-kur' || eylem === 'bildirim-kontrol') {
       if (!['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) throw new DogrulamaHatasi(['Anlık bildirim canlı sitede (Trendyol anahtarlarının olduğu sunucuda) kurulur.']);
@@ -288,15 +297,21 @@ const kanalIstatistik = (kanal: 'trendyol' | 'hepsiburada') => {
   const k = ayar.kanallar[kanal];
   const eslesen = urunler.filter((u) => k.urunler[u.id]?.kod).length;
   // Taslak ürünler ve "bu kanalda satılmıyor" işaretlenenler eşleşme bekleyen sayılmaz (25.11.2026)
-  const eslesmeyen = urunler.filter((u) => !k.urunler[u.id]?.kod && k.urunler[u.id]?.satista !== false && u.durum !== 'taslak').length;
-  const stokFarkli = urunler.filter((u) => {
+  const eslesmeyenListesi = urunler.filter((u) => !k.urunler[u.id]?.kod && k.urunler[u.id]?.satista !== false && u.durum !== 'taslak');
+  const stokFarkliListesi = urunler.filter((u) => {
     const es = k.urunler[u.id];
     if (!es?.kod || !ayrilan) return false;
     const sat = Math.max(0, u.stok - (ayrilan.get(u.id) ?? 0));
     const hdf = es.satista ? kanalHedefStok(sat, k) : 0;
     return es.bildirilen !== undefined && es.bildirilen !== hdf;
-  }).length;
-  return { eslesen, eslesmeyen, stokFarkli };
+  });
+  return {
+    eslesen,
+    eslesmeyen: eslesmeyenListesi.length,
+    stokFarkli: stokFarkliListesi.length,
+    eslesmeyenListesi,
+    stokFarkliListesi,
+  };
 };
 const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol'] as const)
   : aktifGorunum === 'hepsiburada' ? (['hepsiburada'] as const)
@@ -364,8 +379,10 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         const ist = kanalIstatistik(kanal);
         const bekleyen = pyBekleyen(kanal);
         const sorunSayisi = ist.eslesmeyen + ist.stokFarkli;
-        const rozetRenk = k.sonApiHata || k.sonStokHata ? 'kirmizi' : api === 'test' ? 'turuncu' : otomatikGecikti ? 'turuncu' : (apiHazir || bulutBagli) ? 'yesil' : 'gri';
-        const rozetYazi = k.sonApiHata || k.sonStokHata ? '⚠ Bağlantı Hatası' : api === 'test' ? '● Test Ortamı (SIT)' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? '● Canlı · Bağlı' : bulutBagli ? '● Canlıda Aktif' : k.sonApi ? '○ Bağlantı Kapalı' : '○ Kurulum Bekliyor';
+        // Eski senkronlardan kalan "geçersiz ilan kodu (boş)" kaydı artık hata sayılmaz
+        const gercekStokHatasi = k.sonStokHata && !/geçersiz ilan kodu \(boş\)/i.test(k.sonStokHata) ? k.sonStokHata : undefined;
+        const rozetRenk = k.sonApiHata ? 'kirmizi' : gercekStokHatasi ? 'turuncu' : api === 'test' ? 'turuncu' : otomatikGecikti ? 'turuncu' : (apiHazir || bulutBagli) ? 'yesil' : 'gri';
+        const rozetYazi = k.sonApiHata ? '⚠ Bağlantı Hatası' : gercekStokHatasi ? '⚠ Stok Eşitleme Uyarısı' : api === 'test' ? '● Test Ortamı (SIT)' : otomatikGecikti ? '⚠ Eşitleme Gecikiyor' : apiHazir ? '● Canlı · Bağlı' : bulutBagli ? '● Canlıda Aktif' : k.sonApi ? '○ Bağlantı Kapalı' : '○ Kurulum Bekliyor';
         const siparisGuncellik = api === 'test' ? `SIT test · son ${zaman(k.sonApi)}` : otomatikGecikti ? `Gecikti · son ${zaman(k.sonApi)}` : k.sonApi ? `Güncel · ${zaman(k.sonApi)}` : 'Henüz çekilmedi';
         const stokFiyatDurum = api === 'test' ? 'İzole test (canlı stoğa dokunmaz)' : ist.stokFarkli > 0 ? `${ist.stokFarkli} üründe stok farkı` : `${ist.eslesen}/${urunler.length} ürün bağlı · ortak stok`;
         return (
@@ -380,6 +397,9 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
               </div>
               <span class:list={['y-chip', 'y-chip--' + rozetRenk]}>{rozetYazi}</span>
             </div>
+            {(k.sonApiHata || gercekStokHatasi) && (
+              <p class="y-table-note y-yazi-turuncu" style="margin:6px 0 8px">{k.sonApiHata ?? gercekStokHatasi}</p>
+            )}
             <a class="sk-son-esitleme" href={`?gorunum=${kanal}`}>
               <span><PIkon ad="yenile" boyut={15} /> 2. Sipariş: {siparisGuncellik} · 3. Stok: {stokFiyatDurum}</span>
               <span>›</span>
@@ -453,20 +473,28 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
                   <div class="sk-sorun-kutu">
                     <div>
                       <strong><KanalLogo kanal={kanal} boyut="kucuk" /> {KANALLAR[kanal]} · Ürün Eşleşmiyor</strong>
-                      <small>{KANALLAR[kanal]}’da {ist.eslesmeyen} mağaza ürünü henüz bir ilan koduna bağlanmadı.</small>
+                      <small>{KANALLAR[kanal]}’da {ist.eslesmeyen} mağaza ürünü henüz bir ilan koduna bağlanmadı ({ist.eslesmeyenListesi.slice(0, 3).map((u) => u.kisaAd).join(', ')}{ist.eslesmeyen > 3 ? '…' : ''}). Bu kanalda satmıyorsanız satırdan “Bu kanalda satmıyorum” diyebilirsiniz.</small>
                     </div>
                     <span class="y-chip y-chip--turuncu">{ist.eslesmeyen} ürün</span>
-                    <a class="btn btn--sepet btn--kucuk" href={`?gorunum=${kanal}#eslestirme-${kanal}`}>Ürünleri Gör</a>
+                    <a class="btn btn--sepet btn--kucuk" href={`?gorunum=${kanal}&filtre=bekliyor#eslestirme-${kanal}`}>Ürünleri Gör</a>
                   </div>
                 )}
                 {ist.stokFarkli > 0 && (
                   <div class="sk-sorun-kutu is-kirmizi">
                     <div>
                       <strong><KanalLogo kanal={kanal} boyut="kucuk" /> {KANALLAR[kanal]} · Stok Farkı Var</strong>
-                      <small>{ist.stokFarkli} üründe kanala son bildirilen stok ile mağaza hedef stoğu farklı.</small>
+                      <small>{ist.stokFarkli} üründe kanala son bildirilen stok ile mağaza hedef stoğu farklı ({ist.stokFarkliListesi.slice(0, 3).map((u) => {
+                        const es = k.urunler[u.id];
+                        const sat = Math.max(0, u.stok - (ayrilan?.get(u.id) ?? 0));
+                        const hdf = es?.satista ? kanalHedefStok(sat, k) : 0;
+                        return `${u.kisaAd}: kanalda ${es?.bildirilen ?? '—'}, depoda ${hdf}`;
+                      }).join(' · ')}).</small>
                     </div>
                     <span class="y-chip y-chip--kirmizi">{ist.stokFarkli} ürün</span>
-                    <a class="btn btn--sepet btn--kucuk" href={`?gorunum=${kanal}#eslestirme-${kanal}`}>Eşitle / Gör</a>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      {depoHazir && ayarliKanal && <form method="post" style="margin:0"><button class="btn btn--sepet btn--kucuk" name="eylem" value="senkron" type="submit">Şimdi Eşitle</button></form>}
+                      <a class="btn btn--cizgi btn--kucuk" href={`?gorunum=${kanal}&filtre=fark#eslestirme-${kanal}`}>Gör</a>
+                    </div>
                   </div>
                 )}
                 {k.sonApiHata && (
@@ -745,6 +773,20 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
                 <span class="y-chip y-chip--turuncu">{eslesmeyen} eşleşme bekliyor</span>
                 {stokFarkli > 0 && <span class="y-chip y-chip--kirmizi">{stokFarkli} stok farkı</span>}
               </div>
+              <div class="y-ust-aksiyonlar">
+                {kanal === 'trendyol' && (
+                  <a class="btn btn--sepet btn--kucuk" href="/yonetim/siparisler/trendyol-ilanlar">
+                    <PIkon ad="zincir" boyut={15} /> Trendyol İlanları (Bağla / Siteye Çek)
+                  </a>
+                )}
+                {kanal === 'hepsiburada' && ['canli', 'test'].includes(pazaryeriApiDurumu('hepsiburada')) && (
+                  <form method="post">
+                    <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="hb-oto-bagla">
+                      <PIkon ad="zincir" boyut={15} /> HB İlanlarını Otomatik Eşleştir
+                    </button>
+                  </form>
+                )}
+              </div>
             </div>
             <p class="y-help" style="margin-top:0">{KOD_YARDIM[kanal]}</p>
 
@@ -906,16 +948,6 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
 </Yonetim>
 
 <script>
-  // Menüdeki alt bağlantılar (?gorunum=eslestirme | fiyatlar | hepsiburada): ilgili bölümü açıp oraya kaydır
-  {
-    const gorunum = new URLSearchParams(location.search).get('gorunum');
-    const hedef = gorunum === 'fiyatlar' ? 'fiyatlar' : gorunum === 'hepsiburada' ? 'eslestirme-hepsiburada' : gorunum === 'eslestirme' ? 'eslestirmeler' : '';
-    const el = hedef && document.getElementById(hedef);
-    if (el) {
-      if (el instanceof HTMLDetailsElement) el.open = true;
-      requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }));
-    }
-  }
   for (const dugme of document.querySelectorAll<HTMLButtonElement>('[data-hepsini-sec]')) {
     dugme.addEventListener('click', () => {
       const kutular = [...document.querySelectorAll<HTMLInputElement>(`[data-toplu-secim="${dugme.dataset.hepsiniSec}"]`)]
@@ -961,6 +993,21 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
         for (const x of dugmeler) x.classList.toggle('is-aktif', x === b);
         suz();
       });
+    }
+  }
+  // Menüdeki alt bağlantılar (?gorunum=eslestirme | fiyatlar | trendyol | hepsiburada & filtre=bekliyor | fark): ilgili bölümü açıp filtreyi uygula
+  {
+    const params = new URLSearchParams(location.search);
+    const gorunum = params.get('gorunum');
+    const filtre = params.get('filtre');
+    const hedef = gorunum === 'fiyatlar' ? 'fiyatlar' : gorunum === 'trendyol' ? 'eslestirme-trendyol' : gorunum === 'hepsiburada' ? 'eslestirme-hepsiburada' : gorunum === 'eslestirme' ? 'eslestirmeler' : '';
+    const el = hedef && document.getElementById(hedef);
+    if (el) {
+      if (el instanceof HTMLDetailsElement) el.open = true;
+      if (filtre) {
+        el.querySelector<HTMLButtonElement>(`[data-eslestirme-durum="${filtre}"]`)?.click();
+      }
+      requestAnimationFrame(() => el.scrollIntoView({ block: 'start' }));
     }
   }
 </script>

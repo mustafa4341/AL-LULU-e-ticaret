@@ -143,7 +143,6 @@ const liste = adaylar
   .filter((a) => (durum === 'kesilecek' ? !a.fatura : durum === 'iletilecek' ? Boolean(a.fatura && (a.fatura.iletim.durum === 'bekliyor' || a.fatura.iletim.durum === 'hata')) : durum === 'kesildi' ? !!a.fatura : true) && (!kanal || a.kanal === kanal))
   .slice(0, 300);
 const secili = adaylar.find((a) => a.anahtar === q.get('sec'));
-const sekmeler = [['ozet', 'Özet'], ['belgeler', 'Belgeler'], ['giderler', 'Giderler'], ['trendyol', 'Trendyol'], ['raporlar', 'Raporlar']] as const;
 const tarih = (t: string) => yTarih.format(new Date(t));
 const filtre = (ek: Record<string, string | undefined>) => yol + '?' + new URLSearchParams(Object.entries({ durum, kanal, ...ek }).filter(([, v]) => v) as [string, string][]);
 const ILETIM: Record<FaturaKaydi['iletim']['durum'], [string, string]> = {
@@ -157,10 +156,14 @@ const bugun = finansGunu();
 ---
 <Yonetim baslik="Faturalar" altBaslik="GİB’de düzenlenen faturaları kaydedin ve müşteriye / pazaryerine iletim durumunu tamamlayın." aktif="finans" basari={q.get('ok')} hatalar={[...hatalar, ...(q.get('hata') ? [q.get('hata')!] : [])]}>
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
-    {sekmeler.map(([id, ad]) => <a href={'/yonetim/finans?sekme=' + id}>{ad}</a>)}
-    <a href={yol} aria-current="page">Faturalar{kesilecek.length > 0 && ` (${kesilecek.length})`}</a>
+    <a href="/yonetim/finans?sekme=ozet">Finans Özeti</a>
+    <a href={yol} aria-current="page">Faturalar (e-Arşiv){kesilecek.length > 0 && ` (${kesilecek.length})`}</a>
+    <a href="/yonetim/finans?sekme=giderler">Dış Giderler</a>
+    <a href="/yonetim/finans?sekme=belgeler">Koli Belgeleri</a>
+    <a href="/yonetim/finans?sekme=trendyol">Trendyol Hakediş</a>
     <a href="/yonetim/finans/trendyol-karlilik">Trendyol Kârlılık</a>
     <a href="/yonetim/finans/hepsiburada">Hepsiburada</a>
+    <a href="/yonetim/finans?sekme=raporlar">Muhasebe Raporu</a>
   </nav>
 
   <details class="y-kart" open={!adaylar.some((a) => a.fatura)}>
@@ -256,7 +259,7 @@ const bugun = finansGunu();
       <h3>Kesilen fatura ve iletim işlemleri</h3>
       <p><strong>{secili.fatura.no}</strong> · {secili.fatura.tarih.split('-').reverse().join('.')} · {finansPara(secili.fatura.toplam)}
         {secili.fatura.ek ? <> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">PDF / Dosyayı aç ↗</a></>
-          : faturaKanalLinki(secili.fatura) ? <> · <span class="muted">Dosyası Trendyol satıcı panelinde (Siparişler › fatura)</span> · <a class="y-link" href={'/yonetim/finans/fatura-dosya?id=' + secili.fatura.id} target="_blank" rel="noopener">Trendyol’dan indirmeyi dene ↗</a></>
+          : faturaKanalLinki(secili.fatura) ? <> · <span class="y-chip y-chip--yesil">✓ Trendyol’da yüklü</span> · <a class="y-link" href="https://partner.trendyol.com" target="_blank" rel="noopener">Trendyol Panelinde Gör ↗</a></>
           : <span class="muted"> · Dosya eklenmedi</span>}</p>
       <p><span class:list={['y-chip', 'y-chip--' + ILETIM[secili.fatura.iletim.durum][1]]}>{ILETIM[secili.fatura.iletim.durum][0]}</span> {secili.fatura.iletim.mesaj}</p>
       <details class="fm-dosya-yenile">
@@ -339,7 +342,7 @@ const bugun = finansGunu();
       </div>
       <label class="y-alan">Fatura dosyası (PDF ya da fotoğraf)<input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" /><small class="muted">En fazla 4 MB. Portaldan “İndir” ile aldığınız PDF (otomatik iletim için gereklidir).</small></label>
       <label class="y-secim"><input type="checkbox" name="ilet" checked={secili.kanal === 'trendyol' ? tyBagli : secili.kanal === 'web' ? smtpAcik : false} disabled={secili.kanal === 'hepsiburada'} /> {iletimAciklamasi(secili.kanal)}</label>
-      {secili.kanal !== 'hepsiburada' && <p class="y-help">Otomatik fatura iletimi açıksa PDF’i bulunan bekleyen kayıtlar da yeniden denenir. <a class="y-link" href="/yonetim/isler#otomatik-ayarlar">Otomatik iş ayarları</a></p>}
+      {secili.kanal !== 'hepsiburada' && <p class="y-help">Otomatik fatura iletimi açıksa PDF’i bulunan bekleyen kayıtlar da yeniden denenir. <a class="y-link" href="/yonetim#otomasyon">Otomatik iş ayarları</a></p>}
       <div class="y-modal__alt"><button class="btn btn--sepet" type="submit">Fatura kaydını oluştur</button></div>
     </form></>}
   </section>}

@@ -12,7 +12,7 @@
  */
 import { magazaOku } from './depo';
 import { KANALLAR, KANAL_LISTESI, kanalHedefFiyati, kodNormal, type Kanal } from './pazaryeri';
-import { PazaryeriApiHatasi, kanalFiyatGonder, kanalFiyatSonucu, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
+import { PazaryeriApiHatasi, hbTumIlanlar, kanalFiyatGonder, kanalFiyatSonucu, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
 import { finansOku } from './finansDepo';
 import { hbKategori, hedefFiyat, kategoriOnerisi } from './hepsiburadaTarife';
@@ -219,6 +219,8 @@ export type IlanEslesmesi = {
   not?: string;
   /** Çift ilan: bu ilan sitedeki ürüne uyuyor ama ürün Trendyol'da BAŞKA bir ilana bağlı (aynı ürün iki kez satışta) */
   cift?: boolean;
+  /** Fazla ilan olarak işaretlenip stoğu 0 yapılan (kapalı) ek ilan */
+  fazlaKapali?: boolean;
   /** Çift ilanda ürünün şu an bağlı olduğu barkod */
   bagliBarkod?: string;
 };
@@ -243,6 +245,7 @@ export async function trendyolIlanlariniEsle(bagla: boolean, yalniz?: string[]):
     if (u.sku) sku.set(kodNormal(u.sku), u.id);
   }
   const koduBagli = new Map(Object.entries(k.urunler).filter(([, e]) => e.kod).map(([id, e]) => [e.kod!, id]));
+  const kapatilanSet = new Set(k.kapatilanFazlaBarkodlar ?? []);
   const satirlar: IlanEslesmesi[] = ilanlar.map((i) => {
     const satir: IlanEslesmesi = { barkod: i.barkod, stokKodu: i.stokKodu, kanalFiyat: i.fiyat, kanalStok: i.stok, durum: 'yok' };
     const elle = ayar.eslesmeler[kodNormal(i.barkod)] ?? (i.stokKodu ? ayar.eslesmeler[kodNormal(i.stokKodu)] : undefined);
@@ -254,8 +257,16 @@ export async function trendyolIlanlariniEsle(bagla: boolean, yalniz?: string[]):
     const mevcut = k.urunler[urunId]?.kod;
     if (mevcut === i.barkod) satir.durum = 'bagli';
     else if (mevcut) {
-      satir.durum = 'cakisma'; satir.cift = true; satir.bagliBarkod = mevcut;
-      satir.not = `Çift ilan: bu ürün Trendyol’da ${mevcut} barkodlu ilana bağlı. Aynı ürün iki ilanla satılırsa tek stok iki kez satılabilir; hangisinin kalacağını seçin.`;
+      satir.bagliBarkod = mevcut;
+      const stokSifir = (i.stok ?? 0) === 0;
+      if (stokSifir || kapatilanSet.has(i.barkod)) {
+        satir.durum = 'cakisma';
+        satir.fazlaKapali = true;
+        satir.not = `Fazla ilan kapatıldı (stoğu 0). Ana ilan: ${mevcut}.`;
+      } else {
+        satir.durum = 'cakisma'; satir.cift = true;
+        satir.not = `Çift ilan: bu ürün Trendyol’da ${mevcut} barkodlu ilana bağlı. Aynı ürün iki ilanla satılırsa tek stok iki kez satılabilir; hangisinin kalacağını seçin.`;
+      }
     }
     else satir.durum = 'yeni';
     return satir;
@@ -305,4 +316,69 @@ export async function trendyolIlanlariniEsle(bagla: boolean, yalniz?: string[]):
     for (const s of baglananlar) s.durum = 'bagli';
   }
   return { satirlar, baglanan: baglananlar.size };
+}
+
+/**
+ * Hepsiburada'daki aktif ilanları okur; satıcı stok kodu (merchantSku), barkod (GTIN) veya eşleştirme tablosu üzerinden
+ * sitedeki ürünlerle (satista === false işaretliler hariç) eşleştirir. Fiyata dokunmaz; yalnız ortak stok bağlantısını kurar.
+ */
+export async function hepsiburadaIlanlariniEsle(bagla = false): Promise<{ ilanSayisi: number; baglanan: number; eslesmeyenIlanlar: string[] }> {
+  const sinyal = AbortSignal.timeout(35_000);
+  const [ilanlar, ayar, magaza] = await Promise.all([hbTumIlanlar(sinyal), envanterAyarlariOku(), magazaOku(true)]);
+  const k = ayar.kanallar.hepsiburada;
+  const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
+  const gtin = new Map<string, string>();
+  const sku = new Map<string, string>();
+  for (const u of magaza.urunler) {
+    const g = urunGtin(u);
+    if (g) gtin.set(kodNormal(g), u.id);
+    if (u.sku) sku.set(kodNormal(u.sku), u.id);
+  }
+  const bagliKodlar = new Set(Object.values(k.urunler).map((e) => kodNormal(e.kod)).filter(Boolean));
+  const adaylar = new Map<string, { kod: string; hbSku: string; fiyat?: number }[]>();
+  const eslesmeyenIlanlar: string[] = [];
+
+  for (const i of ilanlar) {
+    const mNorm = kodNormal(i.merchantSku);
+    const hNorm = kodNormal(i.hbSku);
+    if (bagliKodlar.has(mNorm) || bagliKodlar.has(hNorm)) continue;
+    const elle = ayar.eslesmeler[mNorm] ?? ayar.eslesmeler[hNorm];
+    const urunId = (elle && urunler.has(elle) ? elle : undefined) ?? sku.get(mNorm) ?? gtin.get(mNorm);
+    if (!urunId) {
+      eslesmeyenIlanlar.push(i.merchantSku || i.hbSku);
+      continue;
+    }
+    if (k.urunler[urunId]?.satista === false || k.urunler[urunId]?.kod) continue;
+    const liste = adaylar.get(urunId) ?? [];
+    liste.push({ kod: i.merchantSku, hbSku: i.hbSku, fiyat: i.fiyat });
+    adaylar.set(urunId, liste);
+  }
+
+  let baglanan = 0;
+  const tekilAdaylar = [...adaylar.entries()].filter(([, liste]) => liste.length === 1);
+  if (bagla && tekilAdaylar.length) {
+    const tarih = new Date().toISOString();
+    await envanterAyarlariGuncelle((a) => {
+      baglanan = 0;
+      const kanal = a.kanallar.hepsiburada;
+      const kullanilan = new Set(Object.values(kanal.urunler).map((e) => kodNormal(e.kod)).filter(Boolean));
+      for (const [urunId, [secim]] of tekilAdaylar) {
+        if (!secim || kanal.urunler[urunId]?.satista === false || kanal.urunler[urunId]?.kod) continue;
+        const mNorm = kodNormal(secim.kod);
+        if (kullanilan.has(mNorm)) continue;
+        kanal.urunler[urunId] = {
+          ...kanal.urunler[urunId],
+          kod: secim.kod,
+          satista: true,
+          fiyatTakip: false,
+          ...(secim.fiyat !== undefined ? { kanalFiyat: secim.fiyat, kanalFiyatTarih: tarih } : {}),
+        };
+        a.eslesmeler[mNorm] = urunId;
+        a.eslesmeler[kodNormal(secim.hbSku)] = urunId;
+        kullanilan.add(mNorm);
+        baglanan++;
+      }
+    });
+  }
+  return { ilanSayisi: ilanlar.length, baglanan, eslesmeyenIlanlar };
 }

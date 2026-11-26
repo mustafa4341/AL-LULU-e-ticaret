@@ -317,6 +317,8 @@ const KanalAyarSema = z.object({
   sonStokNot: z.string().max(1000).optional(),
   /** Aynı site ürününe düşen birden çok kanal ilanı (çift ilan). Trendyol ilanları ekranı ve günlük kontrol yazar. */
   ciftIlanlar: z.array(z.object({ urunId: z.string(), barkodlar: z.array(z.string().max(120)).max(20) })).max(200).default([]),
+  /** Stoğu 0 yapılarak satıştan kaldırıldığı onaylanan fazla (çift) ilan barkodları */
+  kapatilanFazlaBarkodlar: z.array(z.string().max(120)).max(500).default([]),
   /** Ürün bazında: pazaryerinde satışta mı, en son oraya hangi stok yazıldı */
   urunler: z.record(z.string(), z.object({
     satista: z.boolean().default(true),

@@ -396,12 +396,22 @@ const varsayilanSekme = s.birincilIslem.sekme;
                 </button>
               </form>
             )}
+            {tyIslemAcik && py.kargoTakip && !tyOrtakEtiketVar(py.kargoFirma) && (
+              <>
+                <a class="btn btn--sepet btn--kucuk" href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py.id)}/etiket?kagit=a4`} target="_blank" rel="noopener">
+                  <PIkon ad="yazici" boyut={15} /> A4 Barkodlu Etiket Yazdır
+                </a>
+                <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py.id)}/etiket?kagit=etiket`} target="_blank" rel="noopener">
+                  <PIkon ad="barkod" boyut={15} /> 10×10 Etiket
+                </a>
+              </>
+            )}
             <a class="btn btn--cizgi btn--kucuk" href={KANAL_PANELI.trendyol} target="_blank" rel="noopener">
-              Trendyol Paneli (PDF Etiket) ↗
+              Trendyol Paneli ↗
             </a>
           </div>
           {py.kargoTakip && !tyOrtakEtiketVar(py.kargoFirma) && (
-            <small class="muted">Not: {py.kargoFirma || 'Bu kargo firması'} için barkodlu A4/PDF etiketi Trendyol Satıcı Paneli’nden yazdırılır; görevli barkodu okutunca durum otomatik “Kargoda” olur.</small>
+            <small class="muted">Barkodlu kargo etiketini doğrudan buradan A4 veya 10×10 cm yazdırabilirsiniz; kargo görevlisi barkodu okutunca sipariş otomatik “Kargoda” olur.</small>
           )}
         </div>
       )}
@@ -616,9 +626,7 @@ const varsayilanSekme = s.birincilIslem.sekme;
                   PDF Aç ↗
                 </a>
               ) : faturaKanalLinki(kesilenFatura) ? (
-                <a class="y-link" href={`/yonetim/finans/fatura-dosya?id=${encodeURIComponent(kesilenFatura.id)}`} target="_blank" rel="noopener">
-                  Trendyol’dan Aç ↗
-                </a>
+                <span class="y-chip y-chip--yesil">✓ Trendyol’da Yüklü</span>
               ) : (
                 <span class="y-chip y-chip--turuncu">PDF eklenmedi</span>
               )}

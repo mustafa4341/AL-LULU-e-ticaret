@@ -20,7 +20,7 @@ import { trendyolEkstreCek, tyBuybox, tyIadeler, tyPaketDurumu, tySorular, tyWeb
 import { PY_DURUM_ADLARI } from './pazaryeri';
 import { trendyolEkstreSatirlari } from './trendyolFinans';
 import { ilanDurumlariniYenile } from './trendyolIlanIslem';
-import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
+import { fiyatOzeti, hepsiburadaIlanlariniEsle, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from './kanalFiyat';
 import { trendyolFaturalariniAl } from './faturaKanaldan';
 import { hbKomisyonlariniGuncelle } from './hepsiburadaKomisyon';
 import { tyKomisyonlariniGuncelle } from './trendyolIceAktar';
@@ -44,7 +44,7 @@ const IADE_DURUMU: Record<string, string> = {
 };
 
 export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]> {
-  const bitis = Date.now() + (o.sureMs ?? 15_000);
+  const bitis = Date.now() + (o.sureMs ?? 35_000);
   const kaldi = () => bitis - Date.now();
   const ayar = await envanterAyarlariOku();
   const ot = ayar.otomasyon;
@@ -177,16 +177,22 @@ export async function otomatikIsler(o: OtomasyonSecenek = {}): Promise<string[]>
 
   // 4c-2. Trendyol ilan başına komisyon oranları: hiç okunmadıysa hemen, sonra günde bir (kâr hesapları bunu kullanır)
   const tyKom = ayar.kanallar.trendyol.komisyonTarih;
-  if (tyBagli && kaldi() > 10_000 && (o.gunlukZorla || eskiMi(tyKom, 24 * 3600_000))) {
+  if (tyBagli && kaldi() > 5_000 && (o.gunlukZorla || eskiMi(tyKom, 24 * 3600_000))) {
     try {
       const degisen = await tyKomisyonlariniGuncelle();
       if (degisen.length) ozet.push(`Trendyol komisyon oranları okundu: ${degisen.length} ürün (${degisen.slice(0, 3).map((d) => `${d.urunId} %${(d.yeni / 100).toLocaleString('tr-TR')}`).join(', ')}${degisen.length > 3 ? '…' : ''})`);
     } catch (e) { const m = `Trendyol komisyonları: ${mesaj(e)}`; if (!(ot.sonOzet ?? []).some((x) => x.endsWith(m))) ozet.push(m); }
   }
 
-  // 4d. Hepsiburada ürün başına komisyon oranları: günde bir (canlı bağlantıda). Kâr hesaplayıcısı ve kârlılık bu oranı kullanır.
+  // 4d. Hepsiburada otomatik ilan eşleştirme + ürün başına komisyon oranları: günde bir (canlı bağlantıda).
   const hbKom = ayar.kanallar.hepsiburada.komisyonTarih;
-  if (pazaryeriApiDurumu('hepsiburada') === 'canli' && kaldi() > 10_000 && (o.gunlukZorla || eskiMi(hbKom, 24 * 3600_000))) {
+  if (pazaryeriApiDurumu('hepsiburada') === 'canli' && kaldi() > 5_000 && (o.gunlukZorla || eskiMi(hbKom, 24 * 3600_000))) {
+    if (ot.otoBagla) {
+      try {
+        const hbEs = await hepsiburadaIlanlariniEsle(true);
+        if (hbEs.baglanan) ozet.push(`${hbEs.baglanan} Hepsiburada ilanı sitedeki ürünüyle otomatik bağlandı (stok ortak)`);
+      } catch (e) { ozet.push(`Hepsiburada ilan bağlama: ${mesaj(e)}`); }
+    }
     try {
       const r = await hbKomisyonlariniGuncelle(Math.min(20_000, kaldi() - 4000));
       const degisen = r.guncellenen.filter((g) => g.eski !== g.yeni);

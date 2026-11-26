@@ -67,6 +67,10 @@ async function herkeseAcikIndir(url: URL): Promise<File | undefined> {
 /** Kayıttaki kanal bağlantısı: yeni kayıtlarda kanalLink, eski kayıtlarda iletim mesajındaki "Bağlantı: …" */
 export const faturaKanalLinki = (k: FaturaKaydi) => k.kanalLink ?? k.iletim.mesaj?.match(/Bağlantı: (https:\/\/\S+)/)?.[1];
 
+/** Trendyol'un satıcı API anahtarına PDF indirme izni vermediği (HTTP 403) müşteri fatura adresi mi? */
+const trendyolKisitiMi = (link: string, hata?: string) =>
+  /trendyol\.com\/(sapigw|integration)\/customer-invoices\//i.test(link) && /HTTP 403/i.test(hata ?? '');
+
 /**
  * Kanaldan alınmış ama dosyası eklenmemiş faturanın dosyasını indirip kayda ekler. Başarısızsa denenme zamanı yazılır.
  * Fatura dosya ekranı (PDF düğmesi) ve otomatik işler kullanır.
@@ -130,7 +134,8 @@ export async function trendyolFaturalariniAl(secenek: { enFazlaSorgu?: number; s
     sonuc.kontrolEdilen++;
     if (!link) continue;
     const no = faturaNoUret(a, link, kullanilan);
-    const { dosya } = await faturaDosyasiIndir(link);
+    const { dosya, hata: indirHata } = await faturaDosyasiIndir(link);
+    const kisitli = !dosya && trendyolKisitiMi(link, indirHata);
     try {
       const { kayit } = await faturaKaydet({
         kanal: 'trendyol', kayit: a.kayit, siparisNo: a.siparisNo, no,
@@ -140,10 +145,15 @@ export async function trendyolFaturalariniAl(secenek: { enFazlaSorgu?: number; s
       }, dosya);
       await faturaGuncelle(kayit.id, (x) => {
         x.kanalLink = link;
-        x.kanalDeneme = new Date().toISOString();
+        // Dosya indirildiyse veya Trendyol 403 kısıtı kesinleştiyse tekrar deneme kapatılır; geçici ağ hatasıysa bir kez daha denenir
+        if (dosya || kisitli) x.kanalDeneme = new Date().toISOString();
         x.iletim = {
           durum: 'gonderildi', tarih: new Date().toISOString(),
-          mesaj: dosya ? 'Trendyol’da yüklü; fatura dosyası siteye alındı.' : 'Trendyol’da yüklü; dosyası bir sonraki denemede alınacak (PDF düğmesiyle de açılabilir).',
+          mesaj: dosya
+            ? 'Trendyol’da yüklü; fatura dosyası siteye alındı.'
+            : kisitli
+              ? 'Trendyol satıcı panelinde yüklü olduğu doğrulandı. Muhasebe ZIP arşivine PDF kopyasını da eklemek isterseniz dosyayı yükleyebilirsiniz.'
+              : 'Trendyol’da yüklü; dosyası bir sonraki denemede alınacak.',
         };
       });
       kullanilan.add(no);
@@ -160,9 +170,10 @@ export async function trendyolFaturalariniAl(secenek: { enFazlaSorgu?: number; s
     && Date.now() - Date.parse(x.olusturma) < 60 * 86_400_000 && !x.kanalDeneme).slice(0, 3);
   for (const x of eksikler) {
     if (Date.now() > bitis - 3000) break;
+    const link = faturaKanalLinki(x) ?? '';
     const r = await kanalFaturaDosyasiniTamamla(x).catch((e) => ({ tamam: false, hata: e instanceof Error ? e.message : 'hata' }));
     if (r.tamam) sonuc.dosyasiTamamlanan.push(x.siparisNo);
-    else if (r.hata) sonuc.hatalar.push(`${x.siparisNo} fatura dosyası: ${r.hata}`);
+    else if (r.hata && !trendyolKisitiMi(link, r.hata)) sonuc.hatalar.push(`${x.siparisNo} fatura dosyası: ${r.hata}`);
   }
   return sonuc;
 }

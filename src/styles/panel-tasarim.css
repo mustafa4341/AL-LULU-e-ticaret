@@ -577,7 +577,7 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
 .y-panel .y-kart-dipnot { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 14px 0 0; color: var(--y-muted); font-size: 14px; }
 .y-panel .y-kart-dipnot svg { color: var(--y-gold-ink); }
 /* ---------- Satış kanalı işaretleri (Web · Trendyol · Hepsiburada) — her yerde aynı ---------- */
-.y-kanal { display: inline-flex; align-items: center; gap: 9px; vertical-align: middle; min-width: 0; }
+.y-kanal { flex: none; display: inline-flex; align-items: center; gap: 9px; vertical-align: middle; min-width: 0; }
 .y-kanal__ad { font-weight: 650; color: var(--y-ink-2); white-space: nowrap; }
 .y-kanal-logo {
   flex: none; display: grid; place-items: center; align-content: center; width: 44px; height: 44px; border-radius: 12px;

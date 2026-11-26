@@ -3,8 +3,9 @@ import Yonetim from '../../../layouts/Yonetim.astro';
 import { guvenliBaglanti } from '../../../lib/istek';
 import KanalLogo from '../../../components/yonetim/KanalLogo.astro';
 import PIkon from '../../../components/yonetim/PIkon.astro';
-import { DogrulamaHatasi, magazaOku } from '../../../lib/depo';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../../lib/depo';
 import { liste, metin } from '../../../lib/form';
+import { yayinEksikleri } from '../../../lib/yonetimUrun';
 import { fiyatOzeti, pazaryeriFiyatlariEsitle, trendyolIlanlariniEsle } from '../../../lib/kanalFiyat';
 import { bosAyarlar, kanalHedefStok } from '../../../lib/pazaryeri';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
@@ -31,10 +32,25 @@ const hataMetni = (e: unknown) => e instanceof DogrulamaHatasi ? e.hatalar : e i
 
 if (Astro.request.method === 'POST') {
   try {
-    if (!depoHazir) throw new DogrulamaHatasi(['Kanal ayarları kullanılamıyor. Veritabanı bağlantısını kontrol edin.']);
-    if (!apiHazir) throw new DogrulamaHatasi(['Bu işlem için bu sunucuda Trendyol bağlantısı gerekir (canlı sitede çalışır).']);
     const f = await Astro.request.formData();
     const eylem = metin(f, 'eylem');
+    if (eylem === 'site-yayinla') {
+      const urunId = metin(f, 'urun');
+      let ad = '';
+      await magazaGuncelle((mm) => {
+        const u = mm.urunler.find((x) => x.id === urunId);
+        if (!u) throw new DogrulamaHatasi(['Sitedeki ürün bulunamadı.']);
+        ad = `${u.marka} ${u.kisaAd}`.trim();
+        // Eski içe aktarma kayıtlarındaki "!" kontrol kilidi varsa onaylanmış sayılarak kaldırılır
+        u.dogrula = u.dogrula.map((d) => d.trim().startsWith('! Trendyol’dan içe aktarıldı') ? d.replace(/^\s*!\s*/, '') : d);
+        const eksik = yayinEksikleri(u);
+        if (eksik.length) throw new DogrulamaHatasi([`"${ad}" henüz yayına alınamaz. Eksik: ${eksik.join(', ')}. Ürünü açıp tamamlayın.`]);
+        u.durum = 'yayinda';
+      }, 'Panel: Trendyol ekranından ürünü yayına alma');
+      return geri(`"${ad}" sitede yayına alındı! Müşteriler artık mağazada görebilir.`, '#liste');
+    }
+    if (!depoHazir) throw new DogrulamaHatasi(['Kanal ayarları kullanılamıyor. Veritabanı bağlantısını kontrol edin.']);
+    if (!apiHazir) throw new DogrulamaHatasi(['Bu işlem için bu sunucuda Trendyol bağlantısı gerekir (canlı sitede çalışır).']);
     const secili = liste(f, 'secili').filter(Boolean);
     if (eylem === 'bagla') {
       const barkod = metin(f, 'barkod');
@@ -63,6 +79,8 @@ if (Astro.request.method === 'POST') {
     if (eylem === 'cek') {
       const kategori = metin(f, 'kategori');
       const stokAl = f.get('stokAl') === 'on';
+      const hemenYayinla = f.get('hemenYayinla') === 'on';
+      const hbKapat = f.get('hbKapat') === 'on';
       const barkodlar = metin(f, 'barkod') ? [metin(f, 'barkod')] : secili;
       if (!barkodlar.length) throw new DogrulamaHatasi(['Siteye çekilecek ilanları soldaki kutulardan seçin ya da satırdaki “Siteye Çek” düğmesini kullanın.']);
       const secimler = barkodlar.map((barkod) => {
@@ -71,12 +89,14 @@ if (Astro.request.method === 'POST') {
         if (stok !== undefined && (!Number.isSafeInteger(stok) || stok < 0)) throw new DogrulamaHatasi([`${barkod}: depo stoğu 0 veya pozitif tam sayı olmalı.`]);
         const fiyatHam = metin(f, 'fiyat-' + barkod).replace(',', '.');
         const fiyat = fiyatHam && Number(fiyatHam) > 0 ? Number(fiyatHam) : undefined;
-        return { barkod, kategori, stok: stokAl ? stok : 0, fiyat };
+        return { barkod, kategori, stok: stokAl ? stok : 0, fiyat, hemenYayinla, hbKapat };
       });
       const r = await trendyoldanUrunCek(secimler);
+      const yayindaOlanlar = r.eklenen.filter((x) => x.durum === 'yayinda');
+      const taslakOlanlar = r.eklenen.filter((x) => x.durum !== 'yayinda');
       const parcalar = [
-        r.eklenen.length ? `${r.eklenen.length} ürün siteye TASLAK olarak eklendi ve Trendyol ilanına bağlandı: ${r.eklenen.map((x) => `${x.ad} (${x.gorsel} görsel)`).join(', ')}.` : '',
-        r.eklenen.length ? 'Sitede yayınlamak için ürünü açıp bilgileri kontrol edin ve “!” ile başlayan notu silin.' : '',
+        yayindaOlanlar.length ? `${yayindaOlanlar.length} ürün siteye çekildi, Trendyol’a bağlandı ve SİTEDE YAYINA ALINDI: ${yayindaOlanlar.map((x) => `${x.ad} (${x.gorsel} görsel)`).join(', ')}.` : '',
+        taslakOlanlar.length ? `${taslakOlanlar.length} ürün siteye TASLAK olarak eklendi ve bağlandı: ${taslakOlanlar.map((x) => `${x.ad} (${x.gorsel} görsel)`).join(', ')}. Satırdaki “Sitede Yayınla” düğmesiyle tek tıkla yayına açabilirsiniz.` : '',
         r.atlanan.length ? `Atlanan: ${r.atlanan.join(' · ')}` : '',
       ].filter(Boolean);
       if (!r.eklenen.length) throw new DogrulamaHatasi(parcalar.length ? parcalar : ['Hiç ürün eklenmedi.']);
@@ -220,15 +240,17 @@ const ciftGruplari = (() => {
         <button class="btn btn--cizgi btn--kucuk" type="button" data-hepsini-sec>Hepsini seç</button>
       </div>
       <details class="tyi-cek" open={say('yeni') > 0}>
-        <summary>Seçilen “sitede yok” ilanları siteye taslak ürün olarak çek {say('yeni') > 0 ? `(${say('yeni')} uygun ilan)` : ''}</summary>
+        <summary>Seçilen “sitede yok” ilanları siteye ürün olarak çek {say('yeni') > 0 ? `(${say('yeni')} uygun ilan)` : ''}</summary>
         <div class="tyi-toplu__satir">
           <label class="y-alan">Site kategorisi
             <select name="kategori" required>{magaza.kategoriler.map((c) => <option value={c.id}>{c.ad}</option>)}</select>
           </label>
           <label class="y-secim"><input type="checkbox" name="stokAl" checked /> Depo stoğunu satırdaki adetle başlat</label>
+          <label class="y-secim"><input type="checkbox" name="hemenYayinla" checked /> Fotoğraf ve fiyat tamsa sitede hemen yayınla</label>
+          <label class="y-secim"><input type="checkbox" name="hbKapat" checked /> Hepsiburada’ya gönderme (yalnız Web + Trendyol)</label>
           <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="cek">Siteye çek (en fazla 6)</button>
         </div>
-        <p class="y-help">Depo stoğu varsayılan olarak Trendyol’daki adettir; satırdaki kutudan değiştirebilirsiniz. Bağlandıktan sonra Trendyol’da {k.guvenlikPayi} adet güvenlik payı düşülmüş adet görünür.</p>
+        <p class="y-help">Depo stoğu varsayılan olarak Trendyol’daki adettir; satırdaki kutudan değiştirebilirsiniz. “Sitede hemen yayınla” işaretliyse çekilen ürün müşterilere anında açılır.</p>
       </details>
     </form>
     <div class="y-toolbar" data-tyi-filtre hidden>
@@ -258,15 +280,22 @@ const ciftGruplari = (() => {
               return <small class="y-table-note y-yazi-kirmizi" title="Aynı ürünü başka mağazalar da satıyor">Buybox {b.sira ?? '?'}. sırada · en iyi {para(b.fiyat)}</small>; })()}
           </td>
           <td data-etiket="Sitedeki ürün" class="tyi-site">
-            {u ? <><a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>{u.marka} {u.kisaAd}</a>
+            {u ? <>
+              <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}><strong>{u.marka} {u.kisaAd}</strong></a>
+              <div style="margin:4px 0">
+                {u.durum === 'yayinda'
+                  ? <a class="y-chip y-chip--yesil" href={'/urun/' + encodeURIComponent(u.id)} target="_blank" rel="noopener">Yayında · Sitede gör ↗</a>
+                  : <span class="y-chip y-chip--turuncu">{u.durum === 'gizli' ? 'Gizli · Sitede kapalı' : 'Taslak · Sitede görünmüyor'}</span>}
+              </div>
               <small class="y-table-note">Depo {u.stok}{s.durum === 'bagli' ? ` · Trendyol’a giden ${kanalHedefStok(u.stok, k)} adet` : ''}</small>
               <small class="y-table-note">Hedef fiyat {para(s.siteFiyat)}{fiyatFarkli ? ' (Trendyol’dan farklı)' : ''}</small>
-              {s.durum === 'bagli' && <small class="y-table-note">{e?.fiyatTakip ? 'Fiyat otomatik takipte' : 'Fiyat elle yönetiliyor'}</small>}</>
-            : <span class="muted">—</span>}
+              {s.durum === 'bagli' && <small class="y-table-note">{e?.fiyatTakip ? 'Fiyat otomatik takipte' : 'Fiyat elle yönetiliyor'}</small>}
+            </> : <span class="muted">—</span>}
           </td>
-          <td data-etiket="Durum" class="tyi-durum"><span class:list={['y-chip', 'y-chip--' + (s.cift ? 'turuncu' : renk)]}>{s.cift ? 'Çift ilan' : ad}</span>{s.not && <small class="y-table-note">{s.not}</small>}</td>
+          <td data-etiket="Durum" class="tyi-durum"><span class:list={['y-chip', 'y-chip--' + (s.cift ? 'turuncu' : s.fazlaKapali ? 'gri' : renk)]}>{s.cift ? 'Çift ilan' : s.fazlaKapali ? 'Fazla ilan (Stok 0)' : ad}</span>{s.not && <small class="y-table-note">{s.not}</small>}</td>
           <td data-etiket="İşlem" class="tyi-islem tyi-islemler">
-            {s.cift && s.urunId && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="ana-ilan" data-onayla={`${s.barkod} barkodlu ilan bu ürünün ana ilanı olsun mu? Aynı ürünün diğer ilanları Trendyol’da 0 stoğa çekilir.`}>Bu ilan kalsın</button></form>}
+            {u && u.durum !== 'yayinda' && <form method="post"><input type="hidden" name="urun" value={u.id} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="site-yayinla">Sitede Yayınla</button></form>}
+            {(s.cift || s.fazlaKapali) && s.urunId && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><input type="hidden" name="urun" value={s.urunId} /><button class:list={['btn', s.fazlaKapali ? 'btn--cizgi' : 'btn--sepet', 'btn--kucuk']} name="eylem" value="ana-ilan" data-onayla={`${s.barkod} barkodlu ilan bu ürünün ana ilanı olsun mu? Aynı ürünün diğer ilanları Trendyol’da 0 stoğa çekilir.`}>Bu ilan kalsın</button></form>}
             {s.cift && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="ilan-kapat" data-onayla={`${s.barkod} barkodlu fazla ilanın Trendyol stoğu 0 yapılsın mı?`}>Fazlayı kapat (stok 0)</button></form>}
             {s.durum === 'eslesir' && <form method="post"><input type="hidden" name="barkod" value={s.barkod} /><button class="btn btn--sepet btn--kucuk" name="eylem" value="bagla">Bağla</button></form>}
             {s.durum === 'bagli' && s.urunId && <>
@@ -274,15 +303,17 @@ const ciftGruplari = (() => {
               {fiyatFarkli && <form method="post"><input type="hidden" name="urun" value={s.urunId} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="fiyat-koru" title="Trendyol’daki fiyatı bu ürünün Trendyol’a özel fiyatı yapar">Trendyol fiyatını koru</button></form>}
               <form method="post"><input type="hidden" name="urun" value={s.urunId} /><input type="hidden" name="deger" value={e?.fiyatTakip ? 'kapat' : 'ac'} /><button class="btn btn--cizgi btn--kucuk" name="eylem" value="takip">{e?.fiyatTakip ? 'Fiyat takibini kapat' : 'Fiyatı otomatik takip et'}</button></form>
             </>}
-            {(s.durum === 'yeni' || (s.durum === 'cakisma' && !s.cift)) && <details class="tyi-elle">
+            {(s.durum === 'yeni' || (s.durum === 'cakisma' && !s.cift && !s.fazlaKapali)) && <details class="tyi-elle">
               <summary class:list={['btn', s.durum === 'yeni' ? 'btn--sepet' : 'btn--cizgi', 'btn--kucuk']}>{s.durum === 'yeni' ? 'Siteye Çek / Bağla' : 'Elle bağla'}</summary>
               {s.durum === 'yeni' && <form method="post" class="tyi-mini">
                 <input type="hidden" name="barkod" value={s.barkod} />
                 <input type="hidden" name={'fiyat-' + s.barkod} value={s.fiyat ?? ''} />
                 <label class="y-alan">Site kategorisi<select name="kategori">{magaza.kategoriler.map((c) => <option value={c.id}>{c.ad}</option>)}</select></label>
                 <label class="y-alan">Depo stoğu<input name={'stok-' + s.barkod} inputmode="numeric" value={s.stok ?? 0} data-tyi-stok={s.barkod} /></label>
+                <label class="y-secim"><input type="checkbox" name="hemenYayinla" checked /> Sitede hemen yayınla</label>
+                <label class="y-secim"><input type="checkbox" name="hbKapat" checked /> Hepsiburada’ya gönderme</label>
                 <input type="hidden" name="stokAl" value="on" />
-                <button class="btn btn--sepet btn--kucuk" name="eylem" value="cek">Siteye taslak ürün olarak çek</button>
+                <button class="btn btn--sepet btn--kucuk" name="eylem" value="cek">Siteye Çek ve Bağla</button>
               </form>}
               <form method="post" class="tyi-mini">
                 <input type="hidden" name="barkod" value={s.barkod} />

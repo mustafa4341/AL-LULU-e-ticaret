@@ -63,7 +63,7 @@ async function katalogStogu() {
   };
 }
 
-function stokHedefleri(
+export function stokHedefleri(
   kanal: Kanal,
   a: KanalAyari,
   stoklar: ReadonlyMap<string, number>,
@@ -76,9 +76,11 @@ function stokHedefleri(
     const kod = listeleme.kod?.trim();
     const stok = stoklar.get(urunId);
     const ad = urunAdlari?.get(urunId) ?? urunId;
-    if (!kod && !listeleme.satista) continue;
-    if (!kod || (kanal === 'trendyol' && /[,\s]/.test(kod))) {
-      uyarilar.push(`${ad}: geçersiz ilan kodu (${kod || 'boş'})`);
+    // Henüz ilan kodu bağlanmamış ürün (ör. önceden özel kanal fiyatı girilmiş) bağlantı/stok hatası değildir;
+    // zaten "Eşleşmemiş ürünler" listesinde izlenir.
+    if (!kod) continue;
+    if (kanal === 'trendyol' && /[,\s]/.test(kod)) {
+      uyarilar.push(`${ad}: geçersiz ilan kodu (${kod})`);
       continue;
     }
     if (kodlar.has(kod)) {
@@ -163,6 +165,7 @@ async function stokHazirla(kanal: Kanal, a: KanalAyari, katalog: Awaited<ReturnT
 
 async function stokYayimla(
   kanal: Kanal, a: KanalAyari, hazir: Awaited<ReturnType<typeof stokHazirla>>, artisEngeli: boolean, sinyal: AbortSignal,
+  artisiZorla = false,
 ) {
   const { katalog, hedefler, ilanlar, uyarilar, notlar } = hazir;
   const uyariMetni = uyarilar.length
@@ -171,13 +174,13 @@ async function stokYayimla(
   const notMetni = notlar.length
     ? `${KANALLAR[kanal]}’da henüz onaylı ilanı görünmeyen ${notlar.length} bağlı ürün: ${notlar.slice(0, 4).join('; ')}${notlar.length > 4 ? '…' : ''}. İlan onaylanınca stoğu kendiliğinden eşitlenir.`
     : null;
-  const artisAcik = !artisEngeli && pazaryeriOrtam('PAZARYERI_STOK_ARTIR') === '1';
+  const artisAcik = !artisEngeli && (artisiZorla || pazaryeriOrtam('PAZARYERI_STOK_ARTIR') === '1');
   const degisen = hedefler.filter((k) => {
     const gercek = ilanlar.get(k.kod)!.stok;
     const onceki = a.urunler[k.urunId]?.sonHedef;
     if (gercek > k.stok) return true;
-    // Kanalda doğal olarak azalan adedi her taramada eski hedefe geri çıkarmayız.
-    return gercek < k.stok && artisAcik && (onceki === undefined || k.stok > onceki);
+    // Kanalda doğal olarak azalan adedi her taramada eski hedefe geri çıkarmayız (panelden elle zorlanmadıkça).
+    return gercek < k.stok && artisAcik && (artisiZorla || onceki === undefined || k.stok > onceki);
   }).slice(0, 1000);
   if (hedefler.length) {
     await kanalAyariYaz(kanal, (taze) => {
@@ -308,7 +311,7 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
             const a = ayar.kanallar[kanal];
             const hazir = hazirlar.get(kanal);
             const stok = a.bekleyenStok ? await stokSonuclandir(kanal, a.bekleyenStok, sinyal)
-              : hazir ? await stokYayimla(kanal, a, hazir, artisEngeli, sinyal) : undefined;
+              : hazir ? await stokYayimla(kanal, a, hazir, artisEngeli, sinyal, tetikleyen === 'panel') : undefined;
             if (stok !== undefined) kanallar[kanal] = { ...kanallar[kanal], stok };
           } catch (e) {
             await stokHatasiniKaydet(kanal, e);

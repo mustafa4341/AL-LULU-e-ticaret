@@ -19,12 +19,13 @@ const [magaza, finans, py, ayar] = await Promise.all([
   pazaryeriSiparisleriOku().catch(() => { hatalar.push('Pazaryeri siparişleri okunamadı.'); return []; }),
   envanterAyarlariOku().catch(() => undefined),
 ]);
+const urunMap = new Map(magaza.urunler.map((u) => [u.id, u]));
 const kdv = (id?: string): number => (id ? ayar?.kanallar.trendyol.ilanlar[id]?.kdv ?? finans?.hbUrunler[id]?.kdv : undefined) ?? 20;
 const tyUrunler = ayar?.kanallar.trendyol.urunler ?? {};
 const komisyonOrani = (id?: string) => { const bp = id ? tyUrunler[id]?.komisyonBp : undefined; return bp === undefined ? undefined : bp / 10_000; };
 const rapor = finans ? trendyolKarlilik(py, finans, magaza, gun, kdv, komisyonOrani) : undefined;
 
-/* ---- Satış başı tahmini kâr: ilanın Trendyol komisyon oranı + alış maliyeti (25.11.2026) ---- */
+/* ---- Satış başı tahmini kâr: ilanın Trendyol komisyon oranı + alış maliyeti ---- */
 const kargoFirmasi = finans?.hbAyar.kargoFirmasi || 'aras';
 const birimSatirlar = magaza.urunler
   .filter((u) => tyUrunler[u.id]?.kod && tyUrunler[u.id]?.satista !== false)
@@ -37,76 +38,394 @@ const birimSatirlar = magaza.urunler
         : kanalHedefFiyati(u, ayar?.kanallar.trendyol).hedef;
     const fiyat = Math.round(fiyatTL * 100);
     const hb = finans?.hbUrunler[u.id];
+    const desi = ayar?.kanallar.trendyol.ilanlar[u.id]?.desi ?? hb?.desi ?? 3;
     const girdi = e.komisyonBp === undefined ? undefined : {
-      oranBp: e.komisyonBp, komisyonKdvDahil: true, urunKdv: kdv(u.id), desi: ayar?.kanallar.trendyol.ilanlar[u.id]?.desi ?? hb?.desi ?? 3, kargoFirmasi,
+      oranBp: e.komisyonBp, komisyonKdvDahil: true, urunKdv: kdv(u.id), desi, kargoFirmasi,
       islemBedeli: 0, hizmetBedeli: 0, stopajBp: 100, maliyet: hb?.maliyet,
     };
     const h = girdi ? satisHesabi({ ...girdi, fiyat }) : undefined;
-    return { id: u.id, ad: `${u.marka} ${u.kisaAd}`, oranBp: e.komisyonBp, fiyat, maliyet: hb?.maliyet, yatan: h?.hesabaYatan, kar: h?.netKar, marj: h?.marj, basaBas: girdi ? hedefFiyat(girdi, 0) : undefined };
+    const komisyonTutar = h ? h.kalemler[0]!.net + h.kalemler[0]!.kdv : undefined;
+    const kargoTutar = h ? h.kalemler[1]!.net + h.kalemler[1]!.kdv : undefined;
+    return {
+      id: u.id,
+      marka: u.marka,
+      kisaAd: u.kisaAd,
+      gorsel: u.gorseller[0]?.src,
+      barkod: e.kod,
+      stok: u.stok,
+      desi,
+      oranBp: e.komisyonBp,
+      fiyat,
+      komisyonTutar,
+      kargoTutar,
+      maliyet: hb?.maliyet,
+      yatan: h?.hesabaYatan,
+      kar: h?.netKar,
+      marj: h?.marj,
+      basaBas: girdi ? hedefFiyat(girdi, 0) : undefined,
+    };
   })
-  .sort((a, b) => (a.kar ?? 0) - (b.kar ?? 0));
+  .sort((a, b) => (b.kar ?? -1e12) - (a.kar ?? -1e12));
+
 const komisyonsuz = birimSatirlar.filter((r) => r.oranBp === undefined).length;
+const zarardakiSayi = birimSatirlar.filter((r) => (r.kar ?? 0) < 0).length;
 const yuzde = (n?: number) => n === undefined ? '—' : '%' + (n * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 });
 const para = (n?: number) => n === undefined ? '—' : finansPara(n);
+const isaretli = (n?: number) => n === undefined ? '—' : (n < 0 ? '−' : '+') + finansPara(Math.abs(n));
 const maliyetsiz = rapor?.satirlar.filter((r) => r.urunId && r.maliyet === undefined).length ?? 0;
 ---
-<Yonetim baslik="Trendyol Ürün Kârlılığı" altBaslik="Hangi ürün ne kadar sattı, Trendyol ne kesti, hesabınıza ne kaldı, maliyetten sonra ne kazandınız." aktif="finans" {hatalar}>
+<Yonetim baslik="Trendyol Ürün Kârlılığı" altBaslik="Her üründe müşterinin ödediği fiyattan kesintiler ve alış maliyeti düşüldükten sonra cebinize ne kaldığını net görün." aktif="finans" genis {hatalar}>
   <KanalLogo slot="baslik-onu" kanal="trendyol" boyut="buyuk" />
   <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/fiyatlar?gorunum=trendyol"><PIkon ad="etiket" boyut={17} />Fiyat ve Maliyet Düzenle</a>
+    <a class="btn btn--cizgi" href="/yonetim/finans?sekme=trendyol"><PIkon ad="banka" boyut={17} />Trendyol Cari Hakediş</a>
     {[30, 90, 365].map((g) => <a class:list={['btn', 'btn--kucuk', g === gun ? 'btn--sepet' : 'btn--cizgi']} href={'?gun=' + g}>Son {g} gün</a>)}
   </div>
 
+  <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri" style="margin-bottom:16px">
+    <a href="/yonetim/finans?sekme=ozet">Finans Özeti</a>
+    <a href="/yonetim/finans/faturalar">Faturalar (e-Arşiv)</a>
+    <a href="/yonetim/finans?sekme=giderler">Dış Giderler</a>
+    <a href="/yonetim/finans?sekme=belgeler">Koli Belgeleri</a>
+    <a href="/yonetim/finans?sekme=trendyol">Trendyol Hakediş</a>
+    <a href="/yonetim/finans/trendyol-karlilik" aria-current="page">Trendyol Kârlılık</a>
+    <a href="/yonetim/finans/hepsiburada">Hepsiburada</a>
+    <a href="/yonetim/finans?sekme=raporlar">Muhasebe Raporu</a>
+  </nav>
+
+  {/* Nasıl hesaplanır şeridi */}
+  <div class="kr-formul" aria-label="Kâr hesabı adımları">
+    <div class="kr-formul__kutu">
+      <span class="kr-formul__no">1</span>
+      <div><strong>Trendyol Satış Fiyatı</strong><small>Müşterinin ödediği tutar</small></div>
+    </div>
+    <span class="kr-formul__isaret" aria-hidden="true">−</span>
+    <div class="kr-formul__kutu kr-formul__kutu--kesinti">
+      <span class="kr-formul__no">2</span>
+      <div><strong>Komisyon + Kargo</strong><small>Trendyol kesintileri</small></div>
+    </div>
+    <span class="kr-formul__isaret" aria-hidden="true">=</span>
+    <div class="kr-formul__kutu kr-formul__kutu--yatan">
+      <span class="kr-formul__no">3</span>
+      <div><strong>Bankaya Yatan</strong><small>Hesabınıza geçen hakediş</small></div>
+    </div>
+    <span class="kr-formul__isaret" aria-hidden="true">−</span>
+    <div class="kr-formul__kutu">
+      <span class="kr-formul__no">4</span>
+      <div><strong>Ürün Alış Maliyeti</strong><small>KDV hariç geliş fiyatı</small></div>
+    </div>
+    <span class="kr-formul__isaret" aria-hidden="true">=</span>
+    <div class="kr-formul__kutu kr-formul__kutu--kar">
+      <span class="kr-formul__no">✓</span>
+      <div><strong>Cebe Kalan Net Kâr</strong><small>Gerçek ürün kazancınız</small></div>
+    </div>
+  </div>
+
+  {/* 1. TABLO: SATIŞ BAŞI GÜNCEL KÂRLILIK */}
   <section class="y-kart" id="birim">
-    <div class="y-kart__bas"><div><h2><PIkon ad="yuzde" /> Satış başı tahmini kâr (ilanın Trendyol komisyonuyla)</h2>
-      <p class="y-kart__alt">Trendyol’daki şu anki fiyatla bir adet satılırsa: hesabınıza yatacak tutar, alış maliyetinden sonra kalan net kâr ve zarar etmeden inebileceğiniz en düşük fiyat.</p></div></div>
-    {komisyonsuz > 0 && <p class="y-help">{komisyonsuz} ürünün komisyon oranı henüz okunmadı; oranlar Trendyol’dan günde bir (ve “Trendyol ilanları” ekranı açılınca) kendiliğinden alınır.</p>}
-    {birimSatirlar.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-      <thead><tr><th>Ürün</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Trendyol fiyatı</th><th class="y-sayi">Alış (KDV hariç)</th><th class="y-sayi">Hesaba yatan</th><th class="y-sayi">Net kâr</th><th class="y-sayi">Zararsız en düşük fiyat</th></tr></thead>
-      <tbody>{birimSatirlar.map((r) => <tr>
-        <td data-etiket="Ürün"><strong>{r.ad}</strong></td>
-        <td data-etiket="Komisyon" class="y-sayi">{r.oranBp !== undefined ? '%' + (r.oranBp / 100).toLocaleString('tr-TR') : '—'}</td>
-        <td data-etiket="Trendyol fiyatı" class="y-sayi y-nowrap">{para(r.fiyat)}</td>
-        <td data-etiket="Alış" class="y-sayi y-nowrap">{r.maliyet !== undefined ? para(r.maliyet) : <span class="muted">girilmedi</span>}</td>
-        <td data-etiket="Hesaba yatan" class="y-sayi y-nowrap">{para(r.yatan)}</td>
-        <td data-etiket="Net kâr" class:list={['y-sayi', 'y-nowrap', { 'y-yazi-kirmizi': (r.kar ?? 0) < 0 }]}><strong>{para(r.kar)}</strong>{r.marj !== undefined && <small class="y-table-note">{yuzde(r.marj)} marj</small>}</td>
-        <td data-etiket="En düşük fiyat" class="y-sayi y-nowrap">{para(r.basaBas)}</td>
-      </tr>)}</tbody>
-    </table></div> : <p class="y-bos">Trendyol’a bağlı ürün yok.</p>}
-    <p class="y-help">Kargo, Trendyol’un sözleşmeli kargo ücreti siparişten sonra kesinti faturasıyla geldiği için burada {kargoFirmasi === 'aras' ? 'Aras' : kargoFirmasi} desi tarifesiyle tahmin edilir; gerçek kesintiler aşağıdaki tabloda ekstreden gelir. Trendyol’un platform hizmet bedeli ve kampanya/kupon indirimleri dahil değildir.</p>
+    <div class="y-kart__bas">
+      <div>
+        <h2><PIkon ad="yuzde" /> 1 Adet Satışta Cebime Ne Kalır? ({birimSatirlar.length} Bağlı Ürün)</h2>
+        <p class="y-kart__alt">Trendyol’daki güncel satış fiyatınız ve ürünün gerçek komisyon oranıyla 1 adet satıldığında oluşacak tablo.</p>
+      </div>
+      <div class="y-ust-aksiyonlar">
+        {zarardakiSayi > 0
+          ? <span class="y-chip y-chip--kirmizi">{zarardakiSayi} ürün zararda</span>
+          : <span class="y-chip y-chip--yesil">Tüm bağlı ürünler kârda</span>}
+        <a class="btn btn--cizgi btn--kucuk" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="zincir" boyut={15} />Trendyol İlanları</a>
+      </div>
+    </div>
+
+    {komisyonsuz > 0 && <p class="y-uyari">{komisyonsuz} ürünün komisyon oranı henüz okunmadı; oranlar Trendyol’dan günde bir (ve “Trendyol ilanları” ekranı açılınca) otomatik alınır.</p>}
+
+    {birimSatirlar.length ? (
+      <div class="y-tablo-kap kr-tablo-kap">
+        <table class="y-tablo kr-tablo">
+          <thead>
+            <tr class="kr-grup-baslik">
+              <th>Ürün ve Bağlantı</th>
+              <th colspan="2" class="kr-bolge-satis">Satış ve Trendyol Kesintileri</th>
+              <th class="kr-bolge-yatan">Bankaya Giren</th>
+              <th colspan="2" class="kr-bolge-kar">Maliyet ve Net Kazanç</th>
+              <th class="kr-bolge-taban">Alt Sınır</th>
+            </tr>
+            <tr>
+              <th>Ürün</th>
+              <th class="y-sayi kr-bolge-satis">Trendyol Fiyatı</th>
+              <th class="y-sayi">Komisyon &amp; Kargo</th>
+              <th class="y-sayi kr-bolge-yatan">Hesaba Yatan</th>
+              <th class="y-sayi kr-bolge-kar">Alış (KDV Hrç)</th>
+              <th class="y-sayi">Net Kâr &amp; Marj</th>
+              <th class="y-sayi kr-bolge-taban">Zararsız En Düşük</th>
+            </tr>
+          </thead>
+          <tbody>
+            {birimSatirlar.map((r) => {
+              const zararda = (r.kar ?? 0) < 0;
+              return (
+                <tr class:list={{ 'kr-satir--zarar': zararda }}>
+                  <td data-etiket="Ürün" class="kr-urun-hucre">
+                    <div class="kr-urun">
+                      <a class="kr-foto" href={'/yonetim/urunler/' + encodeURIComponent(r.id)} tabindex="-1" aria-hidden="true">
+                        {r.gorsel ? <img src={r.gorsel} alt="" width="56" height="56" loading="lazy" decoding="async" /> : <PIkon ad="kutu" boyut={22} />}
+                      </a>
+                      <div class="kr-urun__bilgi">
+                        <span class="kr-marka">{r.marka}</span>
+                        <a class="kr-ad" href={'/yonetim/urunler/' + encodeURIComponent(r.id)}>{r.kisaAd}</a>
+                        <div class="kr-alt-etiketler">
+                          <span class="kr-etiket">Barkod: {r.barkod}</span>
+                          <span class="kr-etiket">Stok: {r.stok}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+
+                  <td data-etiket="Trendyol Fiyatı" class="y-sayi kr-bolge-satis">
+                    <strong class="kr-tutar kr-tutar--satis">{para(r.fiyat)}</strong>
+                    <small class="kr-not">KDV dahil satış</small>
+                  </td>
+
+                  <td data-etiket="Komisyon & Kargo" class="y-sayi">
+                    <span class="kr-kesinti-oran">
+                      {r.oranBp !== undefined ? '%' + (r.oranBp / 100).toLocaleString('tr-TR') + ' komisyon' : 'Oran bekleniyor'}
+                    </span>
+                    {r.komisyonTutar !== undefined && (
+                      <small class="kr-not">−{para(r.komisyonTutar)} kom. · −{para(r.kargoTutar)} kargo ({r.desi} desi)</small>
+                    )}
+                  </td>
+
+                  <td data-etiket="Hesaba Yatan" class="y-sayi kr-bolge-yatan">
+                    <strong class="kr-tutar kr-tutar--yatan">{para(r.yatan)}</strong>
+                    <small class="kr-not">Bankaya yatacak</small>
+                  </td>
+
+                  <td data-etiket="Alış (KDV hariç)" class="y-sayi kr-bolge-kar">
+                    {r.maliyet !== undefined ? (
+                      <>
+                        <span class="kr-tutar">{para(r.maliyet)}</span>
+                        <small class="kr-not">Birim geliş</small>
+                      </>
+                    ) : (
+                      <a class="y-chip y-chip--turuncu" href={'/yonetim/fiyatlar?gorunum=trendyol#f-' + encodeURIComponent(r.id)}>Maliyet Gir →</a>
+                    )}
+                  </td>
+
+                  <td data-etiket="Net Kâr" class:list={['y-sayi', 'kr-kar-hucre', zararda ? 'is-zarar' : r.kar !== undefined ? 'is-kar' : '']}>
+                    <strong class="kr-tutar kr-tutar--kar">{r.kar !== undefined ? isaretli(r.kar) : '—'}</strong>
+                    {r.marj !== undefined && (
+                      <span class:list={['kr-marj', zararda ? 'kr-marj--kirmizi' : 'kr-marj--yesil']}>
+                        {yuzde(r.marj)} marj
+                      </span>
+                    )}
+                  </td>
+
+                  <td data-etiket="Zararsız En Düşük Fiyat" class="y-sayi kr-bolge-taban">
+                    <strong class="kr-tutar kr-tutar--taban">{para(r.basaBas)}</strong>
+                    <small class="kr-not">Bu fiyatın altı zarar</small>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    ) : <p class="y-bos">Trendyol’a bağlı ürün bulunmuyor.</p>}
+
+    <p class="y-help" style="margin-top:12px">
+      <strong>Not:</strong> Kargo kesintisi, sipariş sonrası kesinti faturasıyla kesinleştiği için burada {kargoFirmasi === 'aras' ? 'Aras Kargo' : kargoFirmasi} desi tarifesiyle tahmin edilir. Kesinleşen sipariş kesintileri aşağıdaki gerçekleşen satış tablosunda yer alır.
+    </p>
   </section>
 
+  {/* 2. BÖLÜM: DÖNEMDE GERÇEKLEŞEN SATIŞLAR */}
   {rapor && <>
     <div class="y-metrics y-metrics--finans">
-      <div class="y-metric y-metric--altin"><PIkon ad="para" /><span>Brüt satış</span><strong>{para(rapor.toplam.brut)}</strong></div>
-      <div class="y-metric y-metric--kirmizi"><PIkon ad="yuzde" /><span>Komisyon + kargo + diğer</span><strong>{para(rapor.toplam.komisyon + rapor.toplam.kargo + rapor.toplam.diger)}</strong></div>
-      <div class="y-metric y-metric--mavi"><PIkon ad="banka" /><span>Hesaba yatacak (hakediş)</span><strong>{para(rapor.toplam.hakedis)}</strong></div>
-      <div class:list={['y-metric', (rapor.toplam.netKar ?? 0) < 0 ? 'y-metric--kirmizi' : 'y-metric--yesil']}><PIkon ad="grafik" /><span>Tahmini net kâr (maliyeti girili ürünler)</span><strong>{para(rapor.toplam.netKar)}</strong></div>
+      <div class="y-metric y-metric--altin"><PIkon ad="para" /><span>Son {gun} Gün Brüt Satış</span><strong>{para(rapor.toplam.brut)}</strong><small>Müşterilerin ödediği toplam</small></div>
+      <div class="y-metric y-metric--kirmizi"><PIkon ad="yuzde" /><span>Komisyon + Kargo + Hizmet</span><strong>−{para(rapor.toplam.komisyon + rapor.toplam.kargo + rapor.toplam.diger)}</strong><small>Platform kesintileri</small></div>
+      <div class="y-metric y-metric--mavi"><PIkon ad="banka" /><span>Hesaba Yatacak (Hakediş)</span><strong>{para(rapor.toplam.hakedis)}</strong><small>Maliyet düşülmemiş banka tutarı</small></div>
+      <div class:list={['y-metric', (rapor.toplam.netKar ?? 0) < 0 ? 'y-metric--kirmizi' : 'y-metric--yesil']}><PIkon ad="grafik" /><span>Gerçekleşen Tahmini Net Kâr</span><strong>{para(rapor.toplam.netKar)}</strong><small>Alış maliyeti ve KDV sonrası</small></div>
     </div>
 
     {(rapor.ekstresiz > 0 || maliyetsiz > 0) && <div class="y-veri-not" role="status"><PIkon ad="bilgi" boyut={18} /><p>
-      {rapor.ekstresiz > 0 && <>{rapor.ekstresiz} siparişin Trendyol ekstresi henüz gelmedi; komisyonu {rapor.ortalamaKomisyon !== undefined ? `ortalama ${yuzde(rapor.ortalamaKomisyon)} oranla tahmin edildi` : 'henüz tahmin edilemiyor (ilk ekstre bekleniyor)'} (“tahmini” işaretli). Ekstre her gün otomatik çekilir. </>}
-      {maliyetsiz > 0 && <>{maliyetsiz} ürünün alış maliyeti girilmemiş; net kâr için <a class="y-link" href="/yonetim/fiyatlar">Fiyat, Maliyet ve Kâr Tablosu</a>ndan ürünün alış maliyetini kaydedin (tüm kanallarda ortak kullanılır).</>}
+      {rapor.ekstresiz > 0 && <><strong>{rapor.ekstresiz} siparişin Trendyol cari ekstresi henüz kesilmedi</strong> (müşteriye teslimat sonrası oluşur); komisyonu ürünün kendi komisyon oranıyla tahmin edildi (“tahmini” rozetli). </>}
+      {maliyetsiz > 0 && <>{maliyetsiz} ürünün alış maliyeti girilmemiş; <a class="y-link" href="/yonetim/fiyatlar">Fiyat ve Maliyet Tablosu</a>ndan girerek net kârı tamamlayın.</>}
     </p></div>}
 
     <section class="y-kart">
-      <div class="y-kart__bas"><h2><PIkon ad="liste" /> Ürün bazında (son {gun} gün)</h2><span class="y-help">{rapor.satirlar.length} ürün</span></div>
-      {rapor.satirlar.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-        <thead><tr><th>Ürün</th><th class="y-sayi">Adet</th><th class="y-sayi">Brüt satış</th><th class="y-sayi">İndirim / iade</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Kargo + diğer</th><th class="y-sayi">Hakediş</th><th class="y-sayi">Maliyet</th><th class="y-sayi">Net kâr (tahmini)</th><th class="y-sayi">Marj</th></tr></thead>
-        <tbody>{rapor.satirlar.map((r) => <tr>
-          <td data-etiket="Ürün">{r.urunId ? <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(r.urunId)}>{r.ad}</a> : <span>{r.ad} <small class="muted">(eşleşmemiş)</small></span>}{r.tahmini > 0 && <small class="y-table-note y-yazi-turuncu">{r.tahmini} satırda tahmini</small>}</td>
-          <td data-etiket="Adet" class="y-sayi">{r.adet}</td>
-          <td data-etiket="Brüt satış" class="y-sayi y-nowrap">{para(r.brut)}</td>
-          <td data-etiket="İndirim / iade" class="y-sayi y-nowrap">{para(r.indirim + r.iade)}</td>
-          <td data-etiket="Komisyon" class="y-sayi y-nowrap">{para(r.komisyon)}{r.brut > 0 && <small class="y-table-note">{yuzde(r.komisyon / r.brut)}</small>}</td>
-          <td data-etiket="Kargo + diğer" class="y-sayi y-nowrap">{para(r.kargo + r.diger)}</td>
-          <td data-etiket="Hakediş" class="y-sayi y-nowrap"><strong>{para(r.hakedis)}</strong></td>
-          <td data-etiket="Maliyet" class="y-sayi y-nowrap">{para(r.maliyet)}</td>
-          <td data-etiket="Net kâr" class:list={['y-sayi', 'y-nowrap', { 'y-yazi-kirmizi': (r.netKar ?? 0) < 0 }]}><strong>{para(r.netKar)}</strong></td>
-          <td data-etiket="Marj" class="y-sayi">{yuzde(r.marj)}</td>
-        </tr>)}</tbody>
-      </table></div> : <p class="y-bos">Bu dönemde Trendyol satışı yok.</p>}
-      {rapor.siparisDisi > 0 && <p class="y-help">Ayrıca siparişe bağlı olmayan kesinti faturaları: <strong>{para(rapor.siparisDisi)}</strong> (ürünlere dağıtılmadı).</p>}
-      <p class="y-help"><strong>Hesaba yatacak tutar net kâr değildir.</strong> Net kâr tahmini KDV hariç hesaplanır: satıştaki KDV ve kesinti faturalarındaki %20 KDV düşülür, alış maliyeti çıkarılır. Stopaj ve gelir vergisi dahil kesin kârı muhasebeciniz hesaplar.</p>
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="liste" /> Gerçekleşen Trendyol Satışları (Son {gun} Gün)</h2>
+          <p class="y-kart__alt">Bu dönemde gerçekten satılan ürünlerin adet, kesinti, hakediş ve net kâr toplamları.</p>
+        </div>
+        <span class="y-chip y-chip--gri">{rapor.satirlar.length} satılan ürün</span>
+      </div>
+      {rapor.satirlar.length ? (
+        <div class="y-tablo-kap kr-tablo-kap">
+          <table class="y-tablo kr-tablo">
+            <thead>
+              <tr>
+                <th>Satılan Ürün</th>
+                <th class="y-sayi">Adet</th>
+                <th class="y-sayi kr-bolge-satis">Brüt Satış</th>
+                <th class="y-sayi">Komisyon &amp; Kargo</th>
+                <th class="y-sayi kr-bolge-yatan">Hakediş</th>
+                <th class="y-sayi kr-bolge-kar">Toplam Maliyet</th>
+                <th class="y-sayi kr-bolge-kar">Net Kâr &amp; Marj</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rapor.satirlar.map((r) => {
+                const u = r.urunId ? urunMap.get(r.urunId) : undefined;
+                const zararda = (r.netKar ?? 0) < 0;
+                return (
+                  <tr class:list={{ 'kr-satir--zarar': zararda }}>
+                    <td data-etiket="Ürün" class="kr-urun-hucre">
+                      <div class="kr-urun">
+                        <span class="kr-foto">
+                          {u?.gorseller[0]?.src ? <img src={u.gorseller[0].src} alt="" width="52" height="52" loading="lazy" decoding="async" /> : <PIkon ad="kutu" boyut={20} />}
+                        </span>
+                        <div class="kr-urun__bilgi">
+                          {u && <span class="kr-marka">{u.marka}</span>}
+                          {r.urunId
+                            ? <a class="kr-ad" href={'/yonetim/urunler/' + encodeURIComponent(r.urunId)}>{u ? u.kisaAd : r.ad}</a>
+                            : <strong class="kr-ad">{r.ad} <small class="muted">(eşleşmemiş)</small></strong>}
+                          {r.tahmini > 0 && <span class="y-chip y-chip--turuncu" style="margin-top:3px">{r.tahmini} sipariş henüz ekstresiz (tahmini)</span>}
+                        </div>
+                      </div>
+                    </td>
+                    <td data-etiket="Adet" class="y-sayi"><strong class="kr-tutar">{r.adet}</strong><small class="kr-not">adet</small></td>
+                    <td data-etiket="Brüt Satış" class="y-sayi kr-bolge-satis">
+                      <strong class="kr-tutar">{para(r.brut)}</strong>
+                      {(r.indirim + r.iade) > 0 && <small class="kr-not">İade/İnd: −{para(r.indirim + r.iade)}</small>}
+                    </td>
+                    <td data-etiket="Komisyon & Kargo" class="y-sayi">
+                      <span class="kr-tutar">−{para(r.komisyon + r.kargo + r.diger)}</span>
+                      <small class="kr-not">Kom: {para(r.komisyon)} · Krg/Hiz: {para(r.kargo + r.diger)}</small>
+                    </td>
+                    <td data-etiket="Hakediş" class="y-sayi kr-bolge-yatan">
+                      <strong class="kr-tutar kr-tutar--yatan">{para(r.hakedis)}</strong>
+                    </td>
+                    <td data-etiket="Toplam Maliyet" class="y-sayi kr-bolge-kar">
+                      <span class="kr-tutar">{para(r.maliyet)}</span>
+                    </td>
+                    <td data-etiket="Net Kâr" class:list={['y-sayi', 'kr-kar-hucre', zararda ? 'is-zarar' : r.netKar !== undefined ? 'is-kar' : '']}>
+                      <strong class="kr-tutar kr-tutar--kar">{r.netKar !== undefined ? isaretli(r.netKar) : '—'}</strong>
+                      {r.marj !== undefined && <span class:list={['kr-marj', zararda ? 'kr-marj--kirmizi' : 'kr-marj--yesil']}>{yuzde(r.marj)} marj</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : <p class="y-bos">Seçili {gun} günlük dönemde henüz Trendyol satışı bulunmuyor.</p>}
+      {rapor.siparisDisi > 0 && <p class="y-help" style="margin-top:10px">Ayrıca tekil siparişe bağlı olmayan platform kesinti faturaları: <strong>{para(rapor.siparisDisi)}</strong>.</p>}
+      <p class="y-help"><strong>Hesaba yatacak tutar (hakediş) net kâr değildir.</strong> Net kâr KDV hariç hesaplanır: satıştaki KDV ve kesinti faturalarındaki KDV mahsup edilir, ürün alış maliyeti düşülür.</p>
     </section>
   </>}
 </Yonetim>
+
+<style>
+  .kr-formul {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #fff;
+    border: 1px solid #e6dccf;
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-bottom: 18px;
+    overflow-x: auto;
+  }
+  .kr-formul__kutu {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: 1;
+    min-width: 165px;
+    padding: 9px 12px;
+    border-radius: 10px;
+    background: #faf7f2;
+    border: 1px solid #ece3d6;
+  }
+  .kr-formul__kutu strong { display: block; font-size: 13.5px; color: #2b2017; }
+  .kr-formul__kutu small { display: block; font-size: 12px; color: #75685a; margin-top: 1px; }
+  .kr-formul__kutu--kesinti { background: #fff6f4; border-color: #f2d0ca; }
+  .kr-formul__kutu--yatan { background: #f2f7fd; border-color: #cde0f5; }
+  .kr-formul__kutu--kar { background: #effaf3; border-color: #bce5ca; }
+  .kr-formul__no {
+    width: 24px; height: 24px; border-radius: 999px;
+    background: #3d2c1e; color: #fff; font-size: 12px; font-weight: 700;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .kr-formul__kutu--kar .kr-formul__no { background: #0d7a3e; }
+  .kr-formul__isaret { font-size: 18px; font-weight: 800; color: #8c7b69; padding: 0 2px; }
+
+  .kr-tablo-kap { border-radius: 14px; border: 1px solid #e4d9ca; overflow-x: auto; }
+  .kr-tablo { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .kr-tablo th, .kr-tablo td { padding: 12px 11px; vertical-align: middle; font-size: 14.5px; }
+  .kr-grup-baslik th {
+    padding: 8px 11px;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b5d4f;
+    background: #f6f1e9;
+    border-bottom: 1px solid #e6dccf;
+    text-align: center;
+  }
+  .kr-grup-baslik th:first-child { text-align: left; }
+  .kr-bolge-satis { border-left: 2px solid #ebe2d5; }
+  .kr-bolge-yatan { border-left: 2px solid #d5e3f4; background: #f7fafe; }
+  .kr-bolge-kar { border-left: 2px solid #dce8df; }
+  .kr-bolge-taban { border-left: 2px solid #ebe2d5; background: #fcfaf5; }
+  .kr-grup-baslik .kr-bolge-yatan { background: #eaf2fc; color: #1f4f82; }
+  .kr-grup-baslik .kr-bolge-kar { background: #eaf6ee; color: #155e34; }
+  .kr-grup-baslik .kr-bolge-taban { background: #f7f0e2; color: #6e5226; }
+
+  .kr-tablo tbody tr:hover td { filter: brightness(0.985); }
+  .kr-satir--zarar td { background: #fffafa; }
+
+  .kr-urun { display: flex; align-items: center; gap: 11px; min-width: 190px; }
+  .kr-foto {
+    width: 56px; height: 56px; border-radius: 12px;
+    border: 1px solid #e5dacb; background: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0; color: #8c7d6e;
+  }
+  .kr-foto img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+  .kr-urun__bilgi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .kr-marka { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a7967; }
+  .kr-ad { font-size: 15px; font-weight: 750; color: #241a11; text-decoration: none; line-height: 1.28; }
+  a.kr-ad:hover { color: #8c4f19; text-decoration: underline; }
+  .kr-alt-etiketler { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+  .kr-etiket {
+    font-size: 11.5px; font-weight: 600; color: #5f5244;
+    background: #f4efe8; border-radius: 6px; padding: 2px 6px;
+  }
+
+  .kr-tutar { display: block; font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; color: #241a11; white-space: nowrap; }
+  .kr-tutar--satis { font-size: 15.5px; }
+  .kr-tutar--yatan { font-size: 15.5px; color: #194a7a; }
+  .kr-tutar--kar { font-size: 16.5px; font-weight: 800; }
+  .kr-tutar--taban { font-size: 15px; color: #694b1e; }
+  .kr-kesinti-oran { display: block; font-size: 14px; font-weight: 700; color: #8b3726; white-space: nowrap; }
+  .kr-not { display: block; font-size: 12px; color: #75685a; margin-top: 2px; line-height: 1.32; }
+
+  .kr-kar-hucre.is-kar { background: #f2fbf5; }
+  .kr-kar-hucre.is-kar .kr-tutar--kar { color: #0c6e36; }
+  .kr-kar-hucre.is-zarar { background: #fef3f2; }
+  .kr-kar-hucre.is-zarar .kr-tutar--kar { color: #b42318; }
+  .kr-marj {
+    display: inline-block; margin-top: 4px; padding: 2px 8px;
+    border-radius: 999px; font-size: 12px; font-weight: 700;
+  }
+  .kr-marj--yesil { background: #d9f4e2; color: #0b5e2e; }
+  .kr-marj--kirmizi { background: #fde2e0; color: #9e1c13; }
+
+  @media (max-width: 1024px) {
+    .kr-grup-baslik { display: none; }
+    .kr-bolge-satis, .kr-bolge-yatan, .kr-bolge-kar, .kr-bolge-taban { border-left: 0; }
+    .kr-not { white-space: normal; }
+  }
+</style>

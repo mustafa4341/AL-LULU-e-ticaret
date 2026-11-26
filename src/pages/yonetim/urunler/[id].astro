@@ -53,9 +53,9 @@ if (Astro.request.method === 'POST') {
     const yayin = metin(f, 'yayin');
     if (yayin === 'yayinda' || yayin === 'gizli' || yayin === 'taslak') aday.durum = yayin;
     const fiyat = sayi(f, 'fiyat', urun.fiyat);
-    const kampanya = evet(f, 'kampanya');
-    const kampanyaEtiket = istegeBagli(f, 'kampanya_etiket');
     const oncekiFiyat = sayi(f, 'onceki_fiyat');
+    const kampanya = evet(f, 'kampanya') || (oncekiFiyat > fiyat && (!urun.kampanya || urun.kampanya.oncekiFiyat !== oncekiFiyat));
+    const kampanyaEtiket = istegeBagli(f, 'kampanya_etiket');
     // Sayfa adresi marka + ürün adından tamamen otomatik oluşturulur
     const hedefId = yeni
       ? benzersizKod(`${aday.marka} ${aday.kisaAd || aday.ad}`.trim() || 'urun', new Set(m.urunler.map((u) => u.id)))
@@ -91,6 +91,9 @@ if (Astro.request.method === 'POST') {
           const stok = !yeni && aday.stok === eskiStok ? u.stok : aday.stok;
           const sonFiyat = !yeni && fiyat === eskiFiyat ? u.fiyat : fiyat;
           const { fiyat: _f, fiyatGecmisi: _g, kampanya: _k, id: _i, ...alanlar } = aday;
+          if (evet(f, 'kontrolOnay')) {
+            alanlar.dogrula = alanlar.dogrula.map((d) => d.replace(/^\s*!\s*/, ''));
+          }
           Object.assign(u, alanlar, { stok });
           if (kampanya && oncekiFiyat && oncekiFiyat <= sonFiyat) throw new DogrulamaHatasi(["Önceki satış fiyatı indirimli satış fiyatından yüksek olmalı."]);
           fiyatUygula(u, sonFiyat, kampanya, kampanyaEtiket, oncekiFiyat);
@@ -364,7 +367,7 @@ const fotoTamam = u.gorseller.length > 0;
           <div class="y-izgara y-izgara--2" style="margin-top:12px">
             <div class="y-alan">
               <label for="onceki_fiyat">Önceki satış fiyatı</label>
-              <input id="onceki_fiyat" name="onceki_fiyat" inputmode="numeric" value={u.kampanya?.oncekiFiyat ?? ""} placeholder="Örn. 13999" data-hedef-eleman="fiyat" />
+              <input id="onceki_fiyat" name="onceki_fiyat" inputmode="numeric" value={u.kampanya?.oncekiFiyat ?? bilgi?.onceki ?? ""} placeholder="Örn. 13999" data-onceki-girdi data-hedef-eleman="fiyat" />
               <small class="y-ipucu">Ürüne gerçekten uyguladığınız önceki fiyatı yazın.</small>
             </div>
             <div class="y-alan">
@@ -896,7 +899,16 @@ const fotoTamam = u.gorseller.length > 0;
         <li><button type="button" class="y-link" data-adim-ac="fotograf">3. Fotoğraflar</button><span class:list={['y-chip', fotoTamam ? 'y-chip--yesil' : 'y-chip--turuncu']}>{fotoTamam ? `${u.gorseller.length} hazır` : 'Eksik'}</span></li>
       </ul>
       {!yeni && <dl class="y-money-lines y-money-lines--kucuk"><div><dt>Depo / Satılabilir</dt><dd>{u.stok} / {satilabilirStok} adet</dd></div>{bagliKanallar.length > 0 && <div><dt>Bağlı kanallar</dt><dd>{bagliKanallar.map((kn) => KANALLAR[kn]).join(', ')}</dd></div>}</dl>}
-      {eksikBilgiler.length > 0 ? <><p class="y-help">Yayın için tamamlanacaklar:</p><ul>{eksikBilgiler.map((x) => <li>{x}</li>)}</ul></> : <p class="y-help">Yayın için gerekli tüm zorunlu bilgiler tamam.</p>}
+      {eksikBilgiler.length > 0 ? <>
+        <p class="y-help">Yayın için tamamlanacaklar:</p>
+        <ul>{eksikBilgiler.map((x) => <li>{x}</li>)}</ul>
+        {u.dogrula.some((d) => d.trim().startsWith('!')) && (
+          <label class="y-secim" style="margin-top:8px;padding:8px 10px;border:1px solid #f0c38a;border-radius:10px;background:#fffaf3">
+            <input type="checkbox" name="kontrolOnay" form="urun-form" />
+            <span>İç kontrol notlarını inceledim, yayına alınabilir</span>
+          </label>
+        )}
+      </> : <p class="y-help">Yayın için gerekli tüm zorunlu bilgiler tamam.</p>}
       <p class="y-help">Kaydedilmemiş değişiklikleri müşteri görünümünde incelemek için sağ üstten <strong>Önizle</strong>’yi açın.</p>
     </aside>
     <Onizleme id="urun-onizleme" tur="urun" kayit={u.id} />

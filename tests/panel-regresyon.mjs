@@ -52,6 +52,11 @@ try {
   const istekMod = await vite.ssrLoadModule('/src/lib/istek.ts');
   const siparisMerkezi = await vite.ssrLoadModule('/src/lib/siparisMerkezi.ts');
   const hbApiMod = await vite.ssrLoadModule('/src/lib/hepsiburadaApi.ts');
+  const tyIceAktar = await vite.ssrLoadModule('/src/lib/trendyolIceAktar.ts');
+  const yonetimUrun = await vite.ssrLoadModule('/src/lib/yonetimUrun.ts');
+  const semaMod = await vite.ssrLoadModule('/src/lib/sema.ts');
+  const fiyatMod = await vite.ssrLoadModule('/src/lib/fiyat.ts');
+  const katalogMod = await vite.ssrLoadModule('/src/lib/katalog.ts');
 
   const magazaHam = JSON.parse(fs.readFileSync(path.join(repoKoku, 'veri', 'magaza.json'), 'utf8'));
 
@@ -369,6 +374,81 @@ try {
     assert.equal(hbHedef.kaynak, 'ozel');
     assert.equal(hbHedef.hedef, 2499);
     assert.equal(urun.fiyat, 2000);
+  });
+
+  // 11. Bağlanmamış özel fiyatlı ürün sahte "Bağlantı Hatası / geçersiz ilan kodu (boş)" üretmemeli
+  await test('Faz 7.1: İlan kodu henüz bağlanmamış özel fiyatlı ürün stokHedefleri içinde sahte bağlantı hatası üretmemeli', () => {
+    const ayar = pazaryeri.bosAyarlar();
+    ayar.kanallar.trendyol.urunler['fissler-vitaquick-premium-6l'] = { satista: true, ozelFiyat: 14500 };
+    ayar.kanallar.trendyol.urunler['fissler-buhar-aparati-22'] = { satista: true, kod: '4009209307671' };
+    ayar.kanallar.trendyol.urunler['hatali-urun'] = { satista: true, kod: 'BOZUK KOD 123' };
+
+    const stoklar = new Map([
+      ['fissler-vitaquick-premium-6l', 0],
+      ['fissler-buhar-aparati-22', 4],
+      ['hatali-urun', 2],
+    ]);
+    const sonuc = pazaryeriSenkron.stokHedefleri('trendyol', ayar.kanallar.trendyol, stoklar);
+    assert.equal(sonuc.hedefler.length, 1);
+    assert.equal(sonuc.hedefler[0].urunId, 'fissler-buhar-aparati-22');
+    assert.equal(sonuc.uyarilar.length, 1, 'Yalnızca gerçekten bozuk kod uyarı üretmeli, boş kod değil');
+    assert.match(sonuc.uyarilar[0], /BOZUK KOD 123/);
+  });
+
+  // 12. Trendyol'dan çekilen ürün için zengin içerik üretimi + engelsiz yayına alma
+  await test('Faz 7.2: zenginUrunIcerigi ürüne özel zengin açıklama, 4 fayda, 4 SSS ve geçerli Urun şeması üretmeli', () => {
+    const icerik = tyIceAktar.zenginUrunIcerigi({
+      marka: 'Eratec',
+      ad: 'Cam Kavanoz 2 Parçalı Kapak 1000 ml',
+      kisaAd: 'Cam Kavanoz 2 Parçalı Kapak 1000 ml',
+      kategori: 'saklama',
+      ozellikler: [
+        { ad: 'Materyal', deger: 'Cam' },
+        { ad: 'Hacim', deger: '1 L' },
+        { ad: 'Menşei', deger: 'DE' },
+        { ad: 'Web Color', deger: 'Şeffaf' },
+        { ad: 'Gıda Temas Sembolü', deger: 'Evet' },
+      ],
+      aciklama: '',
+      barkod: 'ERTCKVNZ1000MLX1',
+      stokKodu: 'ERTCKVNZ1000MLX1',
+    });
+    assert.equal(icerik.oneCikanBilgiler.length, 4);
+    assert.equal(icerik.faydalar.length, 4);
+    assert.equal(icerik.sss.length, 4);
+    assert(icerik.kutuIcerigi.length >= 1);
+    assert(icerik.teknik.some(([k, v]) => /menşei/i.test(k) && v === 'Almanya'), 'DE ülke kodu Almanya olarak çevrilmeli');
+
+    const adayUrun = semaMod.UrunSema.parse({
+      ...structuredClone(yonetimUrun.BOS_URUN),
+      id: 'eratec-cam-kavanoz-test',
+      durum: 'yayinda',
+      marka: 'Eratec',
+      ad: 'Cam Kavanoz 2 Parçalı Kapak 1000 ml',
+      kisaAd: 'Cam Kavanoz 2 Parçalı Kapak 1000 ml',
+      kategoriler: ['saklama'],
+      fiyat: 339,
+      stok: 10,
+      gorseller: [{ src: '/medya/test/01.webp', alt: 'Eratec Cam Kavanoz' }],
+      ...icerik,
+      dogrula: ['Trendyol’dan içe aktarıldı: bilgi notu.'],
+    });
+    assert.deepEqual(yonetimUrun.yayinEksikleri(adayUrun), [], 'Ünlemsiz bilgi notu yayına almayı engellememeli');
+  });
+
+  // 13. İndirimli set sepete ekleme + stoksuz set kartı DOM güvenliği
+  await test('Faz 7.3: İndirimli setler doğru set indirimiyle sepete eklenmeli ve stoksuz set kartları sepet betiğini çökertmemeli', () => {
+    const kat = new katalogMod.Katalog(magazaHam);
+    const ik = kat.istemci();
+    const stokluSetId = Object.keys(ik.setler)[0];
+    assert(stokluSetId, 'İstemci kataloğunda en az 1 satışta indirimli set bulunmalı');
+    const sepet = fiyatMod.sepetHesapla([{ tip: 'set', id: stokluSetId, adet: 1 }], ik);
+    assert.equal(sepet.satirlar.length, 1);
+    assert(sepet.setIndirimi > 0, 'İndirimli sette pozitif set indirimi hesaplanmalı');
+
+    const sepetKaynak = fs.readFileSync(path.join(repoKoku, 'src', 'scripts', 'sepet.ts'), 'utf8');
+    assert(!sepetKaynak.includes("kutu.querySelector<HTMLButtonElement>('[data-sepete-ekle]')!"), 'Stoksuz set kartları için null-olmayan zorlama (!) kaldırılmış olmalı');
+    assert(sepetKaynak.includes('return id && buton && etiket && not ? [{ id, buton, etiket, not }] : [];'), 'Yalnızca aktif sepete-ekle butonu olan set kutuları izlenmeli');
   });
 
   console.log(`\nSonuç: ${gecen} geçti, ${kalan} başarısız.`);

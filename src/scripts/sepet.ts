@@ -182,12 +182,13 @@ function oneriBul() {
   return undefined;
 }
 
-const birlikteKutulari = Array.from(document.querySelectorAll<HTMLElement>('[data-birlikte]'), (kutu) => ({
-  id: kutu.dataset.birlikte!,
-  buton: kutu.querySelector<HTMLButtonElement>('[data-sepete-ekle]')!,
-  etiket: kutu.querySelector<HTMLElement>('[data-etiket]')!,
-  not: kutu.querySelector<HTMLElement>('[data-birlikte-sepet-notu]')!,
-}));
+const birlikteKutulari = Array.from(document.querySelectorAll<HTMLElement>('[data-birlikte]')).flatMap((kutu) => {
+  const id = kutu.dataset.birlikte;
+  const buton = kutu.querySelector<HTMLButtonElement>('[data-sepete-ekle]');
+  const etiket = buton?.querySelector<HTMLElement>('[data-etiket]');
+  const not = kutu.querySelector<HTMLElement>('[data-birlikte-sepet-notu]');
+  return id && buton && etiket && not ? [{ id, buton, etiket, not }] : [];
+});
 
 function seteGecis(id: string) {
   if (!setBul(id)) return;
@@ -285,7 +286,7 @@ function yansit(): void {
 }
 
 /* ---------------- Tıklamalar ---------------- */
-let mesgul = false;
+const mesgulButonlar = new WeakSet<HTMLElement>();
 const bildirimZamanlari = new WeakMap<HTMLElement, number>();
 function adetKaynagi(btn: HTMLElement): number {
   const el = btn.dataset.adetKaynak ? document.querySelector<HTMLElement>(btn.dataset.adetKaynak) : null;
@@ -310,8 +311,9 @@ document.addEventListener('click', (e) => {
   if (!t) return;
 
   if (t.hasAttribute('data-sepete-ekle')) {
-    if (mesgul) return;
-    mesgul = true; window.setTimeout(() => (mesgul = false), 500);
+    if (mesgulButonlar.has(t)) return;
+    mesgulButonlar.add(t);
+    window.setTimeout(() => mesgulButonlar.delete(t), 250);
     const tip = (t.dataset.tip as KalemTipi) || 'urun', id = t.dataset.id!;
     const gecis = t.hasAttribute('data-sete-gec') ? seteGecis(id) : undefined;
     if (t.hasAttribute('data-sete-gec') && !gecis) { setleriYansit(); return; }
@@ -320,7 +322,7 @@ document.addEventListener('click', (e) => {
     geriBildirim(t, gecis ? 'Sete geçildi' : 'Eklendi');
     // Sepet içindeki öneriden ekleniyorsa sepet zaten açıktır; diğer tüm "Sepete Ekle" tıklamalarında sepet çekmecesi doğrudan açılır.
     if (t.hasAttribute('data-sessiz')) return;
-    cekmeceAc('sepet', tip === 'set' ? undefined : document.querySelector<HTMLElement>('[data-odemeye-gec]'));
+    cekmeceAc('sepet', document.querySelector<HTMLElement>('[data-odemeye-gec]'));
     return;
   }
 

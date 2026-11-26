@@ -256,7 +256,7 @@ export function kanalSiparisAl(kanal: Kanal, baslangic: number, bitis: number, s
 
 export type StokKalemi = { urunId: string; kod: string; stok: number };
 /** Kanaldaki ilanın anlık hali. fiyat = satış fiyatı, listeFiyati = üstü çizili fiyat (TL, KDV dahil). */
-export type KanalIlani = { stok: number; hbSku?: string; fiyat?: number; listeFiyati?: number };
+export type KanalIlani = { stok: number; hbSku?: string; merchantSku?: string; fiyat?: number; listeFiyati?: number };
 const tutar = (v: unknown) => {
   const n = typeof v === 'number' ? v : typeof v === 'string' && v.trim() ? Number(v.replace(',', '.')) : NaN;
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : undefined;
@@ -290,11 +290,12 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
     return sonuc;
   }
   const islem = 'Hepsiburada stok sorgusu';
-  // Filtre parametresi "merchantSkuList" (virgülle ayrılmış). Eski "merchantSku" parametresini HB yok sayıp
-  // tüm ilanları döndürüyordu (SIT ortamında doğrulandı, 24.11.2026). HB satıcı stok kodunu büyük harfe çevirir.
+  // Filtre parametresi "merchantSkuList" (virgülle ayrılmış). Bazı ürünler satıcı tarafından HBCV... (hepsiburadaSku)
+  // koduyla eşleştirilmiş olabileceği için merchantSkuList'te bulunmayanlar tam ilan listesinden (hbSku/merchantSku) tamamlanır.
   const sorgulanabilir = [...new Set(kodlar.filter((k) => k && !k.includes(',')))];
-  for (let i = 0; i < sorgulanabilir.length; i += 20) {
-    const parca = sorgulanabilir.slice(i, i + 20);
+  const dogrudanMerchant = sorgulanabilir.filter((k) => !/^HB[A-Z0-9]{8,}$/i.test(k));
+  for (let i = 0; i < dogrudanMerchant.length; i += 20) {
+    const parca = dogrudanMerchant.slice(i, i + 20);
     const url = new URL(hbYol(a, 'listings'), hbAdres(a, 'listing'));
     url.searchParams.set('merchantSkuList', parca.join(','));
     url.searchParams.set('limit', '50');
@@ -305,7 +306,20 @@ export async function kanalStokOku(kanal: Kanal, kodlar: string[], sinyal: Abort
       if (kayit.length !== 1) continue;
       const stok = tamsayi(alan(kayit[0]!, 'availableStock'));
       const hbSku = metin(alan(kayit[0]!, 'hepsiburadaSku'));
-      if (stok !== undefined && hbSku) sonuc.set(kod, { stok, hbSku, fiyat: tutar(alan(kayit[0]!, 'price')) });
+      const merchantSku = metin(alan(kayit[0]!, 'merchantSku'));
+      if (stok !== undefined && hbSku) sonuc.set(kod, { stok, hbSku, merchantSku, fiyat: tutar(alan(kayit[0]!, 'price')) });
+    }
+  }
+  const kalanKodlar = sorgulanabilir.filter((k) => !sonuc.has(k));
+  if (kalanKodlar.length) {
+    const tumu = await hbTumIlanlar(sinyal);
+    for (const kod of kalanKodlar) {
+      const ust = kod.toLocaleUpperCase('en-US');
+      const eslesen = tumu.filter((x) => x.hbSku.toLocaleUpperCase('en-US') === ust || x.merchantSku.toLocaleUpperCase('en-US') === ust);
+      if (eslesen.length === 1 && eslesen[0]!.stok !== undefined) {
+        const b = eslesen[0]!;
+        sonuc.set(kod, { stok: b.stok!, hbSku: b.hbSku, merchantSku: b.merchantSku, fiyat: b.fiyat });
+      }
     }
   }
   return sonuc;
@@ -375,7 +389,10 @@ export async function kanalStokGonder(
     id = metin(nesne(await istek(a, url, islem, sinyal, { items })).batchRequestId);
   } else {
     const url = new URL(hbYol(a, 'listings', '/stock-uploads'), hbAdres(a, 'listing'));
-    const govde = kalemler.map((k) => ({ merchantSku: k.kod, hepsiburadaSku: ilanlar.get(k.kod)?.hbSku, availableStock: k.stok }));
+    const govde = kalemler.map((k) => {
+      const ilan = ilanlar.get(k.kod);
+      return { merchantSku: ilan?.merchantSku ?? k.kod, hepsiburadaSku: ilan?.hbSku, availableStock: k.stok };
+    });
     id = metin(alan(nesne(await istek(a, url, islem, sinyal, govde)), 'id'));
   }
   if (!id) throw new PazaryeriApiHatasi(`${islem} takip kimliği döndürmedi.`);
@@ -404,7 +421,10 @@ export async function kanalFiyatGonder(
     id = metin(nesne(await istek(a, url, islem, sinyal, { items })).batchRequestId);
   } else {
     const url = new URL(hbYol(a, 'listings', '/price-uploads'), hbAdres(a, 'listing'));
-    const govde = kalemler.map((k) => ({ merchantSku: k.kod, hepsiburadaSku: ilanlar.get(k.kod)?.hbSku, price: k.fiyat }));
+    const govde = kalemler.map((k) => {
+      const ilan = ilanlar.get(k.kod);
+      return { merchantSku: ilan?.merchantSku ?? k.kod, hepsiburadaSku: ilan?.hbSku, price: k.fiyat };
+    });
     id = metin(alan(nesne(await istek(a, url, islem, sinyal, govde)), 'id'));
   }
   if (!id) throw new PazaryeriApiHatasi(`${islem} takip kimliği döndürmedi.`);
