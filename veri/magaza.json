@@ -881,6 +881,10 @@
         [
           "Barkod (EAN)",
           "4009209373645"
+        ],
+        [
+          "MPN",
+          "040-114-04-000/0"
         ]
       ],
       "dogrula": [],
@@ -925,7 +929,7 @@
       "gorseller": [
         {
           "alt": "Fissler Copenhagen 8 parça cam kapaklı paslanmaz çelik tencere seti",
-          "src": "/img/urunler/fissler-copenhagen-tencere-seti/01.webp"
+          "src": "/img/urunler/fissler-copenhagen-tencere-seti/katalog.jpg"
         }
       ],
       "faydaBaslik": "Kapağı açmadan pişmeyi izleyin, yıllarca güvenle kullanın.",
@@ -1731,7 +1735,7 @@
       ]
     },
     {
-      "ad": "Ingenio Essential L2006502 4 Parça Tencere Seti (16-18-20 cm)",
+      "ad": "Ingenio Essential L2006502 4 Parça Tava ve Tencere Seti",
       "id": "tefal-ingenio-essential-4-parca",
       "sku": "L2006502",
       "sss": [
@@ -1741,7 +1745,7 @@
         },
         {
           "soru": "Setin içinde kapak var mı?",
-          "cevap": "Hayır, bu 4 parça set 16-18-20 cm üç tencere ve 1 çıkarılabilir saptan oluşur. Mevcut 16-18-20 cm kapaklarınızla veya Ingenio kapaklarıyla kullanılabilir."
+          "cevap": "Set kutusunda 18 cm sos tenceresi, 24 ve 26 cm tavalar ve bir çıkarılabilir Ingenio sap bulunur."
         },
         {
           "soru": "Çıkarılabilir sap ağır yemeklerde güvenli mi?",
@@ -1752,7 +1756,7 @@
           "cevap": "Yapışmaz kaplama kolayca temizlenir. Çıkarılabilir sapın mekanizmasını korumak için sap elde yıkanmalıdır."
         }
       ],
-      "ozet": "16, 18 ve 20 cm üç tencere ile 10 kg taşıma kapasiteli çıkarılabilir saptan oluşan Fransa üretimi 4 parça Tefal Ingenio Essential seti. Titanyum yapışmaz kaplama, difüzyon taban ve iç içe geçen kompakt tasarım. İndüksiyon hariç tüm ocaklarla uyumlu.",
+      "ozet": "18 cm sos tenceresi, 24 cm tava, 26 cm tava ve çıkarılabilir saptan oluşan Tefal Ingenio Essential seti. PowerGlide yapışmaz yüzeyi ve iç içe geçen tasarımıyla günlük kullanıma uygundur. Gazlı, elektrikli ve cam seramik ocaklarla uyumludur.",
       "stok": 1,
       "durum": "yayinda",
       "fiyat": 7299,
@@ -1770,11 +1774,11 @@
         ],
         [
           "Set içeriği",
-          "4 parça (3 tencere + 1 çıkarılabilir sap)"
+          "2 tava, 1 sos tenceresi ve 1 çıkarılabilir sap"
         ],
         [
-          "Tencere çapları",
-          "16 cm, 18 cm, 20 cm"
+          "Kap çapları",
+          "18 cm sos tenceresi, 24 ve 26 cm tava"
         ],
         [
           "Çıkarılabilir sap",
@@ -1782,7 +1786,7 @@
         ],
         [
           "İç kaplama",
-          "Titanyumlu yapışmaz (PFOA içermez)"
+          "PowerGlide yapışmaz kaplama"
         ],
         [
           "Taban",
@@ -1793,11 +1797,7 @@
           "Gazlı, elektrikli, seramik (İndüksiyon HARİÇ)"
         ],
         [
-          "Üretim yeri",
-          "Fransa"
-        ],
-        [
-          "Model kodu",
+          "Üretici model kodu",
           "L2006502"
         ],
         [
@@ -1813,25 +1813,25 @@
       "faydalar": [
         {
           "ikon": "kutu",
-          "metin": "16 cm sos ve çorba için, 18 cm pilav ve makarna için, 20 cm ise günlük sulu yemekler için elinizin altında; üstelik tek tencere yerinde.",
-          "baslik": "Küçük mutfaklar ve günlük hazırlık için en pratik 3 boy",
+          "metin": "18 cm sos tenceresini sos ve küçük porsiyonlarda, 24 ve 26 cm tavaları günlük pişirmede kullanabilirsiniz.",
+          "baslik": "Günlük pişirme için üç farklı boy",
           "kaynak": "Tefal Ingenio sistemi"
         },
         {
           "ikon": "kilit",
-          "metin": "Patentli çıkarılabilir sap, tencereler arasında saniyeler içinde geçiş yapmanızı sağlar ve 10 kg’a kadar ağırlığı güvenle taşır.",
+          "metin": "Çıkarılabilir Ingenio sap, tava ve sos tenceresi arasında tek elle geçiş sağlar.",
           "baslik": "3 noktalı güvenli Ingenio sap (10 kg kapasite)",
           "kaynak": "Tefal resmî verisi"
         },
         {
           "ikon": "ates",
-          "metin": "Sapı çıkardığınızda tencereler fırında graten ve fırın yemekleri için tepsiye, sofrada ise şık birer servis kabına dönüşür.",
-          "baslik": "Fırın kabı ve servis kasesi olarak kullanım"
+          "metin": "Sapı çıkararak uygun kapları fırında kullanabilir, pişirdiğiniz yemeği aynı kapta servis edebilirsiniz.",
+          "baslik": "Fırından sofraya"
         },
         {
           "ikon": "kalkan",
-          "metin": "Fransa’da üretilen PFOA’sız yapışmaz iç yüzey ve homojen ısı yayan difüzyon taban, yemeklerin dibini tutmasını önler.",
-          "baslik": "Kolay temizlenen titanyumlu yapışmaz kaplama"
+          "metin": "PowerGlide yapışmaz kaplama günlük kullanımdan sonra temizliği kolaylaştırır.",
+          "baslik": "PowerGlide yapışmaz kaplama"
         }
       ],
       "kampanya": {
@@ -1841,14 +1841,14 @@
       "oneCikan": true,
       "rozetler": [
         "damga:serit:lacivert:İç İçe · Yer Açar",
-        "Çıkarılabilir Sap · Fransa",
-        "16–18–20 cm · 4 Parça",
+        "Çıkarılabilir Ingenio Sap",
+        "18, 24 ve 26 cm · 4 Parça",
         "Orijinal Ürün"
       ],
       "gorseller": [
         {
-          "alt": "Tefal Ingenio Essential L2006502 4 parça tencere seti (16-18-20 cm)",
-          "src": "/img/urunler/tefal-ingenio-essential-4-parca/01.webp"
+          "alt": "Tefal Ingenio Essential L2006502 iki tava, bir sos tenceresi ve çıkarılabilir sap",
+          "src": "/img/urunler/tefal-ingenio-essential-4-parca/katalog.jpg"
         },
         {
           "alt": "Tefal Ingenio Essential çıkarılabilir saplı iç içe geçme görünümü",
@@ -1859,14 +1859,14 @@
           "src": "/img/urunler/tefal-ingenio-essential-4-parca/03.webp"
         }
       ],
-      "faydaBaslik": "Üç temel tencere, tek bir tencere yerinde.",
+      "faydaBaslik": "İki tava, bir sos tenceresi ve tek sap.",
       "kategoriler": [
         "tencere"
       ],
       "kutuIcerigi": [
-        "Tencere 16 cm",
-        "Tencere 18 cm",
-        "Tencere 20 cm",
+        "18 cm sos tenceresi",
+        "24 cm tava",
+        "26 cm tava",
         "1 adet çıkarılabilir Ingenio sap"
       ],
       "fiyatGecmisi": [
@@ -1886,7 +1886,7 @@
           "dogrulandi": true
         }
       ],
-      "faydaAltBaslik": "Günlük yemek, sos ve fırın tarifleri için iç içe geçen Fransa üretimi pratik Ingenio seti.",
+      "faydaAltBaslik": "Ocaktan fırına ve sofraya geçebilen, iç içe saklanan 4 parçalı Ingenio seti.",
       "faydaUstBaslik": "Neden bu tencere seti?",
       "sepetteIndirim": 0,
       "birlikteIyiGider": [
@@ -1896,7 +1896,7 @@
       "oneCikanBilgiler": [
         {
           "ikon": "kutu",
-          "metin": "16, 18 ve 20 cm üç tencere iç içe geçer|Sapı çıktığı için dolapta yalnızca en büyük tencere kadar yer kaplar"
+          "metin": "18 cm sos tenceresi, 24 ve 26 cm tavalar iç içe yerleşir|Çıkarılabilir sap dolapta yer kazandırır"
         },
         {
           "ikon": "kilit",
@@ -1908,7 +1908,7 @@
         },
         {
           "ikon": "kalkan",
-          "metin": "Fransa üretimi titanyumlu yapışmaz yüzey|PFOA içermez, kolay temizlenir · Gazlı, elektrikli ve seramik ocaklarla uyumlu"
+          "metin": "PowerGlide yapışmaz yüzey|Gazlı, elektrikli ve cam seramik ocaklarda kullanılabilir"
         }
       ]
     },
@@ -2030,7 +2030,7 @@
       "gorseller": [
         {
           "alt": "Tefal 5 Second Chopper K1330404 500 ml manuel doğrayıcı",
-          "src": "/img/urunler/tefal-5-saniye-dograyici/01.webp"
+          "src": "/img/urunler/tefal-5-saniye-dograyici/katalog.webp"
         },
         {
           "alt": "Tefal 5 Second Chopper bağımsız paslanmaz çelik çift bıçak sistemi",
