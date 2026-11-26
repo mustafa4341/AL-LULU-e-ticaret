@@ -239,8 +239,12 @@
           "2 yıl"
         ],
         [
-          "Model kodu",
+          "Üretici model kodu",
           "602-410-06-000/0"
+        ],
+        [
+          "Barkod (EAN)",
+          "4009209401232"
         ]
       ],
       "dogrula": [
@@ -687,7 +691,7 @@
           "Uygun (uzun ömür için elde yıkama önerilir)"
         ],
         [
-          "Model kodu",
+          "Üretici model kodu",
           "G7320434"
         ],
         [
@@ -1975,6 +1979,10 @@
           "K1330404 (2100105213)"
         ],
         [
+          "MPN",
+          "K1330404"
+        ],
+        [
           "Barkod (EAN)",
           "3168430275584"
         ]
@@ -2654,7 +2662,7 @@
           "King"
         ],
         [
-          "Model kodu",
+          "Üretici model kodu",
           "1026441"
         ],
         [

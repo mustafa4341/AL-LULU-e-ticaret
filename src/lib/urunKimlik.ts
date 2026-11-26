@@ -34,10 +34,12 @@ export function gtinAlani(kod: string): 'gtin8' | 'gtin12' | 'gtin13' | 'gtin14'
   return `gtin${kod.length}` as 'gtin8' | 'gtin12' | 'gtin13' | 'gtin14';
 }
 
-/** Teknik özelliklerde açıkça belirtilen üretici parça numarası. */
+const MPN_ETIKETI = /^(?:MPN|Üretici\s+model\s+kodu|Üretici\s+parça\s+numarası)$/iu;
+
+/** Teknik özelliklerde açıkça üreticiye ait olduğu belirtilen parça numarası. */
 export function urunMpn(u: Pick<Urun, 'teknik'>): string | undefined {
-  const kod = u.teknik.find(([etiket]) => /^(?:MPN|Üretici model kodu|Üretici parça numarası)$/iu.test(etiket))?.[1];
-  return kod && kod.length <= 70 && !gtinGecerli(kod) ? kod : undefined;
+  const kod = u.teknik.find(([etiket]) => MPN_ETIKETI.test(etiket.trim()))?.[1].trim();
+  return kod && kod.length <= 70 && !gtinGecerli(kod.replace(/[\s-]/g, '')) ? kod : undefined;
 }
 
 export function markaliUrunAdi(u: Pick<Urun, 'marka' | 'ad'>): string {
