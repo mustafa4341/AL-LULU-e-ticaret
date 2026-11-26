@@ -546,7 +546,7 @@
 }
 .birlikte__ad { font-size: .875rem; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
 .birlikte__fiyat { display: flex; align-items: baseline; flex-wrap: wrap; gap: 3px 6px; font-size: .875rem; }
-.birlikte__fiyat s { color: var(--ink-3); font-size: .75rem; }
+.birlikte__fiyat :is(s, .birlikte__tekil) { color: var(--ink-3); font-size: .75rem; }
 .birlikte__mevcut { display: flex; align-items: center; gap: 4px; color: var(--ink-2); font-size: .75rem; font-weight: 650; }
 .birlikte__mevcut svg { flex: none; }
 .birlikte__alt {

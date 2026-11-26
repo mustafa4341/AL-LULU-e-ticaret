@@ -126,6 +126,16 @@ const stoktakiUrunler = k.tumUrunler()
     .mobil-urun > strong small { color: var(--ink-2); font-size: .6875rem; }
     .mobil-urun:focus-visible { outline: 2px solid var(--gold-ink); outline-offset: -2px; }
   }
-  @media (min-width: 700px) { .urun-bannerlari { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (min-width: 700px) {
+    .urun-bannerlari { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding-bottom: 12px; }
+    .urun-banner { grid-template-columns: minmax(0, 1fr) minmax(90px, 29%); }
+    .urun-banner__metin { padding-block: 12px; padding-inline-start: clamp(13px, 1.7vw, 20px); }
+    .urun-banner h2 { font-size: clamp(1.25rem, 2.1vw, 1.625rem); text-wrap: balance; }
+    .urun-banner :global(.fiyat-tasarruf) { display: none; }
+    .urun-banner :global(.fiyat-onceki) { flex-basis: auto; }
+    .urun-banner :global(.fiyat) { font-size: clamp(1.25rem, 2.2vw, 1.5rem); }
+    .urun-banner__durum { margin-bottom: 4px; }
+    .urun-banner img { max-width: 162px; justify-self: center; padding: 6%; }
+  }
   @media (prefers-reduced-motion: reduce) { .urun-banner img { transition: none; } }
 </style>

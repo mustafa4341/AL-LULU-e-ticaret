@@ -102,7 +102,7 @@ function dokumHtml(s: HesapSatiri): string {
 export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
   const anah = anahtar(s);
   const eklenir = eklenebilir(s.tip, s.id) > 0;
-  // Üstü çizili tutar = indirimlerden önceki tutar (set: ayrı ayrı fiyat; ürün: kampanya öncesi fiyat + sepette indirim)
+  // Set için güncel ayrı alım toplamını kendi etiketiyle göster; ürünlerde önceki fiyatı çiz.
   const indirimsiz = s.birimAyriAyri ? s.birimAyriAyri * s.adet : s.birimFiyat * s.adet + satirKampanyaIndirimi(s, katalog);
   const once = indirimsiz > s.toplam ? indirimsiz : 0;
   const altSatir = `
@@ -112,7 +112,7 @@ export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
             <span class="adet__deger" aria-live="polite">${s.adet}</span>
             <button type="button" data-kalem-arti="${esc(anah)}" aria-label="Adedi artır"${eklenir ? '' : ' disabled'}>${ikonSvg('arti', 16)}</button>
           </div>` : `<span class="muted small">${s.adet} adet</span>`}
-          <div class="kalem__fiyat">${once ? `<s>${formatTL(once)}</s>` : ''}<span class="${once ? 'fiyat--indirimli' : ''}">${formatTL(s.toplam)}</span></div>
+          <div class="kalem__fiyat">${once && s.tip === 'urun' ? `<s>${formatTL(once)}</s>` : ''}<span class="${once ? 'fiyat--indirimli' : ''}">${formatTL(s.toplam)}</span></div>
         </div>`;
   if (s.tip === 'set') return setSatirHtml(s, altSatir, once);
   return `
@@ -132,17 +132,24 @@ export function satirHtml(s: HesapSatiri, duzenlenebilir = true): string {
  */
 function setSatirHtml(s: HesapSatiri, altSatir: string, once: number): string {
   const set = setBul(s.id);
-  const urunler = set?.kalemler.map((x) => ({ x, u: urunBul(x.urunId) })) ?? [];
+  const urunler = set?.kalemler.flatMap((x) => {
+    const u = urunBul(x.urunId);
+    return u ? [{ x, u }] : [];
+  }) ?? [];
   const urunSayisi = s.parcalar.reduce((t, p) => t + p.adet, 0);
   const yuzde = s.birimAyriAyri ? Math.round(((s.birimAyriAyri - s.birimFiyat) * 100) / s.birimAyriAyri) : 0;
   // Setteki bir ürün katalogda görünmüyorsa (taslak vb.) kısa içerik metnine dönülür
-  const liste = urunler.length && urunler.every((k) => k.u)
-    ? urunler.map(({ x, u }) => `
+  const liste = urunler.length && urunler.length === set?.kalemler.length
+    ? urunler.map(({ x, u }) => {
+        const adet = x.adet * s.adet;
+        const onceki = u.onceki;
+        return `
         <li class="set-kalem__urun">
-          <span class="set-kalem__gorsel" aria-hidden="true">${u!.gorsel ? `<img src="${esc(u!.gorsel)}" alt="" width="44" height="52" loading="lazy">` : ikonSvg(u!.ikon, 20)}</span>
-          <span class="set-kalem__bilgi"><span class="set-kalem__ad">${esc(`${u!.marka} ${u!.kisaAd}`)}</span><span class="set-kalem__adet">${x.adet * s.adet} adet</span></span>
-          <span class="set-kalem__fiyat">${formatTL(u!.fiyat * x.adet * s.adet)}</span>
-        </li>`).join('')
+          <span class="set-kalem__gorsel" aria-hidden="true">${u.gorsel ? `<img src="${esc(u.gorsel)}" alt="" width="44" height="52" loading="lazy">` : ikonSvg(u.ikon, 20)}</span>
+          <span class="set-kalem__bilgi"><span class="set-kalem__ad">${esc(`${u.marka} ${u.kisaAd}`)}</span><span class="set-kalem__adet">${adet} adet</span></span>
+          <span class="set-kalem__fiyat">${onceki ? `<s><span class="visually-hidden">Ürünün önceki fiyatı: </span>${formatTL(onceki * adet)}</s>` : ''}${formatTL(u.fiyat * adet)}</span>
+        </li>`;
+      }).join('')
     : s.icerik ? `<li class="set-kalem__urun set-kalem__urun--metin">${esc(s.icerik)}</li>` : '';
   return `
     <div class="kalem kalem--set">
@@ -152,6 +159,7 @@ function setSatirHtml(s: HesapSatiri, altSatir: string, once: number): string {
           <a class="kalem__ad" href="${esc(s.href)}">${esc(s.ad)}</a>
         </div>
         <ul class="set-kalem__liste" aria-label="${esc(s.ad)} içindeki ürünler">${liste}</ul>
+        ${once ? `<p class="set-kalem__ayri">Bugün ayrı ayrı ${formatTL(once)}</p>` : ''}
         ${once ? `<div class="set-kalem__indirim"><span>Set indirimi${yuzde ? ` (%${yuzde})` : ''}</span><span>−${formatTL(once - s.toplam)}</span></div>` : ''}
         ${altSatir}
       </div>

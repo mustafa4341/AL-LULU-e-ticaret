@@ -31,6 +31,7 @@ const satista = k.setEngelleri(set, Boolean(Astro.locals.vitrinOnizleme)).length
       const g = k.anaGorsel(d.urun);
       const mevcut = d.urun.id === mevcutUrunId;
       const kalemIndirimli = d.indirimliBirim !== undefined && d.indirimliBirim < d.birim;
+      const onceki = k.fiyatBilgisi(d.urun).onceki;
       return (
         <li class="birlikte__urun">
           <a class="birlikte__urun-link" href={`/urun/${d.urun.id}`} aria-current={mevcut ? 'page' : undefined}>
@@ -44,7 +45,8 @@ const satista = k.setEngelleri(set, Boolean(Astro.locals.vitrinOnizleme)).length
             <span class="birlikte__ad">{d.adet > 1 ? `${d.adet} × ` : ''}{d.urun.kisaAd}</span>
           </a>
           <span class="birlikte__fiyat">
-            {kalemIndirimli && <s>{formatTL(d.birim * d.adet)}</s>}
+            {onceki && <s><span class="visually-hidden">Ürünün önceki fiyatı: </span>{formatTL(onceki * d.adet)}</s>}
+            {kalemIndirimli && <span class="birlikte__tekil">Tekli {formatTL(d.birim * d.adet)}</span>}
             <strong class:list={{ 'birlikte__indirimli-fiyat': kalemIndirimli }}>{formatTL((d.indirimliBirim ?? d.birim) * d.adet)}</strong>
           </span>
           {mevcut && <span class="birlikte__mevcut"><Ikon ad="tik" boyut={13} />İncelediğiniz ürün</span>}
@@ -54,8 +56,8 @@ const satista = k.setEngelleri(set, Boolean(Astro.locals.vitrinOnizleme)).length
   </ul>
   <div class="birlikte__alt">
     <div class="birlikte__toplam">
-      {indirimli && <span class="birlikte__yerine">Ayrı ayrı {formatTL(f.ayriAyri)}</span>}
-      <span class="birlikte__fiyat-buyuk"><span class:list={{ 'birlikte__indirimli-fiyat': indirimli }}><span class="visually-hidden">Set fiyatı </span>{formatTL(f.fiyat)}</span> {indirimli && <span class="birlikte__kazanc">{formatTL(f.kazanc)} tasarruf</span>}</span>
+      {indirimli && <span class="birlikte__yerine">Bugün ayrı ayrı {formatTL(f.ayriAyri)}</span>}
+      <span class="birlikte__fiyat-buyuk"><span class:list={{ 'birlikte__indirimli-fiyat': indirimli }}><span class="visually-hidden">Set fiyatı </span>{formatTL(f.fiyat)}</span> {indirimli && <span class="birlikte__kazanc">Sette {formatTL(f.kazanc)} avantaj</span>}</span>
     </div>
     {satista ? (
       <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="set" data-id={set.id} data-konum="birlikte-al" aria-describedby={`set-sepet-${set.id}`}>

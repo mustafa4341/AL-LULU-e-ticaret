@@ -563,15 +563,15 @@ const coklu = vitrinler.length > 1;
   }
 
   @media (max-width: 699px) {
-    .vitrin-banner { padding-block: 10px; }
+    .vitrin-banner { --vitrin-gorsel-boyu: clamp(120px, 32vw, 190px); padding-block: 8px 6px; }
     .vitrin-banner__panel { display: flex; flex-direction: column; }
-    .vitrin-banner__gorsel { height: clamp(140px, 39vw, 218px); flex: none; }
+    .vitrin-banner__gorsel { height: var(--vitrin-gorsel-boyu); flex: none; }
     .vitrin-banner__metin {
       flex: 1;
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      padding: 12px 14px 15px;
+      padding: 10px 12px 12px;
       background: #26261a;
     }
     .vitrin-banner__metin :is(h1, h2, .vitrin-banner__baslik) {
@@ -583,22 +583,23 @@ const coklu = vitrinler.length > 1;
     .vitrin-banner__fiyat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; margin-top: 8px; padding: 4px 8px; }
     .vitrin-banner__fiyat span, .vitrin-banner__fiyat s { font-size: .6875rem; }
     .vitrin-banner__fiyat strong { font-size: 1.0625rem; }
-    .vitrin-banner__aksiyon { margin-top: auto; padding-top: 9px; gap: 4px 10px; }
+    .vitrin-banner__aksiyon { margin-top: auto; padding-top: 6px; gap: 4px 10px; }
     .vitrin-banner__baglanti { min-height: 44px; padding: 6px 10px; gap: 5px; font-size: .8125rem; }
     .vitrin-banner__baglanti-uzun { display: none; }
     .vitrin-banner__baglanti-kisa { display: inline; }
     .vitrin-banner__durum { font-size: .75rem; }
-    .vitrin-banner__ok { top: calc(clamp(140px, 39vw, 218px) / 2); }
-    .vitrin-banner__noktalar { top: calc(clamp(140px, 39vw, 218px) - 36px); bottom: auto; padding: 0 5px; }
+    .vitrin-banner__ok { top: calc(var(--vitrin-gorsel-boyu) / 2); }
+    .vitrin-banner__noktalar { top: calc(var(--vitrin-gorsel-boyu) - 36px); bottom: auto; padding: 0 5px; }
     .vitrin-banner__nokta { width: 26px; height: 28px; }
     .vitrin-banner__panel--urun .vitrin-banner__metin { background: #38131b; }
   }
 
   @media (min-width: 700px) {
+    .vitrin-banner { padding-block: 16px 12px; }
     .vitrin-banner__panel {
       display: grid;
       align-items: center;
-      min-height: clamp(350px, 36vw, 480px);
+      min-height: clamp(292px, 29vw, 360px);
       isolation: isolate;
     }
     .vitrin-banner__panel::after {
@@ -609,12 +610,16 @@ const coklu = vitrinler.length > 1;
       content: '';
     }
     .vitrin-banner__panel--urun::after { background: linear-gradient(90deg, #250c12f7 0%, #3d121cf0 27%, #38121b9c 48%, transparent 71%); }
-    .vitrin-banner__panel--urun :is(h1, .vitrin-banner__baslik) { font-size: clamp(35px, 4.6vw, 64px); }
     .vitrin-banner__gorsel { position: absolute; z-index: -2; inset: 0; }
     .vitrin-banner__metin {
-      width: min(52%, 36rem);
-      padding: 32px 0 50px clamp(72px, 6.2vw, 94px);
+      width: min(55%, 36rem);
+      padding: 20px 0 38px clamp(56px, 5.8vw, 80px);
     }
+    .vitrin-banner__metin :is(h1, h2, .vitrin-banner__baslik) { font-size: clamp(30px, 3.65vw, 52px); }
+    .vitrin-banner__metin p:not(.vitrin-banner__baslik) { margin-top: 9px; font-size: .9375rem; line-height: 1.45; }
+    .vitrin-banner__fiyat { padding: 6px 12px; margin-top: 9px; }
+    .vitrin-banner__fiyat strong { font-size: clamp(1.375rem, 2.45vw, 1.875rem); }
+    .vitrin-banner__aksiyon { margin-top: 11px; gap: 5px 12px; }
     .vitrin-banner__ok {
       top: 50%;
       width: 46px;
