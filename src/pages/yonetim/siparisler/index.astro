@@ -523,6 +523,10 @@ const acikIndeks = secParam
     .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) {
       grid-template-columns: minmax(0, 1fr) minmax(400px, 42%) !important;
     }
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo :is(th, td):nth-child(4),
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo :is(th, td):nth-child(6) {
+      display: none;
+    }
     .sm-calisma-paneli {
       max-height: calc(100dvh - var(--y-top-height) - 32px);
       overflow-y: auto;

@@ -155,7 +155,7 @@ const acikEditor = liste.some((u) => u.id === duzenle);
 // Not: regex şablonun içinde yazılırsa Astro derleyicisi onu etiket sanıp sayfa açılmaz; burada kalmalı.
 const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
 ---
-<Yonetim baslik="Ürünler ve Stok" altBaslik="Kataloğu, fiyatları ve depodaki ürün adetlerini yönetin." aktif="urunler" basari={basari} hatalar={hatalar}>
+<Yonetim baslik="Ürünler ve Stok" altBaslik="Kataloğu, fiyatları ve depodaki ürün adetlerini yönetin." aktif="urunler" basari={basari} hatalar={hatalar} genis>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--sepet" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyat ve Kâr Tablosu</a>
     <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={18} />Trendyol’a gönder</a>

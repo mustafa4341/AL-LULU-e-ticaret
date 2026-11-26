@@ -447,10 +447,10 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
   .y-ilan-duzen { grid-template-columns: minmax(0, 1fr) minmax(300px, 32%); }
   .y-ilan-duzen > aside { position: sticky; top: calc(var(--y-top-height) + 18px); }
 }
-/* Boş hızlı işlem paneli sipariş tablosunu daraltmasın: bir kayıt açılınca görünür */
+/* Boş hızlı işlem paneli sipariş ve ürün tablosunu daraltmasın: bir kayıt açılınca görünür */
 @media (min-width: 1100px) {
-  .y-panel .y-liste-detay:has(.y-siparis-secim):not(:has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
-  .y-panel .y-liste-detay:has(.y-siparis-secim):not(:has([data-panel-kayit]:not([hidden]))) .y-siparis-secim { display: none; }
+  .y-panel .y-liste-detay:has(.y-siparis-secim, .y-urun-secim):not(:has([data-panel-kayit]:not([hidden]))) { grid-template-columns: minmax(0, 1fr); }
+  .y-panel .y-liste-detay:has(.y-siparis-secim, .y-urun-secim):not(:has([data-panel-kayit]:not([hidden]))) :is(.y-siparis-secim, .y-urun-secim) { display: none; }
 }
 @media (max-width: 1199px) {
   .y-urun-secim:has([data-panel-bos]:not([hidden])) { display: none; }
@@ -692,7 +692,7 @@ body.yonetim.y-panel { background: var(--y-bg); color: var(--y-ink); font: 15px/
   .y-kirinti { display: none; }
   .y-arama-cubugu { flex: 1 1 auto; min-width: 0; }
   .y-panel .y-top-end { margin-left: auto; }
-  .y-panel .y-sidebar { width: min(300px, 86vw); bottom: var(--y-bottom-height); top: var(--y-top-height); }
+  .y-panel .y-sidebar { width: min(300px, 86vw); bottom: var(--y-bottom-height); top: var(--y-top-height); max-height: calc(100dvh - var(--y-top-height) - var(--y-bottom-height)); overflow-y: auto; padding-bottom: 18px; }
   html[data-y-mobile="acik"] .y-panel .y-sidebar { display: flex; }
   .y-panel .y-sekmeler :is(button, a), .y-panel .y-row-menu > summary { min-height: 44px; }
   .y-panel .y-bottom-nav { position: fixed; z-index: 34; inset: auto 0 0; height: var(--y-bottom-height); display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); border-top: 1px solid var(--y-border); background: #fff; padding: 4px 5px env(safe-area-inset-bottom); }

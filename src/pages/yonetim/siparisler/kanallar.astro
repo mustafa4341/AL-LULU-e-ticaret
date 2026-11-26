@@ -391,7 +391,7 @@ const gosterilecekEslesmeKanallari = aktifGorunum === 'trendyol' ? (['trendyol']
               </a>
               <a href={`?gorunum=eslestirme#eslestirme-${kanal}`} class:list={['sk-sayac-kutu', { 'is-uyari': sorunSayisi > 0 }]}>
                 <strong><PIkon ad="katman" boyut={18} /> {sorunSayisi}</strong>
-                <small>{ist.eslesmeyen > 0 ? `${ist.eslesmeyen} ürün eşleşmiyor` : ist.stokFarkli > 0 ? `${ist.stokFarkli} stok farkı` : 'Stok uyumlu'}</small>
+                <small>{[ist.eslesmeyen > 0 ? `${ist.eslesmeyen} eşleşmiyor` : '', ist.stokFarkli > 0 ? `${ist.stokFarkli} stok farkı` : ''].filter(Boolean).join(' · ') || 'Stok uyumlu'}</small>
               </a>
             </div>
             <a class="btn btn--cizgi sk-detay-btn" href={`?gorunum=${kanal}`}>Kanal Ayarları ve Eşleştirme ↗</a>
