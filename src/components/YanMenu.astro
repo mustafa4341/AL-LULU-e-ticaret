@@ -9,7 +9,7 @@ const amiral = k.urunBul(k.anaSayfa.hero.urunId);
 const amiralGorsel = amiral ? k.anaGorsel(amiral) : undefined;
 /* Sepette indirim varsa ödenecek fiyat gösterilir (sepetle aynı — denetim AUD-027) */
 const amiralFiyat = amiral ? (k.fiyatBilgisi(amiral).sepette?.fiyat ?? amiral.fiyat) : 0;
-const setSayisi = k.tumSetler().length;
+const setSayisi = k.vitrinSetleri().length;
 ---
 <aside class="cekmece cekmece--alt" id="kategori-paneli" role="dialog" aria-modal="true" aria-labelledby="kategori-baslik" data-cekmece tabindex="-1" hidden>
   <div class="cekmece__tutamac" aria-hidden="true"></div>

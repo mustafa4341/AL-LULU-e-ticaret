@@ -1,20 +1,24 @@
 ---
-import Ikon from '../Ikon.astro';
-import UrunKarti from '../UrunKarti.astro';
+import UrunVitrini from './UrunVitrini.astro';
+import { BUTCE_ESIGI } from '../../lib/katalog';
+import { formatTL } from '../../lib/fiyat';
+import type { Urun } from '../../lib/sema';
+
 const k = Astro.locals.katalog;
-const urunler = k.oneCikanUrunler();
-/* Tek ürün varken iki sütunlu ray yarım ekran boş bırakıyordu: tek ürün tam genişlik, yatay kart olur
-   ve "Tümünü gör" gizlenir (gidecek başka ürün yok). */
-const tek = urunler.length === 1;
+const cokSatanlar = k.cokSatanUrunler();
+const butce = k.butceUrunleri();
+const adaylar = k.oneCikanUrunler().filter((u) => k.stoktaMi(u));
+const vitrineGirenler = new Set([...cokSatanlar.slice(0, 4), ...butce.slice(0, 4)].map((u) => u.id));
+const secim: Urun[] = [];
+const kullanilanKategoriler = new Set<string>();
+for (const u of adaylar) {
+  const kategori = u.kategoriler[0];
+  if (!kategori || kullanilanKategoriler.has(kategori) || vitrineGirenler.has(u.id)) continue;
+  kullanilanKategoriler.add(kategori);
+  secim.push(u);
+}
+const urunler = [...secim, ...adaylar.filter((u) => !secim.includes(u) && !vitrineGirenler.has(u.id)), ...adaylar.filter((u) => vitrineGirenler.has(u.id))];
 ---
-{urunler.length > 0 && (
-  <section class="bolum bolum--beyaz" aria-labelledby="one-cikan-baslik">
-    <div class="container">
-      <div class="bolum-bas">
-        <div><p class="eyebrow eyebrow--altin">Seçtiklerimiz</p><h2 id="one-cikan-baslik">{tek ? 'Öne çıkan ürün' : k.anaSayfa.oneCikanlarBaslik}</h2></div>
-        {!tek && <a class="bolum-bas__link" href="/urunler">Tümünü gör <Ikon ad="sag" boyut={16} /></a>}
-      </div>
-      <div class:list={['urun-ray', { 'urun-ray--tek': tek }]}>{urunler.map((u) => <UrunKarti urun={u} konum="one-cikanlar" yatay={tek} />)}</div>
-    </div>
-  </section>
-)}
+<UrunVitrini id="one-cikanlar" baslik={k.anaSayfa.oneCikanlarBaslik} {urunler} href="/urunler" baglanti="Tüm ürünleri gör" />
+<UrunVitrini id="cok-satanlar" baslik="Çok satanlar" urunler={cokSatanlar} href="/urunler?secim=cok-satan" baglanti="Çok satanları gör" ton="sicak" />
+<UrunVitrini id="butceye-uygun" baslik={`${formatTL(BUTCE_ESIGI)} ve altı`} urunler={butce} href="/urunler?secim=butce" baglanti="Bu fiyat aralığını gör" />

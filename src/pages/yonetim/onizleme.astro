@@ -1,7 +1,7 @@
 ---
 import AnaSayfa from '../../components/AnaSayfa.astro';
 import BakimSayfasi from '../../components/BakimSayfasi.astro';
-import SetKarti from '../../components/SetKarti.astro';
+import SetListesi from '../../components/SetListesi.astro';
 import UrunSayfasi from '../../components/UrunSayfasi.astro';
 import Base from '../../layouts/Base.astro';
 import { satisAdetleri } from '../../lib/depo';
@@ -35,7 +35,10 @@ if (tur === 'urun') {
   urun.ad ||= 'Ürün adı';
   urun.kisaAd ||= urun.ad;
   urun.gorseller = urunGorselleri(f, temel, bloblar.map((src) => ({ src, alt: urun!.ad })));
-  fiyatUygula(urun, Math.max(0, sayi(f, 'fiyat')), evet(f, 'kampanya'), istegeBagli(f, 'kampanya_etiket'), sayi(f, 'onceki_fiyat'));
+  const fiyat = Math.max(0, sayi(f, 'fiyat'));
+  const oncekiFiyat = sayi(f, 'onceki_fiyat');
+  const kampanya = evet(f, 'kampanya') || oncekiFiyat > fiyat;
+  fiyatUygula(urun, fiyat, kampanya, istegeBagli(f, 'kampanya_etiket'), oncekiFiyat);
   m.urunler = [...m.urunler.filter((u) => u.id !== urun?.id), urun];
   if (urun.durum !== 'yayinda') not = urun.durum === 'taslak' ? 'Taslak · müşterilere görünmez' : 'Gizli · müşterilere görünmez';
 } else if (tur === 'set') {
@@ -59,6 +62,9 @@ Astro.response.headers.set('X-Preview-Note', encodeURIComponent(not));
 ---
 {urun ? <UrunSayfasi urun={urun} /> : set ? (
   <Base baslik={set.ad} aciklama={set.aciklama} aktif="setler">
-    <div class="container"><div class="set-grid"><SetKarti set={set} /></div></div>
+    <div class="container">
+      <h1 class="visually-hidden">Set önizlemesi</h1>
+      <SetListesi setler={[set]} />
+    </div>
   </Base>
 ) : bolum === 'tadilat' ? <BakimSayfasi /> : <AnaSayfa />}

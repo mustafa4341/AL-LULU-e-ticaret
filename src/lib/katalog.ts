@@ -34,6 +34,8 @@ export interface SetKalemDokumu {
 export type RozetTonu = 'turuncu' | 'mercan' | 'kirmizi' | 'altin' | 'lacivert' | 'yesil';
 export type RozetStili = 'muhur' | 'serit';
 
+export const BUTCE_ESIGI = 1_500;
+
 export interface Rozetler {
   /** Sol üst vitrin damgası (en fazla 1) */
   damga?: string;
@@ -80,6 +82,16 @@ export class Katalog {
   maxAdet(u: Urun): number { return Math.max(0, Math.min(u.maxAdet, u.stok)); }
   anaGorsel(u: Urun) { return u.gorseller[0]; }
   oneCikanUrunler(): Urun[] { return this.urunListesi.filter((u) => u.oneCikan); }
+  cokSatanUrunler(): Urun[] {
+    return this.urunListesi.filter((u) => this.cokSatanMi(u)).sort((a, b) =>
+      Number(this.stoktaMi(b)) - Number(this.stoktaMi(a)) || (this.satislar.get(b.id) ?? 0) - (this.satislar.get(a.id) ?? 0),
+    );
+  }
+  butceUrunleri(simdi = Date.now()): Urun[] {
+    return this.urunListesi.filter((u) => this.stoktaMi(u))
+      .map((u) => ({ urun: u, fiyat: sepetteFiyat(u.fiyat, gecerliSepetteIndirim({ sepetteIndirim: u.sepetteIndirim, firsatBitis: u.firsat?.bitis }, simdi)) }))
+      .filter(({ fiyat }) => fiyat <= BUTCE_ESIGI).sort((a, b) => a.fiyat - b.fiyat).map(({ urun }) => urun);
+  }
   birlikteIyiGiderler(u: Urun): Urun[] {
     return u.birlikteIyiGider.map((id) => this.urunBul(id)).filter((x): x is Urun => !!x && this.stoktaMi(x));
   }
@@ -125,6 +137,14 @@ export class Katalog {
 
   firsatUrunleri(): Urun[] {
     return this.urunListesi.filter((u) => this.firsatAktif(u) && this.stoktaMi(u));
+  }
+
+  indirimliUrunler(simdi = Date.now()): Urun[] {
+    return this.urunListesi.filter((u) => {
+      if (!this.stoktaMi(u)) return false;
+      const fiyat = this.fiyatBilgisi(u, simdi);
+      return Boolean(fiyat.onceki || fiyat.sepette);
+    });
   }
 
   /** Sitedeki son 30 günlük satış eşiği dolduysa ya da mağaza sahibi diğer kanallardaki satışlara dayanarak açtıysa */
@@ -187,13 +207,16 @@ export class Katalog {
   }
 
   /* ---------------- Setler ---------------- */
-  tumSetler(): UrunSeti[] {
+  vitrinSetleri(): UrunSeti[] {
     return this.magaza.setler.filter(
-      (s) => this.gorunur(s.durum) && this.setEngelleri(s, this.taslaklarGorunur).length === 0,
+      (s) => this.gorunur(s.durum) && this.setEngelleri(s, this.taslaklarGorunur, { stokGerekli: false }).length === 0,
     );
   }
+  tumSetler(): UrunSeti[] {
+    return this.magaza.setler.filter((s) => this.gorunur(s.durum) && this.setEngelleri(s, this.taslaklarGorunur).length === 0);
+  }
   setBul(id: string): UrunSeti | undefined { return this.tumSetler().find((s) => s.id === id); }
-  setEngelleri(s: UrunSeti, taslakIzinli = false): string[] {
+  setEngelleri(s: UrunSeti, taslakIzinli = false, { stokGerekli = true } = {}): string[] {
     const adetler = new Map<string, number>();
     for (const { urunId, adet } of s.kalemler) adetler.set(urunId, (adetler.get(urunId) ?? 0) + adet);
     const sorunlar: string[] = [];
@@ -201,7 +224,8 @@ export class Katalog {
       const u = this.magaza.urunler.find((u) => u.id === id);
       if (!u) sorunlar.push('Sette bulunamayan bir ürün var.');
       else if (u.durum !== 'yayinda' && !(taslakIzinli && u.durum === 'taslak')) sorunlar.push(u.kisaAd + ' yayında değil.');
-      else if (Math.min(u.stok, u.maxAdet) < adet) sorunlar.push(u.kisaAd + ' için yeterli stok veya alım adedi yok.');
+      else if (u.maxAdet < adet) sorunlar.push(u.kisaAd + ' için set adedi, sipariş sınırını aşıyor.');
+      else if (stokGerekli && u.stok < adet) sorunlar.push(u.kisaAd + ' için yeterli stok yok.');
       else if (!u.gorseller.length && !s.gorsel && !taslakIzinli) sorunlar.push(u.kisaAd + ' için fotoğraf gerekli.');
     }
     const { fiyat, ayriAyri } = this.setFiyati(s);
@@ -224,7 +248,10 @@ export class Katalog {
     return { ...setToplamlari(dokum, f), dokum };
   }
   urunuIcerenSetler(urunId: string): UrunSeti[] {
-    return this.tumSetler().filter((s) => s.kalemler.some((k) => k.urunId === urunId));
+    return this.vitrinSetleri()
+      .filter((s) => s.kalemler.some((k) => k.urunId === urunId))
+      .map((set) => ({ set, satista: this.setEngelleri(set, this.taslaklarGorunur).length === 0 }))
+      .sort((a, b) => Number(b.satista) - Number(a.satista)).map(({ set }) => set);
   }
 
   /* ---------------- Tarayıcıya giden özet ----------------

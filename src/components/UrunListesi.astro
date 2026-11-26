@@ -8,7 +8,7 @@ interface Props { urunler: Urun[]; aktif: string }
 const { urunler, aktif } = Astro.props;
 const k = Astro.locals.katalog;
 const kategoriler = k.gorunurKategoriler({ menu: true });
-const setVar = k.tumSetler().length > 0;
+const setVar = k.vitrinSetleri().length > 0;
 const amiral = k.urunBul(k.anaSayfa.hero.urunId);
 ---
 <div class="filtre-serit" aria-label="Kategoriler">

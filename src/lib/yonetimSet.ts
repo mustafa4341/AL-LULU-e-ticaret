@@ -8,8 +8,11 @@ export const BOS_SET: UrunSeti = {
 };
 
 export function setFormu(f: FormData, temel: UrunSeti, gorsel?: string): UrunSeti {
+  const secilenKutular = liste(f, 'kalem_sec').filter(Boolean);
   const adetler = liste(f, 'kalem_adet');
-  const kalemler = liste(f, 'kalem_urun').map((urunId, i) => ({ urunId, adet: Number(adetler[i]) || 1 })).filter((x) => x.urunId);
+  const kalemler = secilenKutular.length
+    ? secilenKutular.map((urunId) => ({ urunId, adet: Math.max(1, sayi(f, 'kalem_adet_' + urunId, 1)) }))
+    : liste(f, 'kalem_urun').map((urunId, i) => ({ urunId, adet: Number(adetler[i]) || 1 })).filter((x) => x.urunId);
   const deger = sayi(f, 'deger');
   const tip = metin(f, 'fiyat_tip');
   const d = DurumSema.safeParse(metin(f, 'durum'));

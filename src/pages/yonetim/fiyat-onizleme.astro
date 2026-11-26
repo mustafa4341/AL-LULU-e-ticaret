@@ -4,26 +4,48 @@ import Yonetim from '../../layouts/Yonetim.astro';
 import PIkon from '../../components/yonetim/PIkon.astro';
 import Fiyat from '../../components/Fiyat.astro';
 import Ikon from '../../components/Ikon.astro';
+import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../lib/depo';
+import { metin } from '../../lib/form';
 import type { FiyatBilgisi } from '../../lib/katalog';
 
-const indirimli: FiyatBilgisi = { fiyat: 12999, onceki: 13999, yuzde: 7, enDusuk: true, enDusukGun: 30 };
-const normal: FiyatBilgisi = { fiyat: 12999, enDusuk: false, enDusukGun: 30 };
-const secili = Astro.locals.katalog.site.fiyatSunumu;
 const SECENEKLER = [
   { id: 'sade', ad: 'A — Sade', not: 'En premium görünüm. İndirim fark edilir ama bağırmaz. Kampanya döneminde avantaj gözden kaçabilir.' },
   { id: 'kampanya', ad: 'B — Güçlü kampanya', not: 'En dikkat çekici. Kısa süreli büyük kampanyalarda iyi; sürekli kullanılırsa "pazar yeri" hissi verir, premium algıyı zayıflatabilir.' },
   { id: 'dengeli', ad: 'C — Dengeli premium (önerilen)', not: 'Fiyat bordo ve büyük, eski fiyat gri ve küçük, % rozeti küçük; tasarruf TL olarak yeşil. Hem avantaj net hem marka sakin.' },
 ] as const;
+
+let hatalar: string[] = [];
+const basari = Astro.url.searchParams.get('ok');
+if (Astro.request.method === 'POST') {
+  const f = await Astro.request.formData();
+  const stil = (['sade', 'kampanya', 'dengeli'] as const).find((x) => x === metin(f, 'fiyatSunumu'));
+  if (!stil) {
+    hatalar = ['Geçerli bir fiyat stili seçin.'];
+  } else {
+    try {
+      await magazaGuncelle((m) => { m.site.fiyatSunumu = stil; }, 'Panel: fiyat sunumu stili');
+      const ad = SECENEKLER.find((s) => s.id === stil)?.ad ?? stil;
+      return Astro.redirect(`/yonetim/fiyat-onizleme?ok=${encodeURIComponent(`Fiyat sunumu "${ad}" olarak güncellendi.`)}`, 303);
+    } catch (e) {
+      hatalar = e instanceof DogrulamaHatasi ? e.hatalar : [(e as Error).message];
+    }
+  }
+}
+
+const m = await magazaOku();
+const indirimli: FiyatBilgisi = { fiyat: 12999, onceki: 13999, yuzde: 7, enDusuk: true, enDusukGun: 30 };
+const normal: FiyatBilgisi = { fiyat: 12999, enDusuk: false, enDusukGun: 30 };
+const secili = m.site.fiyatSunumu;
 ---
-<Yonetim baslik="Fiyat sunumu önizleme" altBaslik="Ürün kartlarında ve ürün detay sayfasında fiyat ile indirimlerin müşteriye nasıl göründüğünü karşılaştırın." aktif="site">
+<Yonetim baslik="Fiyat sunumu önizleme" altBaslik="Ürün kartlarında ve ürün detay sayfasında fiyat ile indirimlerin müşteriye nasıl göründüğünü karşılaştırın ve tek tıkla seçin." aktif="site" {basari} {hatalar}>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
     <a class="btn btn--cizgi" href="/yonetim/site-duzeni?bolum=duyuru"><PIkon ad="ok-sol" boyut={18} />Duyurular ve Fiyat Görünümü'ne dön</a>
   </div>
   <div class="y-veri-not" style="margin-bottom:14px">
     <PIkon ad="bilgi" boyut={18} />
     <p>
-      <strong>Yasal indirim gösterimi ve örnek rakamlar</strong>
-      Aşağıdaki rakamlar <strong>yalnızca örnektir</strong> (13.999 → 12.999 TL). Sitede üstü çizili önceki fiyat, Ticari Reklam Yönetmeliği gereği yalnızca indirimden önceki 10 gün içinde gerçekten daha yüksek fiyat uygulandıysa çıkar. Şu an mağazada aktif stil: <strong>{SECENEKLER.find((s) => s.id === secili)?.ad}</strong> · <a class="y-link" href="/yonetim/site-duzeni?bolum=duyuru"><strong>Stili değiştirmek için tıklayın →</strong></a>
+      <strong>Canlı fiyat stili seçimi</strong>
+      Aşağıdaki kartlardan istediğinize tıklayarak mağazadaki tüm indirimli ürünlerin fiyat görünümünü (A, B veya C) anında değiştirebilirsiniz. Şu an mağazada aktif stil: <strong>{SECENEKLER.find((s) => s.id === secili)?.ad}</strong>
     </p>
   </div>
   <div class="y-izgara y-izgara--3">
@@ -31,13 +53,26 @@ const SECENEKLER = [
       <section class="y-kart" style={s.id === secili ? 'border-color:var(--y-gold,#aa812e);box-shadow:0 0 0 2px var(--y-gold,#aa812e)' : undefined}>
         <div class="y-kart__bas">
           <h2><PIkon ad="etiket" /> {s.ad}</h2>
-          {s.id === secili && <span class="y-chip y-chip--yesil">Aktif stil</span>}
+          {s.id === secili ? (
+            <span class="y-chip y-chip--yesil">Aktif stil</span>
+          ) : (
+            <form method="post" style="margin:0">
+              <input type="hidden" name="fiyatSunumu" value={s.id} />
+              <button type="submit" class="btn btn--sepet btn--kucuk">Bu stili seç</button>
+            </form>
+          )}
         </div>
         <p class="y-aciklama">{s.not}</p>
         <div class="urun-fiyat"><Fiyat bilgi={indirimli} boyut="buyuk" sunum={s.id} /><p class="urun-fiyat__alt">Vergiler dahil · <strong class="yesil">Kargo Bedava</strong></p></div>
         <div class="satin-al"><span class="btn btn--simdi">Şimdi Al</span><span class="btn btn--sepet"><Ikon ad="canta" boyut={18} />Sepete Ekle</span></div>
         <p class="y-ipucu" style="margin-top:14px">Ürün liste kartında görünümü:</p>
         <div style="padding:10px;border:1px solid var(--line);border-radius:12px;background:#fff"><Fiyat bilgi={indirimli} boyut="kucuk" sunum={s.id} /></div>
+        <form method="post" style="margin-top:12px">
+          <input type="hidden" name="fiyatSunumu" value={s.id} />
+          <button type="submit" class:list={['btn', s.id === secili ? 'btn--cizgi' : 'btn--sepet']} style="width:100%" disabled={s.id === secili}>
+            <PIkon ad="tik" boyut={16} />{s.id === secili ? 'Şu an bu stil kullanılıyor' : `${s.ad} stilini uygula`}
+          </button>
+        </form>
       </section>
     ))}
   </div>

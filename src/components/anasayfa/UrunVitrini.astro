@@ -1,0 +1,41 @@
+---
+import type { Urun } from '../../lib/sema';
+import UrunKarti from '../UrunKarti.astro';
+
+interface Props {
+  id: string;
+  baslik: string;
+  urunler: Urun[];
+  href: string;
+  baglanti: string;
+  ton?: 'sade' | 'indirim' | 'sicak';
+}
+const { id, baslik, urunler, href, baglanti, ton = 'sade' } = Astro.props;
+const secilen = urunler.slice(0, 4);
+const tek = secilen.length === 1;
+---
+{secilen.length > 0 && (
+  <section class:list={['bolum', 'urun-vitrini', `urun-vitrini--${ton}`]} id={id} aria-labelledby={`${id}-baslik`}>
+    <div class="container">
+      <div class="bolum-bas">
+        <h2 id={`${id}-baslik`}>{baslik}</h2>
+        <slot name="baslik-eki" />
+        <a class="bolum-bas__link" href={href}>{baglanti}</a>
+      </div>
+      <div class:list={['urun-ray', { 'urun-ray--tek': tek }]}>
+        {secilen.map((urun) => <UrunKarti {urun} konum={id} yatay={tek} />)}
+      </div>
+    </div>
+  </section>
+)}
+
+<style>
+  .urun-vitrini { padding-block: clamp(24px, 4vw, 48px); scroll-margin-top: 120px; }
+  .urun-vitrini--sicak { background: #faf1e7; }
+  .urun-vitrini--indirim { background: #fff1ed; }
+  .bolum-bas { align-items: center; gap: 8px 20px; flex-wrap: wrap; }
+  .bolum-bas__link { font-weight: 700; }
+  .urun-vitrini--indirim .bolum-bas__link { color: #a42c12; }
+  .urun-ray--tek :global(.kart--yatay) { max-width: none; grid-template-columns: clamp(112px, 24%, 260px) minmax(0, 1fr); }
+  .urun-ray--tek :global(.kart--yatay .kart__gorsel) { min-height: clamp(136px, 16vw, 190px); }
+</style>

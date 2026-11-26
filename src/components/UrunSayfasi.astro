@@ -28,7 +28,10 @@ const bilgi = k.fiyatBilgisi(urun);
 const rozet = k.rozetler(urun);
 const stokta = k.stoktaMi(urun);
 const oneriSet = k.urunuIcerenSetler(urun.id)[0];
+const oneriSetFiyati = oneriSet ? k.setFiyati(oneriSet) : undefined;
 const tamamlayicilar = Astro.locals.vitrinOnizleme ? k.birlikteIyiGiderOnizleme(urun) : k.birlikteIyiGiderler(urun);
+const benzerUrunler = kat ? k.kategoriUrunleri(kat.id)
+  .filter((u) => u.id !== urun.id && k.stoktaMi(u) && !tamamlayicilar.some((item) => item.id === u.id)).slice(0, 4) : [];
 const stokMetni = urun.stok <= 3 ? 'Stokta son ' + urun.stok + ' adet' : 'Stokta · hemen gönderime hazır';
 const soruUrl = k.whatsapp(`Merhaba, ${urun.marka} ${urun.kisaAd} hakkında bir sorum var.`);
 const stokHaberUrl = k.whatsapp(`${urun.kisaAd} stoğa girince haber verir misiniz?`);
@@ -64,6 +67,7 @@ const yapisalVeri = {
   ...(gtin ? { [gtinAlani(gtin)]: gtin } : {}),
   description: urun.ozet,
   url: urunUrl,
+  mainEntityOfPage: urunUrl,
   ...(kat ? { category: kat.ad } : {}),
   image: urun.gorseller.map((g) => new URL(g.src, kok).href),
   // Teknik bilgiler: Google ve yapay zekâ aramaları ürünü bu özelliklerle eşleştirir (yalnız paneldeki gerçek veri)
@@ -71,6 +75,10 @@ const yapisalVeri = {
   offers: {
     // Müşterinin ödeyeceği fiyat (sepette indirim varsa o); süreli fırsatta bitiş tarihi
     '@type': 'Offer', priceCurrency: 'TRY', price: String(gosterilenFiyat),
+    ...(bilgi.onceki && !bilgi.sepette ? { priceSpecification: {
+      '@type': 'UnitPriceSpecification', price: String(bilgi.onceki), priceCurrency: 'TRY',
+      priceType: 'https://schema.org/StrikethroughPrice',
+    } } : {}),
     ...(bilgi.sepette && urun.firsat?.bitis ? { priceValidUntil: urun.firsat.bitis.slice(0, 10) } : {}),
     availability: stokta ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
     itemCondition: 'https://schema.org/NewCondition', url: urunUrl,
@@ -122,7 +130,7 @@ const sssVerisi = urunSSS.length ? {
       <div class="urun-galeri-kap">
         <Galeri gorseller={urun.gorseller} yedekIkon={kat?.ikon} />
         {rozet.damga && !bilgi.firsat && <UrunRozeti etiket={rozet.damga} tur={k.cokSatanMi(urun) ? 'cok-satan' : rozet.damgaTon === 'kirmizi' ? 'stok' : 'ozellik'} ton={rozet.damgaTon} stil={rozet.damgaStil} konum="galeri" />}
-        {bilgi.onceki && <span class="urun-indirim-cip"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde} İndirim</span>}
+        {bilgi.onceki && <span class="urun-indirim-cip"><Ikon ad="trend" boyut={14} />{bilgi.yuzde ? `%${bilgi.yuzde} İndirim` : 'İndirim'}</span>}
       </div>
 
       <div class="urun-bilgi">
@@ -140,10 +148,25 @@ const sssVerisi = urunSSS.length ? {
         )}
 
         <div class="urun-fiyat">
-          <Fiyat bilgi={bilgi} boyut="buyuk" />
+          <Fiyat bilgi={bilgi} boyut="buyuk" vurgu={urun.id === k.anaSayfa.hero.urunId} />
           {bilgi.etiket && <span class="indirim-etiket">{bilgi.etiket}</span>}
           <p class="urun-fiyat__alt">Vergiler dahil{rozet.serit && <> · <strong class="yesil">{rozet.serit}</strong></>}</p>
         </div>
+
+        {oneriSet && oneriSetFiyati && (
+          <a class="urun-seti-kisa" href={`#set-${oneriSet.id}`}>
+            <span class="urun-seti-kisa__bilgi">
+              <span class="urun-seti-kisa__ad">{oneriSet.ad}</span>
+              <span class="urun-seti-kisa__incele">Seti incele</span>
+            </span>
+            <span class="urun-seti-kisa__fiyat">
+              {oneriSetFiyati.yuzde > 0 && (
+                <span class="urun-seti-kisa__rozet"><Ikon ad="trend" boyut={14} />%{oneriSetFiyati.yuzde} set avantajı</span>
+              )}
+              <strong>{formatTL(oneriSetFiyati.fiyat)}</strong>
+            </span>
+          </a>
+        )}
 
         <OzellikListesi maddeler={urun.oneCikanBilgiler} marka={urun.marka} />
 
@@ -263,6 +286,18 @@ const sssVerisi = urunSSS.length ? {
     </section>
   )}
 
+  {kat && benzerUrunler.length > 0 && (
+    <section class="bolum bolum--beyaz" aria-labelledby="benzer-urunler">
+      <div class="container">
+        <div class="bolum-bas">
+          <h2 id="benzer-urunler">Benzer ürünler</h2>
+          <a class="bolum-bas__link" href={`/kategori/${kat.id}`}>{kat.ad}</a>
+        </div>
+        <div class="urun-ray">{benzerUrunler.map((u) => <UrunKarti urun={u} konum="benzer-urunler" />)}</div>
+      </div>
+    </section>
+  )}
+
   <SonCagri urun={urun} />
 
   {stokta && (
@@ -281,3 +316,27 @@ const sssVerisi = urunSSS.length ? {
   import '../scripts/buyutec';
   </script>
 </Base>
+
+<style>
+  .urun-seti-kisa {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+    margin-top: 10px;
+    padding: 11px 14px;
+    border: 1px solid #e5aeba;
+    border-radius: var(--r);
+    background: #fff5f6;
+    color: #6e1a2d;
+    text-decoration: none;
+  }
+  .urun-seti-kisa:hover { border-color: #a71931; }
+  .urun-seti-kisa__bilgi, .urun-seti-kisa__fiyat { display: grid; gap: 3px; }
+  .urun-seti-kisa__ad { font-weight: 700; font-size: .875rem; }
+  .urun-seti-kisa__incele { font-size: .8125rem; text-decoration: underline; text-underline-offset: 2px; }
+  .urun-seti-kisa__fiyat { color: #a71931; font-variant-numeric: tabular-nums; }
+  .urun-seti-kisa__rozet { display: inline-flex; align-items: center; gap: 4px; font-size: .8125rem; font-weight: 750; }
+  .urun-bilgi :global(.birlikte) { scroll-margin-top: 140px; }
+</style>

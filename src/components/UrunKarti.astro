@@ -5,6 +5,7 @@ import Fiyat from './Fiyat.astro';
 import GorselYok from './GorselYok.astro';
 import FirsatSayaci from './FirsatSayaci.astro';
 import UrunRozeti from './UrunRozeti.astro';
+import { markaliUrunAdi } from '../lib/urunKimlik';
 
 interface Props {
   urun: Urun;
@@ -24,6 +25,8 @@ const rozetTuru = k.cokSatanMi(urun) ? 'cok-satan' : bilgi.firsat ? 'firsat' : r
 const stokta = k.stoktaMi(urun);
 const kat = k.kategoriBul(urun.kategoriler[0]!);
 const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
+const urunAdi = markaliUrunAdi(urun);
+const modelAdi = urunAdi.slice(urun.marka.length).trim();
 ---
 <article class:list={["kart", { "kart--firsat": !!bilgi.firsat, "kart--yatay": yatay }]} data-urun-kart data-urun-id={urun.id} data-fiyat={siralamaFiyati} data-reveal>
   <a class="kart__gorsel" href={`/urun/${urun.id}`} tabindex="-1" aria-hidden="true" data-kart-galeri={cokluGorsel ? JSON.stringify(tumGorseller.map((g) => g.src)) : undefined}>
@@ -38,7 +41,6 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
       </span>
     )}
     {urun.durum === 'taslak' && <span class="rozet rozet--taslak kart__taslak">Örnek</span>}
-    {bilgi.onceki && urun.durum !== 'taslak' && <span class="kart__indirim"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
     {rozet.serit && rozet.stokSeridi ? (
       <span class="kart__serit kart__serit--donen" aria-label={`${rozet.serit}, ${rozet.stokSeridi}`}>
         <span class="kart__serit-oge kart__serit-oge--kargo"><Ikon ad="kargo" boyut={14} />{rozet.serit}</span>
@@ -52,10 +54,10 @@ const siralamaFiyati = bilgi.sepette?.fiyat ?? bilgi.fiyat;
   </a>
   {rozet.damga && rozetTuru !== 'firsat' && <UrunRozeti etiket={rozet.damga} tur={rozetTuru} ton={rozet.damgaTon} stil={rozet.damgaStil} />}
   <div class="kart__govde">
-    <h3 class="kart__ad"><a href={`/urun/${urun.id}`} data-astro-prefetch><strong>{urun.marka}</strong> {urun.ad}</a></h3>
+    <h3 class="kart__ad"><a href={`/urun/${urun.id}`} data-astro-prefetch><strong>{urun.marka}</strong> {modelAdi}</a></h3>
     {bilgi.firsat && <FirsatSayaci etiket={bilgi.firsat.etiket} bitis={bilgi.firsat.bitis} stil={bilgi.firsat.stil} boyut="kucuk" />}
     {!bilgi.firsat && rozet.kucuk.length > 0 && <p class="kart__bilgi"><Ikon ad="kalkan" boyut={14} />{rozet.kucuk[0]}</p>}
-    <Fiyat bilgi={bilgi} boyut="kucuk" />
+    <Fiyat bilgi={bilgi} boyut="kucuk" vurgu={urun.id === k.anaSayfa.hero.urunId} />
     {bilgi.etiket && <span class="indirim-etiket" style="font-size:11.5px;margin-top:2px">{bilgi.etiket}</span>}
   </div>
   {stokta ? (

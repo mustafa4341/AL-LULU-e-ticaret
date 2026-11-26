@@ -2,16 +2,33 @@
 /* Set kartı (ana sayfa ve Setler sayfası): set görseli varsa üstte, ardından "Birlikte Al" dökümü. */
 import BirlikteAl from './BirlikteAl.astro';
 import type { UrunSeti } from '../lib/sema';
-interface Props { set: UrunSeti }
-const { set } = Astro.props;
+interface Props { set: UrunSeti; baslikSeviyesi: 'h2' | 'h3'; genis?: boolean }
+const { set, baslikSeviyesi: Baslik, genis = false } = Astro.props;
 ---
-<article class="set-kart" data-reveal>
+<article class:list={['set-kart', { 'set-kart--gorselli': set.gorsel, 'set-kart--genis': genis }]} data-reveal>
   <header class="set-kart__bas">
     {set.durum === 'taslak' && <span class="rozet rozet--taslak">Örnek</span>}
     {set.rozet && <p class="eyebrow eyebrow--altin">{set.rozet}</p>}
-    <h3 class="set-kart__ad">{set.ad}</h3>
+    <Baslik class="set-kart__ad">{set.ad}</Baslik>
     {set.aciklama && <p class="muted small">{set.aciklama}</p>}
   </header>
   {set.gorsel && <img class="set-kart__foto" src={set.gorsel.src} alt={set.gorsel.alt} width="360" height="480" loading="lazy" />}
   <BirlikteAl set={set} />
 </article>
+
+<style>
+  .set-kart { border-color: #e8c6bd; }
+  .set-kart--genis { grid-column: 1 / -1; }
+  .set-kart__ad { line-height: 1.15; }
+  @container set-listesi (min-width: 810px) {
+    .set-kart--genis.set-kart--gorselli {
+      display: grid;
+      grid-template-columns: minmax(250px, 1fr) minmax(400px, 1.4fr);
+      grid-template-rows: auto 1fr;
+      gap: 12px 24px;
+      padding: 24px;
+    }
+    .set-kart--genis .set-kart__foto { grid-row: 2; margin-top: 0; }
+    .set-kart--genis.set-kart--gorselli :global(.birlikte) { grid-column: 2; grid-row: 1 / span 2; align-self: center; margin-top: 0; }
+  }
+</style>

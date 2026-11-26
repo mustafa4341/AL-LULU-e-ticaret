@@ -62,7 +62,7 @@ if (Astro.request.method === 'POST') {
         finansOku(),
       ]);
       const yayindakiUrunler = mevcutMagaza.urunler.filter((u) => u.durum !== 'gizli');
-      const webDegisenler: { id: string; ad: string; yeniFiyat?: number; eskiFiyat: number; yeniStok?: number; eskiStok: number }[] = [];
+      const webDegisenler: { id: string; ad: string; yeniFiyat?: number; eskiFiyat: number; yeniOnceki?: number | null; eskiOnceki: number | null; yeniStok?: number; eskiStok: number }[] = [];
       const maliyetDegisenler: { id: string; maliyet?: number; desi: number; kdv: number; oranBp?: number; kategori: string; oranKaynak?: 'hepsiburada' | 'elle'; oranTarih?: string; vadeGun?: number }[] = [];
       const kanalDegisenler: { id: string; tyOzel?: number | null; hbOzel?: number | null }[] = [];
       const bilerekSifirDegisenler: { id: string; deger: boolean }[] = [];
@@ -95,8 +95,26 @@ if (Astro.request.method === 'POST') {
           if (yuvarlak !== eskiWeb) yeniFiyat = yuvarlak;
         }
 
-        if (yeniStok !== undefined || yeniFiyat !== undefined) {
-          webDegisenler.push({ id, ad, yeniFiyat, eskiFiyat: eskiWeb, yeniStok, eskiStok });
+        const eskiOncekiHam = metin(f, 'eskiWebOnceki_' + id);
+        const eskiOnceki = eskiOncekiHam ? Number(eskiOncekiHam) : null;
+        let yeniOnceki: number | null | undefined;
+        if (f.has('webOnceki_' + id)) {
+          const oncekiHam = metin(f, 'webOnceki_' + id);
+          if (!oncekiHam) {
+            if (eskiOnceki !== null) yeniOnceki = null;
+          } else {
+            const tl = tlSayiOku(oncekiHam);
+            const sonWeb = yeniFiyat ?? eskiWeb;
+            if (tl === undefined || !Number.isFinite(tl) || tl <= sonWeb || tl > 10_000_000) {
+              throw new DogrulamaHatasi([`${ad}: Web üstü çizili önceki fiyat, satış fiyatından (${sonWeb} TL) yüksek olmalı.`]);
+            }
+            const yuvarlak = Math.round(tl);
+            if (yuvarlak !== eskiOnceki) yeniOnceki = yuvarlak;
+          }
+        }
+
+        if (yeniStok !== undefined || yeniFiyat !== undefined || yeniOnceki !== undefined) {
+          webDegisenler.push({ id, ad, yeniFiyat, eskiFiyat: eskiWeb, yeniOnceki, eskiOnceki, yeniStok, eskiStok });
         }
 
         if (f.has('bilerekSifirMevcut_' + id)) {
@@ -233,7 +251,17 @@ if (Astro.request.method === 'POST') {
               throw new DogrulamaHatasi([`${d.ad}: Web fiyatı bu sırada değişti. Sayfayı yenileyip kontrol edin.`]);
             }
             if (d.yeniStok !== undefined) u.stok = d.yeniStok;
-            if (d.yeniFiyat !== undefined) fiyatUygula(u, d.yeniFiyat);
+            if (d.yeniFiyat !== undefined || d.yeniOnceki !== undefined) {
+              const sonFiyat = d.yeniFiyat ?? u.fiyat;
+              const sonOnceki = d.yeniOnceki !== undefined ? d.yeniOnceki : (u.kampanya?.oncekiFiyat ?? null);
+              if (sonOnceki && sonOnceki > sonFiyat) {
+                fiyatUygula(u, sonFiyat, true, u.kampanya?.etiket, sonOnceki);
+              } else if (d.yeniOnceki === null) {
+                fiyatUygula(u, sonFiyat, false);
+              } else {
+                fiyatUygula(u, sonFiyat);
+              }
+            }
           }
         }, `Fiyat ve Kâr Merkezi: ${webDegisenler.length} ürün`);
         if (webDegisenler.some((d) => d.yeniStok !== undefined)) {
@@ -587,6 +615,7 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
                   {gosterWeb && (
                     <td data-etiket="Web Fiyatı" class="fkm-kanal-hucre">
                       <input type="hidden" name={'eskiWeb_' + u.id} value={u.fiyat} />
+                      <input type="hidden" name={'eskiWebOnceki_' + u.id} value={u.kampanya?.oncekiFiyat ?? ''} />
                       <div class="fkm-fiyat-satir">
                         <input
                           type="text"
@@ -599,6 +628,19 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
                         />
                         <span class="fkm-birim">TL</span>
                       </div>
+                      <label class="fkm-onceki-satir">
+                        <span>Üstü çizili:</span>
+                        <input
+                          type="text"
+                          inputmode="numeric"
+                          name={'webOnceki_' + u.id}
+                          value={u.kampanya?.oncekiFiyat ?? ''}
+                          placeholder="Yok"
+                          class="y-girdi fkm-kutu fkm-kutu--kucuk"
+                          aria-label={`${u.kisaAd} Web üstü çizili önceki fiyat`}
+                        />
+                        <span class="fkm-birim">TL</span>
+                      </label>
                       <div class="fkm-kar-satir" data-fkm-web-ozet>
                         {s.webNetKar !== undefined ? (
                           <span class:list={[s.webNetKar < 0 ? 'y-yazi-kirmizi' : 'y-yazi-yesil']}>
@@ -868,6 +910,8 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
   .fkm-kutu { width: 104px; min-height: 36px; padding: 6px 8px; font-weight: 600; text-align: right; }
   .fkm-kutu--dar { width: 72px; }
   .fkm-kutu--desi { width: 54px; }
+  .fkm-kutu--kucuk { width: 82px; min-height: 29px; padding: 3px 6px; font-size: 12.5px; }
+  .fkm-onceki-satir { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11.5px; color: var(--ink-3); }
   .fkm-kutu--oran { width: 52px; min-height: 28px; padding: 3px 6px; font-size: 12.5px; }
   .fkm-kutu--uyari { border-color: #d97706; background: #fffbeb; }
   .fkm-alis-grup { display: flex; gap: 6px; justify-content: flex-end; align-items: flex-end; }

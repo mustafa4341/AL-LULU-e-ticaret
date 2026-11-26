@@ -77,14 +77,17 @@ if (Astro.request.method === 'POST') {
       if (!u) throw new Error('Ürün bulunamadı.');
       const stok = sayi(f, 'stok', -1);
       const fiyat = sayi(f, 'fiyat', -1);
+      const oncekiFiyat = sayi(f, 'oncekiFiyat', 0);
+      const kampanya = f.get('kampanya') === 'on' || (oncekiFiyat > fiyat && (!u.kampanya || u.kampanya.oncekiFiyat !== oncekiFiyat));
       const indirim = sayi(f, 'sepetteIndirim', -1);
       if (stok < 0 || fiyat <= 0 || indirim < 0 || indirim > 50) throw new Error('Geçerli fiyat, stok ve %0–50 arası sepet indirimi girin.');
+      if (kampanya && oncekiFiyat > 0 && oncekiFiyat <= fiyat) throw new Error('Önceki satış fiyatı indirimli satış fiyatından yüksek olmalı.');
       const eskiStok = sayi(f, 'eskiStok', -1);
       if (stok !== eskiStok && u.stok !== eskiStok) throw new Error('Stok bu sırada güncellendi. Güncel stoğu kontrol edip tekrar deneyin.');
       const eskiFiyat = sayi(f, 'eskiFiyat', -1);
       if (fiyat !== eskiFiyat && u.fiyat !== eskiFiyat) throw new Error('Fiyat bu sırada güncellendi. Güncel fiyatı kontrol edip tekrar deneyin.');
       if (stok !== eskiStok) u.stok = stok;
-      if (fiyat !== eskiFiyat) fiyatUygula(u, fiyat);
+      fiyatUygula(u, fiyat, kampanya, u.kampanya?.etiket, oncekiFiyat > fiyat ? oncekiFiyat : undefined);
       u.sepetteIndirim = indirim;
     }, 'Panel: hızlı stok düzeltme');
     const ozelEsikHam = metin(f, 'urunKritik');
@@ -247,10 +250,17 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
           <input type="hidden" name="id" value={u.id} /><input type="hidden" name="eskiStok" value={u.stok} /><input type="hidden" name="eskiFiyat" value={u.fiyat} />
           <div class="y-izgara y-izgara--2">
             <label class="y-alan">Web satış fiyatı (TL)<input name="fiyat" type="number" min="1" step="1" inputmode="numeric" required value={String((duzenle === u.id ? form?.get('fiyat') : undefined) ?? u.fiyat)} /></label>
-            <label class="y-alan">Ortak depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
+            <label class="y-alan">Üstü çizili önceki fiyat (TL)<input name="oncekiFiyat" type="number" min="0" step="1" inputmode="numeric" placeholder="İndirim yoksa boş" value={String((duzenle === u.id ? form?.get('oncekiFiyat') : undefined) ?? u.kampanya?.oncekiFiyat ?? k.fiyatBilgisi(u).onceki ?? '')} /></label>
           </div>
           <div class="y-izgara y-izgara--2">
+            <label class="y-alan">Ortak depo stoku (adet)<input name="stok" type="number" min="0" required value={String((duzenle === u.id ? form?.get('stok') : undefined) ?? u.stok)} /></label>
             <label class="y-alan">Web sepette indirim (%)<input name="sepetteIndirim" min="0" max="50" type="number" required value={String((duzenle === u.id ? form?.get('sepetteIndirim') : undefined) ?? u.sepetteIndirim)} /></label>
+          </div>
+          <div class="y-izgara y-izgara--2">
+            <label class="y-secim" style="align-self:end">
+              <input type="checkbox" name="kampanya" checked={Boolean(u.kampanya)} />
+              <span>İndirimli (üstü çizili) göster</span>
+            </label>
             <label class="y-alan">Ürüne özel stok eşiği<input name="urunKritik" type="number" min="0" max="100000" placeholder={`Varsayılan (${envanter.kritikVarsayilan})`} value={envanter.urunKritik[u.id] ?? ''} /></label>
           </div>
           <label class="y-secim">

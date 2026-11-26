@@ -88,11 +88,8 @@ if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
     if (liste.length < 2) return;
 
     let hazir = false;
-    let zaman: number | undefined;
-    let onyukleZaman: number | undefined;
     let temizleZaman: number | undefined;
     let aktif = 0;
-    let sonX: number | null = null;
     let istekNo = 0;
     let katmanlar: (HTMLImageElement | null)[] | null = null;
 
@@ -187,29 +184,19 @@ if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
 
     kutu.addEventListener('pointerenter', (e) => {
       if (e.pointerType && e.pointerType !== 'mouse') return;
-      sonX = e.clientX;
-      window.clearTimeout(zaman);
-      window.clearTimeout(onyukleZaman);
-      onyukleZaman = window.setTimeout(katmanlariHazirla, 220);
-      zaman = window.setTimeout(() => {
-        hazir = true;
-        kutu.classList.add('is-galeri-aktif');
-        katmanlariHazirla();
-        if (sonX !== null) konumdanGoster(sonX);
-      }, 420);
+      hazir = true;
+      kutu.classList.add('is-galeri-aktif');
+      katmanlariHazirla();
+      goster(1);
     });
 
     kutu.addEventListener('pointermove', (e) => {
-      sonX = e.clientX;
-      if (!hazir) return;
+      if (!hazir || liste.length <= 2) return;
       konumdanGoster(e.clientX);
     });
 
     kutu.addEventListener('pointerleave', () => {
-      window.clearTimeout(zaman);
-      window.clearTimeout(onyukleZaman);
       hazir = false;
-      sonX = null;
       kutu.classList.remove('is-galeri-aktif');
       goster(0);
     });

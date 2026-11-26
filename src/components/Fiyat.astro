@@ -11,19 +11,23 @@ import { formatTL } from '../lib/fiyat';
 interface Props {
   bilgi: FiyatBilgisi;
   boyut?: 'buyuk' | 'orta' | 'kucuk';
+  vurgu?: boolean;
   /** Önizleme için; verilmezse panel ayarı kullanılır */
   sunum?: 'sade' | 'kampanya' | 'dengeli';
 }
-const { bilgi, boyut = 'orta' } = Astro.props;
+const { bilgi, boyut = 'orta', vurgu = false } = Astro.props;
 const sunum = Astro.props.sunum ?? Astro.locals.katalog?.site.fiyatSunumu ?? 'dengeli';
-const indirimli = !!bilgi.onceki;
-const tasarruf = indirimli ? bilgi.onceki! - bilgi.fiyat : 0;
+const onceki = bilgi.onceki;
+const indirimli = onceki !== undefined && onceki > bilgi.fiyat;
+const tasarruf = indirimli ? onceki - bilgi.fiyat : 0;
 const buyuk = boyut === 'buyuk';
+const vurgulu = vurgu && !indirimli;
+const yuzdeMetni = bilgi.yuzde ? `%${bilgi.yuzde} İndirim` : 'İndirim';
 ---
-<div class:list={['fiyat-kutu', `fiyat-kutu--${boyut}`, `fiyat-kutu--${sunum}`, { 'fiyat-kutu--indirimli': indirimli || bilgi.enDusuk }]}>
+<div class:list={['fiyat-kutu', `fiyat-kutu--${boyut}`, `fiyat-kutu--${sunum}`, { 'fiyat-kutu--indirimli': indirimli || bilgi.enDusuk, 'fiyat-kutu--vurgulu': vurgulu }]}>
   {indirimli && sunum === 'kampanya' && buyuk && (
     <div class="fiyat-kampanya-ust">
-      <span class="fiyat-rozet-buyuk"><Ikon ad="trend" boyut={16} />%{bilgi.yuzde} İNDİRİM</span>
+      <span class="fiyat-rozet-buyuk"><Ikon ad="trend" boyut={16} />{yuzdeMetni}</span>
       {bilgi.enDusuk && <span class="fiyat-endusuk"><Ikon ad="trend" boyut={16} />Son {bilgi.enDusukGun} Günün En Düşük Fiyatı</span>}
     </div>
   )}
@@ -31,14 +35,20 @@ const buyuk = boyut === 'buyuk';
     <p class="fiyat-endusuk"><Ikon ad="trend" boyut={boyut === 'kucuk' ? 14 : 16} />Son {bilgi.enDusukGun} Günün En Düşük Fiyatı</p>
   )}
   <div class="fiyat-satir">
-    {indirimli && sunum === 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
-    {indirimli && sunum === 'dengeli' && <span class="rozet rozet--indirim fiyat-yuzde"><Ikon ad="trend" boyut={boyut === 'kucuk' ? 12 : 15} />%{bilgi.yuzde}{buyuk && ' İndirim'}</span>}
-    {indirimli && sunum === 'kampanya' && !buyuk && <span class="rozet rozet--indirim fiyat-yuzde"><Ikon ad="trend" boyut={12} />%{bilgi.yuzde}</span>}
-    <span class:list={['fiyat', { 'fiyat--indirimli': indirimli && sunum !== 'sade' }]}>{formatTL(bilgi.fiyat)}</span>
-    {indirimli && sunum !== 'dengeli' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(bilgi.onceki!)}</s>}
-    {indirimli && sunum === 'sade' && <span class="fiyat-yuzde-sade"><Ikon ad="trend" boyut={14} />%{bilgi.yuzde}</span>}
+    {indirimli && sunum !== 'sade' && <div class="fiyat-onceki">
+      <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(onceki)}</s>
+      {(sunum === 'dengeli' || !buyuk) && <span class="rozet rozet--indirim fiyat-yuzde"><Ikon ad="trend" boyut={boyut === 'kucuk' ? 12 : 15} />{yuzdeMetni}</span>}
+    </div>}
+    {vurgulu ? (
+      <span class="fiyat-vurgu">
+        <span class="fiyat-vurgu__etiket"><Ikon ad="etiket" boyut={14} />Web fiyatı</span>
+        <span class="fiyat fiyat--vurgulu">{formatTL(bilgi.fiyat)}</span>
+      </span>
+    ) : <span class:list={['fiyat', { 'fiyat--indirimli': indirimli && sunum !== 'sade' }]}>{formatTL(bilgi.fiyat)}</span>}
+    {indirimli && sunum === 'sade' && <s class="fiyat-eski"><span class="visually-hidden">Önceki fiyat: </span>{formatTL(onceki)}</s>}
+    {indirimli && sunum === 'sade' && <span class="fiyat-yuzde-sade"><Ikon ad="trend" boyut={14} />{yuzdeMetni}</span>}
   </div>
-  {indirimli && buyuk && sunum === 'dengeli' && <p class="fiyat-tasarruf">{formatTL(tasarruf)} daha az ödüyorsunuz</p>}
+  {indirimli && sunum === 'dengeli' && <p class="fiyat-tasarruf">{formatTL(tasarruf)} tasarruf</p>}
   {indirimli && sunum === 'kampanya' && <p class="fiyat-tasarruf fiyat-tasarruf--kampanya">{formatTL(tasarruf)} tasarruf</p>}
   {bilgi.sepette && (
     <div class="fiyat-sepette">
@@ -47,3 +57,14 @@ const buyuk = boyut === 'buyuk';
     </div>
   )}
 </div>
+
+<style>
+  .fiyat-onceki { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
+  .fiyat-satir:has(.fiyat-onceki) { row-gap: 1px; }
+  .fiyat-kutu--kucuk .fiyat-tasarruf { font-size: .8125rem; }
+  .fiyat-vurgu { width: fit-content; display: grid; gap: 1px; padding: 5px 10px; border-radius: 7px; background: #fce9eb; color: #a71931; }
+  .fiyat-vurgu__etiket { display: flex; align-items: center; gap: 4px; font-size: .8125rem; font-weight: 700; }
+  .fiyat--vurgulu { color: inherit; }
+  .fiyat-kutu--buyuk .fiyat-vurgu { padding: 0; background: transparent; }
+  .fiyat-kutu--buyuk .fiyat-vurgu__etiket { padding: 3px 8px; width: fit-content; border-radius: 5px; background: #fce9eb; }
+</style>

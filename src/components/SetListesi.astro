@@ -1,0 +1,21 @@
+---
+import SetKarti from './SetKarti.astro';
+import type { UrunSeti } from '../lib/sema';
+
+interface Props {
+  setler: UrunSeti[];
+  baslikSeviyesi?: 'h2' | 'h3';
+}
+const { setler, baslikSeviyesi = 'h2' } = Astro.props;
+const ilkGenis = (setler[0]?.kalemler.length ?? 0) > 2;
+---
+<div class:list={['set-grid', { 'set-grid--tek': setler.length === 1 }]}>
+  {setler.map((set, i) => (
+    <SetKarti {set} {baslikSeviyesi}
+      genis={setler.length === 1 || (ilkGenis && (i === 0 || (i === setler.length - 1 && setler.length % 2 === 0)))} />
+  ))}
+</div>
+
+<style>
+  .set-grid { container: set-listesi / inline-size; }
+</style>

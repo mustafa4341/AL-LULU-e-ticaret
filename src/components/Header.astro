@@ -15,7 +15,7 @@ interface Props {
 const { aktif, sade = false } = Astro.props;
 const k = Astro.locals.katalog;
 const kategoriler = k.gorunurKategoriler({ menu: true });
-const setVar = k.tumSetler().length > 0;
+const setVar = k.vitrinSetleri().length > 0;
 const wa = k.whatsapp('Merhaba, bir sorum var.');
 const takipAktif = aktif === 'takip' || Astro.url.pathname.startsWith('/siparis');
 ---

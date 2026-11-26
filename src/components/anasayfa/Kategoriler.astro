@@ -1,18 +1,14 @@
 ---
 import Ikon from '../Ikon.astro';
 const k = Astro.locals.katalog;
-const kategoriler = k.gorunurKategoriler({ anaSayfa: true });
-/* Ürünü olan kategori sayısı 2'den azsa bölüm ana sayfada gösterilmez: altı kutunun beşinde "Yakında"
-   yazması mağazayı yarım gösteriyordu. Kategoriler menüde kalır; yeni ürün eklenince bölüm kendiliğinden açılır. */
-const doluKategori = kategoriler.filter((kat) => k.kategoriUrunleri(kat.id).length > 0).length;
+const kategoriler = k.gorunurKategoriler({ anaSayfa: true }).filter((kat) => k.kategoriUrunleri(kat.id).length > 0);
 ---
-<!-- Telefonda gizli: alttaki menüde "Kategoriler" butonu aynı işi görüyor (bkz. global.css .kategori-bolum) -->
-{doluKategori >= 2 && (
+{kategoriler.length >= 2 && (
   <section class="bolum kategori-bolum" aria-labelledby="kat-baslik">
     <div class="container">
       <div class="bolum-bas">
-        <div><p class="eyebrow eyebrow--altin">Kategoriler</p><h2 id="kat-baslik">Ne arıyorsunuz?</h2></div>
-        <a class="bolum-bas__link" href="/urunler">Tümü <Ikon ad="sag" boyut={16} /></a>
+        <h2 id="kat-baslik">Kategoriler</h2>
+        <a class="bolum-bas__link" href="/urunler">Tüm ürünler</a>
       </div>
       <div class="kategori-grid">
         {kategoriler.map((kat) => {
@@ -21,7 +17,7 @@ const doluKategori = kategoriler.filter((kat) => k.kategoriUrunleri(kat.id).leng
             <a class="kategori-kart" href={`/kategori/${kat.id}`} data-reveal>
               <span class="kategori-kart__ikon"><Ikon ad={kat.ikon} boyut={22} /></span>
               <span class="kategori-kart__ad">{kat.ad}</span>
-              <span class="kategori-kart__alt">{n > 0 ? n + ' ürün' : 'Yakında'}</span>
+              <span class="kategori-kart__alt">{n} ürün</span>
             </a>
           );
         })}
@@ -29,3 +25,13 @@ const doluKategori = kategoriler.filter((kat) => k.kategoriUrunleri(kat.id).leng
     </div>
   </section>
 )}
+
+<style>
+  .kategori-bolum { padding-block: clamp(20px, 3vw, 36px); }
+  .kategori-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+  .kategori-kart { gap: 8px; padding: 12px; min-height: 108px; }
+  @media (max-width: 699px) {
+    .kategori-grid { grid-template-columns: none; grid-auto-flow: column; grid-auto-columns: 128px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 3px 8px; }
+    .kategori-kart { scroll-snap-align: start; }
+  }
+</style>

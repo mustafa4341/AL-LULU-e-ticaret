@@ -12,11 +12,12 @@ const ikili = f.dokum.length === 2;
 // Yönetici önizlemesi: set veya içindeki bir ürün taslaksa müşteriler bu kutuyu görmez
 const taslakUrunler = f.dokum.filter((d) => d.urun.durum === 'taslak').map((d) => d.urun);
 const taslak = set.durum === 'taslak' || taslakUrunler.length > 0;
+const satista = k.setEngelleri(set, Boolean(Astro.locals.vitrinOnizleme)).length === 0;
 ---
 <section class="birlikte" aria-labelledby={`birlikte-${set.id}`} id={`set-${set.id}`} data-birlikte={set.id}>
   <div class="birlikte__serit">
     <div class="birlikte__serit-ad"><Ikon ad="kutu" boyut={18} /><p id={`birlikte-${set.id}`}>{mevcutUrunId ? set.ad : 'Set içeriği'}</p></div>
-    {indirimli && f.yuzde > 0 && <span class="birlikte__serit-yuzde">%{f.yuzde} set avantajı</span>}
+    {indirimli && f.yuzde > 0 && <span class="birlikte__serit-yuzde"><Ikon ad="trend" boyut={14} />%{f.yuzde} set avantajı</span>}
   </div>
   {taslak && (
     <p class="taslak-uyari">
@@ -53,12 +54,14 @@ const taslak = set.durum === 'taslak' || taslakUrunler.length > 0;
   </ul>
   <div class="birlikte__alt">
     <div class="birlikte__toplam">
-      {indirimli && <span class="birlikte__yerine">Ayrı ayrı <s>{formatTL(f.ayriAyri)}</s></span>}
+      {indirimli && <span class="birlikte__yerine">Ayrı ayrı {formatTL(f.ayriAyri)}</span>}
       <span class="birlikte__fiyat-buyuk"><span class:list={{ 'birlikte__indirimli-fiyat': indirimli }}><span class="visually-hidden">Set fiyatı </span>{formatTL(f.fiyat)}</span> {indirimli && <span class="birlikte__kazanc">{formatTL(f.kazanc)} tasarruf</span>}</span>
     </div>
-    <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="set" data-id={set.id} data-konum="birlikte-al" aria-describedby={`set-sepet-${set.id}`}>
-      <Ikon ad="canta" boyut={18} /><span data-etiket>Seti Sepete Ekle</span>
-    </button>
+    {satista ? (
+      <button class="btn btn--sepet" type="button" data-sepete-ekle data-tip="set" data-id={set.id} data-konum="birlikte-al" aria-describedby={`set-sepet-${set.id}`}>
+        <Ikon ad="canta" boyut={18} /><span data-etiket>Seti Sepete Ekle</span>
+      </button>
+    ) : <button class="btn btn--cizgi" type="button" disabled>Set şu an stokta yok</button>}
     <p class="birlikte__sepet-notu" id={`set-sepet-${set.id}`} data-birlikte-sepet-notu hidden></p>
   </div>
 </section>

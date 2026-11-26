@@ -1,7 +1,6 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
 import PIkon from '../../components/yonetim/PIkon.astro';
-import Ikon from '../../components/Ikon.astro';
 import Onizleme from '../../components/yonetim/Onizleme.astro';
 import { DogrulamaHatasi, gorselKaydet, gorselSil, magazaGuncelle, magazaOku } from '../../lib/depo';
 import { formatTL } from '../../lib/fiyat';
@@ -30,7 +29,7 @@ if (Astro.request.method === 'POST') {
       taslak = aday;
       const sonuc = SetSema.safeParse(aday);
       if (!sonuc.success) throw new DogrulamaHatasi(sonuc.error.issues.map((i) => i.message));
-      const engeller = new Katalog(m).setEngelleri(sonuc.data);
+      const engeller = new Katalog(m).setEngelleri(sonuc.data, false, { stokGerekli: false });
       if (aday.durum === 'yayinda' && engeller.length) throw new DogrulamaHatasi(engeller);
       if (mevcut) Object.assign(mevcut, sonuc.data);
       else m.setler.push({ ...sonuc.data, id: benzersizKod(aday.ad, new Set(m.setler.map((x) => x.id))) });
@@ -48,7 +47,7 @@ const yeni = secim === 'yeni';
 const s = taslak ?? (yeni ? BOS_SET : m.setler.find((x) => x.id === secim));
 const engeller = s && !yeni ? k.setEngelleri(s) : [];
 const DURUM_RENGI: Record<string, string> = { yayinda: 'yesil', taslak: 'gri', gizli: 'turuncu' };
-const vitrinDisi = m.setler.filter((x) => x.durum === 'yayinda' && k.setEngelleri(x).length > 0).length;
+const vitrinDisi = m.setler.filter((x) => x.durum === 'yayinda' && k.setEngelleri(x, false, { stokGerekli: false }).length > 0).length;
 const setSatilabilirAdet = (setKaydi: UrunSeti) => {
   if (!setKaydi.kalemler.length) return 0;
   const adetler = setKaydi.kalemler.map((kalem) => {
@@ -96,7 +95,7 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
           <div class="y-alan">
             <label>Yayın durumu</label>
             <select name="durum">
-              <option value="yayinda" selected={s.durum === 'yayinda'}>Yayında (Tüm ürünleri stoktaysa müşteriye açık)</option>
+              <option value="yayinda" selected={s.durum === 'yayinda'}>Yayında (Stok gelince satın alınabilir)</option>
               <option value="taslak" selected={s.durum === 'taslak'}>Taslak (Yalnız panelde hazırlık aşamasında)</option>
               <option value="gizli" selected={s.durum === 'gizli'}>Gizli (Mağaza listelerinde görünmez)</option>
             </select>
@@ -109,18 +108,44 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
             <span class="y-etiket">Setteki ürünler (en az 2 ürün)</span>
             <small class="muted">Her ürünün birim fiyatı ve mevcut depo stoğu yanında gösterilir.</small>
           </div>
-          <div class="y-tekrar">
-            {s.kalemler.map((x) => (
-              <div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-                <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat} selected={u.id === x.urunId}>{u.kisaAd} — {formatTL(u.fiyat)} (Stok: {u.stok}{u.durum !== 'yayinda' ? ' · ' + YAYIN_ADLARI[u.durum] : ''})</option>)}</select>
-                <input class="y-girdi" name="kalem_adet" type="number" step="1" min="1" value={x.adet} aria-label="Adet" />
-              </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div>
-            ))}
-            <template><div class="y-tekrar__satir"><div class="y-tekrar__alanlar y-tekrar__alanlar--yan">
-              <select class="y-girdi" name="kalem_urun"><option value="">Ürün seçin</option>{m.urunler.map((u) => <option value={u.id} data-fiyat={u.fiyat}>{u.kisaAd} — {formatTL(u.fiyat)} (Stok: {u.stok}{u.durum !== 'yayinda' ? ' · ' + YAYIN_ADLARI[u.durum] : ''})</option>)}</select>
-              <input class="y-girdi" name="kalem_adet" inputmode="numeric" value="1" aria-label="Adet" />
-            </div><button type="button" class="y-sil-btn" data-tekrar-sil aria-label="Ürünü setten çıkar"><Ikon ad="cop" boyut={18} /></button></div></template>
-            <button type="button" class="y-ekle-btn" data-tekrar-ekle>+ Sete ürün ekle</button>
+          <div class="y-izgara y-izgara--2">
+            {m.urunler.map((u) => {
+              const seciliKalem = s.kalemler.find((k) => k.urunId === u.id);
+              const g = u.gorseller[0];
+              return (
+                <div class:list={['y-set-urun-secim', { 'is-secili': Boolean(seciliKalem) }]} data-set-urun-satir>
+                  <label class="y-set-urun-secim__etiket">
+                    <input
+                      type="checkbox"
+                      name="kalem_sec"
+                      value={u.id}
+                      checked={Boolean(seciliKalem)}
+                      data-fiyat={u.fiyat}
+                      data-set-urun-kutu
+                    />
+                    {g && <img src={g.src} alt="" width="38" height="38" loading="lazy" />}
+                    <span>
+                      <strong>{u.marka} {u.kisaAd}</strong>
+                      <small>{formatTL(u.fiyat)} · Stok: {u.stok}{u.durum !== 'yayinda' ? ' · ' + YAYIN_ADLARI[u.durum] : ''}</small>
+                    </span>
+                  </label>
+                  <label class="y-set-urun-secim__adet">
+                    <span>Adet</span>
+                    <input
+                      class="y-girdi"
+                      name={'kalem_adet_' + u.id}
+                      type="number"
+                      step="1"
+                      min="1"
+                      max={u.maxAdet}
+                      value={seciliKalem?.adet ?? 1}
+                      data-set-urun-adet
+                      aria-label={`${u.kisaAd} set adedi`}
+                    />
+                  </label>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -171,9 +196,9 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
   </div> : <>
     <div class="y-metrics y-metrics--finans">
       <div class="y-metric"><PIkon ad="set" /><span>Toplam set</span><strong>{m.setler.length}</strong><small>Katalogdaki set kayıtları</small></div>
-      <div class="y-metric y-metric--yesil"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.setler.filter((x) => x.durum === 'yayinda').length - vitrinDisi}</strong><small>Müşteri görüyor ve alabilir</small></div>
+      <div class="y-metric y-metric--yesil"><PIkon ad="tik-daire" /><span>Yayında</span><strong>{m.setler.filter((x) => x.durum === 'yayinda').length - vitrinDisi}</strong><small>Müşteri vitrinde görebiliyor</small></div>
       <div class="y-metric"><PIkon ad="kalem" /><span>Taslak / gizli</span><strong>{m.setler.filter((x) => x.durum !== 'yayinda').length}</strong><small>Hazırlık veya yayın dışı</small></div>
-      <div class:list={['y-metric', { 'y-metric--kirmizi': vitrinDisi > 0 }]}><PIkon ad="uyari" /><span>Vitrin dışında</span><strong>{vitrinDisi}</strong><small>Yayında ama bileşen stoğu/durumu eksik</small></div>
+      <div class:list={['y-metric', { 'y-metric--kirmizi': vitrinDisi > 0 }]}><PIkon ad="uyari" /><span>Vitrin dışında</span><strong>{vitrinDisi}</strong><small>Bileşen veya fiyat ayarı eksik</small></div>
     </div>
     {m.setler.length ? <section class="y-kart">
       <div class="y-kart__bas"><div><h2><PIkon ad="set" /> Set listesi</h2><p class="y-kart__alt">Set fiyatı, ayrı ayrı alındığındaki tutar, müşteri kazancı ve bileşen stoklarına göre satılabilir set adedi.</p></div></div>
@@ -182,6 +207,7 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
         const f = k.setFiyati(x);
         const setEngelListesi = k.setEngelleri(x);
         const engel = x.durum === "yayinda" && setEngelListesi.length > 0;
+        const vitrinde = x.durum === 'yayinda' && k.setEngelleri(x, false, { stokGerekli: false }).length === 0;
         const satilabilir = setSatilabilirAdet(x);
         const gorsel = x.gorsel?.src ?? f.dokum[0]?.urun.gorseller[0]?.src;
         return <tr>
@@ -207,7 +233,7 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
           <td data-etiket="Ayrı ayrı" class="y-sayi y-nowrap"><s class="muted">{formatTL(f.ayriAyri)}</s></td>
           <td data-etiket="Set fiyatı" class="y-sayi y-nowrap"><strong>{formatTL(f.fiyat)}</strong></td>
           <td data-etiket="Tasarruf" class="y-sayi y-nowrap"><span class="y-chip y-chip--yesil">{formatTL(f.kazanc)}</span></td>
-          <td data-etiket="Durum"><span class:list={['y-chip', engel ? 'y-chip--kirmizi' : 'y-chip--' + (DURUM_RENGI[x.durum] ?? 'gri')]}>{engel ? "Vitrin dışında" : YAYIN_ADLARI[x.durum]}</span></td>
+          <td data-etiket="Durum"><span class:list={['y-chip', engel ? 'y-chip--kirmizi' : 'y-chip--' + (DURUM_RENGI[x.durum] ?? 'gri')]}>{engel ? (vitrinde ? 'Stok bekliyor' : 'Vitrin dışında') : YAYIN_ADLARI[x.durum]}</span></td>
           <td class="y-islem"><a class="btn btn--cizgi btn--kucuk" href={"?duzenle=" + x.id}><PIkon ad="kalem" boyut={16} />Düzenle</a></td>
         </tr>;
       })}
@@ -215,3 +241,64 @@ const seciliSatilabilir = s ? setSatilabilirAdet(s) : 0;
     </section> : <p class="y-bos-satir"><PIkon ad="set" boyut={20} />Henüz set yok. “Yeni set” ile ilk setinizi oluşturun.</p>}
   </>}
 </Yonetim>
+
+<style>
+  .y-set-urun-secim {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border: 1.5px solid var(--y-border, #e5dec9);
+    border-radius: 10px;
+    background: #fff;
+    transition: border-color .15s, background-color .15s;
+  }
+  .y-set-urun-secim:has(input[type="checkbox"]:checked) {
+    border-color: #a71931;
+    background: #fff8f9;
+  }
+  .y-set-urun-secim__etiket {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 1;
+    min-width: 0;
+    cursor: pointer;
+  }
+  .y-set-urun-secim__etiket img {
+    width: 38px;
+    height: 38px;
+    object-fit: contain;
+    border-radius: 7px;
+    border: 1px solid var(--line, #e6dccf);
+    background: #fff;
+    flex: none;
+  }
+  .y-set-urun-secim__etiket span {
+    display: grid;
+    min-width: 0;
+  }
+  .y-set-urun-secim__etiket strong {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+  .y-set-urun-secim__etiket small {
+    font-size: 11.5px;
+    color: var(--y-muted, #6e6256);
+  }
+  .y-set-urun-secim__adet {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    color: var(--y-muted, #6e6256);
+    flex: none;
+  }
+  .y-set-urun-secim__adet input {
+    width: 54px;
+    min-height: 32px;
+    padding: 4px 6px;
+    text-align: center;
+  }
+</style>

@@ -1,17 +1,352 @@
 ---
+import SetListesi from '../SetListesi.astro';
 import Ikon from '../Ikon.astro';
-import SetKarti from '../SetKarti.astro';
 const k = Astro.locals.katalog;
-const setler = k.tumSetler().filter((s) => s.oneCikan);
+const setler = k.vitrinSetleri().filter((s) => s.oneCikan && k.setFiyati(s).kazanc > 0);
+const kayar = setler.length > 1;
 ---
 {setler.length > 0 && (
-  <section class="bolum" aria-labelledby="set-baslik">
+  <section class="bolum set-vitrini" aria-labelledby="set-baslik" aria-roledescription={kayar ? 'karusel' : undefined} data-set-vitrini={kayar || undefined}>
     <div class="container">
       <div class="bolum-bas">
-        <div><p class="eyebrow eyebrow--altin">Birlikte alın, kazanın</p><h2 id="set-baslik">{k.anaSayfa.setlerBaslik}</h2></div>
-        <a class="bolum-bas__link" href="/setler">Tüm setler <Ikon ad="sag" boyut={16} /></a>
+        <h2 id="set-baslik">{k.anaSayfa.setlerBaslik}</h2>
+        <a class="bolum-bas__link" href="/setler">Tüm setleri gör</a>
       </div>
-      <div class="set-grid">{setler.slice(0, 2).map((s) => <SetKarti set={s} />)}</div>
+      {kayar ? (
+        <div class="set-vitrini__sahne" data-set-sahne>
+          <button type="button" class="set-vitrini__ok set-vitrini__ok--sol" aria-label="Önceki set" aria-controls="set-vitrini-ray" data-set-onceki hidden>
+            <Ikon ad="sol" boyut={22} />
+          </button>
+          <div class="set-vitrini__ray" id="set-vitrini-ray" tabindex="0" aria-label="Set kartları" data-set-ray>
+            {setler.map((set, i) => (
+              <div class="set-vitrini__slayt" role="group" aria-roledescription="slayt" aria-label={`${i + 1} / ${setler.length}: ${set.ad}`} data-set-slayt>
+                <SetListesi setler={[set]} baslikSeviyesi="h3" />
+              </div>
+            ))}
+          </div>
+          <button type="button" class="set-vitrini__ok set-vitrini__ok--sag" aria-label="Sonraki set" aria-controls="set-vitrini-ray" data-set-sonraki hidden>
+            <Ikon ad="sag" boyut={22} />
+          </button>
+        </div>
+      ) : <SetListesi {setler} baslikSeviyesi="h3" />}
     </div>
   </section>
 )}
+
+<style>
+  .set-vitrini { background: #fff0eb; padding-block: clamp(24px, 4vw, 46px); }
+  .set-vitrini .bolum-bas { align-items: center; flex-wrap: wrap; gap: 8px 18px; }
+  .set-vitrini .bolum-bas__link { color: #9f2034; font-weight: 700; }
+  .set-vitrini__sahne {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+  .set-vitrini__ray {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    border-radius: var(--r-lg);
+  }
+  .set-vitrini__ray::-webkit-scrollbar { display: none; }
+  .set-vitrini__slayt {
+    flex: 0 0 100%;
+    min-width: 100%;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  .set-vitrini__ok {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 4;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    border: 1.5px solid #e2b4ba;
+    background: rgba(255, 255, 255, .96);
+    color: #8d1930;
+    box-shadow: 0 6px 18px rgba(141, 25, 48, .16);
+    transition: background-color .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
+  }
+  .set-vitrini__ok[hidden] { display: none; }
+  .set-vitrini__ok--sol { left: -16px; }
+  .set-vitrini__ok--sag { right: -16px; }
+  .set-vitrini__ok:hover {
+    background: #a71931;
+    border-color: #a71931;
+    color: #fff;
+    transform: translateY(-50%) scale(1.06);
+  }
+  .set-vitrini__ok:focus-visible {
+    outline: 2px solid #a71931;
+    outline-offset: 2px;
+  }
+  @media (max-width: 760px) {
+    .set-vitrini__ok { width: 38px; height: 38px; }
+    .set-vitrini__ok--sol { left: 6px; }
+    .set-vitrini__ok--sag { right: 6px; }
+  }
+  @media (min-width: 1320px) {
+    .set-vitrini__ok--sol { left: -24px; }
+    .set-vitrini__ok--sag { right: -24px; }
+  }
+</style>
+
+<script>
+  const azHareket = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const OTOMATIK_SURE = 6_800;
+
+  for (const vitrin of document.querySelectorAll<HTMLElement>('[data-set-vitrini]')) {
+    const sahne = vitrin.querySelector<HTMLElement>('[data-set-sahne]');
+    const ray = vitrin.querySelector<HTMLElement>('[data-set-ray]');
+    const oncekiBtn = vitrin.querySelector<HTMLButtonElement>('[data-set-onceki]');
+    const sonrakiBtn = vitrin.querySelector<HTMLButtonElement>('[data-set-sonraki]');
+    const slaytlar = [...vitrin.querySelectorAll<HTMLElement>('[data-set-slayt]')];
+    const toplam = slaytlar.length;
+    if (!sahne || !ray || toplam < 2) continue;
+
+    // Son slayttan ilk slayta da sağa doğru kesintisiz banner gibi akması için ilk slaydın kopyası
+    let klonVar = false;
+    if (!azHareket) {
+      const klon = slaytlar[0]!.cloneNode(true) as HTMLElement;
+      klon.removeAttribute('role');
+      klon.removeAttribute('aria-roledescription');
+      klon.removeAttribute('aria-label');
+      klon.removeAttribute('data-set-slayt');
+      klon.dataset.setKlon = '';
+      klon.setAttribute('aria-hidden', 'true');
+      klon.querySelectorAll<HTMLElement>('[id]').forEach((el) => el.removeAttribute('id'));
+      klon.querySelectorAll<HTMLElement>('a, button').forEach((el) => { el.tabIndex = -1; });
+      ray.append(klon);
+      klonVar = true;
+    }
+
+    let aktif = 0;
+    let hedefIndeks: number | undefined;
+    let klonaGidiyor = false;
+    let otoZaman: number | undefined;
+    let sifirlaZaman: number | undefined;
+    let kaydirBitisZaman: number | undefined;
+    let uzerinde = false;
+    let odakta = false;
+    let dokunuyor = false;
+    let gorunur = !('IntersectionObserver' in window);
+
+    const guncelle = (indeks: number) => {
+      aktif = ((indeks % toplam) + toplam) % toplam;
+      slaytlar.forEach((s, i) => {
+        const secili = i === aktif;
+        s.querySelectorAll<HTMLElement>('a, button').forEach((el) => {
+          el.tabIndex = secili ? 0 : -1;
+        });
+      });
+    };
+
+    const klondanSifiraAl = () => {
+      window.clearTimeout(sifirlaZaman);
+      if (!klonVar || !ray.clientWidth) return;
+      if (Math.round(ray.scrollLeft / ray.clientWidth) >= toplam) {
+        ray.scrollTo({ left: 0, behavior: 'instant' });
+      }
+      klonaGidiyor = false;
+    };
+
+    const git = (istenen: number, yon?: 'ileri' | 'geri') => {
+      const g = ray.clientWidth;
+      if (!g) return;
+      window.clearTimeout(sifirlaZaman);
+
+      if (!klonVar) {
+        const yeni = ((istenen % toplam) + toplam) % toplam;
+        guncelle(yeni);
+        hedefIndeks = undefined;
+        ray.scrollTo({ left: yeni * g, behavior: 'auto' });
+        return;
+      }
+
+      const yumusakKaydir = (hedefSol: number, onceSifirla?: number) => {
+        if (onceSifirla !== undefined) {
+          ray.scrollTo({ left: onceSifirla, behavior: 'instant' });
+          requestAnimationFrame(() => {
+            ray.scrollTo({ left: hedefSol, behavior: 'smooth' });
+          });
+        } else {
+          ray.scrollTo({ left: hedefSol, behavior: 'smooth' });
+        }
+      };
+
+      let baslangicSifirla: number | undefined;
+      if (yon !== 'geri' && (klonaGidiyor || ray.scrollLeft >= (toplam - 0.5) * g)) {
+        baslangicSifirla = Math.max(0, ray.scrollLeft - toplam * g);
+        klonaGidiyor = false;
+      }
+
+      if (yon === 'ileri' && aktif === toplam - 1 && baslangicSifirla === undefined) {
+        guncelle(0);
+        hedefIndeks = 0;
+        klonaGidiyor = true;
+        yumusakKaydir(toplam * g);
+        sifirlaZaman = window.setTimeout(klondanSifiraAl, 650);
+        return;
+      }
+
+      if (yon === 'geri' && aktif === 0) {
+        const klonKonumu = ray.scrollLeft < 0.5 * g ? toplam * g : undefined;
+        klonaGidiyor = false;
+        guncelle(toplam - 1);
+        hedefIndeks = toplam - 1;
+        yumusakKaydir((toplam - 1) * g, klonKonumu);
+        return;
+      }
+
+      const yeni = ((istenen % toplam) + toplam) % toplam;
+      klonaGidiyor = false;
+      guncelle(yeni);
+      hedefIndeks = yeni;
+      yumusakKaydir(yeni * g, baslangicSifirla);
+    };
+
+    const duraklatildiMi = () => uzerinde || odakta || dokunuyor || !gorunur || document.hidden;
+
+    const durdur = () => {
+      window.clearTimeout(otoZaman);
+      otoZaman = undefined;
+    };
+
+    const planla = () => {
+      durdur();
+      if (azHareket || duraklatildiMi()) return;
+      otoZaman = window.setTimeout(() => {
+        if (!duraklatildiMi()) git(aktif + 1, 'ileri');
+        planla();
+      }, OTOMATIK_SURE);
+    };
+
+    let raf = 0;
+    ray.addEventListener('scroll', () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const g = ray.clientWidth;
+        if (!g) return;
+        const ham = Math.round(ray.scrollLeft / g);
+        const gercek = ((ham % toplam) + toplam) % toplam;
+        if (hedefIndeks !== undefined) {
+          const beklenenHam = klonaGidiyor ? toplam : hedefIndeks;
+          if (Math.abs(ray.scrollLeft - beklenenHam * g) < 2) {
+            hedefIndeks = undefined;
+            if (klonaGidiyor) klondanSifiraAl();
+          }
+        } else if (gercek !== aktif) {
+          guncelle(gercek);
+        }
+      });
+
+      window.clearTimeout(kaydirBitisZaman);
+      kaydirBitisZaman = window.setTimeout(() => {
+        hedefIndeks = undefined;
+        klondanSifiraAl();
+      }, 180);
+    }, { passive: true });
+
+    ray.addEventListener('scrollend', () => {
+      window.clearTimeout(kaydirBitisZaman);
+      hedefIndeks = undefined;
+      klondanSifiraAl();
+    });
+
+    ray.addEventListener('pointerdown', (e) => {
+      hedefIndeks = undefined;
+      if (e.pointerType !== 'mouse') {
+        dokunuyor = true;
+        durdur();
+      }
+    }, { passive: true });
+
+    const dokunmaBitir = () => {
+      if (!dokunuyor) return;
+      dokunuyor = false;
+      planla();
+    };
+    window.addEventListener('pointerup', dokunmaBitir, { passive: true });
+    window.addEventListener('pointercancel', dokunmaBitir, { passive: true });
+
+    sahne.addEventListener('pointerenter', (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      uzerinde = true;
+      durdur();
+    });
+
+    sahne.addEventListener('pointerleave', (e) => {
+      if (e.pointerType && e.pointerType !== 'mouse') return;
+      uzerinde = false;
+      planla();
+    });
+
+    sahne.addEventListener('focusin', () => {
+      odakta = true;
+      durdur();
+    });
+
+    sahne.addEventListener('focusout', (e) => {
+      if (e.relatedTarget instanceof Node && sahne.contains(e.relatedTarget)) return;
+      odakta = false;
+      planla();
+    });
+
+    oncekiBtn?.addEventListener('click', () => {
+      git(aktif - 1, 'geri');
+      planla();
+    });
+
+    sonrakiBtn?.addEventListener('click', () => {
+      git(aktif + 1, 'ileri');
+      planla();
+    });
+
+    ray.addEventListener('keydown', (e) => {
+      if (e.target !== ray) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        git(aktif + 1, 'ileri');
+        planla();
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        git(aktif - 1, 'geri');
+        planla();
+      }
+    });
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) durdur();
+      else planla();
+    });
+
+    if ('IntersectionObserver' in window) {
+      new IntersectionObserver(([girdi]) => {
+        gorunur = Boolean(girdi?.isIntersecting);
+        if (gorunur) planla();
+        else durdur();
+      }, { threshold: 0.2 }).observe(vitrin);
+    }
+
+    window.addEventListener('resize', () => {
+      if (!ray.clientWidth) return;
+      klonaGidiyor = false;
+      hedefIndeks = undefined;
+      ray.scrollTo({ left: aktif * ray.clientWidth, behavior: 'instant' });
+    }, { passive: true });
+
+    if (oncekiBtn) oncekiBtn.hidden = false;
+    if (sonrakiBtn) sonrakiBtn.hidden = false;
+    guncelle(0);
+    planla();
+  }
+</script>

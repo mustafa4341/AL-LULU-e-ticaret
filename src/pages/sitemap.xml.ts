@@ -8,7 +8,7 @@ export const GET: APIRoute = async ({ locals, site }) => {
   const kok = (site ?? new URL(k.site.url)).origin;
 
   const kayitlar = [
-    ...['/', '/urunler', '/bilgi', ...(k.tumSetler().length ? ['/setler'] : [])].map((yol) => ({ yol, gorseller: [] as string[], lastmod: undefined as string | undefined })),
+    ...['/', '/urunler', '/bilgi', ...(k.vitrinSetleri().length ? ['/setler'] : [])].map((yol) => ({ yol, gorseller: [] as string[], lastmod: undefined as string | undefined })),
     ...k.gorunurKategoriler().filter((kat) => k.kategoriUrunleri(kat.id).length).map((kat) => ({ yol: `/kategori/${kat.id}`, gorseller: [] as string[], lastmod: undefined })),
     // Ürünlerde son fiyat değişikliğinin günü (sayfadaki fiyat o gün değişti); güvenilir tarih yoksa yazılmaz (denetim AUD-028)
     ...k.tumUrunler().map((u) => ({

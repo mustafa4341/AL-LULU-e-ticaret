@@ -1,0 +1,54 @@
+---
+import Fiyat from '../Fiyat.astro';
+import Ikon from '../Ikon.astro';
+import { markaliUrunAdi } from '../../lib/urunKimlik';
+import type { IkonAdi } from '../../lib/sema';
+
+const k = Astro.locals.katalog;
+const heroId = k.anaSayfa.hero.urunId;
+const teklifler: { id: string; ton: string; etiket?: string; ikon?: IkonAdi }[] = [
+  { id: heroId, ton: 'kil' },
+  { id: 'fissler-buhar-aparati-22', etiket: 'Buharda pişirme', ton: 'zeytin', ikon: 'tencere' },
+];
+---
+<div class="container urun-bannerlari" aria-label="Vitrindeki ürünler">
+  {teklifler.map(({ id, ton, etiket, ikon }, i) => {
+    const urun = k.urunBul(id);
+    if (!urun || (i > 0 && id === teklifler[0].id)) return null;
+    const gorsel = k.anaGorsel(urun);
+    const fiyat = k.fiyatBilgisi(urun);
+    const stokta = k.stoktaMi(urun);
+    const kategori = k.kategoriBul(urun.kategoriler[0]!);
+    return (
+      <article class:list={['urun-banner', `urun-banner--${ton}`]}>
+        <div class="urun-banner__metin">
+          <p class="urun-banner__etiket"><Ikon ad={ikon ?? kategori?.ikon ?? 'kutu'} boyut={17} />{etiket ?? kategori?.ad ?? urun.marka}</p>
+          <h2><a href={`/urun/${urun.id}`}>{markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd })}</a></h2>
+          <Fiyat bilgi={fiyat} boyut="orta" />
+          <p class="urun-banner__durum">{stokta ? k.rozetler(urun).serit ?? 'Stokta' : 'Şu an stokta yok'}</p>
+          <span class="urun-banner__incele">Ürünü incele</span>
+        </div>
+        {gorsel && <img src={gorsel.src} alt="" width="250" height="250" loading="lazy" decoding="async" />}
+      </article>
+    );
+  })}
+</div>
+
+<style>
+  .urun-bannerlari { display: grid; gap: 12px; padding-block: 0 18px; }
+  .urun-banner { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 36%); align-items: center; gap: 4px; border: 1px solid #e7c9bb; border-radius: var(--r-lg); overflow: clip; color: #522518; background: #f9e7db; }
+  .urun-banner--zeytin { color: #303b25; border-color: #d6ddc5; background: #edf1e4; }
+  .urun-banner__metin { padding: clamp(14px, 3vw, 28px); padding-inline-end: 0; }
+  .urun-banner h2 { margin: 6px 0 8px; font-size: clamp(1.5rem, 3vw, 2.1rem); line-height: 1.05; color: inherit; }
+  .urun-banner h2 a { color: inherit; text-decoration: none; }
+  .urun-banner h2 a::after { content: ''; position: absolute; inset: 0; border-radius: var(--r-lg); }
+  .urun-banner:focus-within { outline: 2px solid currentColor; outline-offset: 3px; }
+  .urun-banner__etiket { display: flex; align-items: center; gap: 6px; font-size: .875rem; font-weight: 700; }
+  .urun-banner__durum { margin-block: 2px 8px; font-size: .875rem; }
+  .urun-banner :global(.fiyat) { color: #a71931; font-size: clamp(1.375rem, 2.5vw, 1.75rem); }
+  .urun-banner__incele { display: inline-block; font-size: .875rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
+  .urun-banner img { width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; padding: 8%; mix-blend-mode: multiply; transition: transform .25s ease; }
+  .urun-banner:hover img { transform: scale(1.04); }
+  @media (min-width: 700px) { .urun-bannerlari { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (prefers-reduced-motion: reduce) { .urun-banner img { transition: none; } }
+</style>

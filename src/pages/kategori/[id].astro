@@ -2,8 +2,7 @@
 import Base from '../../layouts/Base.astro';
 import UrunListesi from '../../components/UrunListesi.astro';
 import { KATEGORI_REHBERI } from '../../lib/kategoriRehberi';
-import { metaAciklama } from '../../lib/seo';
-import { markaliUrunAdi } from '../../lib/urunKimlik';
+import { katalogSayfasiVerisi, metaAciklama } from '../../lib/seo';
 const k = Astro.locals.katalog;
 const kategori = k.gorunurKategoriler().find((x) => x.id === Astro.params.id);
 if (!kategori) return Astro.rewrite('/404');
@@ -11,26 +10,10 @@ const urunler = k.kategoriUrunleri(kategori.id);
 const rehber = KATEGORI_REHBERI[kategori.id];
 const kok = Astro.site ?? new URL(k.site.url);
 const url = new URL(`/kategori/${kategori.id}`, kok).href;
-const yapisalVeri = urunler.length ? {
-  '@context': 'https://schema.org',
-  '@type': 'CollectionPage',
-  '@id': `${url}#kategori`,
-  url,
-  name: kategori.ad,
-  description: kategori.aciklama || undefined,
-  inLanguage: 'tr-TR',
-  mainEntity: {
-    '@type': 'ItemList',
-    itemListElement: urunler.map((u, i) => ({
-      '@type': 'ListItem',
-      position: i + 1,
-      name: markaliUrunAdi(u),
-      url: new URL(`/urun/${u.id}`, kok).href,
-    })),
-  },
-} : undefined;
+const aciklama = metaAciklama(kategori.aciklama || rehber?.metin || kategori.ad);
+const yapisalVeri = urunler.length ? katalogSayfasiVerisi(url, kategori.ad, aciklama, urunler) : undefined;
 ---
-<Base baslik={`${kategori.ad} | ${k.site.ad}`} aciklama={metaAciklama(kategori.aciklama || rehber?.metin || kategori.ad)} aktif={kategori.id}
+<Base baslik={`${kategori.ad} | ${k.site.ad}`} {aciklama} aktif={kategori.id}
   gorsel={urunler.find((u) => u.gorseller.length)?.gorseller[0]?.src} {yapisalVeri}
   indekslenmesin={urunler.length === 0}
   kirinti={[['Ürünler', '/urunler'], [kategori.ad, `/kategori/${kategori.id}`]]}>

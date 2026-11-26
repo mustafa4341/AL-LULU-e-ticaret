@@ -467,6 +467,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 /* ---------- Set kartı ---------- */
 .set-grid { display: grid; gap: 14px; }
 @media (min-width: 800px) { .set-grid { grid-template-columns: repeat(2, minmax(0,1fr)); gap: 20px; } }
+.set-grid--tek { grid-template-columns: minmax(0, 1fr); }
 .set-kart { display: grid; grid-template-columns: minmax(0,1fr); background: var(--surface); border: 1px solid #EAD49B; border-radius: var(--r-lg); overflow: hidden; transition: box-shadow .2s; }
 .set-kart:hover { box-shadow: var(--shadow); }
 @media (min-width: 560px) { .set-kart { grid-template-columns: 200px minmax(0,1fr); } }
@@ -633,6 +634,7 @@ ul, ol { margin: 0; padding: 0; list-style: none; }
 .urun-rozetler { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .urun-fiyat { margin-top: 12px; padding: 12px 14px; border-radius: var(--r); background: var(--surface); border: 1.5px solid var(--line); }
 .urun-fiyat:has(.fiyat-kutu--indirimli) { border-color: var(--indirim); background: #FFFBFB; }
+.urun-fiyat:has(.fiyat-kutu--dengeli.fiyat-kutu--vurgulu) { border-color: #d69aa3; background: #fffbfb; }
 .urun-fiyat__alt { margin-top: 6px; font-size: 13px; color: var(--ink-2); }
 .urun-ust-satir { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
 .urun-model { margin-top: 4px; font-size: 13px; color: var(--ink-3); }
@@ -1177,6 +1179,7 @@ mark.yer { background: #EEF3FA; color: #1E3A5F; padding: 0 4px; border-radius: 4
 .kart--yatay .kart__govde { padding: 14px 14px 2px; justify-content: center; }
 .kart--yatay .kart__ad { font-size: 15.5px; -webkit-line-clamp: 3; min-height: 0; }
 .kart--yatay .kart__ekle { grid-column: 2; margin: 8px 14px 14px; min-height: 44px; background: var(--sepet); color: #fff; }
+.kart--yatay .kart__ekle:disabled { background: var(--surface-2); border-color: var(--line); color: var(--ink-3); }
 .kart--yatay .kart__ekle:hover:not(:disabled) { background: var(--sepet-h); }
 @media (min-width: 700px) { .kart--yatay { max-width: 820px; grid-template-columns: 320px minmax(0, 1fr); } .kart--yatay .kart__govde { padding: 22px 22px 4px; } .kart--yatay .kart__ekle { margin: 8px 22px 22px; justify-self: start; padding-inline: 28px; } }
 
@@ -1277,7 +1280,6 @@ mark.yer { background: #EEF3FA; color: #1E3A5F; padding: 0 4px; border-radius: 4
 .siparis-kalem__eski { font-size: 12.5px; font-weight: 500; color: var(--ink-3); }
 
 /* Ana sayfa "Ne arıyorsunuz?" kategori bölümü: telefonda alt menüdeki Kategoriler butonu yeterli */
-@media (max-width: 899px) { .kategori-bolum { display: none; } }
 
 /* Vitrin görseli her ekran genişliğinde kutunun içinde kalsın (yüzde yükseklik bazı genişliklerde kutuya göre çözülmüyordu) */
 .hero__vitrin img { position: absolute; inset: 7% 8%; width: auto; height: auto; max-width: none; margin: 0; object-fit: contain; }

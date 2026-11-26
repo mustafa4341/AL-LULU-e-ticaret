@@ -117,7 +117,7 @@ export const BOLUM_ADLARI: Record<(typeof BOLUMLER)[number], string> = {
   firsatlar: 'Fırsat ürünleri (geri sayımlı)',
   guven: 'Güvence şeridi',
   kategoriler: 'Kategoriler',
-  oneCikanlar: 'Öne çıkan ürünler',
+  oneCikanlar: 'Öne çıkanlar, çok satanlar ve bütçe seçkisi',
   setler: 'Setler & fırsatlar',
   amiralHikaye: 'Amiral ürün hikâyesi',
   nedenBiz: 'Neden biz?',

@@ -1,12 +1,45 @@
 ---
 import Base from '../layouts/Base.astro';
 import UrunListesi from '../components/UrunListesi.astro';
+import { formatTL } from '../lib/fiyat';
+import { BUTCE_ESIGI } from '../lib/katalog';
+import { katalogSayfasiVerisi } from '../lib/seo';
+
 const k = Astro.locals.katalog;
+const indirimliler = k.indirimliUrunler();
+const firsatlar = [...new Set([...indirimliler, ...k.firsatUrunleri()])];
+const secimler = [
+  { id: 'indirim', ad: 'İndirimdekiler', urunler: indirimliler },
+  { id: 'firsat', ad: 'Fırsat ürünleri', urunler: firsatlar },
+  { id: 'cok-satan', ad: 'Çok satanlar', urunler: k.cokSatanUrunler() },
+  { id: 'butce', ad: `${formatTL(BUTCE_ESIGI)} ve altı`, urunler: k.butceUrunleri() },
+];
+const secim = secimler.find(({ id }) => id === Astro.url.searchParams.get('secim'));
+const aciklama = 'Fissler düdüklü tencereleri ve aksesuarları, Tefal tavaları, doğrayıcıları ve sofra gereçlerini inceleyin.';
+const baslik = secim?.ad ?? 'Tüm mutfak ve sofra ürünleri';
+const urunler = secim?.urunler ?? k.tumUrunler();
+const url = new URL('/urunler', Astro.site ?? k.site.url).href;
+const yapisalVeri = !secim && urunler.length ? katalogSayfasiVerisi(url, baslik, aciklama, urunler) : undefined;
+const filtreler = secimler.filter((s) => s === secim || (s.urunler.length > 0 && (s.id !== 'firsat' || firsatlar.length > indirimliler.length)));
 ---
-<Base baslik={`Tüm ürünler | ${k.site.ad}`} aciklama={`${k.site.ad}'daki tüm orijinal, faturalı ve garantili mutfak ürünleri.`} aktif="urunler" kirinti={[['Tüm ürünler', '/urunler']]}>
+<Base baslik={`${baslik} | ${k.site.ad}`} {aciklama} {yapisalVeri} aktif="urunler" indekslenmesin={Boolean(secim)} kirinti={[['Tüm ürünler', '/urunler']]}>
   <div class="container">
     <nav aria-label="Konum"><ol class="kirinti"><li><a href="/">Ana sayfa</a></li><li aria-current="page">Tüm ürünler</li></ol></nav>
-    <header class="liste-bas"><h1>Tüm ürünler</h1><p>Az ama özenle seçilmiş ürünler. Hepsi orijinal, faturalı ve garantili.</p></header>
-    <UrunListesi urunler={k.tumUrunler()} aktif="urunler" />
+    <header class="liste-bas"><h1>{baslik}</h1>{!secim && <p>{aciklama}</p>}</header>
+    {filtreler.length > 0 && (
+      <nav class="secim-filtreleri" aria-label="Alışveriş seçimleri">
+        <a class:list={['cat-pill', { 'is-active': !secim }]} aria-current={!secim ? 'page' : undefined} href="/urunler">Tüm ürünler</a>
+        {filtreler.map((s) => (
+          <a class:list={['cat-pill', { 'is-active': s === secim }]} aria-current={s === secim ? 'page' : undefined} href={`/urunler?secim=${s.id}`}>{s.ad}</a>
+        ))}
+      </nav>
+    )}
+    {secim && !urunler.length ? (
+      <div class="bos-durum"><p>Bu seçimde şu anda ürün bulunmuyor.</p><a class="btn btn--sepet" href="/urunler">Tüm ürünleri gör</a></div>
+    ) : <UrunListesi {urunler} aktif={secim?.id ?? 'urunler'} />}
   </div>
 </Base>
+
+<style>
+  .secim-filtreleri { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 0 16px; }
+</style>

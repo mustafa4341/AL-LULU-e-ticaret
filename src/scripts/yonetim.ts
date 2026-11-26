@@ -537,6 +537,13 @@ document.querySelectorAll<HTMLInputElement>('[data-gorsel-sec]').forEach((input)
 
 const urunForm = document.querySelector<HTMLFormElement>('form[data-onizleme-form="urun"]');
 if (urunForm) {
+  const oncekiGirdi = urunForm.querySelector<HTMLInputElement>('[data-onceki-girdi]');
+  const kampanyaGirdi = urunForm.querySelector<HTMLInputElement>('[data-kampanya-girdi]');
+  oncekiGirdi?.addEventListener('input', () => {
+    const fiyat = sayiCoz(String(new FormData(urunForm).get('fiyat') ?? '')) ?? 0;
+    const onceki = sayiCoz(oncekiGirdi.value) ?? 0;
+    if (kampanyaGirdi && onceki > fiyat) kampanyaGirdi.checked = true;
+  });
   const duzenle = () => {
     const f = new FormData(urunForm);
     const adres = urunForm.querySelector('[data-url-onizleme]');
@@ -544,8 +551,16 @@ if (urunForm) {
     const ozet = urunForm.querySelector('[data-indirim-onizleme]');
     if (ozet) {
       const fiyat = sayiCoz(String(f.get('fiyat') ?? '')) ?? 0;
+      const onceki = sayiCoz(String(f.get('onceki_fiyat') ?? '')) ?? 0;
+      const kampanyaAcik = Boolean(f.get('kampanya'));
       const oran = Math.min(50, Math.max(0, Number(f.get('sepetteIndirim'))));
-      ozet.textContent = fiyat > 0 && oran > 0 ? 'Sepette ' + formatTL(sepetteFiyat(fiyat, oran)) : '';
+      const parcalar: string[] = [];
+      if (kampanyaAcik && onceki > fiyat && fiyat > 0) {
+        const yuzde = Math.round(((onceki - fiyat) / onceki) * 100);
+        parcalar.push(`İndirimli görünüm: ${formatTL(onceki)} → ${formatTL(fiyat)} (%${yuzde} indirim · ${formatTL(onceki - fiyat)} tasarruf)`);
+      }
+      if (fiyat > 0 && oran > 0) parcalar.push('Sepette ' + formatTL(sepetteFiyat(fiyat, oran)));
+      ozet.textContent = parcalar.join(' · ');
     }
   };
   urunForm.addEventListener('input', duzenle);
@@ -560,16 +575,27 @@ if (setForm) {
   function hesaplaSet() {
     if (hedef) hedef.hidden = tip?.value !== 'kalem';
     const f = new FormData(setForm!);
+    const kutular = [...setForm!.querySelectorAll<HTMLInputElement>('[data-set-urun-kutu]:checked')];
     const secilenler = [...setForm!.querySelectorAll<HTMLSelectElement>('[name="kalem_urun"]')];
-    const hedefId = String(f.get('kalem_hedef') || secilenler.filter((x) => x.value).at(-1)?.value || '');
     const deger = Math.round(sayiCoz(String(f.get('deger') ?? '')) ?? NaN);
-    const adetler = f.getAll('kalem_adet');
-    const satirlar = secilenler.flatMap((x, i) => {
-      const birim = Number(x.selectedOptions[0]?.dataset.fiyat);
-      const adet = Number(adetler[i]) || 1;
-      if (!x.value || !Number.isFinite(birim)) return [];
-      return [{ adet, birim, indirimliBirim: tip?.value === 'kalem' && x.value === hedefId ? birim - Math.round(birim * deger / 100) : undefined }];
-    });
+    const sonKalemId = kutular.at(-1)?.value ?? secilenler.filter((x) => x.value).at(-1)?.value ?? '';
+    const hedefId = String(f.get('kalem_hedef') || sonKalemId);
+    const satirlar = kutular.length
+      ? kutular.flatMap((kutu) => {
+          const birim = Number(kutu.dataset.fiyat);
+          const adet = Math.max(1, Number(f.get('kalem_adet_' + kutu.value)) || 1);
+          if (!kutu.value || !Number.isFinite(birim)) return [];
+          return [{ adet, birim, indirimliBirim: tip?.value === 'kalem' && kutu.value === hedefId ? birim - Math.round(birim * deger / 100) : undefined }];
+        })
+      : (() => {
+          const adetler = f.getAll('kalem_adet');
+          return secilenler.flatMap((x, i) => {
+            const birim = Number(x.selectedOptions[0]?.dataset.fiyat);
+            const adet = Number(adetler[i]) || 1;
+            if (!x.value || !Number.isFinite(birim)) return [];
+            return [{ adet, birim, indirimliBirim: tip?.value === 'kalem' && x.value === hedefId ? birim - Math.round(birim * deger / 100) : undefined }];
+          });
+        })();
     const fiyatlama = tip?.value === 'kalem' ? { tip: 'kalem' as const }
       : tip?.value === 'sabit' ? { tip: 'sabit' as const, fiyat: deger } : { tip: 'yuzde' as const, oran: deger };
     const { ayriAyri, fiyat, kazanc } = setToplamlari(satirlar, fiyatlama);

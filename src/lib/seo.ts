@@ -2,7 +2,8 @@
  * Arama motorları ve yapay zekâ aramaları (Google AI Overviews, ChatGPT, Perplexity, Gemini) için
  * mağazanın yapısal verisi. Tüm bilgiler paneldeki GERÇEK ayarlardan üretilir; uydurma puan/yorum yoktur.
  */
-import type { SiteAyarlari } from './sema';
+import type { SiteAyarlari, Urun } from './sema';
+import { markaliUrunAdi } from './urunKimlik';
 import { bosYasalBilgi } from './yonetimSite';
 
 export function xmlMetni(deger: string): string {
@@ -13,6 +14,25 @@ export function metaAciklama(metin: string): string {
   const duz = metin.replace(/\s+/g, ' ').trim();
   if (duz.length <= 160) return duz;
   return duz.slice(0, 159).replace(/\s+\S*$/, '') + '…';
+}
+
+export function katalogSayfasiVerisi(url: string, ad: string, aciklama: string, urunler: readonly Urun[]) {
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'CollectionPage',
+    '@id': `${url}#katalog`,
+    url, name: ad, description: aciklama, inLanguage: 'tr-TR',
+    mainEntity: {
+      '@type': 'ItemList',
+      numberOfItems: urunler.length,
+      itemListElement: urunler.map((u, i) => ({
+        '@type': 'ListItem',
+        position: i + 1,
+        name: markaliUrunAdi(u),
+        url: new URL(`/urun/${u.id}`, url).href,
+      })),
+    },
+  };
 }
 
 const GUNLER: [RegExp, string[]][] = [

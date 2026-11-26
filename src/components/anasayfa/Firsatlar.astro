@@ -1,28 +1,19 @@
 ---
-/* Fırsat ürünleri: panelde "Fırsat ürünü" işaretli ve gerçek bir avantajı olan ürünler. */
-import Ikon from '../Ikon.astro';
+import UrunVitrini from './UrunVitrini.astro';
 import FirsatSure from '../FirsatSure.astro';
-import UrunKarti from '../UrunKarti.astro';
+
 const k = Astro.locals.katalog;
-const urunler = k.firsatUrunleri();
-const enYakin = urunler.map((u) => u.firsat?.bitis)
+const indirimliler = k.indirimliUrunler();
+const urunler = [...new Set([...indirimliler, ...k.firsatUrunleri()])];
+const sadeceIndirim = urunler.length === indirimliler.length;
+const enYakin = urunler.slice(0, 4).map((u) => u.firsat?.bitis)
   .filter((b): b is string => !!b && Number.isFinite(Date.parse(b)))
   .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
 ---
-{urunler.length > 0 && (
-  <section class="bolum firsat-bolum" aria-labelledby="firsat-baslik">
-    <div class="container">
-      <div class="bolum-bas">
-        <h2 id="firsat-baslik">Fırsat ürünleri</h2>
-        {enYakin && (
-          <div class="firsat-bolum__sayac" data-firsat-sayac={enYakin}>
-            <span class="muted small">İlk fırsatın bitişine</span>
-            <FirsatSure bitis={enYakin} />
-          </div>
-        )}
-      </div>
-      <div class="urun-ray">{urunler.map((u) => <UrunKarti urun={u} konum="firsatlar" />)}</div>
-      <a class="bolum-bas__link" href="/urunler" style="margin-top:12px">Tüm ürünler <Ikon ad="sag" boyut={16} /></a>
-    </div>
-  </section>
-)}
+<UrunVitrini id="firsatlar" baslik={sadeceIndirim ? 'İndirimdekiler' : 'Fırsat ürünleri'} {urunler} ton="indirim"
+  href={sadeceIndirim ? '/urunler?secim=indirim' : '/urunler?secim=firsat'} baglanti={sadeceIndirim ? 'Tüm indirimleri gör' : 'Tüm fırsatları gör'}>
+  {enYakin && <div slot="baslik-eki" class="firsat-bolum__sayac" data-firsat-sayac={enYakin}>
+    <span class="muted small">İlk fırsatın bitişine</span>
+    <FirsatSure bitis={enYakin} />
+  </div>}
+</UrunVitrini>

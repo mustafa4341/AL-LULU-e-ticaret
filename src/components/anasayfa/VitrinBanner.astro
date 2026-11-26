@@ -1,17 +1,13 @@
 ---
 import Ikon from '../Ikon.astro';
+import { formatTL } from '../../lib/fiyat';
+import type { FiyatBilgisi } from '../../lib/katalog';
 
 const k = Astro.locals.katalog;
 const kategoriler = new Set(k.gorunurKategoriler().map(({ id }) => id));
 const gorselKlasoru = '/img/vitrin';
 const duduklu = k.urunBul('fissler-vitaquick-premium-6l');
 const dudukluStokta = duduklu ? k.stoktaMi(duduklu) : false;
-const fiyat = duduklu && dudukluStokta ? k.fiyatBilgisi(duduklu) : undefined;
-const indirim = fiyat?.sepette
-  ? 'Sepette %' + fiyat.sepette.yuzde + ' indirim'
-  : fiyat?.onceki && fiyat.yuzde
-    ? '%' + fiyat.yuzde + ' indirim'
-    : undefined;
 
 type Vitrin = {
   id: string;
@@ -20,18 +16,31 @@ type Vitrin = {
   aciklama: string;
   href: string;
   baglanti: string;
-  rozet?: string;
+  fiyat?: FiyatBilgisi;
   durum?: string;
 };
 
-const vitrinler: Vitrin[] = [{
+const vitrinler: Vitrin[] = [];
+if (duduklu) {
+  vitrinler.push({
+    id: 'duduklu',
+    etiket: 'Fissler Vitaquick',
+    baslik: 'Fissler Vitaquick® Premium 6 L',
+    aciklama: 'Paslanmaz çelik düdüklü tencere. Sebzeye ve ete uygun iki pişirme kademesi.',
+    href: '/urun/' + duduklu.id,
+    baglanti: 'Düdüklü tencereyi incele',
+    fiyat: k.fiyatBilgisi(duduklu),
+    durum: dudukluStokta ? undefined : 'Şu an stokta yok',
+  });
+}
+vitrinler.push({
   id: 'secim',
   etiket: 'Mutfak seçkisi',
-  baslik: 'Mutfak ve sofra seçkisi',
-  aciklama: 'Pişirmeden sofraya, günlük mutfak gereçlerini keşfedin.',
+  baslik: 'Tencere, tava ve mutfak gereçleri',
+  aciklama: 'Fissler’den Tefal’e, pişirmeden sofraya mutfağınızın ihtiyaçlarını keşfedin.',
   href: '/urunler',
   baglanti: 'Tüm ürünleri keşfet',
-}];
+});
 
 const kategoriVitrinleri = [
   { id: 'tava', etiket: 'Tavalar', baslik: 'Her gün için tavalar', aciklama: 'Tekli tavalar ve farklı boylarda tava setleri.', baglanti: 'Tavaları incele' },
@@ -44,19 +53,6 @@ for (const kategori of kategoriVitrinleri) {
   }
 }
 
-if (duduklu) {
-  vitrinler.push({
-    id: 'duduklu',
-    etiket: 'Fissler Vitaquick',
-    baslik: 'Fissler Vitaquick® Premium 6 L',
-    aciklama: 'Paslanmaz çelik düdüklü tencere, iki pişirme kademesiyle.',
-    href: '/urun/' + duduklu.id,
-    baglanti: 'Düdüklü tencereyi incele',
-    rozet: indirim,
-    durum: dudukluStokta ? undefined : 'Şu an stokta yok',
-  });
-}
-
 const coklu = vitrinler.length > 1;
 ---
 
@@ -67,7 +63,7 @@ const coklu = vitrinler.length > 1;
         const Baslik = sira === 0 ? 'h1' : 'h2';
         return (
           <div
-            class="vitrin-banner__panel"
+            class:list={['vitrin-banner__panel', { 'vitrin-banner__panel--urun': vitrin.fiyat }]}
             id={'vitrin-' + vitrin.id}
             role={coklu ? 'group' : undefined}
             aria-roledescription={coklu ? 'slayt' : undefined}
@@ -81,9 +77,13 @@ const coklu = vitrinler.length > 1;
                 decoding={sira === 0 ? 'auto' : 'async'} />
             </picture>
             <div class="vitrin-banner__metin">
-              {vitrin.rozet && <span class="vitrin-banner__rozet">{vitrin.rozet}</span>}
               <Baslik>{vitrin.baslik}</Baslik>
               <p>{vitrin.aciklama}</p>
+              {vitrin.fiyat && <div class="vitrin-banner__fiyat">
+                <span>{vitrin.fiyat.sepette ? 'Sepette' : 'Web fiyatı'}</span>
+                {vitrin.fiyat.onceki && <s><span class="visually-hidden">Önceki fiyat: </span>{formatTL(vitrin.fiyat.onceki)}</s>}
+                <strong>{formatTL(vitrin.fiyat.sepette?.fiyat ?? vitrin.fiyat.fiyat)}</strong>
+              </div>}
               <div class="vitrin-banner__aksiyon">
                 <a href={vitrin.href} class="vitrin-banner__baglanti">{vitrin.baglanti} <Ikon ad="sag" boyut={17} /></a>
                 {vitrin.durum && <span class="vitrin-banner__durum">{vitrin.durum}</span>}
@@ -119,7 +119,7 @@ const coklu = vitrinler.length > 1;
 </section>
 
 <script>
-  const OTOMATIK_SURE = 4800;
+  const OTOMATIK_SURE = 6800;
   const azHareket = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   for (const vitrin of document.querySelectorAll<HTMLElement>('[data-vitrin]')) {
@@ -269,7 +269,7 @@ const coklu = vitrinler.length > 1;
 
     const planla = () => {
       durdur();
-      if (duraklatildiMi()) return;
+      if (azHareket || duraklatildiMi()) return;
       otoZaman = window.setTimeout(() => {
         if (!duraklatildiMi()) git(aktif + 1, 'ileri');
         planla();
@@ -464,16 +464,10 @@ const coklu = vitrinler.length > 1;
   }
   .vitrin-banner__baglanti:hover { background: #fff3da; }
   .vitrin-banner__baglanti:focus-visible { outline: 2px solid #fff5e5; outline-offset: 4px; }
-  .vitrin-banner__rozet {
-    display: inline-block;
-    margin-bottom: 12px;
-    padding: 4px 10px;
-    border-radius: 4px;
-    color: #fff;
-    background: #9a2529;
-    font-size: .9rem;
-    font-weight: 700;
-  }
+  .vitrin-banner__fiyat { width: fit-content; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 0 8px; margin-top: 14px; padding: 8px 16px 10px; border-radius: 8px; background: #bb1831; color: #fff; }
+  .vitrin-banner__fiyat span { font-size: .8125rem; font-weight: 700; }
+  .vitrin-banner__fiyat s { font-size: .875rem; color: #ffe5e7; }
+  .vitrin-banner__fiyat strong { grid-column: 1 / -1; font-size: clamp(1.5rem, 4vw, 2.2rem); line-height: 1.05; font-weight: 800; font-variant-numeric: tabular-nums; }
   .vitrin-banner__durum { color: #f4e5c8; font-size: .85rem; }
 
   /* Sağ / Sol geçiş okları: banner üzerine gelince veya odaklanınca belirir */
@@ -569,13 +563,14 @@ const coklu = vitrinler.length > 1;
     .vitrin-banner__gorsel { height: clamp(185px, 54vw, 270px); flex: none; }
     .vitrin-banner__metin { flex: 1; display: flex; flex-direction: column; background: #26261a; }
     .vitrin-banner__aksiyon { margin-top: auto; padding-top: 20px; }
+    .vitrin-banner__panel--urun .vitrin-banner__metin { background: #38131b; }
   }
 
   @media (min-width: 700px) {
     .vitrin-banner__panel {
       display: grid;
       align-items: center;
-      min-height: clamp(365px, 40vw, 570px);
+      min-height: clamp(350px, 36vw, 480px);
       isolation: isolate;
     }
     .vitrin-banner__panel::after {
@@ -585,6 +580,8 @@ const coklu = vitrinler.length > 1;
       background: linear-gradient(90deg, #1b1a11f2 0%, #1b1a11bd 25%, #1b1a1144 48%, transparent 68%);
       content: '';
     }
+    .vitrin-banner__panel--urun::after { background: linear-gradient(90deg, #250c12f7 0%, #3d121cf0 27%, #38121b9c 48%, transparent 71%); }
+    .vitrin-banner__panel--urun :is(h1, .vitrin-banner__baslik) { font-size: clamp(35px, 4.6vw, 64px); }
     .vitrin-banner__gorsel { position: absolute; z-index: -2; inset: 0; }
     .vitrin-banner__metin {
       width: min(52%, 36rem);

@@ -1,338 +1,206 @@
 {
-  "surum": 88,
-  "guncelleme": "2026-11-25T10:08:58.950Z",
   "site": {
     "ad": "Al Lulu Home",
-    "slogan": "Evinize yıllarca eşlik edecek parçalar",
     "url": "https://alluluhome.com",
-    "eposta": "musteri@alluluhome.com",
-    "kurumsalEposta": "info@alluluhome.com",
-    "telefon": "+905525778578",
-    "telefonGorunen": "0552 577 85 78",
-    "whatsapp": "905525778578",
-    "calismaSaatleri": "Hafta içi 09:00–18:00",
-    "sosyal": {
-      "instagram": "",
-      "facebook": "",
-      "tiktok": "",
-      "youtube": "",
-      "x": "",
-      "pinterest": "",
-      "linkedin": ""
-    },
-    "satici": {
-      "unvan": "[Ticari Unvan]",
-      "adres": "[Açık adres]",
-      "mersis": "[—]",
-      "vergiDairesiNo": "[—]",
-      "kep": "[—]",
-      "etbis": "[ETBİS kayıt no]"
-    },
     "kargo": {
-      "firma": "Yurtiçi Kargo",
-      "takipUrl": "https://www.yurticikargo.com/Tracking/Detail/{kod}",
-      "ucret": 99,
-      "ucretsizEsik": 1000,
-      "kesimSaati": 14,
+      "firma": "MNG / DHL",
+      "ucret": 149,
+      "takipUrl": "https://kargotakip.mngkargo.com.tr/?takipNo={kod}",
       "teslimGun": [
         1,
         3
-      ]
+      ],
+      "kesimSaati": 14,
+      "ucretsizEsik": 1999
+    },
+    "eposta": "musteri@alluluhome.com",
+    "satici": {
+      "kep": "[—]",
+      "adres": "Yazlık yeni mah. Estergon caddesi Gölcük/Kocaeli",
+      "etbis": "[ETBİS kayıt no]",
+      "unvan": "[Ticari Unvan]",
+      "mersis": "[—]",
+      "vergiDairesiNo": "[—]"
+    },
+    "slogan": "Evinize yıllarca eşlik edecek parçalar",
+    "sosyal": {
+      "x": "",
+      "tiktok": "",
+      "youtube": "",
+      "facebook": "",
+      "linkedin": "",
+      "instagram": "",
+      "pinterest": ""
     },
     "taksit": {
-      "pesinFiyatinaTaksit": null,
-      "genelMetin": "Kredi kartına taksit seçenekleri ödeme adımında"
+      "genelMetin": "Kredi kartına taksit seçenekleri ödeme adımında",
+      "pesinFiyatinaTaksit": null
     },
+    "iadeGun": 14,
+    "tadilat": {
+      "aktif": false,
+      "baslik": "Sitemiz kısa süreliğine bakımda",
+      "aciklama": "Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.",
+      "tahminiSure": "",
+      "whatsappGoster": true,
+      "siparisTakipAcik": true
+    },
+    "telefon": "+905525778578",
+    "whatsapp": "905525778578",
     "duyurular": [
       "Orijinal ürün · faturalı gönderim · güvenli alışveriş",
       "14:00'e kadar verilen siparişler aynı gün kargoda",
       "1.000 TL ve üzeri siparişlerde kargo bedava",
       "Hızlı iletişim için WhatsApp destek hattımızdan bize yazabilirsiniz"
     ],
-    "iadeGun": 14,
-    "indirimReferansGun": 30,
+    "fiyatSunumu": "kampanya",
     "cokSatanEsik": 10,
-    "fiyatSunumu": "dengeli",
-    "tadilat": {
-      "aktif": true,
-      "baslik": "Sitemiz kısa süreliğine bakımda",
-      "aciklama": "Sizlere daha iyi hizmet verebilmek için mağazamızı güncelliyoruz. Çok yakında tekrar hizmetinizdeyiz.",
-      "tahminiSure": "",
-      "whatsappGoster": true,
-      "siparisTakipAcik": true
-    }
+    "kurumsalEposta": "info@alluluhome.com",
+    "telefonGorunen": "0552 577 85 78",
+    "calismaSaatleri": "Hafta içi 09:00–18:00",
+    "indirimReferansGun": 30
   },
-  "kategoriler": [
+  "surum": 107,
+  "setler": [
     {
-      "id": "duduklu-tencere",
-      "ad": "Düdüklü Tencereler",
-      "aciklama": "Hızlı, güvenli ve enerji dostu pişirme için premium düdüklü tencereler.",
-      "ikon": "duduklu",
-      "sira": 1,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
+      "ad": "Büyük Mutfak ve Sofra Seti",
+      "id": "buyuk-mutfak-ve-sofra-seti",
+      "durum": "yayinda",
+      "rozet": "Büyük Mutfak Paketi",
+      "aciklama": "Fissler Copenhagen 8 parça çelik tencere seti, Tefal Easy Cook & Clean 2’li tava seti (24+28 cm), Ingegno 750 ml rondo ve Zwilling King 30 parça çatal kaşık bıçak takımı.",
+      "kalemler": [
+        {
+          "adet": 1,
+          "urunId": "fissler-copenhagen-tencere-seti"
+        },
+        {
+          "adet": 1,
+          "urunId": "tefal-easy-cook-clean-tava-seti-24-28"
+        },
+        {
+          "adet": 1,
+          "urunId": "ingegno-ipli-dograyici"
+        },
+        {
+          "adet": 1,
+          "urunId": "zwilling-king-30-parca-catal-kasik"
+        }
+      ],
+      "oneCikan": true,
+      "fiyatlama": {
+        "tip": "sabit",
+        "fiyat": 22499
+      }
     },
     {
-      "id": "tencere",
-      "ad": "Tencereler",
-      "aciklama": "Günlük yemeklerden kalabalık sofralara, her boyda tencere.",
-      "ikon": "tencere",
-      "sira": 2,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
+      "ad": "Tefal Günlük Pişirme İkilisi",
+      "id": "tefal-gunluk-pisirme-ikilisi",
+      "durum": "yayinda",
+      "rozet": "Popüler 2’li Set",
+      "aciklama": "Tefal Ingenio Essential 4 parça çıkarılabilir saplı tencere seti ve Duetto+ 24 cm paslanmaz çelik tava bir arada.",
+      "kalemler": [
+        {
+          "adet": 1,
+          "urunId": "tefal-ingenio-essential-4-parca"
+        },
+        {
+          "adet": 1,
+          "urunId": "tefal-duetto-plus-tava-24"
+        }
+      ],
+      "oneCikan": true,
+      "fiyatlama": {
+        "tip": "sabit",
+        "fiyat": 8799
+      }
     },
     {
-      "id": "tava",
-      "ad": "Tavalar",
-      "aciklama": "Paslanmaz çelik ve yapışmaz tavalar.",
-      "ikon": "tava",
-      "sira": 3,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
+      "ad": "Tefal Hazırlık ve Tava Seti",
+      "id": "tefal-hazirlik-ve-tava-seti",
+      "durum": "yayinda",
+      "rozet": "Pratik İkili",
+      "aciklama": "Tefal Hard Titanium 2X 24 cm tava ve 5 Second Chopper 500 ml manuel doğrayıcı ile doğramadan pişirmeye pratik ikili.",
+      "kalemler": [
+        {
+          "adet": 1,
+          "urunId": "tefal-hard-titanium-essential-tava-24"
+        },
+        {
+          "adet": 1,
+          "urunId": "tefal-5-saniye-dograyici"
+        }
+      ],
+      "oneCikan": true,
+      "fiyatlama": {
+        "tip": "sabit",
+        "fiyat": 2599
+      }
     },
     {
-      "id": "aksesuar",
-      "ad": "Aksesuar & Yedek Parça",
-      "aciklama": "Conta, buhar aparatı ve tamamlayıcı parçalar.",
-      "ikon": "kasik",
-      "sira": 4,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
-    },
-    {
-      "id": "saklama",
-      "ad": "Saklama & Düzen",
-      "aciklama": "Mutfağınızı ferahlatan saklama ve düzenleme ürünleri.",
-      "ikon": "kutu",
-      "sira": 5,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": true
-    },
-    {
-      "id": "sofra",
-      "ad": "Sofra & Servis",
-      "aciklama": "Sofranıza şıklık katan servis ürünleri.",
-      "ikon": "kase",
-      "sira": 6,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
-    },
-    {
-      "id": "mutfak-aletleri",
-      "ad": "Doğrayıcı & Mutfak Aletleri",
-      "aciklama": "Doğrayıcılar ve hazırlığı kolaylaştıran mutfak aletleri.",
-      "ikon": "kase",
-      "sira": 70,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
-    },
-    {
-      "id": "temizlik",
-      "ad": "Temizlik & Hijyen",
-      "aciklama": "Mutfak ve ev için pratik hijyen ürünleri.",
-      "ikon": "kutu",
-      "sira": 80,
-      "menudeGoster": true,
-      "anaSayfadaGoster": true,
-      "yakindaGoster": false
+      "ad": "Fissler Vitaquick® 6 L + Buhar Aparatı Seti",
+      "id": "vitaquick-buhar-seti",
+      "durum": "yayinda",
+      "rozet": "Uyumlu İkili",
+      "gorsel": {
+        "alt": "Vitaquick düdüklü tencere ve buharlı pişirme aparatı",
+        "src": "/img/urunler/fissler-vitaquick-premium-6l/04-buhar-aparati.webp"
+      },
+      "aciklama": "Vitaquick Premium 6 L düdüklü tencere ve uyumlu 22 cm orijinal Fissler buhar aparatı.",
+      "kalemler": [
+        {
+          "adet": 1,
+          "urunId": "fissler-vitaquick-premium-6l"
+        },
+        {
+          "adet": 1,
+          "urunId": "fissler-buhar-aparati-22"
+        }
+      ],
+      "oneCikan": true,
+      "fiyatlama": {
+        "tip": "sabit",
+        "fiyat": 13499
+      }
     }
   ],
   "urunler": [
     {
-      "id": "fissler-vitaquick-premium-6l",
-      "durum": "yayinda",
-      "marka": "Fissler",
       "ad": "Vitaquick® Premium Düdüklü Tencere 6 L",
-      "kisaAd": "Vitaquick® Premium 6 L",
-      "kategoriler": [
-        "duduklu-tencere"
-      ],
-      "fiyat": 14000,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-10-17T00:00:00.000Z",
-          "fiyat": 13999
-        },
-        {
-          "tarih": "2026-11-17T21:32:49.103Z",
-          "fiyat": 12999
-        },
-        {
-          "tarih": "2026-11-18T07:43:19.604Z",
-          "fiyat": 12999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.513Z",
-          "fiyat": 14000,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 0,
-      "maxAdet": 5,
+      "id": "fissler-vitaquick-premium-6l",
       "sku": "602-410-06-000/0",
-      "gorseller": [
+      "sss": [
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/01-on.webp",
-          "alt": "Fissler Vitaquick Premium 6 L düdüklü tencere, önden görünüm"
+          "soru": "Ürün orijinal mi, faturası var mı?",
+          "cevap": "Evet. Ürün orijinaldir ve adınıza düzenlenen faturayla gönderilir. Kutudaki model kodu faturadaki kodla aynıdır."
         },
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/02-yan.webp",
-          "alt": "Fissler Vitaquick Premium 6 L, yandan görünüm ve uzun kulp"
+          "soru": "Garanti süresi ne kadar?",
+          "cevap": "Ürün 2 yıl garantilidir. Garanti belgesi ürünle birlikte kutudan çıkar."
         },
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/03-ustten.webp",
-          "alt": "Fissler Vitaquick Premium 6 L, üstten kapak görünümü"
+          "soru": "Hangi ocaklarla uyumlu?",
+          "cevap": "İndüksiyon, elektrikli, seramik ve gazlı ocaklar dahil tüm ocak türleriyle kullanılabilir."
         },
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/04-kapak-acik.webp",
-          "alt": "Kapağı açık Vitaquick Premium, iç gövde ve kapak altı"
+          "soru": "6 litre kaç kişi için uygun?",
+          "cevap": "Düdüklü tencerede en fazla 2/3 doldurma kuralı geçerlidir; yaklaşık 4 litre kullanılabilir hacim, 4–6 kişilik bir ana yemek için rahattır. Bu bizim kullanım tahminimizdir."
         },
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/05-servis.webp",
-          "alt": "Vitaquick Premium 6 L içinde pişmiş sebzeli yemek"
+          "soru": "Düdüklü tencere kullanmaktan çekiniyorum. Güvenli mi?",
+          "cevap": "Kapak tam kilitlenmeden basınç oluşmaz ve fazla basınç emniyet sistemleriyle kontrollü olarak tahliye edilir. İlk kullanımda kılavuzu okumanızı öneririz; takıldığınız yerde bize WhatsApp'tan yazabilirsiniz."
         },
         {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/06-ocakta.webp",
-          "alt": "Ocakta buhar çıkaran Vitaquick Premium düdüklü tencere"
-        },
-        {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/07-kullanim.webp",
-          "alt": "Vitaquick Premium kapağının tek elle kapatılması"
-        },
-        {
-          "src": "/img/urunler/fissler-vitaquick-premium-6l/08-kapak-kilidi.webp",
-          "alt": "Vitaquick Premium kapak kilidi ve pişirme kademesi düğmesi"
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Gövde bulaşık makinesinde yıkanabilir; kapak ve valf sistemi elde yıkanmalıdır. Ayrıntılar kullanım kılavuzundadır."
         }
       ],
       "ozet": "İki pişirme kademesiyle hızlı ve kontrollü pişirme. İndüksiyon dahil her ocakta, yıllarca kullanılacak 18/10 paslanmaz çelik.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "saat",
-          "metin": "Mutfakta daha az bekleyin, sofraya daha çok zaman ayırın|Normal tencereye göre %70’e kadar daha kısa pişirme süresi*"
-        },
-        {
-          "ikon": "yildiz",
-          "metin": "10–15 yıl ilk günkü gibi kullanılan ömürlük gövde|18/10 Alman paslanmaz çeliği · yıllar sonra bile yalnızca conta yenileyerek tam performans"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "Düdüklü çekincesini bitiren sessiz ve güvenli kilit|Kulp üzerinde yeşil kilit onayı ve 2 kademeli renkli basınç göstergesi"
-        },
-        {
-          "ikon": "ates",
-          "metin": "Superthermic® tabanla her ocakta tam uyum|İndüksiyon, gaz, elektrik ve seramik ocaklarda homojen ısı dağılımı · Almanya üretimi"
-        }
-      ],
-      "rozetler": [
-        "2 Yıl Garanti",
-        "Orijinal Ürün"
-      ],
-      "garanti": "2 yıl",
-      "faydaUstBaslik": "Neden bu düdüklü tencere?",
-      "faydaBaslik": "Daha az bekleme. Daha çok sofra keyfi.",
-      "faydaAltBaslik": "Basınçlı pişirmenin hızı ve Alman çeliğinin 10–15 yılı aşan uzun ömürlü güveni.",
-      "faydalar": [
-        {
-          "baslik": "%70’e kadar daha kısa pişirme süresi",
-          "metin": "Et ve bakliyatlarda pişirme süresini üçte bire indirir; kuru fasulye 16 dakikada, dana kuşbaşı 20–25 dakikada lokum kıvamına gelir.",
-          "ikon": "saat",
-          "kaynak": "Fissler resmî pişirme tablosu"
-        },
-        {
-          "baslik": "10–15 yıl boyunca mutfağın demirbaşı",
-          "metin": "Ağır 18/10 Alman çeliği gövde eğilmez ve aşınmaz; yıllar süren yoğun kullanımda sadece silikon contayı yenileyerek ilk günkü performansla kullanmaya devam edilir.",
-          "ikon": "yildiz",
-          "kaynak": "Uzun dönem kullanıcı deneyimi & Fissler yedek parça desteği"
-        },
-        {
-          "baslik": "Düdüklü korkusunu bitiren kilit ve gösterge",
-          "metin": "Kapak doğru oturup kulp üzerindeki işaret yeşile dönmeden basınç oluşmaz; eski tip düdüklüler gibi ürkütücü ses çıkarmadan, buharı kontrollü tahliye eder.",
-          "ikon": "kalkan"
-        },
-        {
-          "baslik": "Sebzeye hassas, ete hızlı: 2 pişirme kademesi",
-          "metin": "1. kademe (sarı/yeşil halka) çabuk pişen sebze ve balıkların dağılmasını önler; 2. kademe sert et ve nohut/fasulyeyi hızla yumuşatır.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "Superthermic® kapsül tabanla her ocakta çalışır",
-          "metin": "İndüksiyon, doğalgaz, elektrikli ve cam seramik ocaklarda ısıyı tabana eşit yayar; enerji tasarrufu sağlar.",
-          "ikon": "ates"
-        },
-        {
-          "baslik": "İç ölçü çizgileri ve kolay temizlik",
-          "metin": "Gövde içindeki min–max seviye çizgileri güvenli doldurmayı kolaylaştırır; çıkarılabilir kulp ve çelik gövde zahmetsizce temizlenir.",
-          "ikon": "tencere"
-        }
-      ],
-      "pisirme": [
-        {
-          "yemek": "Pilav (beyaz pirinç)",
-          "sure": "5–7 dk",
-          "kademe": "2",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Kuru fasulye (ıslatılmış)",
-          "sure": "16 dk",
-          "kademe": "2",
-          "miktar": "400 g"
-        },
-        {
-          "yemek": "Mercimek",
-          "sure": "10–15 dk",
-          "kademe": "2",
-          "miktar": "400 g"
-        },
-        {
-          "yemek": "Dana kuşbaşı / gulaş",
-          "sure": "20–25 dk",
-          "kademe": "2",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Kuzu yahni",
-          "sure": "10–15 dk",
-          "kademe": "2",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Tavuk (göğüs / but)",
-          "sure": "15–20 dk",
-          "kademe": "2",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Patates (soyulmuş, parça)",
-          "sure": "6–8 dk",
-          "kademe": "2",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Taze fasulye",
-          "sure": "6–8 dk",
-          "kademe": "1",
-          "miktar": "500 g"
-        },
-        {
-          "yemek": "Havuç",
-          "sure": "4–6 dk",
-          "kademe": "1",
-          "miktar": "500 g"
-        }
-      ],
-      "pisirmeNotu": "Süreler Fissler’in resmi pişirme tablosundan alınmıştır ve kapaktaki sarı halka göründükten (basınç oluştuktan) sonra başlar. Miktar, parça büyüklüğü ve ocağa göre değişebilir.",
+      "stok": 0,
+      "durum": "yayinda",
+      "fiyat": 12999,
+      "marka": "Fissler",
+      "firsat": null,
+      "kisaAd": "Vitaquick® Premium 6 L",
       "teknik": [
         [
           "Marka",
@@ -375,46 +243,6 @@
           "602-410-06-000/0"
         ]
       ],
-      "kutuIcerigi": [
-        "Düdüklü tencere gövdesi",
-        "Kapak (basınç sistemiyle)",
-        "Kullanım kılavuzu",
-        "Garanti belgesi"
-      ],
-      "sss": [
-        {
-          "soru": "Ürün orijinal mi, faturası var mı?",
-          "cevap": "Evet. Ürün orijinaldir ve adınıza düzenlenen faturayla gönderilir. Kutudaki model kodu faturadaki kodla aynıdır."
-        },
-        {
-          "soru": "Garanti süresi ne kadar?",
-          "cevap": "Ürün 2 yıl garantilidir. Garanti belgesi ürünle birlikte kutudan çıkar."
-        },
-        {
-          "soru": "Hangi ocaklarla uyumlu?",
-          "cevap": "İndüksiyon, elektrikli, seramik ve gazlı ocaklar dahil tüm ocak türleriyle kullanılabilir."
-        },
-        {
-          "soru": "6 litre kaç kişi için uygun?",
-          "cevap": "Düdüklü tencerede en fazla 2/3 doldurma kuralı geçerlidir; yaklaşık 4 litre kullanılabilir hacim, 4–6 kişilik bir ana yemek için rahattır. Bu bizim kullanım tahminimizdir."
-        },
-        {
-          "soru": "Düdüklü tencere kullanmaktan çekiniyorum. Güvenli mi?",
-          "cevap": "Kapak tam kilitlenmeden basınç oluşmaz ve fazla basınç emniyet sistemleriyle kontrollü olarak tahliye edilir. İlk kullanımda kılavuzu okumanızı öneririz; takıldığınız yerde bize WhatsApp'tan yazabilirsiniz."
-        },
-        {
-          "soru": "Bulaşık makinesinde yıkanabilir mi?",
-          "cevap": "Gövde bulaşık makinesinde yıkanabilir; kapak ve valf sistemi elde yıkanmalıdır. Ayrıntılar kullanım kılavuzundadır."
-        }
-      ],
-      "birlikteIyiGider": [
-        "fissler-copenhagen-tencere-seti",
-        "fissler-buhar-aparati-22",
-        "tefal-5-saniye-dograyici"
-      ],
-      "oneCikan": true,
-      "cokSatan": true,
-      "oncelik": 100,
       "dogrula": [
         "Buhar aparatı kutuya dahil mi? (gönderilen 4. fotoğrafta aparat görünüyor)",
         "Bulaşık makinesi bilgisi kılavuzdan teyit edilecek",
@@ -423,103 +251,242 @@
         "Güvenlik maddesi kullanım kılavuzundan teyit edilecek.",
         "Model kodu faturadakiyle aynı mı?",
         "Eski fiyat 13.999 TL: mağaza sahibinin beyanı (18.11.2026) — son 30 günde başka kanallarda 13.999 TL'den satıldı. Satış kayıtlarını/faturaları sakla."
-      ]
-    },
-    {
-      "id": "fissler-buhar-aparati-22",
-      "durum": "yayinda",
-      "marka": "Fissler",
-      "ad": "Buharlı Pişirme Aparatı 22 cm (Vitaquick® Uyumlu, Kutusuz)",
-      "kisaAd": "Buhar Aparatı 22 cm",
-      "kategoriler": [
-        "aksesuar"
       ],
-      "fiyat": 1049,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 499,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-23T12:27:03.087Z",
-          "fiyat": 1100,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 1049,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 7,
+      "garanti": "2 yıl",
       "maxAdet": 5,
-      "sku": "FSSLRBUHPSRMAP22CM",
-      "gorseller": [
+      "oncelik": 100,
+      "pisirme": [
         {
-          "src": "/img/urunler/fissler-buhar-aparati-22/01.webp",
-          "alt": "Fissler 22 cm paslanmaz çelik buharlı pişirme aparatı"
-        }
-      ],
-      "ozet": "Sebze, balık ve mantıyı besin değerini, rengini ve lezzetini koruyarak buharda pişirmek için 22 cm Fissler delikli buhar sepeti. 18/10 paslanmaz çelik; 22 cm Vitaquick® düdüklü tencerelerle uyumlu. Kutusuz, koruyucu ambalajında gönderilir.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "tencere",
-          "metin": "22 cm Vitaquick® ve çelik tencerelerle tam uyum|Fissler 4,5 L ve 6 L düdüklüler ile iç çapı 22 cm olan derin tencerelere tam oturur"
+          "sure": "5–7 dk",
+          "yemek": "Pilav (beyaz pirinç)",
+          "kademe": "2",
+          "miktar": "500 g"
         },
         {
-          "ikon": "kase",
-          "metin": "Vitamin, renk ve diri kıvamı korur|Sebze, balık, mantı ve bebek mamaları haşlama suyuna karışmadan, kendi buharında pişer"
+          "sure": "16 dk",
+          "yemek": "Kuru fasulye (ıslatılmış)",
+          "kademe": "2",
+          "miktar": "400 g"
+        },
+        {
+          "sure": "10–15 dk",
+          "yemek": "Mercimek",
+          "kademe": "2",
+          "miktar": "400 g"
+        },
+        {
+          "sure": "20–25 dk",
+          "yemek": "Dana kuşbaşı / gulaş",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "sure": "10–15 dk",
+          "yemek": "Kuzu yahni",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "sure": "15–20 dk",
+          "yemek": "Tavuk (göğüs / but)",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "sure": "6–8 dk",
+          "yemek": "Patates (soyulmuş, parça)",
+          "kademe": "2",
+          "miktar": "500 g"
+        },
+        {
+          "sure": "6–8 dk",
+          "yemek": "Taze fasulye",
+          "kademe": "1",
+          "miktar": "500 g"
+        },
+        {
+          "sure": "4–6 dk",
+          "yemek": "Havuç",
+          "kademe": "1",
+          "miktar": "500 g"
+        }
+      ],
+      "cokSatan": true,
+      "faydalar": [
+        {
+          "ikon": "saat",
+          "metin": "Et ve bakliyatlarda pişirme süresini üçte bire indirir; kuru fasulye 16 dakikada, dana kuşbaşı 20–25 dakikada lokum kıvamına gelir.",
+          "baslik": "%70’e kadar daha kısa pişirme süresi",
+          "kaynak": "Fissler resmî pişirme tablosu"
+        },
+        {
+          "ikon": "yildiz",
+          "metin": "Ağır 18/10 Alman çeliği gövde eğilmez ve aşınmaz; yıllar süren yoğun kullanımda sadece silikon contayı yenileyerek ilk günkü performansla kullanmaya devam edilir.",
+          "baslik": "10–15 yıl boyunca mutfağın demirbaşı",
+          "kaynak": "Uzun dönem kullanıcı deneyimi & Fissler yedek parça desteği"
         },
         {
           "ikon": "kalkan",
-          "metin": "Orijinal Fissler 18/10 paslanmaz çelik|Koku ve tat tutmaz, paslanmaya dirençli gövdesiyle tencerenizle birlikte yıllarca kullanılır"
+          "metin": "Kapak doğru oturup kulp üzerindeki işaret yeşile dönmeden basınç oluşmaz; eski tip düdüklüler gibi ürkütücü ses çıkarmadan, buharı kontrollü tahliye eder.",
+          "baslik": "Düdüklü korkusunu bitiren kilit ve gösterge"
         },
         {
-          "ikon": "kutu",
-          "metin": "Kutusuz, darbe korumalı özel ambalajda|Set içinden ayrılmış orijinal Fissler parçasıdır; özenle paketlenerek gönderilir"
+          "ikon": "gosterge",
+          "metin": "1. kademe (sarı/yeşil halka) çabuk pişen sebze ve balıkların dağılmasını önler; 2. kademe sert et ve nohut/fasulyeyi hızla yumuşatır.",
+          "baslik": "Sebzeye hassas, ete hızlı: 2 pişirme kademesi"
+        },
+        {
+          "ikon": "ates",
+          "metin": "İndüksiyon, doğalgaz, elektrikli ve cam seramik ocaklarda ısıyı tabana eşit yayar; enerji tasarrufu sağlar.",
+          "baslik": "Superthermic® kapsül tabanla her ocakta çalışır"
+        },
+        {
+          "ikon": "tencere",
+          "metin": "Gövde içindeki min–max seviye çizgileri güvenli doldurmayı kolaylaştırır; çıkarılabilir kulp ve çelik gövde zahmetsizce temizlenir.",
+          "baslik": "İç ölçü çizgileri ve kolay temizlik"
         }
       ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 14500
+      },
+      "oneCikan": true,
       "rozetler": [
-        "damga:yok",
-        "22 cm Vitaquick® Uyumlu",
-        "18/10 Paslanmaz Çelik",
-        "Kutusuz · Orijinal Ürün"
+        "2 Yıl Garanti",
+        "Orijinal Ürün"
       ],
-      "faydaUstBaslik": "Neden bu buhar aparatı?",
-      "faydaBaslik": "Suya değmeden pişen sebzeler, dağılmayan lezzet.",
-      "faydaAltBaslik": "22 cm düdüklü ve çelik tencerelerde vitamin, renk ve doğal tadı koruyan buharda pişirme.",
-      "faydalar": [
+      "gorseller": [
         {
-          "baslik": "Haşlama suyuna vitamin kaybetmeden pişirin",
-          "metin": "Brokoli, karnabahar, enginar, patates ve balık filetoları suyun içine temas etmeden pişer; rengi canlı, lezzeti yoğun kalır.",
-          "ikon": "yildiz",
-          "kaynak": "Buharda pişirme avantajı"
+          "alt": "Fissler Vitaquick Premium 6 L düdüklü tencere, önden görünüm",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/01-on.webp"
         },
         {
-          "baslik": "Bebek ek gıdası ve sağlıklı diyetler için ideal",
-          "metin": "Yağsız ve katkısız pişirme sağladığı için bebek maması sebzelerini ve diyet öğünlerini birkaç dakikada hazırlar.",
-          "ikon": "kase"
+          "alt": "Fissler Vitaquick Premium 6 L, yandan görünüm ve uzun kulp",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/02-yan.webp"
         },
         {
-          "baslik": "22 cm tencerelerle çok yönlü uyum",
-          "metin": "Başta Fissler Vitaquick® 4,5 L ve 6 L olmak üzere iç ağız çapı 22 cm olan düdüklü ve derin tencerelerde güvenle kullanılır.",
-          "ikon": "tencere"
+          "alt": "Fissler Vitaquick Premium 6 L, üstten kapak görünümü",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/03-ustten.webp"
         },
         {
-          "baslik": "18/10 çelik hijyeni ve makinede yıkama",
-          "metin": "Gözeneksiz paslanmaz çelik yüzeyi yemek kokusu barındırmaz; işiniz bittiğinde bulaşık makinesinde zahmetsizce yıkanır."
+          "alt": "Kapağı açık Vitaquick Premium, iç gövde ve kapak altı",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/04-kapak-acik.webp"
+        },
+        {
+          "alt": "Vitaquick Premium 6 L içinde pişmiş sebzeli yemek",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/05-servis.webp"
+        },
+        {
+          "alt": "Ocakta buhar çıkaran Vitaquick Premium düdüklü tencere",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/06-ocakta.webp"
+        },
+        {
+          "alt": "Vitaquick Premium kapağının tek elle kapatılması",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/07-kullanim.webp"
+        },
+        {
+          "alt": "Vitaquick Premium kapak kilidi ve pişirme kademesi düğmesi",
+          "src": "/img/urunler/fissler-vitaquick-premium-6l/08-kapak-kilidi.webp"
         }
       ],
-      "pisirme": [],
+      "faydaBaslik": "Daha az bekleme. Daha çok sofra keyfi.",
+      "kategoriler": [
+        "duduklu-tencere"
+      ],
+      "kutuIcerigi": [
+        "Düdüklü tencere gövdesi",
+        "Kapak (basınç sistemiyle)",
+        "Kullanım kılavuzu",
+        "Garanti belgesi"
+      ],
+      "pisirmeNotu": "Süreler Fissler’in resmi pişirme tablosundan alınmıştır ve kapaktaki sarı halka göründükten (basınç oluştuktan) sonra başlar. Miktar, parça büyüklüğü ve ocağa göre değişebilir.",
+      "fiyatGecmisi": [
+        {
+          "fiyat": 14500,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 13999,
+          "tarih": "2026-10-17T00:00:00.000Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 12999,
+          "tarih": "2026-11-17T21:32:49.103Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 12999,
+          "tarih": "2026-11-18T07:43:19.604Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 14000,
+          "tarih": "2026-11-25T10:08:58.513Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 12999,
+          "tarih": "2026-11-26T11:40:58.147Z",
+          "dogrulandi": true
+        }
+      ],
+      "faydaAltBaslik": "Basınçlı pişirmenin hızı ve Alman çeliğinin 10–15 yılı aşan uzun ömürlü güveni.",
+      "faydaUstBaslik": "Neden bu düdüklü tencere?",
+      "sepetteIndirim": 0,
+      "birlikteIyiGider": [
+        "fissler-buhar-aparati-22",
+        "fissler-copenhagen-tencere-seti"
+      ],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "saat",
+          "metin": "Mutfakta daha az bekleyin, sofraya daha çok zaman ayırın|Normal tencereye göre %70’e kadar daha kısa pişirme süresi*"
+        },
+        {
+          "ikon": "yildiz",
+          "metin": "10–15 yıl ilk günkü gibi kullanılan ömürlük gövde|18/10 Alman paslanmaz çeliği · yıllar sonra bile yalnızca conta yenileyerek tam performans"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Düdüklü çekincesini bitiren sessiz ve güvenli kilit|Kulp üzerinde yeşil kilit onayı ve 2 kademeli renkli basınç göstergesi"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Superthermic® tabanla her ocakta tam uyum|İndüksiyon, gaz, elektrik ve seramik ocaklarda homojen ısı dağılımı · Almanya üretimi"
+        }
+      ]
+    },
+    {
+      "ad": "Buharlı Pişirme Aparatı 22 cm (Vitaquick® Uyumlu, Kutusuz)",
+      "id": "fissler-buhar-aparati-22",
+      "sku": "FSSLRBUHPSRMAP22CM",
+      "sss": [
+        {
+          "soru": "Hangi tencerelerle uyumludur?",
+          "cevap": "İç ağız çapı 22 cm olan Fissler Vitaquick® 4,5 L ve 6 L düdüklü tencereler başta olmak üzere 22 cm çaplı tencerelerle uyumludur."
+        },
+        {
+          "soru": "Neden \"kutusuz\" olarak belirtiliyor?",
+          "cevap": "Ürün orijinal karton kutusu olmadan temin edildiği için şeffaflık adına kutusuz olarak belirtilmiştir; kargoda zarar görmeyecek şekilde koruyucu ambalajla gönderilir."
+        },
+        {
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Evet, 18/10 paslanmaz çelik yapısı sayesinde bulaşık makinesinde yıkanmaya uygundur."
+        },
+        {
+          "soru": "Buhar aparatıyla neler pişirilebilir?",
+          "cevap": "Brokoli, havuç, patates, kabak gibi sebzeler, balık filetoları, mantı ve bebek mamaları için sebze/meyveler suyun içine değmeden buharda pişirilebilir."
+        }
+      ],
+      "ozet": "Sebze, balık ve mantıyı besin değerini, rengini ve lezzetini koruyarak buharda pişirmek için 22 cm Fissler delikli buhar sepeti. 18/10 paslanmaz çelik; 22 cm Vitaquick® düdüklü tencerelerle uyumlu. Kutusuz, koruyucu ambalajında gönderilir.",
+      "stok": 6,
+      "durum": "yayinda",
+      "fiyat": 1049,
+      "marka": "Fissler",
+      "firsat": null,
+      "kisaAd": "Buhar Aparatı 22 cm",
       "teknik": [
         [
           "Marka",
@@ -558,140 +525,134 @@
           "4009209307671"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 5,
+      "oncelik": 72,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "yildiz",
+          "metin": "Brokoli, karnabahar, enginar, patates ve balık filetoları suyun içine temas etmeden pişer; rengi canlı, lezzeti yoğun kalır.",
+          "baslik": "Haşlama suyuna vitamin kaybetmeden pişirin",
+          "kaynak": "Buharda pişirme avantajı"
+        },
+        {
+          "ikon": "kase",
+          "metin": "Yağsız ve katkısız pişirme sağladığı için bebek maması sebzelerini ve diyet öğünlerini birkaç dakikada hazırlar.",
+          "baslik": "Bebek ek gıdası ve sağlıklı diyetler için ideal"
+        },
+        {
+          "ikon": "tencere",
+          "metin": "Başta Fissler Vitaquick® 4,5 L ve 6 L olmak üzere iç ağız çapı 22 cm olan düdüklü ve derin tencerelerde güvenle kullanılır.",
+          "baslik": "22 cm tencerelerle çok yönlü uyum"
+        },
+        {
+          "metin": "Gözeneksiz paslanmaz çelik yüzeyi yemek kokusu barındırmaz; işiniz bittiğinde bulaşık makinesinde zahmetsizce yıkanır.",
+          "baslik": "18/10 çelik hijyeni ve makinede yıkama"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 1100
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:yok",
+        "22 cm Vitaquick® Uyumlu",
+        "18/10 Paslanmaz Çelik",
+        "Kutusuz · Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Fissler 22 cm paslanmaz çelik buharlı pişirme aparatı",
+          "src": "/img/urunler/fissler-buhar-aparati-22/01.webp"
+        }
+      ],
+      "faydaBaslik": "Suya değmeden pişen sebzeler, dağılmayan lezzet.",
+      "kategoriler": [
+        "aksesuar"
+      ],
       "kutuIcerigi": [
         "1 adet 22 cm delikli buharlı pişirme aparatı (kutusuz, koruyucu ambalajda)"
       ],
-      "sss": [
-        {
-          "soru": "Hangi tencerelerle uyumludur?",
-          "cevap": "İç ağız çapı 22 cm olan Fissler Vitaquick® 4,5 L ve 6 L düdüklü tencereler başta olmak üzere 22 cm çaplı tencerelerle uyumludur."
-        },
-        {
-          "soru": "Neden \"kutusuz\" olarak belirtiliyor?",
-          "cevap": "Ürün orijinal karton kutusu olmadan temin edildiği için şeffaflık adına kutusuz olarak belirtilmiştir; kargoda zarar görmeyecek şekilde koruyucu ambalajla gönderilir."
-        },
-        {
-          "soru": "Bulaşık makinesinde yıkanabilir mi?",
-          "cevap": "Evet, 18/10 paslanmaz çelik yapısı sayesinde bulaşık makinesinde yıkanmaya uygundur."
-        },
-        {
-          "soru": "Buhar aparatıyla neler pişirilebilir?",
-          "cevap": "Brokoli, havuç, patates, kabak gibi sebzeler, balık filetoları, mantı ve bebek mamaları için sebze/meyveler suyun içine değmeden buharda pişirilebilir."
-        }
-      ],
-      "birlikteIyiGider": [
-        "fissler-vitaquick-premium-6l",
-        "tefal-5-saniye-dograyici"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 72,
-      "dogrula": []
-    },
-    {
-      "id": "tefal-duetto-plus-tava-24",
-      "durum": "yayinda",
-      "marka": "Tefal",
-      "ad": "Duetto+ 2X Paslanmaz Çelik Tava 24 cm",
-      "kisaAd": "Duetto+ Tava 24 cm",
-      "kategoriler": [
-        "tava"
-      ],
-      "fiyat": 1999,
       "fiyatGecmisi": [
         {
+          "fiyat": 499,
           "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 1699,
           "dogrulandi": true
         },
         {
+          "fiyat": 1100,
+          "tarih": "2026-11-23T12:27:03.087Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 999,
           "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 1799,
           "dogrulandi": true
         },
         {
+          "fiyat": 1049,
           "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 1999,
           "dogrulandi": true
         }
       ],
-      "kampanya": null,
+      "faydaAltBaslik": "22 cm düdüklü ve çelik tencerelerde vitamin, renk ve doğal tadı koruyan buharda pişirme.",
+      "faydaUstBaslik": "Neden bu buhar aparatı?",
       "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 8,
-      "maxAdet": 5,
+      "birlikteIyiGider": [
+        "fissler-vitaquick-premium-6l",
+        "fissler-toronto-tencere-seti"
+      ],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "tencere",
+          "metin": "22 cm Vitaquick® ve çelik tencerelerle tam uyum|Fissler 4,5 L ve 6 L düdüklüler ile iç çapı 22 cm olan derin tencerelere tam oturur"
+        },
+        {
+          "ikon": "kase",
+          "metin": "Vitamin, renk ve diri kıvamı korur|Sebze, balık, mantı ve bebek mamaları haşlama suyuna karışmadan, kendi buharında pişer"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Orijinal Fissler 18/10 paslanmaz çelik|Koku ve tat tutmaz, paslanmaya dirençli gövdesiyle tencerenizle birlikte yıllarca kullanılır"
+        },
+        {
+          "ikon": "kutu",
+          "metin": "Kutusuz, darbe korumalı özel ambalajda|Set içinden ayrılmış orijinal Fissler parçasıdır; özenle paketlenerek gönderilir"
+        }
+      ]
+    },
+    {
+      "ad": "Duetto+ 2X Paslanmaz Çelik Tava 24 cm",
+      "id": "tefal-duetto-plus-tava-24",
       "sku": "G7320434",
-      "gorseller": [
+      "sss": [
         {
-          "src": "/img/urunler/tefal-duetto-plus-tava-24/01.webp",
-          "alt": "Tefal Duetto+ 24 cm paslanmaz çelik tava, önden görünüm"
+          "soru": "24 cm tava kaç kişilik porsiyon için uygundur?",
+          "cevap": "1–2 kişilik omlet, sote, sebze veya köfte hazırlığı için günlük kullanımda en çok tercih edilen ideal ölçüdür."
         },
         {
-          "src": "/img/urunler/tefal-duetto-plus-tava-24/02.webp",
-          "alt": "Tefal Duetto+ 24 cm tava, iç yüzey ve Thermo-Signal göstergesi"
+          "soru": "Thermo-Signal™ göstergesi ne işe yarar?",
+          "cevap": "Tava pişirme için ideal sıcaklığa ulaştığında ortadaki kırmızı halka düz kırmızıya döner; böylece yağı yakmadan tam zamanında pişirmeye başlarsınız."
         },
         {
-          "src": "/img/urunler/tefal-duetto-plus-tava-24/03.webp",
-          "alt": "Tefal Duetto+ 24 cm tava, yan profil ve perçinli çelik sap"
+          "soru": "İç kaplaması sağlığa zararlı madde içerir mi?",
+          "cevap": "Tefal’in yapışmaz kaplamaları PFOA, kurşun ve kadmiyum içermez."
         },
         {
-          "src": "/img/urunler/tefal-duetto-plus-tava-24/04.webp",
-          "alt": "Tefal Duetto+ 24 cm tava, indüksiyon uyumlu taban detayı"
+          "soru": "Metal kaşık veya çatal kullanabilir miyim?",
+          "cevap": "Yapışmaz kaplamanın ömrünü korumak için ahşap veya silikon mutfak gereçleri kullanmanızı ve tavanın soğuduktan sonra yıkanmasını öneririz."
         }
       ],
       "ozet": "Parlak paslanmaz çelik gövdeyi Titanium 2X yapışmaz kaplama ve Thermo-Signal™ sıcaklık göstergesiyle birleştiren 24 cm Tefal Duetto+ tava. Omlet, krep, köfte ve günlük soteler için pratik boy.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "tava",
-          "metin": "Eğilmeyen paslanmaz çelik dış gövde|İnce alüminyum tavalar gibi tabanı şişmez; indüksiyon dahil tüm ocaklarda tam performans verir"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "Titanium 2X yapışmaz iç kaplama|Çelik gövdenin ısı gücünü, yumurta ve balığın bile yapışmadığı kolay temizlenen yüzeyle birleştirir"
-        },
-        {
-          "ikon": "ayar",
-          "metin": "Perçinli çelik sapla 250 °C’ye kadar fırına girer|Gevşeme yapmayan sağlam çelik sapı sayesinde ocakta mühürleyip fırında pişirmeye devam edin"
-        },
-        {
-          "ikon": "gosterge",
-          "metin": "Thermo-Signal™ ideal sıcaklık göstergesi|Ortadaki kum saati simgesi düz kırmızıya döndüğünde tava mühürleme için tam kıvamındadır"
-        }
-      ],
-      "rozetler": [
-        "damga:serit:lacivert:250°C Fırına Girer",
-        "Paslanmaz Çelik · Titanium 2X",
-        "Thermo-Signal™ Gösterge",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tava?",
-      "faydaBaslik": "Dışı ömürlük paslanmaz çelik, içi zahmetsiz yapışmaz.",
-      "faydaAltBaslik": "İndüksiyon dahil her ocakta ve 250 °C’ye kadar fırında kullanılabilen profesyonel çelik gövdeli tava.",
-      "faydalar": [
-        {
-          "baslik": "Çelik sağlamlığı ile yapışmaz konforu bir arada",
-          "metin": "Klasik çelik tavalarda yiyecek yapışmasından çekinenler için dışta 18/10 paslanmaz çelik gövdeyi, içte Titanium 2X yapışmaz kaplamayla buluşturur.",
-          "ikon": "kalkan",
-          "kaynak": "Tefal Duetto+ serisi"
-        },
-        {
-          "baslik": "Perçinli çelik sap ve 250 °C fırın uyumu",
-          "metin": "Plastik saplı tavaların aksine gevşemeyen perçinli paslanmaz çelik sapa sahiptir; 250 °C’ye kadar fırına güvenle girebilir.",
-          "ikon": "ates",
-          "kaynak": "Tefal Duetto+ teknik verisi"
-        },
-        {
-          "baslik": "Thermo-Signal™ ile tam zamanında mühürleme",
-          "metin": "Tava ideal sıcaklığa ulaştığında Thermo-Signal™ göstergesi renk değiştirir; et, köfte ve sebzeler suyunu salmadan lezzetle mühürlenir.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "İndüksiyon uyumlu kalın taban ve ideal 24 cm boy",
-          "metin": "Sabah omletlerinden akşam sotelerine kadar her gün elinizin gideceği 24 cm ölçü; kalın indüksiyon tabanıyla ısıyı eşit yayar.",
-          "ikon": "tava"
-        }
-      ],
-      "pisirme": [],
+      "stok": 8,
+      "durum": "yayinda",
+      "fiyat": 1999,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "Duetto+ Tava 24 cm",
       "teknik": [
         [
           "Marka",
@@ -734,128 +695,148 @@
           "3168430321847"
         ]
       ],
-      "kutuIcerigi": [
-        "1 adet Tefal Duetto+ 24 cm paslanmaz çelik tava"
-      ],
-      "sss": [
-        {
-          "soru": "24 cm tava kaç kişilik porsiyon için uygundur?",
-          "cevap": "1–2 kişilik omlet, sote, sebze veya köfte hazırlığı için günlük kullanımda en çok tercih edilen ideal ölçüdür."
-        },
-        {
-          "soru": "Thermo-Signal™ göstergesi ne işe yarar?",
-          "cevap": "Tava pişirme için ideal sıcaklığa ulaştığında ortadaki kırmızı halka düz kırmızıya döner; böylece yağı yakmadan tam zamanında pişirmeye başlarsınız."
-        },
-        {
-          "soru": "İç kaplaması sağlığa zararlı madde içerir mi?",
-          "cevap": "Tefal’in yapışmaz kaplamaları PFOA, kurşun ve kadmiyum içermez."
-        },
-        {
-          "soru": "Metal kaşık veya çatal kullanabilir miyim?",
-          "cevap": "Yapışmaz kaplamanın ömrünü korumak için ahşap veya silikon mutfak gereçleri kullanmanızı ve tavanın soğuduktan sonra yıkanmasını öneririz."
-        }
-      ],
-      "birlikteIyiGider": [
-        "tefal-5-saniye-dograyici",
-        "fissler-copenhagen-tencere-seti",
-        "tefal-easy-cook-clean-tava-seti-24-28"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
+      "dogrula": [],
+      "maxAdet": 5,
       "oncelik": 80,
-      "dogrula": []
-    },
-    {
-      "id": "fissler-copenhagen-tencere-seti",
-      "durum": "yayinda",
-      "marka": "Fissler",
-      "ad": "Copenhagen 8 Parça Cam Kapaklı Çelik Tencere Seti",
-      "kisaAd": "Copenhagen 8 Parça Set",
-      "kategoriler": [
-        "tencere"
-      ],
-      "fiyat": 14199,
-      "fiyatGecmisi": [
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
         {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 14599,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 13999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 14199,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 1,
-      "maxAdet": 1,
-      "sku": "4009209373645",
-      "gorseller": [
-        {
-          "src": "/img/urunler/fissler-copenhagen-tencere-seti/01.webp",
-          "alt": "Fissler Copenhagen 8 parça cam kapaklı paslanmaz çelik tencere seti"
-        }
-      ],
-      "ozet": "Isıya dayanıklı cam kapaklı, 18/10 paslanmaz çelik Fissler Copenhagen tencere seti. Kapağı açmadan yemeğin pişmesini takip edin; dahili ölçü çizgileri ve damlatmayan dökme kenarıyla her gün keyifle kullanın.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "tencere",
-          "metin": "Isıya dayanıklı cam kapaklarla tam kontrol|Buharı ve sıcaklığı dışarı kaçırmadan yemeğin kaynamasını ve suyunu izleyin"
+          "ikon": "kalkan",
+          "metin": "Klasik çelik tavalarda yiyecek yapışmasından çekinenler için dışta 18/10 paslanmaz çelik gövdeyi, içte Titanium 2X yapışmaz kaplamayla buluşturur.",
+          "baslik": "Çelik sağlamlığı ile yapışmaz konforu bir arada",
+          "kaynak": "Tefal Duetto+ serisi"
         },
         {
           "ikon": "ates",
-          "metin": "Dibi tutmayan Superthermic® kapsül taban|Isıyı tabanın tamamına eşit yayar; pilav, çorba ve sulu yemekler dengeli pişer"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "Yıllarca kararmayan 18/10 paslanmaz çelik|Kaplaması soyulan tencerelerin aksine ömür boyu sağlığını ve parlaklığını korur"
+          "metin": "Plastik saplı tavaların aksine gevşemeyen perçinli paslanmaz çelik sapa sahiptir; 250 °C’ye kadar fırına güvenle girebilir.",
+          "baslik": "Perçinli çelik sap ve 250 °C fırın uyumu",
+          "kaynak": "Tefal Duetto+ teknik verisi"
         },
         {
           "ikon": "gosterge",
-          "metin": "Lazer iç ölçü çizgisi ve damlatmaz kenar|Ekstra ölçü kabı kirletmeden su ekleyin, çorba ve sosları tezgaha damlatmadan dökün"
+          "metin": "Tava ideal sıcaklığa ulaştığında Thermo-Signal™ göstergesi renk değiştirir; et, köfte ve sebzeler suyunu salmadan lezzetle mühürlenir.",
+          "baslik": "Thermo-Signal™ ile tam zamanında mühürleme"
+        },
+        {
+          "ikon": "tava",
+          "metin": "Sabah omletlerinden akşam sotelerine kadar her gün elinizin gideceği 24 cm ölçü; kalın indüksiyon tabanıyla ısıyı eşit yayar.",
+          "baslik": "İndüksiyon uyumlu kalın taban ve ideal 24 cm boy"
         }
       ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 2500
+      },
+      "oneCikan": true,
       "rozetler": [
-        "damga:serit:mercan:Avantajlı Set",
-        "Cam Kapaklı · 18/10 Çelik",
-        "İndüksiyon Uyumlu",
+        "damga:serit:lacivert:250°C Fırına Girer",
+        "Paslanmaz Çelik · Titanium 2X",
+        "Thermo-Signal™ Gösterge",
         "Orijinal Ürün"
       ],
-      "faydaUstBaslik": "Neden bu tencere seti?",
-      "faydaBaslik": "Kapağı açmadan pişmeyi izleyin, yıllarca güvenle kullanın.",
-      "faydaAltBaslik": "Superthermic® kalın taban ve ısıya dayanıklı cam kapaklarla her gün zahmetsiz çelik tencere keyfi.",
-      "faydalar": [
+      "gorseller": [
         {
-          "baslik": "Kapağı kaldırmadan kıvam takibi",
-          "metin": "Fırın ısısına dayanıklı sıkı oturan cam kapaklar, buharı içeride hapsederek yemeğin kendi suyuyla lezzetli pişmesini sağlar.",
-          "ikon": "tencere",
-          "kaynak": "Fissler Copenhagen serisi"
+          "alt": "Tefal Duetto+ 24 cm paslanmaz çelik tava, önden görünüm",
+          "src": "/img/urunler/tefal-duetto-plus-tava-24/01.webp"
         },
         {
-          "baslik": "Superthermic® tabanla homojen ısı dağılımı",
-          "metin": "Kalın kapsül taban ocağın ısısını hızla emer ve kenarlara kadar eşit dağıtır; indüksiyon dahil tüm ocaklarda yüksek verim sunar.",
-          "ikon": "ates"
+          "alt": "Tefal Duetto+ 24 cm tava, iç yüzey ve Thermo-Signal göstergesi",
+          "src": "/img/urunler/tefal-duetto-plus-tava-24/02.webp"
         },
         {
-          "baslik": "İç litre skalası ve damlatmayan dökme ağzı",
-          "metin": "Tencere içindeki silinmeyen lazer litre çizgileri ve özel kıvrımlı dökme kenarı günlük yemek hazırlığında hız ve temizlik kazandırır.",
-          "ikon": "gosterge"
+          "alt": "Tefal Duetto+ 24 cm tava, yan profil ve perçinli çelik sap",
+          "src": "/img/urunler/tefal-duetto-plus-tava-24/03.webp"
         },
         {
-          "baslik": "Çeyizden yıllar sonrasına 18/10 çelik",
-          "metin": "Aside, paslanmaya ve bulaşık makinesine dayanıklı 18/10 paslanmaz çelik gövde uzun yıllar mutfağınızın ana tencere seti olarak kalır.",
-          "ikon": "kalkan"
+          "alt": "Tefal Duetto+ 24 cm tava, indüksiyon uyumlu taban detayı",
+          "src": "/img/urunler/tefal-duetto-plus-tava-24/04.webp"
         }
       ],
-      "pisirme": [],
+      "faydaBaslik": "Dışı ömürlük paslanmaz çelik, içi zahmetsiz yapışmaz.",
+      "kategoriler": [
+        "tava"
+      ],
+      "kutuIcerigi": [
+        "1 adet Tefal Duetto+ 24 cm paslanmaz çelik tava"
+      ],
+      "fiyatGecmisi": [
+        {
+          "fiyat": 2500,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1699,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1799,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1999,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
+        }
+      ],
+      "faydaAltBaslik": "İndüksiyon dahil her ocakta ve 250 °C’ye kadar fırında kullanılabilen profesyonel çelik gövdeli tava.",
+      "faydaUstBaslik": "Neden bu tava?",
+      "sepetteIndirim": 0,
+      "birlikteIyiGider": [
+        "tefal-ingenio-essential-4-parca",
+        "tefal-5-saniye-dograyici"
+      ],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "tava",
+          "metin": "Eğilmeyen paslanmaz çelik dış gövde|İnce alüminyum tavalar gibi tabanı şişmez; indüksiyon dahil tüm ocaklarda tam performans verir"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Titanium 2X yapışmaz iç kaplama|Çelik gövdenin ısı gücünü, yumurta ve balığın bile yapışmadığı kolay temizlenen yüzeyle birleştirir"
+        },
+        {
+          "ikon": "ayar",
+          "metin": "Perçinli çelik sapla 250 °C’ye kadar fırına girer|Gevşeme yapmayan sağlam çelik sapı sayesinde ocakta mühürleyip fırında pişirmeye devam edin"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Thermo-Signal™ ideal sıcaklık göstergesi|Ortadaki kum saati simgesi düz kırmızıya döndüğünde tava mühürleme için tam kıvamındadır"
+        }
+      ]
+    },
+    {
+      "ad": "Copenhagen 8 Parça Cam Kapaklı Çelik Tencere Seti",
+      "id": "fissler-copenhagen-tencere-seti",
+      "sku": "4009209373645",
+      "sss": [
+        {
+          "soru": "Cam kapaklar yüksek ısıya dayanıklı mı?",
+          "cevap": "Evet, Fissler Copenhagen serisinin cam kapakları pişirme ısısına dayanıklıdır ve kapağı açmadan yemeği kontrol etmenizi sağlar."
+        },
+        {
+          "soru": "Tencerelerin içinde ölçü çizgisi var mı?",
+          "cevap": "Evet, Fissler Copenhagen tencerelerinin iç gövdesinde litre bazlı entegre ölçüm çizgileri bulunur."
+        },
+        {
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Evet, 18/10 paslanmaz çelik gövde ve cam kapaklar bulaşık makinesinde yıkanmaya uygundur."
+        },
+        {
+          "soru": "Ürün orijinal ve faturalı mı gönderiliyor?",
+          "cevap": "Evet, kapalı orijinal kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
+        }
+      ],
+      "ozet": "Isıya dayanıklı cam kapaklı, 18/10 paslanmaz çelik Fissler Copenhagen tencere seti. Kapağı açmadan yemeğin pişmesini takip edin; dahili ölçü çizgileri ve damlatmayan dökme kenarıyla her gün keyifle kullanın.",
+      "stok": 1,
+      "durum": "yayinda",
+      "fiyat": 14199,
+      "marka": "Fissler",
+      "firsat": null,
+      "kisaAd": "Copenhagen 8 Parça Set",
       "teknik": [
         [
           "Marka",
@@ -898,125 +879,138 @@
           "4009209373645"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 1,
+      "oncelik": 95,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "tencere",
+          "metin": "Fırın ısısına dayanıklı sıkı oturan cam kapaklar, buharı içeride hapsederek yemeğin kendi suyuyla lezzetli pişmesini sağlar.",
+          "baslik": "Kapağı kaldırmadan kıvam takibi",
+          "kaynak": "Fissler Copenhagen serisi"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Kalın kapsül taban ocağın ısısını hızla emer ve kenarlara kadar eşit dağıtır; indüksiyon dahil tüm ocaklarda yüksek verim sunar.",
+          "baslik": "Superthermic® tabanla homojen ısı dağılımı"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Tencere içindeki silinmeyen lazer litre çizgileri ve özel kıvrımlı dökme kenarı günlük yemek hazırlığında hız ve temizlik kazandırır.",
+          "baslik": "İç litre skalası ve damlatmayan dökme ağzı"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Aside, paslanmaya ve bulaşık makinesine dayanıklı 18/10 paslanmaz çelik gövde uzun yıllar mutfağınızın ana tencere seti olarak kalır.",
+          "baslik": "Çeyizden yıllar sonrasına 18/10 çelik"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 15999
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:mercan:Avantajlı Set",
+        "Cam Kapaklı · 18/10 Çelik",
+        "İndüksiyon Uyumlu",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Fissler Copenhagen 8 parça cam kapaklı paslanmaz çelik tencere seti",
+          "src": "/img/urunler/fissler-copenhagen-tencere-seti/01.webp"
+        }
+      ],
+      "faydaBaslik": "Kapağı açmadan pişmeyi izleyin, yıllarca güvenle kullanın.",
+      "kategoriler": [
+        "tencere"
+      ],
       "kutuIcerigi": [
         "4 adet 18/10 paslanmaz çelik tencere",
         "4 adet ısıya dayanıklı cam kapak",
         "Orijinal Fissler Copenhagen kutusu"
       ],
-      "sss": [
-        {
-          "soru": "Cam kapaklar yüksek ısıya dayanıklı mı?",
-          "cevap": "Evet, Fissler Copenhagen serisinin cam kapakları pişirme ısısına dayanıklıdır ve kapağı açmadan yemeği kontrol etmenizi sağlar."
-        },
-        {
-          "soru": "Tencerelerin içinde ölçü çizgisi var mı?",
-          "cevap": "Evet, Fissler Copenhagen tencerelerinin iç gövdesinde litre bazlı entegre ölçüm çizgileri bulunur."
-        },
-        {
-          "soru": "Bulaşık makinesinde yıkanabilir mi?",
-          "cevap": "Evet, 18/10 paslanmaz çelik gövde ve cam kapaklar bulaşık makinesinde yıkanmaya uygundur."
-        },
-        {
-          "soru": "Ürün orijinal ve faturalı mı gönderiliyor?",
-          "cevap": "Evet, kapalı orijinal kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
-        }
-      ],
-      "birlikteIyiGider": [
-        "fissler-vitaquick-premium-6l",
-        "zwilling-king-30-parca-catal-kasik",
-        "tefal-duetto-plus-tava-24"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 95,
-      "dogrula": []
-    },
-    {
-      "id": "fissler-family-line-tencere-seti",
-      "durum": "yayinda",
-      "marka": "Fissler",
-      "ad": "Family Line 9 Parça Paslanmaz Çelik Tencere Seti",
-      "kisaAd": "Family Line 9 Parça Set",
-      "kategoriler": [
-        "tencere"
-      ],
-      "fiyat": 13999,
       "fiyatGecmisi": [
         {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 14599,
+          "fiyat": 15999,
+          "tarih": "2026-11-14T14:12:09.189Z",
           "dogrulandi": true
         },
         {
-          "tarih": "2026-11-24T16:59:28.153Z",
+          "fiyat": 14599,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
+        },
+        {
           "fiyat": 13999,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 14199,
+          "tarih": "2026-11-25T10:08:58.514Z",
           "dogrulandi": true
         }
       ],
-      "kampanya": null,
+      "faydaAltBaslik": "Superthermic® kalın taban ve ısıya dayanıklı cam kapaklarla her gün zahmetsiz çelik tencere keyfi.",
+      "faydaUstBaslik": "Neden bu tencere seti?",
       "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 1,
-      "maxAdet": 1,
-      "sku": "4009209288628",
-      "gorseller": [
-        {
-          "src": "/img/urunler/fissler-family-line-tencere-seti/01.webp",
-          "alt": "Fissler Family Line 9 parça paslanmaz çelik tencere seti"
-        }
+      "birlikteIyiGider": [
+        "tefal-easy-cook-clean-tava-seti-24-28",
+        "zwilling-king-30-parca-catal-kasik",
+        "ingegno-ipli-dograyici"
       ],
-      "ozet": "Dört kapaklı tencere ve bir kapaksız sos tenceresinden oluşan 5 parça Fissler Family Line 18/10 paslanmaz çelik seti. Çorbadan pilava, kalabalık aile yemeklerinden günlük soslara kadar mutfağın tüm temel ihtiyacı tek kutuda.",
       "oneCikanBilgiler": [
         {
-          "ikon": "kalkan",
-          "metin": "Kırılma derdi olmayan çelik kapaklar ve ağır gövde|18/10 paslanmaz çelik yapısı darbelere dayanıklıdır; yıllarca formunu kaybetmez"
+          "ikon": "tencere",
+          "metin": "Isıya dayanıklı cam kapaklarla tam kontrol|Buharı ve sıcaklığı dışarı kaçırmadan yemeğin kaynamasını ve suyunu izleyin"
         },
         {
           "ikon": "ates",
-          "metin": "Ocaktan 230 °C fırına doğrudan geçiş|Tamamı metal gövde ve kapakları sayesinde yemeği ocakta mühürleyip fırında tamamlayın"
+          "metin": "Dibi tutmayan Superthermic® kapsül taban|Isıyı tabanın tamamına eşit yayar; pilav, çorba ve sulu yemekler dengeli pişer"
         },
         {
-          "ikon": "tencere",
-          "metin": "Aile mutfağı için 5 pişirme kabı (9 parça)|4 farklı boy kapaklı tencere ve 1 pratik saplı sos tenceresi tek kutuda"
+          "ikon": "kalkan",
+          "metin": "Yıllarca kararmayan 18/10 paslanmaz çelik|Kaplaması soyulan tencerelerin aksine ömür boyu sağlığını ve parlaklığını korur"
         },
         {
           "ikon": "gosterge",
-          "metin": "Superthermic® kalın taban ve iç ölçü skalası|Isıyı uzun süre muhafaza eden kapsül taban, lazer litre çizgileri ve damlatmaz kenar"
+          "metin": "Lazer iç ölçü çizgisi ve damlatmaz kenar|Ekstra ölçü kabı kirletmeden su ekleyin, çorba ve sosları tezgaha damlatmadan dökün"
+        }
+      ]
+    },
+    {
+      "ad": "Family Line 9 Parça Paslanmaz Çelik Tencere Seti",
+      "id": "fissler-family-line-tencere-seti",
+      "sku": "4009209288628",
+      "sss": [
+        {
+          "soru": "Sette toplam kaç parça tencere var?",
+          "cevap": "Set; 4 adet kapaklı tencere ve 1 adet kapaksız saplı sos tenceresi olmak üzere 5 ana pişirme kabından oluşur."
+        },
+        {
+          "soru": "Sos tenceresinin kapağı var mı?",
+          "cevap": "Sos tenceresi kapaksızdır; dilerseniz aynı çaptaki tencerenin kapağıyla birlikte kullanılabilir."
+        },
+        {
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Evet, 18/10 paslanmaz çelik parçaların tamamı bulaşık makinesinde yıkanmaya uygundur."
+        },
+        {
+          "soru": "Ürün orijinal ve faturalı mı?",
+          "cevap": "Evet, orijinal kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
         }
       ],
-      "rozetler": [
-        "damga:altin:Yıldız Ürün",
-        "9 Parça · İndüksiyon Uyumlu",
-        "18/10 Paslanmaz Çelik",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tencere seti?",
-      "faydaBaslik": "Ocaktan fırına giren, kuşaklar boyu eskimeyen çelik sağlamlığı.",
-      "faydaAltBaslik": "Tamamı 18/10 paslanmaz çelik gövde ve çelik kapaklarıyla yoğun aile mutfakları için üretildi.",
-      "faydalar": [
-        {
-          "baslik": "Fırına girebilen tam çelik yapı (230 °C)",
-          "metin": "Plastik veya cam parça içermeyen paslanmaz çelik gövde ve kapaklar, yemeklerinizi fırında pişirmeye veya sıcak tutmaya olanak tanır.",
-          "ikon": "ates",
-          "kaynak": "Fissler Family Line teknik verisi"
-        },
-        {
-          "baslik": "Kırılmaz çelik kapaklar ve ömürlük gövde",
-          "metin": "Cam kapak kırılma endişesi istemeyen kullanıcıların favorisidir; ağır çelik kapaklar buharı içeride tutarak yemeği kendi suyunda pişirir.",
-          "ikon": "kalkan"
-        },
-        {
-          "baslik": "Isıyı hapseden kalın Superthermic® taban",
-          "metin": "İndüksiyon dahil her ocakta ısıyı tabana homojen yayar; ocağı kapattıktan sonra bile yemeği uzun süre sıcak tutar.",
-          "ikon": "tencere"
-        },
-        {
-          "baslik": "İç ölçü çizgileri ve damlatmaz servis kenarı",
-          "metin": "Lazer işaretlemeli litre göstergesi, geniş dökme ağzı ve bulaşık makinesinde yıkanabilen pürüzsüz yüzey günlük kullanımı kolaylaştırır.",
-          "ikon": "gosterge"
-        }
-      ],
-      "pisirme": [],
+      "ozet": "Dört kapaklı tencere ve bir kapaksız sos tenceresinden oluşan 5 parça Fissler Family Line 18/10 paslanmaz çelik seti. Çorbadan pilava, kalabalık aile yemeklerinden günlük soslara kadar mutfağın tüm temel ihtiyacı tek kutuda.",
+      "stok": 1,
+      "durum": "yayinda",
+      "fiyat": 13999,
+      "marka": "Fissler",
+      "firsat": null,
+      "kisaAd": "Family Line 9 Parça Set",
       "teknik": [
         [
           "Marka",
@@ -1055,145 +1049,132 @@
           "4009209288628"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 1,
+      "oncelik": 92,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "ates",
+          "metin": "Plastik veya cam parça içermeyen paslanmaz çelik gövde ve kapaklar, yemeklerinizi fırında pişirmeye veya sıcak tutmaya olanak tanır.",
+          "baslik": "Fırına girebilen tam çelik yapı (230 °C)",
+          "kaynak": "Fissler Family Line teknik verisi"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Cam kapak kırılma endişesi istemeyen kullanıcıların favorisidir; ağır çelik kapaklar buharı içeride tutarak yemeği kendi suyunda pişirir.",
+          "baslik": "Kırılmaz çelik kapaklar ve ömürlük gövde"
+        },
+        {
+          "ikon": "tencere",
+          "metin": "İndüksiyon dahil her ocakta ısıyı tabana homojen yayar; ocağı kapattıktan sonra bile yemeği uzun süre sıcak tutar.",
+          "baslik": "Isıyı hapseden kalın Superthermic® taban"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Lazer işaretlemeli litre göstergesi, geniş dökme ağzı ve bulaşık makinesinde yıkanabilen pürüzsüz yüzey günlük kullanımı kolaylaştırır.",
+          "baslik": "İç ölçü çizgileri ve damlatmaz servis kenarı"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 15999
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:altin:Yıldız Ürün",
+        "9 Parça · İndüksiyon Uyumlu",
+        "18/10 Paslanmaz Çelik",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Fissler Family Line 9 parça paslanmaz çelik tencere seti",
+          "src": "/img/urunler/fissler-family-line-tencere-seti/01.webp"
+        }
+      ],
+      "faydaBaslik": "Ocaktan fırına giren, kuşaklar boyu eskimeyen çelik sağlamlığı.",
+      "kategoriler": [
+        "tencere"
+      ],
       "kutuIcerigi": [
         "4 adet kapaklı paslanmaz çelik tencere",
         "1 adet kapaksız saplı sos tenceresi"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "Sette toplam kaç parça tencere var?",
-          "cevap": "Set; 4 adet kapaklı tencere ve 1 adet kapaksız saplı sos tenceresi olmak üzere 5 ana pişirme kabından oluşur."
+          "fiyat": 15999,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Sos tenceresinin kapağı var mı?",
-          "cevap": "Sos tenceresi kapaksızdır; dilerseniz aynı çaptaki tencerenin kapağıyla birlikte kullanılabilir."
+          "fiyat": 14599,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Bulaşık makinesinde yıkanabilir mi?",
-          "cevap": "Evet, 18/10 paslanmaz çelik parçaların tamamı bulaşık makinesinde yıkanmaya uygundur."
-        },
-        {
-          "soru": "Ürün orijinal ve faturalı mı?",
-          "cevap": "Evet, orijinal kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
+          "fiyat": 13999,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "Tamamı 18/10 paslanmaz çelik gövde ve çelik kapaklarıyla yoğun aile mutfakları için üretildi.",
+      "faydaUstBaslik": "Neden bu tencere seti?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "fissler-vitaquick-premium-6l",
         "zwilling-king-30-parca-catal-kasik",
         "tefal-duetto-plus-tava-24"
       ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 92,
-      "dogrula": []
-    },
-    {
-      "id": "fissler-toronto-tencere-seti",
-      "durum": "yayinda",
-      "marka": "Fissler",
-      "ad": "Toronto Paslanmaz Çelik Tencere Seti",
-      "kisaAd": "Toronto Çelik Tencere Seti",
-      "kategoriler": [
-        "tencere"
-      ],
-      "fiyat": 14999,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 14599,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 12999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 14999,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 1,
-      "maxAdet": 1,
-      "sku": "FISSLER-TORONTO",
-      "gorseller": [
-        {
-          "src": "/img/urunler/fissler-toronto-tencere-seti/01.webp",
-          "alt": "Fissler Toronto paslanmaz çelik tencere seti, tam görünüm"
-        },
-        {
-          "src": "/img/urunler/fissler-toronto-tencere-seti/02.webp",
-          "alt": "Fissler Toronto tencere seti, kapak ve gövde detayı"
-        },
-        {
-          "src": "/img/urunler/fissler-toronto-tencere-seti/03.webp",
-          "alt": "Fissler Toronto tencere seti, kulplar ve parlak çelik yüzey"
-        },
-        {
-          "src": "/img/urunler/fissler-toronto-tencere-seti/04.webp",
-          "alt": "Fissler Toronto tencere seti, iç ölçek ve taban yapısı"
-        },
-        {
-          "src": "/img/urunler/fissler-toronto-tencere-seti/05.webp",
-          "alt": "Fissler Toronto tencere seti, mutfakta kullanım"
-        }
-      ],
-      "ozet": "Farklı boylarda kapaklı tencereler ve saplı bir sos tenceresini bir araya getiren Fissler Toronto 18/10 paslanmaz çelik seti. Superthermic taban, iç ölçü skalası ve damlatmaz kenar tasarımıyla günlük mutfak konforu.",
       "oneCikanBilgiler": [
         {
           "ikon": "kalkan",
-          "metin": "Parmak izi ve su lekesi gizleyen mat çelik|Saten fırçalanmış 18/10 paslanmaz çelik dış yüzey günlük kullanımda hep temiz görünür"
-        },
-        {
-          "ikon": "tencere",
-          "metin": "Buharı içeride tutan ısıya dayanıklı cam kapaklar|Kapağı açmadan pişme sürecini takip edin, ısı ve lezzet kaybını önleyin"
+          "metin": "Kırılma derdi olmayan çelik kapaklar ve ağır gövde|18/10 paslanmaz çelik yapısı darbelere dayanıklıdır; yıllarca formunu kaybetmez"
         },
         {
           "ikon": "ates",
-          "metin": "Superthermic® kapsül taban|İndüksiyon dahil tüm ocaklarda ısıyı dengeli dağıtarak dibi tutmadan pişirir"
+          "metin": "Ocaktan 230 °C fırına doğrudan geçiş|Tamamı metal gövde ve kapakları sayesinde yemeği ocakta mühürleyip fırında tamamlayın"
+        },
+        {
+          "ikon": "tencere",
+          "metin": "Aile mutfağı için 5 pişirme kabı (9 parça)|4 farklı boy kapaklı tencere ve 1 pratik saplı sos tenceresi tek kutuda"
         },
         {
           "ikon": "gosterge",
-          "metin": "Entegre iç ölçü çizgileri ve damlatmaz kenar|Tencere içinden doğrudan sıvı ölçümü ve tezgahı kirletmeyen dökme ağzı"
+          "metin": "Superthermic® kalın taban ve iç ölçü skalası|Isıyı uzun süre muhafaza eden kapsül taban, lazer litre çizgileri ve damlatmaz kenar"
+        }
+      ]
+    },
+    {
+      "ad": "Toronto Paslanmaz Çelik Tencere Seti",
+      "id": "fissler-toronto-tencere-seti",
+      "sku": "FISSLER-TORONTO",
+      "sss": [
+        {
+          "soru": "18/10 paslanmaz çelik ne anlama gelir?",
+          "cevap": "Yüzde 18 krom ve yüzde 10 nikel içeren bu çelik alaşımı paslanmaya karşı ekstra dirençlidir, gıdaya tat veya koku geçirmez."
+        },
+        {
+          "soru": "Tencerelerin içinde ölçü göstergesi var mı?",
+          "cevap": "Evet, tencere iç yüzeyinde sıvı ölçümünü kolaylaştıran entegre ölçek çizgileri yer alır."
+        },
+        {
+          "soru": "Bulaşık makinesinde yıkanabilir mi?",
+          "cevap": "Evet, bulaşık makinesinde yıkanmaya uygundur."
+        },
+        {
+          "soru": "Ürün orijinal kutusunda ve faturalı mı gelir?",
+          "cevap": "Evet, ürün orijinal kapalı kutusunda ve adınıza kesilmiş resmi faturayla gönderilir."
         }
       ],
-      "rozetler": [
-        "damga:altin:Favori Set",
-        "Superthermic Taban · 18/10 Çelik",
-        "İndüksiyon Uyumlu",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tencere seti?",
-      "faydaBaslik": "Fissler mühendisliği, günlük mutfakta en pratik haliyle.",
-      "faydaAltBaslik": "Leke belli etmeyen saten mat çelik gövde, cam kapaklar ve Superthermic® taban konforu.",
-      "faydalar": [
-        {
-          "baslik": "Günlük kullanıma dayanıklı saten mat yüzey",
-          "metin": "Fırçalanmış mat 18/10 çelik gövde, parlak yüzeylere göre su lekelerini ve çizikleri çok daha az belli eder; yıllarca şıklığını korur.",
-          "ikon": "kalkan",
-          "kaynak": "Fissler Toronto serisi"
-        },
-        {
-          "baslik": "Her öğüne uygun ideal tencere boyları",
-          "metin": "Derin çorba/haşlama tencereleri, pilav/karnıyarık tenceresi ve saplı sosluğuyla Türk mutfağının günlük pişirme alışkanlıklarına tam uyar.",
-          "ikon": "tencere"
-        },
-        {
-          "baslik": "Superthermic® tabanla enerji dostu pişirme",
-          "metin": "Kalın kapsüllü taban ısıyı hızla iletir ve eşit yayar; kısık ve orta ateşte bile yüksek pişirme performansı sunar.",
-          "ikon": "ates"
-        },
-        {
-          "baslik": "İç litre skalası ve zahmetsiz temizlik",
-          "metin": "İç gövdedeki ölçü çizgileri, damlatmaz kenar yapısı ve bulaşık makinesi uyumu mutfaktaki işinizi hızlandırır.",
-          "ikon": "tik"
-        }
-      ],
-      "pisirme": [],
+      "ozet": "Farklı boylarda kapaklı tencereler ve saplı bir sos tenceresini bir araya getiren Fissler Toronto 18/10 paslanmaz çelik seti. Superthermic taban, iç ölçü skalası ve damlatmaz kenar tasarımıyla günlük mutfak konforu.",
+      "stok": 1,
+      "durum": "yayinda",
+      "fiyat": 14999,
+      "marka": "Fissler",
+      "firsat": null,
+      "kisaAd": "Toronto Çelik Tencere Seti",
       "teknik": [
         [
           "Marka",
@@ -1228,136 +1209,152 @@
           "4009209373089"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 1,
+      "oncelik": 88,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "kalkan",
+          "metin": "Fırçalanmış mat 18/10 çelik gövde, parlak yüzeylere göre su lekelerini ve çizikleri çok daha az belli eder; yıllarca şıklığını korur.",
+          "baslik": "Günlük kullanıma dayanıklı saten mat yüzey",
+          "kaynak": "Fissler Toronto serisi"
+        },
+        {
+          "ikon": "tencere",
+          "metin": "Derin çorba/haşlama tencereleri, pilav/karnıyarık tenceresi ve saplı sosluğuyla Türk mutfağının günlük pişirme alışkanlıklarına tam uyar.",
+          "baslik": "Her öğüne uygun ideal tencere boyları"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Kalın kapsüllü taban ısıyı hızla iletir ve eşit yayar; kısık ve orta ateşte bile yüksek pişirme performansı sunar.",
+          "baslik": "Superthermic® tabanla enerji dostu pişirme"
+        },
+        {
+          "ikon": "tik",
+          "metin": "İç gövdedeki ölçü çizgileri, damlatmaz kenar yapısı ve bulaşık makinesi uyumu mutfaktaki işinizi hızlandırır.",
+          "baslik": "İç litre skalası ve zahmetsiz temizlik"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 16150
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:altin:Favori Set",
+        "Superthermic Taban · 18/10 Çelik",
+        "İndüksiyon Uyumlu",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Fissler Toronto paslanmaz çelik tencere seti, tam görünüm",
+          "src": "/img/urunler/fissler-toronto-tencere-seti/01.webp"
+        },
+        {
+          "alt": "Fissler Toronto tencere seti, kapak ve gövde detayı",
+          "src": "/img/urunler/fissler-toronto-tencere-seti/02.webp"
+        },
+        {
+          "alt": "Fissler Toronto tencere seti, kulplar ve parlak çelik yüzey",
+          "src": "/img/urunler/fissler-toronto-tencere-seti/03.webp"
+        },
+        {
+          "alt": "Fissler Toronto tencere seti, iç ölçek ve taban yapısı",
+          "src": "/img/urunler/fissler-toronto-tencere-seti/04.webp"
+        },
+        {
+          "alt": "Fissler Toronto tencere seti, mutfakta kullanım",
+          "src": "/img/urunler/fissler-toronto-tencere-seti/05.webp"
+        }
+      ],
+      "faydaBaslik": "Fissler mühendisliği, günlük mutfakta en pratik haliyle.",
+      "kategoriler": [
+        "tencere"
+      ],
       "kutuIcerigi": [
         "Fissler Toronto paslanmaz çelik kapaklı tencereler ve 1 adet saplı sos tenceresi (kesin ölçüler kutudan teyit edilecektir)"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "18/10 paslanmaz çelik ne anlama gelir?",
-          "cevap": "Yüzde 18 krom ve yüzde 10 nikel içeren bu çelik alaşımı paslanmaya karşı ekstra dirençlidir, gıdaya tat veya koku geçirmez."
+          "fiyat": 16150,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Tencerelerin içinde ölçü göstergesi var mı?",
-          "cevap": "Evet, tencere iç yüzeyinde sıvı ölçümünü kolaylaştıran entegre ölçek çizgileri yer alır."
+          "fiyat": 14599,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Bulaşık makinesinde yıkanabilir mi?",
-          "cevap": "Evet, bulaşık makinesinde yıkanmaya uygundur."
+          "fiyat": 12999,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Ürün orijinal kutusunda ve faturalı mı gelir?",
-          "cevap": "Evet, ürün orijinal kapalı kutusunda ve adınıza kesilmiş resmi faturayla gönderilir."
+          "fiyat": 14999,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "Leke belli etmeyen saten mat çelik gövde, cam kapaklar ve Superthermic® taban konforu.",
+      "faydaUstBaslik": "Neden bu tencere seti?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "fissler-vitaquick-premium-6l",
         "zwilling-king-30-parca-catal-kasik",
         "tefal-duetto-plus-tava-24"
       ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 88,
-      "dogrula": []
-    },
-    {
-      "id": "ingegno-ipli-dograyici",
-      "durum": "yayinda",
-      "marka": "Ingegno",
-      "ad": "Pratik İpli El Rondosu 750 ml (Siyah-Gri)",
-      "kisaAd": "İpli El Rondosu 750 ml",
-      "kategoriler": [
-        "mutfak-aletleri"
-      ],
-      "fiyat": 379,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 299,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 349,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 379,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 16,
-      "maxAdet": 5,
-      "sku": "INNG750MLSYHGRI",
-      "gorseller": [
-        {
-          "src": "/img/urunler/ingegno-ipli-dograyici/01.webp",
-          "alt": "Ingegno Pratik İpli El Rondosu 750 ml siyah-gri, önden görünüm"
-        },
-        {
-          "src": "/img/urunler/ingegno-ipli-dograyici/02.webp",
-          "alt": "Ingegno İpli Doğrayıcı, paslanmaz çelik çift bıçak ve sıyırıcı detayı"
-        },
-        {
-          "src": "/img/urunler/ingegno-ipli-dograyici/03.webp",
-          "alt": "Ingegno İpli El Rondosu, kullanım ve hazne görünümü"
-        }
-      ],
-      "ozet": "Elektrik veya pil gerektirmeyen, dayanıklı Paracord çekme ipli Ingegno el rondosu. Çift paslanmaz çelik bıçak, sıyırıcı mekanizma ve kaymaz silikon tabanıyla soğan, sebze, sos ve köfte harcını saniyeler içinde hazırlar.",
       "oneCikanBilgiler": [
         {
           "ikon": "kalkan",
-          "metin": "Kopmaya dirençli Paracord ip ve yay çeliği|Klasik ipli rondolardaki ip kopması ve geri sarmama sorununa karşı yüksek mukavemetli mekanizma"
+          "metin": "Parmak izi ve su lekesi gizleyen mat çelik|Saten fırçalanmış 18/10 paslanmaz çelik dış yüzey günlük kullanımda hep temiz görünür"
         },
         {
-          "ikon": "kasik",
-          "metin": "750 ml geniş hazne + sıyırıcılı çift bıçak|Kenarlara yapışan malzemeyi ortaya toplayan sıyırıcı kanatlarla tek seferde bol malzeme doğrar"
+          "ikon": "tencere",
+          "metin": "Buharı içeride tutan ısıya dayanıklı cam kapaklar|Kapağı açmadan pişme sürecini takip edin, ısı ve lezzet kaybını önleyin"
         },
         {
-          "ikon": "saat",
-          "metin": "Soğandan köfte harcına saniyeler içinde|Elektrik harcamadan salata, meze, ezme, bebek püresi ve burger/köfte iç harcını hazırlar"
+          "ikon": "ates",
+          "metin": "Superthermic® kapsül taban|İndüksiyon dahil tüm ocaklarda ısıyı dengeli dağıtarak dibi tutmadan pişirir"
         },
         {
-          "ikon": "tik",
-          "metin": "Tam tur kaymaz silikon taban|Tezgahta kaymadan tek elle rahatça çekilir; hazne ve bıçaklar saniyeler içinde yıkanır"
+          "ikon": "gosterge",
+          "metin": "Entegre iç ölçü çizgileri ve damlatmaz kenar|Tencere içinden doğrudan sıvı ölçümü ve tezgahı kirletmeyen dökme ağzı"
+        }
+      ]
+    },
+    {
+      "ad": "Pratik İpli El Rondosu 750 ml (Siyah-Gri)",
+      "id": "ingegno-ipli-dograyici",
+      "sku": "INNG750MLSYHGRI",
+      "sss": [
+        {
+          "soru": "Elektrik veya pil gerektirir mi?",
+          "cevap": "Hayır, tamamen manuel ipli çekme mekanizmasıyla çalışır; kablo, priz veya pil gerektirmez."
+        },
+        {
+          "soru": "Hangi yiyecekleri doğrayabilirim?",
+          "cevap": "Soğan, sarımsak, maydanoz, domates, biber, havuç gibi sebzeler; salata, meze, soslar ve kutusunda belirtildiği gibi köfte/burger harçları için uygundur."
+        },
+        {
+          "soru": "Doğrama inceliğini nasıl ayarlarım?",
+          "cevap": "İpi az sayıda çektiğinizde iri parçalar, daha fazla çektiğinizde püreye yakın ince doğrama elde edersiniz."
+        },
+        {
+          "soru": "Kapağı nasıl temizlemeliyim?",
+          "cevap": "İp mekanizmasının ömrünü korumak için kapağı su içine daldırmadan nemli bezle silmeniz, hazne ve bıçak kısmını yıkayıp kurulamanız önerilir."
         }
       ],
-      "rozetler": [
-        "damga:mercan:Süper Fiyat",
-        "Kopmayan Paracord İp · 750 ml",
-        "Kaymaz Silikon Taban",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu el rondosu?",
-      "faydaBaslik": "Geniş 750 ml hazne ve kopmaya dirençli Paracord ip gücü.",
-      "faydaAltBaslik": "Sıyırıcılı çift bıçak sistemiyle soğandan köfte harcına kadar priz aramadan saniyeler içinde doğrama.",
-      "faydalar": [
-        {
-          "baslik": "Paracord paraşüt ipiyle uzun ömürlü çekme",
-          "metin": "İpli doğrayıcılarda en çok aranan dayanıklılık için aşınmaya dirençli Paracord ip ve güçlü yay çeliği geri sarma sistemi kullanılmıştır.",
-          "ikon": "kalkan",
-          "kaynak": "Ingegno ürün verisi"
-        },
-        {
-          "baslik": "750 ml büyük hacim ve sıyırıcı aparat",
-          "metin": "Standart 400–500 ml doğrayıcılara göre daha geniş hazneye sahiptir; döner sıyırıcı kollar kenarda iri parça kalmasını önler.",
-          "ikon": "kasik"
-        },
-        {
-          "baslik": "Sulandırmadan tane tane doğrama",
-          "metin": "Elektrikli robotların aksine soğanı ve domatesi püre yapıp acı suyunu çıkarmaz; bıçakla elde doğranmış gibi diri kıvam verir.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "Mutfakta, yazlıkta ve kampta prizsiz konfor",
-          "metin": "Kablo ve priz derdi olmadan her yerde çalışır; kaymaz silikon tabanı sayesinde ıslak tezgahta bile sabit durur.",
-          "ikon": "saat"
-        }
-      ],
-      "pisirme": [],
+      "ozet": "Elektrik veya pil gerektirmeyen, dayanıklı Paracord çekme ipli Ingegno el rondosu. Çift paslanmaz çelik bıçak, sıyırıcı mekanizma ve kaymaz silikon tabanıyla soğan, sebze, sos ve köfte harcını saniyeler içinde hazırlar.",
+      "stok": 16,
+      "durum": "yayinda",
+      "fiyat": 379,
+      "marka": "Ingegno",
+      "firsat": null,
+      "kisaAd": "İpli El Rondosu 750 ml",
       "teknik": [
         [
           "Marka",
@@ -1396,157 +1393,146 @@
           "4452255988453"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 5,
+      "oncelik": 75,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "kalkan",
+          "metin": "İpli doğrayıcılarda en çok aranan dayanıklılık için aşınmaya dirençli Paracord ip ve güçlü yay çeliği geri sarma sistemi kullanılmıştır.",
+          "baslik": "Paracord paraşüt ipiyle uzun ömürlü çekme",
+          "kaynak": "Ingegno ürün verisi"
+        },
+        {
+          "ikon": "kasik",
+          "metin": "Standart 400–500 ml doğrayıcılara göre daha geniş hazneye sahiptir; döner sıyırıcı kollar kenarda iri parça kalmasını önler.",
+          "baslik": "750 ml büyük hacim ve sıyırıcı aparat"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Elektrikli robotların aksine soğanı ve domatesi püre yapıp acı suyunu çıkarmaz; bıçakla elde doğranmış gibi diri kıvam verir.",
+          "baslik": "Sulandırmadan tane tane doğrama"
+        },
+        {
+          "ikon": "saat",
+          "metin": "Kablo ve priz derdi olmadan her yerde çalışır; kaymaz silikon tabanı sayesinde ıslak tezgahta bile sabit durur.",
+          "baslik": "Mutfakta, yazlıkta ve kampta prizsiz konfor"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 449
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:mercan:Süper Fiyat",
+        "Kopmayan Paracord İp · 750 ml",
+        "Kaymaz Silikon Taban",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Ingegno Pratik İpli El Rondosu 750 ml siyah-gri, önden görünüm",
+          "src": "/img/urunler/ingegno-ipli-dograyici/01.webp"
+        },
+        {
+          "alt": "Ingegno İpli Doğrayıcı, paslanmaz çelik çift bıçak ve sıyırıcı detayı",
+          "src": "/img/urunler/ingegno-ipli-dograyici/02.webp"
+        },
+        {
+          "alt": "Ingegno İpli El Rondosu, kullanım ve hazne görünümü",
+          "src": "/img/urunler/ingegno-ipli-dograyici/03.webp"
+        }
+      ],
+      "faydaBaslik": "Geniş 750 ml hazne ve kopmaya dirençli Paracord ip gücü.",
+      "kategoriler": [
+        "mutfak-aletleri"
+      ],
       "kutuIcerigi": [
         "1 adet Ingegno şeffaf hazne (kaymaz tabanlı)",
         "1 adet ipli çekme mekanizmalı kapak",
         "1 adet paslanmaz çelik bıçak ve sıyırıcı ünitesi"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "Elektrik veya pil gerektirir mi?",
-          "cevap": "Hayır, tamamen manuel ipli çekme mekanizmasıyla çalışır; kablo, priz veya pil gerektirmez."
+          "fiyat": 449,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Hangi yiyecekleri doğrayabilirim?",
-          "cevap": "Soğan, sarımsak, maydanoz, domates, biber, havuç gibi sebzeler; salata, meze, soslar ve kutusunda belirtildiği gibi köfte/burger harçları için uygundur."
+          "fiyat": 299,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Doğrama inceliğini nasıl ayarlarım?",
-          "cevap": "İpi az sayıda çektiğinizde iri parçalar, daha fazla çektiğinizde püreye yakın ince doğrama elde edersiniz."
+          "fiyat": 349,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Kapağı nasıl temizlemeliyim?",
-          "cevap": "İp mekanizmasının ömrünü korumak için kapağı su içine daldırmadan nemli bezle silmeniz, hazne ve bıçak kısmını yıkayıp kurulamanız önerilir."
+          "fiyat": 379,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "Sıyırıcılı çift bıçak sistemiyle soğandan köfte harcına kadar priz aramadan saniyeler içinde doğrama.",
+      "faydaUstBaslik": "Neden bu el rondosu?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "tefal-duetto-plus-tava-24",
         "tefal-easy-cook-clean-tava-seti-24-28",
         "eratec-tek-kullanimlik-havlu"
       ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 75,
-      "dogrula": []
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kalkan",
+          "metin": "Kopmaya dirençli Paracord ip ve yay çeliği|Klasik ipli rondolardaki ip kopması ve geri sarmama sorununa karşı yüksek mukavemetli mekanizma"
+        },
+        {
+          "ikon": "kasik",
+          "metin": "750 ml geniş hazne + sıyırıcılı çift bıçak|Kenarlara yapışan malzemeyi ortaya toplayan sıyırıcı kanatlarla tek seferde bol malzeme doğrar"
+        },
+        {
+          "ikon": "saat",
+          "metin": "Soğandan köfte harcına saniyeler içinde|Elektrik harcamadan salata, meze, ezme, bebek püresi ve burger/köfte iç harcını hazırlar"
+        },
+        {
+          "ikon": "tik",
+          "metin": "Tam tur kaymaz silikon taban|Tezgahta kaymadan tek elle rahatça çekilir; hazne ve bıçaklar saniyeler içinde yıkanır"
+        }
+      ]
     },
     {
-      "id": "tefal-ingenio-black-stone-10-parca",
-      "durum": "yayinda",
-      "marka": "Tefal",
       "ad": "Ingenio Black Stone L39994 10 Parça Tencere ve Tava Seti",
-      "kisaAd": "Ingenio Black Stone 10 Parça",
-      "kategoriler": [
-        "tava",
-        "tencere"
-      ],
-      "fiyat": 16499,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 17249,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 15999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 16499,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 1,
-      "maxAdet": 1,
+      "id": "tefal-ingenio-black-stone-10-parca",
       "sku": "L39994",
-      "gorseller": [
+      "sss": [
         {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/01.webp",
-          "alt": "Tefal Ingenio Black Stone L39994 10 parça tencere ve tava seti"
+          "soru": "Sap her parçaya uyuyor mu ve güvenli mi?",
+          "cevap": "Evet, tek çıkarılabilir Ingenio sap setteki tüm tava ve tencerelere uyar. 3 noktalı güvenlik kilit sistemiyle 10 kg’a kadar ağırlığı güvenle taşır."
         },
         {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/02.webp",
-          "alt": "Tefal Ingenio Black Stone tek sap çok yönlü kullanım"
+          "soru": "Hermetik saklama kapakları ne işe yarar?",
+          "cevap": "16 cm ve 18 cm tencerelerin üzerine sıkıca kapanır; yemeği başka saklama kabına aktarmadan doğrudan buzdolabında muhafaza etmenizi sağlar."
         },
         {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/03.webp",
-          "alt": "Tefal Ingenio Black Stone ocak ve fırın uyumu"
+          "soru": "Sapı çıkarıp tencere ve tavaları fırına koyabilir miyim?",
+          "cevap": "Ingenio gövdeleri sap ve plastik kapaklar çıkarıldığında fırın kullanımına uygundur; maksimum sıcaklık sınırı kutu/kılavuzdan teyit edilmelidir."
         },
         {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/04.webp",
-          "alt": "Tefal Ingenio Black Stone iç içe geçen düzenli mutfak depolama"
-        },
-        {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/05.webp",
-          "alt": "Tefal Ingenio Black Stone Mineralia+ yapışmaz kaplama detayı"
-        },
-        {
-          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/06.webp",
-          "alt": "Tefal Ingenio Black Stone hermetik kapaklı buzdolabı saklama"
+          "soru": "Dolapta gerçekten yer kazandırır mı?",
+          "cevap": "Evet, sabit sap olmadığı için tüm parçalar iç içe istiflenir ve klasik tencere-tava setlerine göre çok daha az dolap alanı kaplar."
         }
       ],
       "ozet": "Tek çıkarılabilir sapla ocaktan fırına, sofradan buzdolabına geçen Fransa üretimi 10 parça Tefal Ingenio Black Stone seti. 3 tava, 2 tencere, 2 hermetik saklama kapağı, 2 servis aleti ve 10 kg taşıma kapasiteli güvenli sap tek kutuda.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "kutu",
-          "metin": "İç içe geçer, mutfak dolabında yarı yarıya yer açar|Sabit sap karmaşası olmadan 5 pişirme kabı tek bir tencere alanında üst üste istiflenir"
-        },
-        {
-          "ikon": "kilit",
-          "metin": "10 kg taşıyan 3 noktalı güvenli Ingenio sap|Tek elle takılıp çıkarılır; dolu tencereyi ocaktan fırına ve sofraya güvenle taşır*"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "Mineralia+ taş dokulu ekstra dayanıklı kaplama|Doğal mineral takviyeli yapışmaz yüzey az yağla pişirir, PFOA içermez"
-        },
-        {
-          "ikon": "konum",
-          "metin": "Fransa üretimi · İndüksiyon dahil tüm ocaklar|Hermetik buzdolabı kapakları ve Thermo-Signal™ ısı göstergesiyle 10 parça tam set"
-        }
-      ],
-      "rozetler": [
-        "damga:serit:lacivert:Dolapta %50 Yer Açar",
-        "İç İçe Geçer · Çıkarılabilir Sap",
-        "Fransa Üretimi",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tencere ve tava seti?",
-      "faydaBaslik": "Tek tıkla ocaktan fırına, sofradan buzdolabına.",
-      "faydaAltBaslik": "Dolaplarda %50’ye kadar yer açan çıkarılabilir sap sistemi ve Fransa üretimi Mineralia+ taş dokulu kaplama.",
-      "faydalar": [
-        {
-          "baslik": "Ocaktan fırına, sofradan buzdolabına tek kapta",
-          "metin": "Sapı çıkarıp yemeği fırında kızartın, şık bir servis kabı gibi sofraya koyun; artan yemeği hermetik kapağını kapatıp doğrudan buzdolabına kaldırın.",
-          "ikon": "ayar",
-          "kaynak": "Tefal Ingenio çok yönlü kullanım"
-        },
-        {
-          "baslik": "Dar dolaplarda ve bulaşık makinesinde ferahlık",
-          "metin": "Sabit saplar olmadığı için tüm tava ve tencereler iç içe geçer; küçük mutfaklarda, çeyizde ve bulaşık makinesi raflarında büyük yer kazandırır.",
-          "ikon": "kutu"
-        },
-        {
-          "baslik": "3 noktalı kilit, 10 kg taşıma kapasitesi",
-          "metin": "Tefal’in patentli çıkarılabilir sapı gövdeyi üç noktadan sıkıca kavrar; ağır yemeklerde bile sarsıntısız ve güvenli tutuş sağlar.",
-          "ikon": "kilit",
-          "kaynak": "Tefal resmî laboratuvar verisi"
-        },
-        {
-          "baslik": "Mineralia+ kaplama ve Thermo-Signal™ gösterge",
-          "metin": "Mineral parçacıklarla güçlendirilmiş taş efektli yapışmaz yüzey ve ideal mühürleme ısısını bildiren kırmızı Thermo-Signal™ halkası.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "Fransa üretimi ve indüksiyon uyumlu kalın taban",
-          "metin": "İndüksiyon dahil tüm ocaklarda ısıyı hızla ve homojen dağıtan kalın taban yapısı Fransa’da üretilmiştir.",
-          "ikon": "konum"
-        }
-      ],
-      "pisirme": [],
+      "stok": 1,
+      "durum": "yayinda",
+      "fiyat": 16499,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "Ingenio Black Stone 10 Parça",
       "teknik": [
         [
           "Marka",
@@ -1605,6 +1591,82 @@
           "3168430331266"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 1,
+      "oncelik": 94,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "ayar",
+          "metin": "Sapı çıkarıp yemeği fırında kızartın, şık bir servis kabı gibi sofraya koyun; artan yemeği hermetik kapağını kapatıp doğrudan buzdolabına kaldırın.",
+          "baslik": "Ocaktan fırına, sofradan buzdolabına tek kapta",
+          "kaynak": "Tefal Ingenio çok yönlü kullanım"
+        },
+        {
+          "ikon": "kutu",
+          "metin": "Sabit saplar olmadığı için tüm tava ve tencereler iç içe geçer; küçük mutfaklarda, çeyizde ve bulaşık makinesi raflarında büyük yer kazandırır.",
+          "baslik": "Dar dolaplarda ve bulaşık makinesinde ferahlık"
+        },
+        {
+          "ikon": "kilit",
+          "metin": "Tefal’in patentli çıkarılabilir sapı gövdeyi üç noktadan sıkıca kavrar; ağır yemeklerde bile sarsıntısız ve güvenli tutuş sağlar.",
+          "baslik": "3 noktalı kilit, 10 kg taşıma kapasitesi",
+          "kaynak": "Tefal resmî laboratuvar verisi"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Mineral parçacıklarla güçlendirilmiş taş efektli yapışmaz yüzey ve ideal mühürleme ısısını bildiren kırmızı Thermo-Signal™ halkası.",
+          "baslik": "Mineralia+ kaplama ve Thermo-Signal™ gösterge"
+        },
+        {
+          "ikon": "konum",
+          "metin": "İndüksiyon dahil tüm ocaklarda ısıyı hızla ve homojen dağıtan kalın taban yapısı Fransa’da üretilmiştir.",
+          "baslik": "Fransa üretimi ve indüksiyon uyumlu kalın taban"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 17999
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:lacivert:Dolapta %50 Yer Açar",
+        "İç İçe Geçer · Çıkarılabilir Sap",
+        "Fransa Üretimi",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Tefal Ingenio Black Stone L39994 10 parça tencere ve tava seti",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/01.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Black Stone tek sap çok yönlü kullanım",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/02.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Black Stone ocak ve fırın uyumu",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/03.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Black Stone iç içe geçen düzenli mutfak depolama",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/04.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Black Stone Mineralia+ yapışmaz kaplama detayı",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/05.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Black Stone hermetik kapaklı buzdolabı saklama",
+          "src": "/img/urunler/tefal-ingenio-black-stone-10-parca/06.webp"
+        }
+      ],
+      "faydaBaslik": "Tek tıkla ocaktan fırına, sofradan buzdolabına.",
+      "kategoriler": [
+        "tava",
+        "tencere"
+      ],
       "kutuIcerigi": [
         "Tava 24 cm",
         "Tava 28 cm",
@@ -1615,134 +1677,84 @@
         "2 adet servis aleti (spatula ve kaşık)",
         "1 adet çıkarılabilir Ingenio sap"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "Sap her parçaya uyuyor mu ve güvenli mi?",
-          "cevap": "Evet, tek çıkarılabilir Ingenio sap setteki tüm tava ve tencerelere uyar. 3 noktalı güvenlik kilit sistemiyle 10 kg’a kadar ağırlığı güvenle taşır."
+          "fiyat": 17999,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Hermetik saklama kapakları ne işe yarar?",
-          "cevap": "16 cm ve 18 cm tencerelerin üzerine sıkıca kapanır; yemeği başka saklama kabına aktarmadan doğrudan buzdolabında muhafaza etmenizi sağlar."
+          "fiyat": 17249,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Sapı çıkarıp tencere ve tavaları fırına koyabilir miyim?",
-          "cevap": "Ingenio gövdeleri sap ve plastik kapaklar çıkarıldığında fırın kullanımına uygundur; maksimum sıcaklık sınırı kutu/kılavuzdan teyit edilmelidir."
+          "fiyat": 15999,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Dolapta gerçekten yer kazandırır mı?",
-          "cevap": "Evet, sabit sap olmadığı için tüm parçalar iç içe istiflenir ve klasik tencere-tava setlerine göre çok daha az dolap alanı kaplar."
+          "fiyat": 16499,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "Dolaplarda %50’ye kadar yer açan çıkarılabilir sap sistemi ve Fransa üretimi Mineralia+ taş dokulu kaplama.",
+      "faydaUstBaslik": "Neden bu tencere ve tava seti?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "tefal-5-saniye-dograyici",
         "tefal-duetto-plus-tava-24",
         "zwilling-king-30-parca-catal-kasik"
       ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 94,
-      "dogrula": []
-    },
-    {
-      "id": "tefal-ingenio-essential-4-parca",
-      "durum": "yayinda",
-      "marka": "Tefal",
-      "ad": "Ingenio Essential L2006502 4 Parça Tencere Seti (16-18-20 cm)",
-      "kisaAd": "Ingenio Essential 4 Parça",
-      "kategoriler": [
-        "tencere"
-      ],
-      "fiyat": 7299,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 8399,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 6999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 7299,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 1,
-      "maxAdet": 1,
-      "sku": "L2006502",
-      "gorseller": [
-        {
-          "src": "/img/urunler/tefal-ingenio-essential-4-parca/01.webp",
-          "alt": "Tefal Ingenio Essential L2006502 4 parça tencere seti (16-18-20 cm)"
-        },
-        {
-          "src": "/img/urunler/tefal-ingenio-essential-4-parca/02.webp",
-          "alt": "Tefal Ingenio Essential çıkarılabilir saplı iç içe geçme görünümü"
-        },
-        {
-          "src": "/img/urunler/tefal-ingenio-essential-4-parca/03.webp",
-          "alt": "Tefal Ingenio Essential 4 parça set detay görünümü"
-        }
-      ],
-      "ozet": "16, 18 ve 20 cm üç tencere ile 10 kg taşıma kapasiteli çıkarılabilir saptan oluşan Fransa üretimi 4 parça Tefal Ingenio Essential seti. Titanyum yapışmaz kaplama, difüzyon taban ve iç içe geçen kompakt tasarım. İndüksiyon hariç tüm ocaklarla uyumlu.",
       "oneCikanBilgiler": [
         {
           "ikon": "kutu",
-          "metin": "16, 18 ve 20 cm üç tencere iç içe geçer|Sapı çıktığı için dolapta yalnızca en büyük tencere kadar yer kaplar"
+          "metin": "İç içe geçer, mutfak dolabında yarı yarıya yer açar|Sabit sap karmaşası olmadan 5 pişirme kabı tek bir tencere alanında üst üste istiflenir"
         },
         {
           "ikon": "kilit",
-          "metin": "10 kg kapasiteli çıkarılabilir güvenli sap|3 noktalı güvenlik kilidiyle tek tıkla takılır, tüm Ingenio serisiyle uyumludur*"
-        },
-        {
-          "ikon": "ates",
-          "metin": "Ocaktan fırına ve sofraya pratik geçiş|Sapı çıkarıp fırın kabı olarak kullanın; bulaşık çıkarmadan sofrada servis edin"
+          "metin": "10 kg taşıyan 3 noktalı güvenli Ingenio sap|Tek elle takılıp çıkarılır; dolu tencereyi ocaktan fırına ve sofraya güvenle taşır*"
         },
         {
           "ikon": "kalkan",
-          "metin": "Fransa üretimi titanyumlu yapışmaz yüzey|PFOA içermez, kolay temizlenir · Gazlı, elektrikli ve seramik ocaklarla uyumlu"
+          "metin": "Mineralia+ taş dokulu ekstra dayanıklı kaplama|Doğal mineral takviyeli yapışmaz yüzey az yağla pişirir, PFOA içermez"
+        },
+        {
+          "ikon": "konum",
+          "metin": "Fransa üretimi · İndüksiyon dahil tüm ocaklar|Hermetik buzdolabı kapakları ve Thermo-Signal™ ısı göstergesiyle 10 parça tam set"
+        }
+      ]
+    },
+    {
+      "ad": "Ingenio Essential L2006502 4 Parça Tencere Seti (16-18-20 cm)",
+      "id": "tefal-ingenio-essential-4-parca",
+      "sku": "L2006502",
+      "sss": [
+        {
+          "soru": "İndüksiyon ocakta kullanılır mı?",
+          "cevap": "Hayır. Kutu üzerinde açıkça belirtildiği gibi gazlı, elektrikli ve cam seramik ocaklarla uyumludur; indüksiyon ocaklarda çalışmaz."
+        },
+        {
+          "soru": "Setin içinde kapak var mı?",
+          "cevap": "Hayır, bu 4 parça set 16-18-20 cm üç tencere ve 1 çıkarılabilir saptan oluşur. Mevcut 16-18-20 cm kapaklarınızla veya Ingenio kapaklarıyla kullanılabilir."
+        },
+        {
+          "soru": "Çıkarılabilir sap ağır yemeklerde güvenli mi?",
+          "cevap": "Evet, Tefal Ingenio sap 3 noktalı kilit sistemine sahiptir ve resmi Tefal testlerine göre 10 kg’a kadar yük taşıyabilir."
+        },
+        {
+          "soru": "Temizliği nasıl yapılmalı?",
+          "cevap": "Yapışmaz kaplama kolayca temizlenir. Çıkarılabilir sapın mekanizmasını korumak için sap elde yıkanmalıdır."
         }
       ],
-      "rozetler": [
-        "damga:serit:lacivert:İç İçe · Yer Açar",
-        "Çıkarılabilir Sap · Fransa",
-        "16–18–20 cm · 4 Parça",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tencere seti?",
-      "faydaBaslik": "Üç temel tencere, tek bir tencere yerinde.",
-      "faydaAltBaslik": "Günlük yemek, sos ve fırın tarifleri için iç içe geçen Fransa üretimi pratik Ingenio seti.",
-      "faydalar": [
-        {
-          "baslik": "Küçük mutfaklar ve günlük hazırlık için en pratik 3 boy",
-          "metin": "16 cm sos ve çorba için, 18 cm pilav ve makarna için, 20 cm ise günlük sulu yemekler için elinizin altında; üstelik tek tencere yerinde.",
-          "ikon": "kutu",
-          "kaynak": "Tefal Ingenio sistemi"
-        },
-        {
-          "baslik": "3 noktalı güvenli Ingenio sap (10 kg kapasite)",
-          "metin": "Patentli çıkarılabilir sap, tencereler arasında saniyeler içinde geçiş yapmanızı sağlar ve 10 kg’a kadar ağırlığı güvenle taşır.",
-          "ikon": "kilit",
-          "kaynak": "Tefal resmî verisi"
-        },
-        {
-          "baslik": "Fırın kabı ve servis kasesi olarak kullanım",
-          "metin": "Sapı çıkardığınızda tencereler fırında graten ve fırın yemekleri için tepsiye, sofrada ise şık birer servis kabına dönüşür.",
-          "ikon": "ates"
-        },
-        {
-          "baslik": "Kolay temizlenen titanyumlu yapışmaz kaplama",
-          "metin": "Fransa’da üretilen PFOA’sız yapışmaz iç yüzey ve homojen ısı yayan difüzyon taban, yemeklerin dibini tutmasını önler.",
-          "ikon": "kalkan"
-        }
-      ],
-      "pisirme": [],
+      "ozet": "16, 18 ve 20 cm üç tencere ile 10 kg taşıma kapasiteli çıkarılabilir saptan oluşan Fransa üretimi 4 parça Tefal Ingenio Essential seti. Titanyum yapışmaz kaplama, difüzyon taban ve iç içe geçen kompakt tasarım. İndüksiyon hariç tüm ocaklarla uyumlu.",
+      "stok": 1,
+      "durum": "yayinda",
+      "fiyat": 7299,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "Ingenio Essential 4 Parça",
       "teknik": [
         [
           "Marka",
@@ -1789,148 +1801,142 @@
           "3168430273153"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 1,
+      "oncelik": 85,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "kutu",
+          "metin": "16 cm sos ve çorba için, 18 cm pilav ve makarna için, 20 cm ise günlük sulu yemekler için elinizin altında; üstelik tek tencere yerinde.",
+          "baslik": "Küçük mutfaklar ve günlük hazırlık için en pratik 3 boy",
+          "kaynak": "Tefal Ingenio sistemi"
+        },
+        {
+          "ikon": "kilit",
+          "metin": "Patentli çıkarılabilir sap, tencereler arasında saniyeler içinde geçiş yapmanızı sağlar ve 10 kg’a kadar ağırlığı güvenle taşır.",
+          "baslik": "3 noktalı güvenli Ingenio sap (10 kg kapasite)",
+          "kaynak": "Tefal resmî verisi"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Sapı çıkardığınızda tencereler fırında graten ve fırın yemekleri için tepsiye, sofrada ise şık birer servis kabına dönüşür.",
+          "baslik": "Fırın kabı ve servis kasesi olarak kullanım"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Fransa’da üretilen PFOA’sız yapışmaz iç yüzey ve homojen ısı yayan difüzyon taban, yemeklerin dibini tutmasını önler.",
+          "baslik": "Kolay temizlenen titanyumlu yapışmaz kaplama"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 8399
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:lacivert:İç İçe · Yer Açar",
+        "Çıkarılabilir Sap · Fransa",
+        "16–18–20 cm · 4 Parça",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Tefal Ingenio Essential L2006502 4 parça tencere seti (16-18-20 cm)",
+          "src": "/img/urunler/tefal-ingenio-essential-4-parca/01.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Essential çıkarılabilir saplı iç içe geçme görünümü",
+          "src": "/img/urunler/tefal-ingenio-essential-4-parca/02.webp"
+        },
+        {
+          "alt": "Tefal Ingenio Essential 4 parça set detay görünümü",
+          "src": "/img/urunler/tefal-ingenio-essential-4-parca/03.webp"
+        }
+      ],
+      "faydaBaslik": "Üç temel tencere, tek bir tencere yerinde.",
+      "kategoriler": [
+        "tencere"
+      ],
       "kutuIcerigi": [
         "Tencere 16 cm",
         "Tencere 18 cm",
         "Tencere 20 cm",
         "1 adet çıkarılabilir Ingenio sap"
       ],
-      "sss": [
-        {
-          "soru": "İndüksiyon ocakta kullanılır mı?",
-          "cevap": "Hayır. Kutu üzerinde açıkça belirtildiği gibi gazlı, elektrikli ve cam seramik ocaklarla uyumludur; indüksiyon ocaklarda çalışmaz."
-        },
-        {
-          "soru": "Setin içinde kapak var mı?",
-          "cevap": "Hayır, bu 4 parça set 16-18-20 cm üç tencere ve 1 çıkarılabilir saptan oluşur. Mevcut 16-18-20 cm kapaklarınızla veya Ingenio kapaklarıyla kullanılabilir."
-        },
-        {
-          "soru": "Çıkarılabilir sap ağır yemeklerde güvenli mi?",
-          "cevap": "Evet, Tefal Ingenio sap 3 noktalı kilit sistemine sahiptir ve resmi Tefal testlerine göre 10 kg’a kadar yük taşıyabilir."
-        },
-        {
-          "soru": "Temizliği nasıl yapılmalı?",
-          "cevap": "Yapışmaz kaplama kolayca temizlenir. Çıkarılabilir sapın mekanizmasını korumak için sap elde yıkanmalıdır."
-        }
-      ],
-      "birlikteIyiGider": [
-        "tefal-easy-cook-clean-tava-seti-24-28",
-        "tefal-5-saniye-dograyici",
-        "tefal-ingenio-black-stone-10-parca"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 85,
-      "dogrula": []
-    },
-    {
-      "id": "tefal-5-saniye-dograyici",
-      "durum": "yayinda",
-      "marka": "Tefal",
-      "ad": "5 Second Chopper K1330404 500 ml Manuel Doğrayıcı",
-      "kisaAd": "5 Second Chopper 500 ml",
-      "kategoriler": [
-        "mutfak-aletleri"
-      ],
-      "fiyat": 819,
       "fiyatGecmisi": [
         {
+          "fiyat": 8399,
           "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 699,
           "dogrulandi": true
         },
         {
+          "fiyat": 6999,
           "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 799,
           "dogrulandi": true
         },
         {
+          "fiyat": 7299,
           "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 819,
           "dogrulandi": true
         }
       ],
-      "kampanya": null,
+      "faydaAltBaslik": "Günlük yemek, sos ve fırın tarifleri için iç içe geçen Fransa üretimi pratik Ingenio seti.",
+      "faydaUstBaslik": "Neden bu tencere seti?",
       "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 3,
-      "maxAdet": 3,
-      "sku": "K1330404",
-      "gorseller": [
-        {
-          "src": "/img/urunler/tefal-5-saniye-dograyici/01.webp",
-          "alt": "Tefal 5 Second Chopper K1330404 500 ml manuel doğrayıcı"
-        },
-        {
-          "src": "/img/urunler/tefal-5-saniye-dograyici/02.webp",
-          "alt": "Tefal 5 Second Chopper bağımsız paslanmaz çelik çift bıçak sistemi"
-        },
-        {
-          "src": "/img/urunler/tefal-5-saniye-dograyici/03.webp",
-          "alt": "Tefal 5 Second Chopper sebze ve sos doğrama görünümü"
-        },
-        {
-          "src": "/img/urunler/tefal-5-saniye-dograyici/04.webp",
-          "alt": "Tefal 5 Second Chopper kilitli kapak ve ergonomik çekme kulpu"
-        },
-        {
-          "src": "/img/urunler/tefal-5-saniye-dograyici/05.webp",
-          "alt": "Tefal 5 Second Chopper şeffaf 500 ml kase detayı"
-        }
+      "birlikteIyiGider": [
+        "tefal-duetto-plus-tava-24",
+        "tefal-5-saniye-dograyici"
       ],
-      "ozet": "Patentli bağımsız paslanmaz çelik ikili bıçak sistemiyle saniyeler içinde doğrayan elektriksiz Tefal 5 Second Chopper. Soğan, sebze, taze ot, kuruyemiş, pesto ve bebek maması için çekme sayısına göre kusursuz kıvam kontrolü.",
       "oneCikanBilgiler": [
         {
-          "ikon": "saat",
-          "metin": "Soğan, sarımsak ve sebzeler 5 saniyede hazır|Göz yakmadan, elinizde soğan kokusu bırakmadan ipi birkaç kez çekmeniz yeterli"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "Patentli bağımsız dönen çift paslanmaz bıçak|Havuç, ceviz, fındık ve taze otlarda takılmadan homojen doğrama yapan güçlendirilmiş bıçaklar"
-        },
-        {
-          "ikon": "gosterge",
-          "metin": "İri veya ince: kıvam kontrolü tamamen sizde|2–3 çekişte salata ve yemeklik iri doğrama; 5–6 çekişte sos, pesto ve bebek maması kıvamı"
+          "ikon": "kutu",
+          "metin": "16, 18 ve 20 cm üç tencere iç içe geçer|Sapı çıktığı için dolapta yalnızca en büyük tencere kadar yer kaplar"
         },
         {
           "ikon": "kilit",
-          "metin": "Kaymaz taban ve güvenli kilitli kapak|Tezgaha vakum gibi tutunan alt taban ve çalışma sırasında açılmayan kilit mekanizması"
+          "metin": "10 kg kapasiteli çıkarılabilir güvenli sap|3 noktalı güvenlik kilidiyle tek tıkla takılır, tüm Ingenio serisiyle uyumludur*"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Ocaktan fırına ve sofraya pratik geçiş|Sapı çıkarıp fırın kabı olarak kullanın; bulaşık çıkarmadan sofrada servis edin"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Fransa üretimi titanyumlu yapışmaz yüzey|PFOA içermez, kolay temizlenir · Gazlı, elektrikli ve seramik ocaklarla uyumlu"
+        }
+      ]
+    },
+    {
+      "ad": "5 Second Chopper K1330404 500 ml Manuel Doğrayıcı",
+      "id": "tefal-5-saniye-dograyici",
+      "sku": "K1330404",
+      "sss": [
+        {
+          "soru": "Elektrik veya pil ile mi çalışıyor?",
+          "cevap": "Hayır, tamamen manuel ipli çekme mekanizmasıyla çalışır; elektrik bağlantısı veya pil gerektirmez."
+        },
+        {
+          "soru": "İri veya ince doğrama ayarı nasıl yapılır?",
+          "cevap": "Doğrama derecesi ipi çekme sayınızla belirlenir: az çekişte salata için iri, birkaç ek çekişte sos, pesto ve guacamole için ince kıvam elde edersiniz."
+        },
+        {
+          "soru": "Hangi parçalar bulaşık makinesinde yıkanabilir?",
+          "cevap": "Şeffaf kase ve paslanmaz çelik bıçaklar bulaşık makinesinde yıkanabilir. Çekme ipi mekanizmasını barındıran üst kapak ise suya batırılmadan nemli süngerle silinmelidir."
+        },
+        {
+          "soru": "Kuruyemiş ve sert sebze doğrar mı?",
+          "cevap": "Evet, dayanıklı paslanmaz çelik ikili bıçakları soğan, havuç, taze otlar, domates ve ceviz/fındık gibi kuruyemişler için uygundur."
         }
       ],
-      "rozetler": [
-        "damga:serit:yesil:5 Saniyede Doğrar",
-        "Elektriksiz · Çift Çelik Bıçak",
-        "500 ml Şeffaf Hazne",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu manuel doğrayıcı?",
-      "faydaBaslik": "Mutfak robotu çıkarmadan, 5 saniyede gözyaşsız hazırlık.",
-      "faydaAltBaslik": "Birbirinden bağımsız dönen patentli çift çelik bıçakla soğandan cevize istediğiniz incelikte doğrama.",
-      "faydalar": [
-        {
-          "baslik": "Büyük robotları yıkama derdine son",
-          "metin": "Bir-iki soğan veya sos hazırlığı için ağır elektrikli robotları çıkarıp yıkamak yerine, 5 saniyede doğrayıp kaseyi sudan geçirmeniz yeterlidir.",
-          "ikon": "saat",
-          "kaynak": "Tefal 5 Second Chopper kullanıcı deneyimi"
-        },
-        {
-          "baslik": "Bağımsız dönen ultra keskin çift bıçak",
-          "metin": "Sabit bıçaklı sıradan ipli doğrayıcıların aksine iki bıçak bağımsız hareket eder; sert sebze ve kuruyemişlerde sıkışma yapmaz.",
-          "ikon": "yildiz",
-          "kaynak": "Tefal patentli bıçak teknolojisi"
-        },
-        {
-          "baslik": "Çekiş sayısına göre kusursuz kıvam",
-          "metin": "Kristal şeffaf 500 ml hazneden içeriği görerek çekiş sayısını ayarlayın; malzemeyi ezmeden, sulandırmadan tane tane doğrayın.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "Elektriksiz, her yerde güvenli kullanım",
-          "metin": "Kilitli kapak ve kaymaz silikon tabanla tezgahta, yazlıkta, karavanda veya kampta priz aramadan güvenle çalışır.",
-          "ikon": "kilit"
-        }
-      ],
-      "pisirme": [],
+      "ozet": "Patentli bağımsız paslanmaz çelik ikili bıçak sistemiyle saniyeler içinde doğrayan elektriksiz Tefal 5 Second Chopper. Soğan, sebze, taze ot, kuruyemiş, pesto ve bebek maması için çekme sayısına göre kusursuz kıvam kontrolü.",
+      "stok": 3,
+      "durum": "yayinda",
+      "fiyat": 819,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "5 Second Chopper 500 ml",
       "teknik": [
         [
           "Marka",
@@ -1973,134 +1979,154 @@
           "3168430275584"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 3,
+      "oncelik": 76,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "saat",
+          "metin": "Bir-iki soğan veya sos hazırlığı için ağır elektrikli robotları çıkarıp yıkamak yerine, 5 saniyede doğrayıp kaseyi sudan geçirmeniz yeterlidir.",
+          "baslik": "Büyük robotları yıkama derdine son",
+          "kaynak": "Tefal 5 Second Chopper kullanıcı deneyimi"
+        },
+        {
+          "ikon": "yildiz",
+          "metin": "Sabit bıçaklı sıradan ipli doğrayıcıların aksine iki bıçak bağımsız hareket eder; sert sebze ve kuruyemişlerde sıkışma yapmaz.",
+          "baslik": "Bağımsız dönen ultra keskin çift bıçak",
+          "kaynak": "Tefal patentli bıçak teknolojisi"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Kristal şeffaf 500 ml hazneden içeriği görerek çekiş sayısını ayarlayın; malzemeyi ezmeden, sulandırmadan tane tane doğrayın.",
+          "baslik": "Çekiş sayısına göre kusursuz kıvam"
+        },
+        {
+          "ikon": "kilit",
+          "metin": "Kilitli kapak ve kaymaz silikon tabanla tezgahta, yazlıkta, karavanda veya kampta priz aramadan güvenle çalışır.",
+          "baslik": "Elektriksiz, her yerde güvenli kullanım"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 1049
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:yesil:5 Saniyede Doğrar",
+        "Elektriksiz · Çift Çelik Bıçak",
+        "500 ml Şeffaf Hazne",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Tefal 5 Second Chopper K1330404 500 ml manuel doğrayıcı",
+          "src": "/img/urunler/tefal-5-saniye-dograyici/01.webp"
+        },
+        {
+          "alt": "Tefal 5 Second Chopper bağımsız paslanmaz çelik çift bıçak sistemi",
+          "src": "/img/urunler/tefal-5-saniye-dograyici/02.webp"
+        },
+        {
+          "alt": "Tefal 5 Second Chopper sebze ve sos doğrama görünümü",
+          "src": "/img/urunler/tefal-5-saniye-dograyici/03.webp"
+        },
+        {
+          "alt": "Tefal 5 Second Chopper kilitli kapak ve ergonomik çekme kulpu",
+          "src": "/img/urunler/tefal-5-saniye-dograyici/04.webp"
+        },
+        {
+          "alt": "Tefal 5 Second Chopper şeffaf 500 ml kase detayı",
+          "src": "/img/urunler/tefal-5-saniye-dograyici/05.webp"
+        }
+      ],
+      "faydaBaslik": "Mutfak robotu çıkarmadan, 5 saniyede gözyaşsız hazırlık.",
+      "kategoriler": [
+        "mutfak-aletleri"
+      ],
       "kutuIcerigi": [
         "1 adet şeffaf kase (kaymaz tabanlı)",
         "1 adet ipli çekme mekanizmalı kilitli kapak",
         "1 adet paslanmaz çelik bağımsız ikili bıçak ünitesi"
       ],
-      "sss": [
-        {
-          "soru": "Elektrik veya pil ile mi çalışıyor?",
-          "cevap": "Hayır, tamamen manuel ipli çekme mekanizmasıyla çalışır; elektrik bağlantısı veya pil gerektirmez."
-        },
-        {
-          "soru": "İri veya ince doğrama ayarı nasıl yapılır?",
-          "cevap": "Doğrama derecesi ipi çekme sayınızla belirlenir: az çekişte salata için iri, birkaç ek çekişte sos, pesto ve guacamole için ince kıvam elde edersiniz."
-        },
-        {
-          "soru": "Hangi parçalar bulaşık makinesinde yıkanabilir?",
-          "cevap": "Şeffaf kase ve paslanmaz çelik bıçaklar bulaşık makinesinde yıkanabilir. Çekme ipi mekanizmasını barındıran üst kapak ise suya batırılmadan nemli süngerle silinmelidir."
-        },
-        {
-          "soru": "Kuruyemiş ve sert sebze doğrar mı?",
-          "cevap": "Evet, dayanıklı paslanmaz çelik ikili bıçakları soğan, havuç, taze otlar, domates ve ceviz/fındık gibi kuruyemişler için uygundur."
-        }
-      ],
-      "birlikteIyiGider": [
-        "tefal-duetto-plus-tava-24",
-        "tefal-hard-titanium-essential-tava-24",
-        "fissler-vitaquick-premium-6l"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 76,
-      "dogrula": []
-    },
-    {
-      "id": "tefal-hard-titanium-essential-tava-24",
-      "durum": "yayinda",
-      "marka": "Tefal",
-      "ad": "Hard Titanium Essential 2X Tava 24 cm",
-      "kisaAd": "Hard Titanium 2X Tava 24 cm",
-      "kategoriler": [
-        "tava"
-      ],
-      "fiyat": 1999,
       "fiyatGecmisi": [
         {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 1899,
+          "fiyat": 1049,
+          "tarih": "2026-11-14T14:12:09.189Z",
           "dogrulandi": true
         },
         {
+          "fiyat": 699,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 799,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 819,
           "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 1999,
           "dogrulandi": true
         }
       ],
-      "kampanya": null,
+      "faydaAltBaslik": "Birbirinden bağımsız dönen patentli çift çelik bıçakla soğandan cevize istediğiniz incelikte doğrama.",
+      "faydaUstBaslik": "Neden bu manuel doğrayıcı?",
       "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 3,
-      "maxAdet": 3,
+      "birlikteIyiGider": [
+        "tefal-hard-titanium-essential-tava-24",
+        "tefal-easy-cook-clean-tava-seti-24-28"
+      ],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "saat",
+          "metin": "Soğan, sarımsak ve sebzeler 5 saniyede hazır|Göz yakmadan, elinizde soğan kokusu bırakmadan ipi birkaç kez çekmeniz yeterli"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Patentli bağımsız dönen çift paslanmaz bıçak|Havuç, ceviz, fındık ve taze otlarda takılmadan homojen doğrama yapan güçlendirilmiş bıçaklar"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "İri veya ince: kıvam kontrolü tamamen sizde|2–3 çekişte salata ve yemeklik iri doğrama; 5–6 çekişte sos, pesto ve bebek maması kıvamı"
+        },
+        {
+          "ikon": "kilit",
+          "metin": "Kaymaz taban ve güvenli kilitli kapak|Tezgaha vakum gibi tutunan alt taban ve çalışma sırasında açılmayan kilit mekanizması"
+        }
+      ]
+    },
+    {
+      "ad": "Hard Titanium Essential 2X Tava 24 cm",
+      "id": "tefal-hard-titanium-essential-tava-24",
       "sku": "TFLHT2X24",
-      "gorseller": [
+      "sss": [
         {
-          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/00-studyo.webp",
-          "alt": "Tefal Hard Titanium Essential 2X 24 cm tava, üstten stüdyo görünümü"
+          "soru": "Titanium 2X kaplamanın farkı nedir?",
+          "cevap": "Standart yapışmaz kaplamalara kıyasla titanyum takviyesiyle aşınmaya karşı daha uzun ömürlü performans sunmak üzere geliştirilmiştir."
         },
         {
-          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/01.webp",
-          "alt": "Tefal Hard Titanium Essential 24 cm yapışmaz tava, üstten görünüm"
+          "soru": "Kaplama PFOA içeriyor mu?",
+          "cevap": "Hayır. Tefal’in yapışmaz kaplamaları PFOA, kurşun ve kadmiyum içermez."
         },
         {
-          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/02.webp",
-          "alt": "Tefal Hard Titanium Essential 24 cm tava, Titanium 2X orijinal ambalaj ön yüzü"
+          "soru": "24 cm tava ne için idealdir?",
+          "cevap": "Günlük kahvaltılıklar, omlet, krep, sote ve 1–2 kişilik et/tavuk pişirme işlemleri için en pratik boydur."
+        },
+        {
+          "soru": "Tavanın ömrünü uzatmak için neye dikkat etmeliyim?",
+          "cevap": "Ahşap veya silikon spatula kullanmanız, tavayı boş halde aşırı yüksek ateşte uzun süre bırakmamanız ve soğuduktan sonra yıkamanız önerilir."
         }
       ],
       "ozet": "Fransa üretimi, Titanium 2X takviyeli ekstra dayanıklı yapışmaz kaplamalı 24 cm Tefal Hard Titanium Essential tava. Thermo-Signal™ sıcaklık göstergesi ve difüzyon tabanıyla günlük kızartma ve mühürlemeler için uzun ömürlü performans.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "kalkan",
-          "metin": "Standart kaplamaya göre 2 kat dayanıklı Titanium 2X|Titanyum parçacıklarıyla güçlendirilmiş, PFOA içermeyen uzun ömürlü yapışmaz yüzey*"
-        },
-        {
-          "ikon": "gosterge",
-          "metin": "Thermo-Signal™ sıcaklık göstergesi|Tavanın ortasındaki halka düz kırmızıya döndüğünde yağı yakmadan pişirmeye başlayın"
-        },
-        {
-          "ikon": "ates",
-          "metin": "Homojen ısı yayan difüzyon taban|Tavanın ortası ve kenarları aynı sıcaklıkta pişer; krep, omlet ve soteler eşit kızarır"
-        },
-        {
-          "ikon": "konum",
-          "metin": "Fransa üretimi · Bileği yormayan ergonomik gövde|Günlük kullanımda tek elle rahatça çevrilir, iç-dış yapışmaz yüzeyi saniyeler içinde silinir"
-        }
-      ],
-      "rozetler": [
-        "damga:serit:altin:2 Kat Dayanıklı",
-        "Fransa Üretimi · Titanium 2X",
-        "Thermo-Signal™ Gösterge",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu tava?",
-      "faydaBaslik": "Yoğun günlük kullanıma dirençli, Fransa üretimi Titanium 2X.",
-      "faydaAltBaslik": "Az yağla sağlıklı kızartma ve soteler için 2 kat daha uzun ömürlü yapışmaz yüzey.",
-      "faydalar": [
-        {
-          "baslik": "Yoğun kullanıma geliştirilmiş Titanium 2X kaplama",
-          "metin": "Her gün tava kullanan mutfaklar için titanyum katmanla güçlendirilmiştir; çok az yağla bile yiyeceklerin tavadan kayarak ayrılmasını sağlar.",
-          "ikon": "kalkan",
-          "kaynak": "Tefal Hard Titanium serisi"
-        },
-        {
-          "baslik": "Thermo-Signal™ ile soğuk tavaya son",
-          "metin": "Tavayı erken veya aşırı ısıtma hatasını ortadan kaldırır; gösterge düz kırmızı olduğunda mühürleme için ideal ısıya ulaşılmıştır.",
-          "ikon": "gosterge",
-          "kaynak": "Tefal Thermo-Signal™"
-        },
-        {
-          "baslik": "Eşit kızartan difüzyon taban",
-          "metin": "Isıyı taban yüzeyine dengeli dağıtarak bir tarafı yanıp diğer tarafı çiğ kalan yemek sorununu önler.",
-          "ikon": "ates"
-        },
-        {
-          "baslik": "Fransa üretimi kalite ve zahmetsiz temizlik",
-          "metin": "PFOA, kurşun ve kadmiyum içermeyen güvenli kaplaması soğuduktan sonra yumuşak bir süngerle saniyeler içinde tertemiz olur.",
-          "ikon": "konum"
-        }
-      ],
-      "pisirme": [],
+      "stok": 3,
+      "durum": "yayinda",
+      "fiyat": 1999,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "Hard Titanium 2X Tava 24 cm",
       "teknik": [
         [
           "Marka",
@@ -2139,128 +2165,139 @@
           "3168430343115"
         ]
       ],
-      "kutuIcerigi": [
-        "1 adet Tefal Hard Titanium Essential 24 cm tava"
-      ],
-      "sss": [
-        {
-          "soru": "Titanium 2X kaplamanın farkı nedir?",
-          "cevap": "Standart yapışmaz kaplamalara kıyasla titanyum takviyesiyle aşınmaya karşı daha uzun ömürlü performans sunmak üzere geliştirilmiştir."
-        },
-        {
-          "soru": "Kaplama PFOA içeriyor mu?",
-          "cevap": "Hayır. Tefal’in yapışmaz kaplamaları PFOA, kurşun ve kadmiyum içermez."
-        },
-        {
-          "soru": "24 cm tava ne için idealdir?",
-          "cevap": "Günlük kahvaltılıklar, omlet, krep, sote ve 1–2 kişilik et/tavuk pişirme işlemleri için en pratik boydur."
-        },
-        {
-          "soru": "Tavanın ömrünü uzatmak için neye dikkat etmeliyim?",
-          "cevap": "Ahşap veya silikon spatula kullanmanız, tavayı boş halde aşırı yüksek ateşte uzun süre bırakmamanız ve soğuduktan sonra yıkamanız önerilir."
-        }
-      ],
-      "birlikteIyiGider": [
-        "tefal-5-saniye-dograyici",
-        "tefal-ingenio-essential-4-parca",
-        "tefal-easy-cook-clean-tava-seti-24-28"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 78,
-      "dogrula": []
-    },
-    {
-      "id": "tefal-easy-cook-clean-tava-seti-24-28",
-      "durum": "yayinda",
-      "marka": "Tefal",
-      "ad": "Easy Cook & Clean 2’li Tava Seti (24 cm + 28 cm)",
-      "kisaAd": "Easy Cook & Clean 2’li Set",
-      "kategoriler": [
-        "tava"
-      ],
-      "fiyat": 2049,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 2799,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 1999,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 2049,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 3,
+      "dogrula": [],
       "maxAdet": 3,
-      "sku": "B55490",
-      "gorseller": [
+      "oncelik": 78,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
         {
-          "src": "/img/urunler/tefal-easy-cook-clean-tava-seti-24-28/01.webp",
-          "alt": "Tefal Easy Cook & Clean 2’li tava seti (24 cm ve 28 cm)"
-        }
-      ],
-      "ozet": "Günlük mutfakların en çok kullanılan iki boyu 24 cm ve 28 cm tek sette. Hafif alüminyum gövde, içte ve dışta kolay temizlenen titanyumlu yapışmaz kaplama ve Thermo-Signal™ ısı göstergesiyle zahmetsiz pişirme.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "tava",
-          "metin": "24 cm + 28 cm: mutfağın iki temel boyu tek kutuda|Sabah yumurtası ve tek porsiyon için 24 cm; kalabalık sote, balık ve köfte için 28 cm"
-        },
-        {
-          "ikon": "tik",
-          "metin": "İçte ve dışta %100 kolay temizlenen yapışmaz yüzey|Alev korumalı dış kaplaması sayesinde tavanın arkasına ve kenarlarına sıçrayan yağlar yapışmaz"
+          "ikon": "kalkan",
+          "metin": "Her gün tava kullanan mutfaklar için titanyum katmanla güçlendirilmiştir; çok az yağla bile yiyeceklerin tavadan kayarak ayrılmasını sağlar.",
+          "baslik": "Yoğun kullanıma geliştirilmiş Titanium 2X kaplama",
+          "kaynak": "Tefal Hard Titanium serisi"
         },
         {
           "ikon": "gosterge",
-          "metin": "Thermo-Signal™ ısı göstergesi ve difüzyon taban|İdeal pişirme sıcaklığını renk değişimiyle bildirir, ısıyı tabana homojen yayar"
+          "metin": "Tavayı erken veya aşırı ısıtma hatasını ortadan kaldırır; gösterge düz kırmızı olduğunda mühürleme için ideal ısıya ulaşılmıştır.",
+          "baslik": "Thermo-Signal™ ile soğuk tavaya son",
+          "kaynak": "Tefal Thermo-Signal™"
         },
         {
-          "ikon": "kalkan",
-          "metin": "Titanyum takviyeli güvenli kaplama|PFOA, kurşun ve kadmiyum içermez; hafif gövdesiyle bileği yormadan günlük konfor sunar"
+          "ikon": "ates",
+          "metin": "Isıyı taban yüzeyine dengeli dağıtarak bir tarafı yanıp diğer tarafı çiğ kalan yemek sorununu önler.",
+          "baslik": "Eşit kızartan difüzyon taban"
+        },
+        {
+          "ikon": "konum",
+          "metin": "PFOA, kurşun ve kadmiyum içermeyen güvenli kaplaması soğuduktan sonra yumuşak bir süngerle saniyeler içinde tertemiz olur.",
+          "baslik": "Fransa üretimi kalite ve zahmetsiz temizlik"
         }
       ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 2199
+      },
+      "oneCikan": true,
       "rozetler": [
-        "damga:serit:yesil:İç-Dış Yapışmaz",
-        "24 + 28 cm · 2’li Tava Seti",
-        "Kolay Temizlenir Yüzey",
+        "damga:serit:altin:2 Kat Dayanıklı",
+        "Fransa Üretimi · Titanium 2X",
+        "Thermo-Signal™ Gösterge",
         "Orijinal Ürün"
       ],
-      "faydaUstBaslik": "Neden bu 2’li tava seti?",
-      "faydaBaslik": "Mutfağın en çok kullanılan iki boyu, içi dışı leke tutmayan kaplamayla.",
-      "faydaAltBaslik": "Kahvaltı için 24 cm, aile yemekleri için 28 cm tava; dış yüzeyde bile yağ lekesi bırakmayan pratik temizlik.",
-      "faydalar": [
+      "gorseller": [
         {
-          "baslik": "Her öğüne hazır 24 cm ve 28 cm ikilisi",
-          "metin": "Tek tava alıp boy sorunu yaşamak yerine; kahvaltı, omlet ve soslar için 24 cm, ana yemek ve misafir soteleri için 28 cm tavaya aynı anda sahip olun.",
-          "ikon": "tava"
+          "alt": "Tefal Hard Titanium Essential 2X 24 cm tava, üstten stüdyo görünümü",
+          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/00-studyo.webp"
         },
         {
-          "baslik": "Dışı da içi kadar kolay temizlenir",
-          "metin": "Kullanıcıların tavada en çok şikayet ettiği \"dış kenarlarda yanmış yağ lekesi\" sorununu, iç ve dış yapışmaz Easy Cook & Clean kaplamasıyla çözer.",
-          "ikon": "tik",
-          "kaynak": "Tefal Easy Cook & Clean"
+          "alt": "Tefal Hard Titanium Essential 24 cm yapışmaz tava, üstten görünüm",
+          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/01.webp"
         },
         {
-          "baslik": "Thermo-Signal™ ile tam kıvamında pişirme",
-          "metin": "Her iki tavada da bulunan ısı göstergesi ideal pişirme anını haber verir; az yağla sağlıklı ve lezzetli sonuçlar sunar.",
-          "ikon": "gosterge"
-        },
-        {
-          "baslik": "Bileği yormayan hafif ve dengeli tasarım",
-          "metin": "Hafif alüminyum gövde ve ele oturan ergonomik sap sayesinde krep çevirirken veya servis yaparken rahatça kontrol edilir.",
-          "ikon": "yildiz"
+          "alt": "Tefal Hard Titanium Essential 24 cm tava, Titanium 2X orijinal ambalaj ön yüzü",
+          "src": "/img/urunler/tefal-hard-titanium-essential-tava-24/02.webp"
         }
       ],
-      "pisirme": [],
+      "faydaBaslik": "Yoğun günlük kullanıma dirençli, Fransa üretimi Titanium 2X.",
+      "kategoriler": [
+        "tava"
+      ],
+      "kutuIcerigi": [
+        "1 adet Tefal Hard Titanium Essential 24 cm tava"
+      ],
+      "fiyatGecmisi": [
+        {
+          "fiyat": 2199,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1899,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1999,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
+        }
+      ],
+      "faydaAltBaslik": "Az yağla sağlıklı kızartma ve soteler için 2 kat daha uzun ömürlü yapışmaz yüzey.",
+      "faydaUstBaslik": "Neden bu tava?",
+      "sepetteIndirim": 0,
+      "birlikteIyiGider": [
+        "tefal-5-saniye-dograyici",
+        "tefal-ingenio-essential-4-parca"
+      ],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kalkan",
+          "metin": "Standart kaplamaya göre 2 kat dayanıklı Titanium 2X|Titanyum parçacıklarıyla güçlendirilmiş, PFOA içermeyen uzun ömürlü yapışmaz yüzey*"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Thermo-Signal™ sıcaklık göstergesi|Tavanın ortasındaki halka düz kırmızıya döndüğünde yağı yakmadan pişirmeye başlayın"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Homojen ısı yayan difüzyon taban|Tavanın ortası ve kenarları aynı sıcaklıkta pişer; krep, omlet ve soteler eşit kızarır"
+        },
+        {
+          "ikon": "konum",
+          "metin": "Fransa üretimi · Bileği yormayan ergonomik gövde|Günlük kullanımda tek elle rahatça çevrilir, iç-dış yapışmaz yüzeyi saniyeler içinde silinir"
+        }
+      ]
+    },
+    {
+      "ad": "Easy Cook & Clean 2’li Tava Seti (24 cm + 28 cm)",
+      "id": "tefal-easy-cook-clean-tava-seti-24-28",
+      "sku": "B55490",
+      "sss": [
+        {
+          "soru": "Setin içinde hangi ölçüler bulunuyor?",
+          "cevap": "Günlük mutfakta en sık kullanılan 24 cm ve 28 cm olmak üzere 2 adet tava yer alır."
+        },
+        {
+          "soru": "Dış yüzeyi de kolay temizlenir mi?",
+          "cevap": "Evet, Easy Cook & Clean serisi hem iç hem dış yüzeyde kolay temizlenebilen yapışmaz kaplamaya sahiptir."
+        },
+        {
+          "soru": "İndüksiyon ocakta kullanılır mı?",
+          "cevap": "Avrupa’daki Easy Cook & Clean serisi indüksiyon hariç ocaklar içindir; gönderilecek kutudaki ocak simgeleri kesin olarak teyit edilip bu tabloya işlenecektir."
+        },
+        {
+          "soru": "Hangi mutfak gereçleriyle kullanılmalı?",
+          "cevap": "Kaplamanın uzun ömürlü kalması için silikon veya ahşap spatula kullanmanız önerilir."
+        }
+      ],
+      "ozet": "Günlük mutfakların en çok kullanılan iki boyu 24 cm ve 28 cm tek sette. Hafif alüminyum gövde, içte ve dışta kolay temizlenen titanyumlu yapışmaz kaplama ve Thermo-Signal™ ısı göstergesiyle zahmetsiz pişirme.",
+      "stok": 3,
+      "durum": "yayinda",
+      "fiyat": 2049,
+      "marka": "Tefal",
+      "firsat": null,
+      "kisaAd": "Easy Cook & Clean 2’li Set",
       "teknik": [
         [
           "Marka",
@@ -2299,143 +2336,136 @@
           "3168430313569"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 3,
+      "oncelik": 82,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "tava",
+          "metin": "Tek tava alıp boy sorunu yaşamak yerine; kahvaltı, omlet ve soslar için 24 cm, ana yemek ve misafir soteleri için 28 cm tavaya aynı anda sahip olun.",
+          "baslik": "Her öğüne hazır 24 cm ve 28 cm ikilisi"
+        },
+        {
+          "ikon": "tik",
+          "metin": "Kullanıcıların tavada en çok şikayet ettiği \"dış kenarlarda yanmış yağ lekesi\" sorununu, iç ve dış yapışmaz Easy Cook & Clean kaplamasıyla çözer.",
+          "baslik": "Dışı da içi kadar kolay temizlenir",
+          "kaynak": "Tefal Easy Cook & Clean"
+        },
+        {
+          "ikon": "gosterge",
+          "metin": "Her iki tavada da bulunan ısı göstergesi ideal pişirme anını haber verir; az yağla sağlıklı ve lezzetli sonuçlar sunar.",
+          "baslik": "Thermo-Signal™ ile tam kıvamında pişirme"
+        },
+        {
+          "ikon": "yildiz",
+          "metin": "Hafif alüminyum gövde ve ele oturan ergonomik sap sayesinde krep çevirirken veya servis yaparken rahatça kontrol edilir.",
+          "baslik": "Bileği yormayan hafif ve dengeli tasarım"
+        }
+      ],
+      "kampanya": {
+        "baslangic": "2026-11-26T14:12:09.188Z",
+        "oncekiFiyat": 2499
+      },
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:yesil:İç-Dış Yapışmaz",
+        "24 + 28 cm · 2’li Tava Seti",
+        "Kolay Temizlenir Yüzey",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Tefal Easy Cook & Clean 2’li tava seti (24 cm ve 28 cm)",
+          "src": "/img/urunler/tefal-easy-cook-clean-tava-seti-24-28/01.webp"
+        }
+      ],
+      "faydaBaslik": "Mutfağın en çok kullanılan iki boyu, içi dışı leke tutmayan kaplamayla.",
+      "kategoriler": [
+        "tava"
+      ],
       "kutuIcerigi": [
         "1 adet 24 cm tava",
         "1 adet 28 cm tava"
       ],
-      "sss": [
-        {
-          "soru": "Setin içinde hangi ölçüler bulunuyor?",
-          "cevap": "Günlük mutfakta en sık kullanılan 24 cm ve 28 cm olmak üzere 2 adet tava yer alır."
-        },
-        {
-          "soru": "Dış yüzeyi de kolay temizlenir mi?",
-          "cevap": "Evet, Easy Cook & Clean serisi hem iç hem dış yüzeyde kolay temizlenebilen yapışmaz kaplamaya sahiptir."
-        },
-        {
-          "soru": "İndüksiyon ocakta kullanılır mı?",
-          "cevap": "Avrupa’daki Easy Cook & Clean serisi indüksiyon hariç ocaklar içindir; gönderilecek kutudaki ocak simgeleri kesin olarak teyit edilip bu tabloya işlenecektir."
-        },
-        {
-          "soru": "Hangi mutfak gereçleriyle kullanılmalı?",
-          "cevap": "Kaplamanın uzun ömürlü kalması için silikon veya ahşap spatula kullanmanız önerilir."
-        }
-      ],
-      "birlikteIyiGider": [
-        "tefal-ingenio-essential-4-parca",
-        "tefal-5-saniye-dograyici",
-        "ingegno-ipli-dograyici"
-      ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 82,
-      "dogrula": []
-    },
-    {
-      "id": "eratec-tek-kullanimlik-havlu",
-      "durum": "yayinda",
-      "marka": "Eratec",
-      "ad": "Sıkıştırılmış Tek Kullanımlık Hijyenik Havlu 22x28 cm 50 gr (10’lu Paket)",
-      "kisaAd": "Sıkıştırılmış Havlu (10’lu)",
-      "kategoriler": [
-        "temizlik"
-      ],
-      "fiyat": 139,
       "fiyatGecmisi": [
         {
+          "fiyat": 2499,
+          "tarih": "2026-11-14T14:12:09.189Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 2799,
           "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 139,
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 1999,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
+        },
+        {
+          "fiyat": 2049,
+          "tarih": "2026-11-25T10:08:58.514Z",
           "dogrulandi": true
         }
       ],
-      "kampanya": null,
+      "faydaAltBaslik": "Kahvaltı için 24 cm, aile yemekleri için 28 cm tava; dış yüzeyde bile yağ lekesi bırakmayan pratik temizlik.",
+      "faydaUstBaslik": "Neden bu 2’li tava seti?",
       "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 2,
-      "maxAdet": 2,
-      "sku": "ERTCTKHSHVL22x28CM50GR",
-      "gorseller": [
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/01.webp",
-          "alt": "Eratec sıkıştırılmış tek kullanımlık hijyenik havlu 22x28 cm 50 gr (10’lu)"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/02.webp",
-          "alt": "Eratec tek kullanımlık havlu, suyla açılan sıkıştırılmış tablet formu"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/03.webp",
-          "alt": "Eratec hijyenik havlu, yumuşak pamuk ve bitki lifi çapraz doku"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/04.webp",
-          "alt": "Eratec sıkıştırılmış havlu, günlük ve seyahat kullanımı"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/05.webp",
-          "alt": "Eratec tek kullanımlık havlu 22x28 cm tam açık boy"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/06.webp",
-          "alt": "Eratec sıkıştırılmış havlu 10’lu paket detayı"
-        },
-        {
-          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/07.webp",
-          "alt": "Eratec hijyenik havlu sıcak havlu makinesi uyumu"
-        }
+      "birlikteIyiGider": [
+        "fissler-copenhagen-tencere-seti",
+        "ingegno-ipli-dograyici"
       ],
-      "ozet": "Çapraz doku teknolojisiyle üretilmiş, saf pamuk ve doğal bitki liflerinden sıkıştırılmış Eratec tek kullanımlık hijyenik havlu. Kimyasal, koku ve floresan içermez; suyla temas ettiği an tam boy yumuşak havluya dönüşür.",
       "oneCikanBilgiler": [
         {
-          "ikon": "kutu",
-          "metin": "Az yer kaplar, suyla anında 22×28 cm havluya dönüşür|Soğuk veya ılık su değdiği anda şişerek 50 gr kalınlığında tam boy yumuşak havlu olur"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "%100 saf pamuk ve doğal bitki lifi (kimyasalsız)|Parfüm, alkol, koruyucu ve floresan içermez; bebek cildinde ve yüzde güvenle kullanılır"
+          "ikon": "tava",
+          "metin": "24 cm + 28 cm: mutfağın iki temel boyu tek kutuda|Sabah yumurtası ve tek porsiyon için 24 cm; kalabalık sote, balık ve köfte için 28 cm"
         },
         {
           "ikon": "tik",
-          "metin": "Yırtılmayan 50 gr kalın çapraz doku|İnce ıslak mendiller gibi dağılmaz; yüksek su emiciliğiyle gerçek kumaş havlu hissi verir"
+          "metin": "İçte ve dışta %100 kolay temizlenen yapışmaz yüzey|Alev korumalı dış kaplaması sayesinde tavanın arkasına ve kenarlarına sıçrayan yağlar yapışmaz"
         },
         {
-          "ikon": "ev",
-          "metin": "Misafir ikramından seyahate çok yönlü hijyen|Restoran tipi sıcak/soğuk misafir servisi, çanta, kamp, spor ve sıcak havlu makineleri için"
-        }
-      ],
-      "rozetler": [
-        "damga:serit:yesil:Suyla Açılır",
-        "Katkısız Saf Pamuk · 22×28 cm",
-        "10’lu Paket · 50 gr",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu sıkıştırılmış havlu?",
-      "faydaBaslik": "Birkaç damla suyla saniyeler içinde açılan, katkısız saf pamuk hijyeni.",
-      "faydaAltBaslik": "Mutfakta, misafir ağırlarken, bebek bakımında ve seyahatte her seferinde sıfır paket taze havlu.",
-      "faydalar": [
+          "ikon": "gosterge",
+          "metin": "Thermo-Signal™ ısı göstergesi ve difüzyon taban|İdeal pişirme sıcaklığını renk değişimiyle bildirir, ısıyı tabana homojen yayar"
+        },
         {
-          "baslik": "Islak mendil kimyasalı olmadan saf suyla temizlik",
-          "metin": "Paketlenmiş ıslak mendillerdeki koruyucu ve parfümler yerine yalnızca kendi eklediğiniz temiz suyla açılır; alerjik ve hassas ciltler için idealdir.",
           "ikon": "kalkan",
-          "kaynak": "Eratec Almanya ürün verisi"
+          "metin": "Titanyum takviyeli güvenli kaplama|PFOA, kurşun ve kadmiyum içermez; hafif gövdesiyle bileği yormadan günlük konfor sunar"
+        }
+      ]
+    },
+    {
+      "ad": "Sıkıştırılmış Tek Kullanımlık Hijyenik Havlu 22x28 cm 50 gr (10’lu Paket)",
+      "id": "eratec-tek-kullanimlik-havlu",
+      "sku": "ERTCTKHSHVL22x28CM50GR",
+      "sss": [
+        {
+          "soru": "Sıkıştırılmış havlu nasıl kullanılır?",
+          "cevap": "Üzerine az miktarda soğuk veya ılık su döktüğünüzde birkaç saniye içinde şişerek tam boy yumuşak havlu haline gelir."
         },
         {
-          "baslik": "50 gr kalın çapraz doku (yırtılmaz ve emici)",
-          "metin": "Standart ince tablet mendillerden farklı olarak 50 gr yüksek gramajlı çapraz dokuya sahiptir; el, yüz ve yüzey temizliğinde formunu korur.",
-          "ikon": "tik"
+          "soru": "İçinde parfüm veya kimyasal madde var mı?",
+          "cevap": "Hayır, koku, kimyasal katkı ve floresan madde içermez; saf pamuk ve doğal bitki liflerinden üretilmiştir."
         },
         {
-          "baslik": "Misafir sofralarında şık ve hijyenik ikram",
-          "metin": "Yemek öncesi veya sonrasında misafirlerinize ılık su ve birkaç damla limon/lavanta ile açılan taze sıcak havlu sunumu yapmanızı sağlar.",
-          "ikon": "saat"
+          "soru": "Nerelerde kullanılabilir?",
+          "cevap": "Mutfakta, misafir ağırlarken, seyahat ve kampta, spor sonrasında, makyaj temizliğinde ve bebek bakımında pratik hijyen sağlar."
         },
         {
-          "baslik": "Çantada, seyahatte ve sıcak havlu makinelerinde",
-          "metin": "Kuru halde minimum yer kaplar, akma veya kuruma yapmaz; Eratec otomatik sıcak havlu dispenserleriyle (60–80 °C) de tam uyumludur.",
-          "ikon": "ates"
+          "soru": "Sıcak havlu dispenserleriyle uyumlu mu?",
+          "cevap": "Evet, Eratec’in otomatik sıcak havlu makinelerinde 60–80 °C sıcaklıkla kullanıma da uygundur."
         }
       ],
-      "pisirme": [],
+      "ozet": "Çapraz doku teknolojisiyle üretilmiş, saf pamuk ve doğal bitki liflerinden sıkıştırılmış Eratec tek kullanımlık hijyenik havlu. Kimyasal, koku ve floresan içermez; suyla temas ettiği an tam boy yumuşak havluya dönüşür.",
+      "stok": 2,
+      "durum": "yayinda",
+      "fiyat": 139,
+      "marka": "Eratec",
+      "firsat": null,
+      "kisaAd": "Sıkıştırılmış Havlu (10’lu)",
       "teknik": [
         [
           "Marka",
@@ -2478,151 +2508,142 @@
           "ERTCTKHSHVL22x28CM50GR"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 2,
+      "oncelik": 68,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "kalkan",
+          "metin": "Paketlenmiş ıslak mendillerdeki koruyucu ve parfümler yerine yalnızca kendi eklediğiniz temiz suyla açılır; alerjik ve hassas ciltler için idealdir.",
+          "baslik": "Islak mendil kimyasalı olmadan saf suyla temizlik",
+          "kaynak": "Eratec Almanya ürün verisi"
+        },
+        {
+          "ikon": "tik",
+          "metin": "Standart ince tablet mendillerden farklı olarak 50 gr yüksek gramajlı çapraz dokuya sahiptir; el, yüz ve yüzey temizliğinde formunu korur.",
+          "baslik": "50 gr kalın çapraz doku (yırtılmaz ve emici)"
+        },
+        {
+          "ikon": "saat",
+          "metin": "Yemek öncesi veya sonrasında misafirlerinize ılık su ve birkaç damla limon/lavanta ile açılan taze sıcak havlu sunumu yapmanızı sağlar.",
+          "baslik": "Misafir sofralarında şık ve hijyenik ikram"
+        },
+        {
+          "ikon": "ates",
+          "metin": "Kuru halde minimum yer kaplar, akma veya kuruma yapmaz; Eratec otomatik sıcak havlu dispenserleriyle (60–80 °C) de tam uyumludur.",
+          "baslik": "Çantada, seyahatte ve sıcak havlu makinelerinde"
+        }
+      ],
+      "kampanya": null,
+      "oneCikan": false,
+      "rozetler": [
+        "damga:serit:yesil:Suyla Açılır",
+        "Katkısız Saf Pamuk · 22×28 cm",
+        "10’lu Paket · 50 gr",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Eratec sıkıştırılmış tek kullanımlık hijyenik havlu 22x28 cm 50 gr (10’lu)",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/01.webp"
+        },
+        {
+          "alt": "Eratec tek kullanımlık havlu, suyla açılan sıkıştırılmış tablet formu",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/02.webp"
+        },
+        {
+          "alt": "Eratec hijyenik havlu, yumuşak pamuk ve bitki lifi çapraz doku",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/03.webp"
+        },
+        {
+          "alt": "Eratec sıkıştırılmış havlu, günlük ve seyahat kullanımı",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/04.webp"
+        },
+        {
+          "alt": "Eratec tek kullanımlık havlu 22x28 cm tam açık boy",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/05.webp"
+        },
+        {
+          "alt": "Eratec sıkıştırılmış havlu 10’lu paket detayı",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/06.webp"
+        },
+        {
+          "alt": "Eratec hijyenik havlu sıcak havlu makinesi uyumu",
+          "src": "/img/urunler/eratec-tek-kullanimlik-havlu/07.webp"
+        }
+      ],
+      "faydaBaslik": "Birkaç damla suyla saniyeler içinde açılan, katkısız saf pamuk hijyeni.",
+      "kategoriler": [
+        "temizlik"
+      ],
       "kutuIcerigi": [
         "10 adet Eratec 22×28 cm (50 gr) sıkıştırılmış tek kullanımlık hijyenik havlu"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "Sıkıştırılmış havlu nasıl kullanılır?",
-          "cevap": "Üzerine az miktarda soğuk veya ılık su döktüğünüzde birkaç saniye içinde şişerek tam boy yumuşak havlu haline gelir."
-        },
-        {
-          "soru": "İçinde parfüm veya kimyasal madde var mı?",
-          "cevap": "Hayır, koku, kimyasal katkı ve floresan madde içermez; saf pamuk ve doğal bitki liflerinden üretilmiştir."
-        },
-        {
-          "soru": "Nerelerde kullanılabilir?",
-          "cevap": "Mutfakta, misafir ağırlarken, seyahat ve kampta, spor sonrasında, makyaj temizliğinde ve bebek bakımında pratik hijyen sağlar."
-        },
-        {
-          "soru": "Sıcak havlu dispenserleriyle uyumlu mu?",
-          "cevap": "Evet, Eratec’in otomatik sıcak havlu makinelerinde 60–80 °C sıcaklıkla kullanıma da uygundur."
+          "fiyat": 139,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "Mutfakta, misafir ağırlarken, bebek bakımında ve seyahatte her seferinde sıfır paket taze havlu.",
+      "faydaUstBaslik": "Neden bu sıkıştırılmış havlu?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "zwilling-king-30-parca-catal-kasik",
         "ingegno-ipli-dograyici",
         "tefal-5-saniye-dograyici"
       ],
-      "oneCikan": false,
-      "cokSatan": false,
-      "oncelik": 68,
-      "dogrula": []
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kutu",
+          "metin": "Az yer kaplar, suyla anında 22×28 cm havluya dönüşür|Soğuk veya ılık su değdiği anda şişerek 50 gr kalınlığında tam boy yumuşak havlu olur"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "%100 saf pamuk ve doğal bitki lifi (kimyasalsız)|Parfüm, alkol, koruyucu ve floresan içermez; bebek cildinde ve yüzde güvenle kullanılır"
+        },
+        {
+          "ikon": "tik",
+          "metin": "Yırtılmayan 50 gr kalın çapraz doku|İnce ıslak mendiller gibi dağılmaz; yüksek su emiciliğiyle gerçek kumaş havlu hissi verir"
+        },
+        {
+          "ikon": "ev",
+          "metin": "Misafir ikramından seyahate çok yönlü hijyen|Restoran tipi sıcak/soğuk misafir servisi, çanta, kamp, spor ve sıcak havlu makineleri için"
+        }
+      ]
     },
     {
-      "id": "zwilling-king-30-parca-catal-kasik",
-      "durum": "yayinda",
-      "marka": "Zwilling",
       "ad": "King Parlak 30 Parça Çatal Kaşık Bıçak Takımı (6 Kişilik)",
-      "kisaAd": "King 30 Parça Çatal Bıçak",
-      "kategoriler": [
-        "sofra"
-      ],
-      "fiyat": 7099,
-      "fiyatGecmisi": [
-        {
-          "tarih": "2026-11-19T15:14:17.994Z",
-          "fiyat": 5549,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-24T16:59:28.153Z",
-          "fiyat": 7299,
-          "dogrulandi": true
-        },
-        {
-          "tarih": "2026-11-25T10:08:58.514Z",
-          "fiyat": 7099,
-          "dogrulandi": true
-        }
-      ],
-      "kampanya": null,
-      "sepetteIndirim": 0,
-      "firsat": null,
-      "stok": 3,
-      "maxAdet": 3,
+      "id": "zwilling-king-30-parca-catal-kasik",
       "sku": "1026441",
-      "gorseller": [
+      "sss": [
         {
-          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/01.webp",
-          "alt": "Zwilling King parlak 30 parça çatal kaşık bıçak takımı (6 kişilik)"
+          "soru": "Takım kaç kişilik ve içinde hangi parçalar var?",
+          "cevap": "6 kişiliktir ve toplam 30 parçadan oluşur: 6 yemek bıçağı, 6 yemek çatalı, 6 yemek kaşığı, 6 kahve kaşığı ve 6 pasta çatalı."
         },
         {
-          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/02.webp",
-          "alt": "Zwilling King 30 parça set, orijinal hediye kutusunda"
+          "soru": "Bulaşık makinesinde yıkanır mı?",
+          "cevap": "Evet, 18/10 paslanmaz çelik yapısı bulaşık makinesinde yıkanmaya uygundur. Su lekesi kalmaması için yıkama bitiminde kapağı aralayıp kurumasını sağlamanız önerilir."
         },
         {
-          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/03.webp",
-          "alt": "Zwilling King 18/10 paslanmaz çelik parlak yüzey detayı"
+          "soru": "Bıçakların \"monoblok\" olması ne anlama gelir?",
+          "cevap": "Bıçağın kesici ağzı ve sapı tek parça yüksek kaliteli bıçak çeliğinden dövülerek üretilir; ek yeri olmadığı için hem daha dayanıklı hem de daha dengelidir."
         },
         {
-          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/04.webp",
-          "alt": "Zwilling King monoblok dövme yemek bıçağı, çatal ve kaşık"
-        },
-        {
-          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/05.webp",
-          "alt": "Zwilling King 30 parça sofra sunumu"
+          "soru": "Orijinal kutusunda mı gönderiliyor?",
+          "cevap": "Evet, orijinal Zwilling King kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
         }
       ],
       "ozet": "6 kişilik, 30 parça Zwilling King çatal kaşık bıçak takımı. 18/10 paslanmaz çelik, yüksek kaliteli bıçak çeliğinden dövme monoblok yemek bıçakları ve ayna parlaklığında zamansız tasarım. Bulaşık makinesinde yıkanabilir, orijinal hediye kutusunda.",
-      "oneCikanBilgiler": [
-        {
-          "ikon": "yildiz",
-          "metin": "Elde tok ve dengeli duran ideal ağırlık|Ne eli yoracak kadar ağır ne de ince takımlar gibi hafif; ergonomik kavisli sap tasarımı"
-        },
-        {
-          "ikon": "kalkan",
-          "metin": "18/10 paslanmaz çelik ve monoblok dövme bıçak|Kararma yapmayan ayna parlaklığında çelik ve tek parça bıçak çeliğinden dövülmüş keskin bıçaklar"
-        },
-        {
-          "ikon": "kasik",
-          "metin": "Tatlı ve kahve servisi dahil 6 kişilik 30 parça|6 yemek kaşığı, 6 çatal, 6 bıçak + 6 pasta çatalı ve 6 kahve/çay kaşığı"
-        },
-        {
-          "ikon": "hediye",
-          "metin": "Bulaşık makinesinde yıkanır · Çeyiz ve hediyeye hazır|Orijinal Zwilling saklama kutusunda, uzun yıllar parlaklığını koruyan yapı"
-        }
-      ],
-      "rozetler": [
-        "damga:serit:mercan:Avantajlı Ürün",
-        "6 Kişilik · 18/10 Çelik",
-        "Bulaşık Makinesine Uygun",
-        "Orijinal Ürün"
-      ],
-      "faydaUstBaslik": "Neden bu çatal kaşık bıçak takımı?",
-      "faydaBaslik": "Sofrada zamansız zarafet, elde kusursuz denge.",
-      "faydaAltBaslik": "290 yılı aşan Zwilling çelik ustalığının günlük sofralarda ve misafir davetlerinde yarattığı fark.",
-      "faydalar": [
-        {
-          "baslik": "Elde hissedilen denge ve ağırlık kalitesi",
-          "metin": "Kullanıcıların en çok övdüğü özelliği, yuvarlatılmış kavisli sapların ele tam oturması ve tok çelik ağırlığının sofrada verdiği kalite hissidir.",
-          "ikon": "yildiz",
-          "kaynak": "Zwilling King kullanıcı deneyimi"
-        },
-        {
-          "baslik": "Tek parça dövme monoblok yemek bıçakları",
-          "metin": "Zwilling bıçak uzmanlığıyla tek parça bıçak çeliğinden dövülen yemek bıçakları ek yeri barındırmaz; yıllarca keskinliğini korur.",
-          "ikon": "kalkan",
-          "kaynak": "Zwilling Türkiye resmî verisi"
-        },
-        {
-          "baslik": "Yıllarca solmayan 18/10 ayna parlaklığı",
-          "metin": "%18 krom ve %10 nikel içeren yüksek saflıkta paslanmaz çelik, gıda asitlerine ve bulaşık makinesinde yıkamaya karşı yüksek direnç gösterir.",
-          "ikon": "tik",
-          "kaynak": "Zwilling King 1026441"
-        },
-        {
-          "baslik": "Desensiz, her yemek takımına uyan tasarım",
-          "metin": "Modası geçmeyen sade ve parlak hatları hem modern günlük tabaklarla hem de klasik misafir yemek takımlarıyla kusursuz uyum sağlar.",
-          "ikon": "kasik"
-        },
-        {
-          "baslik": "Tatlı ve kahve ikramıyla eksiksiz 30 parça",
-          "metin": "Ana yemek takımına ek olarak 6 adet pasta çatalı ve 6 adet çay/kahve kaşığıyla 6 kişilik tüm servis ihtiyacını tek kutuda karşılar.",
-          "ikon": "hediye"
-        }
-      ],
-      "pisirme": [],
+      "stok": 3,
+      "durum": "yayinda",
+      "fiyat": 7099,
+      "marka": "Zwilling",
+      "firsat": null,
+      "kisaAd": "King 30 Parça Çatal Bıçak",
       "teknik": [
         [
           "Marka",
@@ -2661,6 +2682,75 @@
           "4009839667589"
         ]
       ],
+      "dogrula": [],
+      "maxAdet": 3,
+      "oncelik": 90,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "yildiz",
+          "metin": "Kullanıcıların en çok övdüğü özelliği, yuvarlatılmış kavisli sapların ele tam oturması ve tok çelik ağırlığının sofrada verdiği kalite hissidir.",
+          "baslik": "Elde hissedilen denge ve ağırlık kalitesi",
+          "kaynak": "Zwilling King kullanıcı deneyimi"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Zwilling bıçak uzmanlığıyla tek parça bıçak çeliğinden dövülen yemek bıçakları ek yeri barındırmaz; yıllarca keskinliğini korur.",
+          "baslik": "Tek parça dövme monoblok yemek bıçakları",
+          "kaynak": "Zwilling Türkiye resmî verisi"
+        },
+        {
+          "ikon": "tik",
+          "metin": "%18 krom ve %10 nikel içeren yüksek saflıkta paslanmaz çelik, gıda asitlerine ve bulaşık makinesinde yıkamaya karşı yüksek direnç gösterir.",
+          "baslik": "Yıllarca solmayan 18/10 ayna parlaklığı",
+          "kaynak": "Zwilling King 1026441"
+        },
+        {
+          "ikon": "kasik",
+          "metin": "Modası geçmeyen sade ve parlak hatları hem modern günlük tabaklarla hem de klasik misafir yemek takımlarıyla kusursuz uyum sağlar.",
+          "baslik": "Desensiz, her yemek takımına uyan tasarım"
+        },
+        {
+          "ikon": "hediye",
+          "metin": "Ana yemek takımına ek olarak 6 adet pasta çatalı ve 6 adet çay/kahve kaşığıyla 6 kişilik tüm servis ihtiyacını tek kutuda karşılar.",
+          "baslik": "Tatlı ve kahve ikramıyla eksiksiz 30 parça"
+        }
+      ],
+      "kampanya": null,
+      "oneCikan": true,
+      "rozetler": [
+        "damga:serit:mercan:Avantajlı Ürün",
+        "6 Kişilik · 18/10 Çelik",
+        "Bulaşık Makinesine Uygun",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "Zwilling King parlak 30 parça çatal kaşık bıçak takımı (6 kişilik)",
+          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/01.webp"
+        },
+        {
+          "alt": "Zwilling King 30 parça set, orijinal hediye kutusunda",
+          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/02.webp"
+        },
+        {
+          "alt": "Zwilling King 18/10 paslanmaz çelik parlak yüzey detayı",
+          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/03.webp"
+        },
+        {
+          "alt": "Zwilling King monoblok dövme yemek bıçağı, çatal ve kaşık",
+          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/04.webp"
+        },
+        {
+          "alt": "Zwilling King 30 parça sofra sunumu",
+          "src": "/img/urunler/zwilling-king-30-parca-catal-kasik/05.webp"
+        }
+      ],
+      "faydaBaslik": "Sofrada zamansız zarafet, elde kusursuz denge.",
+      "kategoriler": [
+        "sofra"
+      ],
       "kutuIcerigi": [
         "6 adet yemek bıçağı (monoblok dövme)",
         "6 adet yemek çatalı",
@@ -2669,88 +2759,174 @@
         "6 adet pasta çatalı",
         "Orijinal Zwilling saklama ve hediye kutusu"
       ],
-      "sss": [
+      "fiyatGecmisi": [
         {
-          "soru": "Takım kaç kişilik ve içinde hangi parçalar var?",
-          "cevap": "6 kişiliktir ve toplam 30 parçadan oluşur: 6 yemek bıçağı, 6 yemek çatalı, 6 yemek kaşığı, 6 kahve kaşığı ve 6 pasta çatalı."
+          "fiyat": 5549,
+          "tarih": "2026-11-19T15:14:17.994Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Bulaşık makinesinde yıkanır mı?",
-          "cevap": "Evet, 18/10 paslanmaz çelik yapısı bulaşık makinesinde yıkanmaya uygundur. Su lekesi kalmaması için yıkama bitiminde kapağı aralayıp kurumasını sağlamanız önerilir."
+          "fiyat": 7299,
+          "tarih": "2026-11-24T16:59:28.153Z",
+          "dogrulandi": true
         },
         {
-          "soru": "Bıçakların \"monoblok\" olması ne anlama gelir?",
-          "cevap": "Bıçağın kesici ağzı ve sapı tek parça yüksek kaliteli bıçak çeliğinden dövülerek üretilir; ek yeri olmadığı için hem daha dayanıklı hem de daha dengelidir."
-        },
-        {
-          "soru": "Orijinal kutusunda mı gönderiliyor?",
-          "cevap": "Evet, orijinal Zwilling King kutusunda ve adınıza düzenlenen resmi faturayla gönderilir."
+          "fiyat": 7099,
+          "tarih": "2026-11-25T10:08:58.514Z",
+          "dogrulandi": true
         }
       ],
+      "faydaAltBaslik": "290 yılı aşan Zwilling çelik ustalığının günlük sofralarda ve misafir davetlerinde yarattığı fark.",
+      "faydaUstBaslik": "Neden bu çatal kaşık bıçak takımı?",
+      "sepetteIndirim": 0,
       "birlikteIyiGider": [
         "fissler-copenhagen-tencere-seti",
         "fissler-family-line-tencere-seti",
         "fissler-vitaquick-premium-6l"
       ],
-      "oneCikan": true,
-      "cokSatan": false,
-      "oncelik": 90,
-      "dogrula": []
-    }
-  ],
-  "setler": [
-    {
-      "id": "vitaquick-buhar-seti",
-      "durum": "taslak",
-      "ad": "Vitaquick + Buhar Aparatı Seti",
-      "aciklama": "Düdüklü tencereniz ve buharda pişirme aparatı birlikte, set fiyatıyla.",
-      "kalemler": [
+      "oneCikanBilgiler": [
         {
-          "urunId": "fissler-vitaquick-premium-6l",
-          "adet": 1
+          "ikon": "yildiz",
+          "metin": "Elde tok ve dengeli duran ideal ağırlık|Ne eli yoracak kadar ağır ne de ince takımlar gibi hafif; ergonomik kavisli sap tasarımı"
         },
         {
-          "urunId": "fissler-buhar-aparati-22",
-          "adet": 1
+          "ikon": "kalkan",
+          "metin": "18/10 paslanmaz çelik ve monoblok dövme bıçak|Kararma yapmayan ayna parlaklığında çelik ve tek parça bıçak çeliğinden dövülmüş keskin bıçaklar"
+        },
+        {
+          "ikon": "kasik",
+          "metin": "Tatlı ve kahve servisi dahil 6 kişilik 30 parça|6 yemek kaşığı, 6 çatal, 6 bıçak + 6 pasta çatalı ve 6 kahve/çay kaşığı"
+        },
+        {
+          "ikon": "hediye",
+          "metin": "Bulaşık makinesinde yıkanır · Çeyiz ve hediyeye hazır|Orijinal Zwilling saklama kutusunda, uzun yıllar parlaklığını koruyan yapı"
+        }
+      ]
+    },
+    {
+      "ad": "Eratec Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+      "id": "eratec-cam-kavanoz-2-parcali-kapak-1000-ml",
+      "sku": "ERTCKVNZ1000MLX1",
+      "sss": [],
+      "ozet": "Kuru bakliyat, ev yapımı konserve ve kiler düzeni için 1000 ml kapasiteli şeffaf cam kavanoz. Hava sızdırmayan iki parçalı vidalı metal kapak sistemiyle gıdaları taze tutar.",
+      "stok": 10,
+      "durum": "yayinda",
+      "fiyat": 339,
+      "marka": "ERATEC",
+      "firsat": null,
+      "kisaAd": "Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+      "teknik": [
+        [
+          "Renk",
+          "Şeffaf"
+        ],
+        [
+          "Menşei",
+          "DE"
+        ],
+        [
+          "Bakım Talimatları (Gıda Temas)",
+          "Gıda ile temas güvenlidir."
+        ],
+        [
+          "Parça Sayısı",
+          "1"
+        ],
+        [
+          "Materyal",
+          "Cam"
+        ],
+        [
+          "Hacim",
+          "1 L"
+        ],
+        [
+          "Gıda Temas Sembolü",
+          "Evet"
+        ]
+      ],
+      "dogrula": [],
+      "maxAdet": 5,
+      "oncelik": 0,
+      "pisirme": [],
+      "cokSatan": false,
+      "faydalar": [
+        {
+          "ikon": "kilit",
+          "metin": "Ayrı iç kapak diski ve çevrilerek sabitlenen dış çemberi sayesinde kavanoz ağzını eşit basınçla kapatır; konserve ve kuru gıda saklamada tazeliği korur.",
+          "baslik": "İki parçalı kapakla güvenli sızdırmazlık"
+        },
+        {
+          "ikon": "kutu",
+          "metin": "1 litrelik ideal hacmi ve şeffaf cam yapısı sayesinde bakliyattan ev yapımı soslara kadar içerikleri etiket aramadan tek bakışta görmenizi sağlar.",
+          "baslik": "Kiler ve mutfak raflarında düzenli görünüm"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Plastik kapların aksine gıda kokusunu veya rengini içine çekmez; geniş ağız yapısı sayesinde elde veya bulaşık makinesinde zahmetsizce temizlenir.",
+          "baslik": "Sağlıklı ve kolay temizlenen cam yüzey"
         }
       ],
-      "fiyatlama": {
-        "tip": "yuzde",
-        "oran": 8
-      },
-      "gorsel": {
-        "src": "/img/urunler/fissler-vitaquick-premium-6l/04-buhar-aparati.webp",
-        "alt": "Vitaquick düdüklü tencere ve buharlı pişirme aparatı"
-      },
-      "rozet": "Set fırsatı",
-      "oneCikan": true
+      "kampanya": null,
+      "oneCikan": false,
+      "rozetler": [
+        "1000 ml · Kalın Cam Gövde",
+        "2 Parçalı Vakumlu Kapak",
+        "Orijinal Ürün"
+      ],
+      "gorseller": [
+        {
+          "alt": "ERATEC Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+          "src": "/medya/eratec-cam-kavanoz-2-parcali-kapak-1000-ml/mwxlf14z-db498d.webp"
+        },
+        {
+          "alt": "ERATEC Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+          "src": "/medya/eratec-cam-kavanoz-2-parcali-kapak-1000-ml/mwxlf2t7-db9066.webp"
+        },
+        {
+          "alt": "ERATEC Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+          "src": "/medya/eratec-cam-kavanoz-2-parcali-kapak-1000-ml/mwxlf41h-e039c4.webp"
+        },
+        {
+          "alt": "ERATEC Cam Kavanoz 2 Parçalı Kapak 1000 ml",
+          "src": "/medya/eratec-cam-kavanoz-2-parcali-kapak-1000-ml/mwxlf5o2-324a2b.webp"
+        }
+      ],
+      "kategoriler": [
+        "sofra"
+      ],
+      "kutuIcerigi": [],
+      "fiyatGecmisi": [
+        {
+          "fiyat": 339,
+          "tarih": "2026-11-26T13:33:28.773Z",
+          "dogrulandi": false
+        },
+        {
+          "fiyat": 339,
+          "tarih": "2026-11-26T13:39:31.130Z",
+          "dogrulandi": true
+        }
+      ],
+      "sepetteIndirim": 0,
+      "birlikteIyiGider": [],
+      "oneCikanBilgiler": [
+        {
+          "ikon": "kutu",
+          "metin": "1000 ml (1 litre) geniş saklama hacmi|Bakliyat, kuruyemiş, turşu, reçel ve ev yapımı konserveler için ideal boy"
+        },
+        {
+          "ikon": "kilit",
+          "metin": "2 parçalı sızdırmaz kapak sistemi|Düz iç kapak diski ve dişli dış halka ile hava ve nem geçişini keser"
+        },
+        {
+          "ikon": "kalkan",
+          "metin": "Koku ve leke tutmayan saf cam gövde|İçindeki gıdayı net gösterir, bulaşık makinesinde güvenle yıkanır"
+        }
+      ]
     }
   ],
   "anaSayfa": {
-    "bolumler": [
-      "hero",
-      "firsatlar",
-      "guven",
-      "oneCikanlar",
-      "kategoriler",
-      "setler",
-      "amiralHikaye",
-      "nedenBiz",
-      "sss"
-    ],
-    "hero": {
-      "urunId": "fissler-vitaquick-premium-6l",
-      "ustBaslik": "Öne çıkan ürün",
-      "baslik": "Fissler Vitaquick® Premium 6 L",
-      "altBaslik": "Normal tencereye göre %70’e kadar daha kısa pişirme, iki kademe, her ocakta. Orijinal ürün, 2 yıl garanti.",
-      "maddeler": [
-        "Normal tencereye göre %70’e kadar daha kısa pişirme*",
-        "İndüksiyon dahil her ocakta, iki pişirme kademesi",
-        "Orijinal ürün · 2 yıl garanti · Kargo bedava"
-      ]
-    },
-    "oneCikanlarBaslik": "Öne çıkan ürünler",
-    "setlerBaslik": "Setler & fırsatlar",
     "sss": [
       {
         "soru": "Siparişimi nasıl takip ederim?",
@@ -2768,10 +2944,119 @@
         "soru": "Taksit yapılıyor mu?",
         "cevap": "Kredi kartına taksit seçeneklerini ödeme adımında görebilirsiniz."
       }
-    ]
+    ],
+    "hero": {
+      "baslik": "Fissler Vitaquick® Premium 6 L",
+      "urunId": "fissler-vitaquick-premium-6l",
+      "maddeler": [
+        "Normal tencereye göre %70’e kadar daha kısa pişirme*",
+        "İndüksiyon dahil her ocakta, iki pişirme kademesi",
+        "Orijinal ürün · 2 yıl garanti · Kargo bedava"
+      ],
+      "altBaslik": "Normal tencereye göre %70’e kadar daha kısa pişirme, iki kademe, her ocakta. Orijinal ürün, 2 yıl garanti.",
+      "ustBaslik": "Öne çıkan ürün"
+    },
+    "bolumler": [
+      "hero",
+      "setler",
+      "firsatlar",
+      "guven",
+      "oneCikanlar",
+      "kategoriler",
+      "amiralHikaye",
+      "nedenBiz",
+      "sss"
+    ],
+    "setlerBaslik": "İndirimli setler",
+    "oneCikanlarBaslik": "Öne çıkan ürünler"
   },
+  "guncelleme": "2026-11-26T14:12:09.814Z",
+  "kategoriler": [
+    {
+      "ad": "Düdüklü Tencereler",
+      "id": "duduklu-tencere",
+      "ikon": "duduklu",
+      "sira": 1,
+      "aciklama": "Hızlı, güvenli ve enerji dostu pişirme için premium düdüklü tencereler.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Tencereler",
+      "id": "tencere",
+      "ikon": "tencere",
+      "sira": 2,
+      "aciklama": "Günlük yemeklerden kalabalık sofralara, her boyda tencere.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Tavalar",
+      "id": "tava",
+      "ikon": "tava",
+      "sira": 3,
+      "aciklama": "Paslanmaz çelik ve yapışmaz tavalar.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Aksesuar & Yedek Parça",
+      "id": "aksesuar",
+      "ikon": "kasik",
+      "sira": 4,
+      "aciklama": "Conta, buhar aparatı ve tamamlayıcı parçalar.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Saklama & Düzen",
+      "id": "saklama",
+      "ikon": "kutu",
+      "sira": 5,
+      "aciklama": "Mutfağınızı ferahlatan saklama ve düzenleme ürünleri.",
+      "menudeGoster": true,
+      "yakindaGoster": true,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Sofra & Servis",
+      "id": "sofra",
+      "ikon": "kase",
+      "sira": 6,
+      "aciklama": "Sofranıza şıklık katan servis ürünleri.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Doğrayıcı & Mutfak Aletleri",
+      "id": "mutfak-aletleri",
+      "ikon": "kase",
+      "sira": 70,
+      "aciklama": "Doğrayıcılar ve hazırlığı kolaylaştıran mutfak aletleri.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    },
+    {
+      "ad": "Temizlik & Hijyen",
+      "id": "temizlik",
+      "ikon": "kutu",
+      "sira": 80,
+      "aciklama": "Mutfak ve ev için pratik hijyen ürünleri.",
+      "menudeGoster": true,
+      "yakindaGoster": false,
+      "anaSayfadaGoster": true
+    }
+  ],
   "paytrStokIslemleri": [
     "panel:AL261124-2109:-1",
-    "panel:AL261124-2109:1"
+    "panel:AL261124-2109:1",
+    "panel:AL261125-2254:-1",
+    "panel:AL261125-2254:1"
   ]
 }
