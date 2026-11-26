@@ -27,6 +27,7 @@ const kayar = setler.length > 1;
           <button type="button" class="set-vitrini__ok set-vitrini__ok--sag" aria-label="Sonraki set" aria-controls="set-vitrini-ray" data-set-sonraki hidden>
             <Ikon ad="sag" boyut={22} />
           </button>
+          <span class="set-vitrini__konum" data-set-konum hidden></span>
         </div>
       ) : <SetListesi {setler} baslikSeviyesi="h3" />}
     </div>
@@ -77,6 +78,7 @@ const kayar = setler.length > 1;
     transition: background-color .18s var(--ease), color .18s var(--ease), border-color .18s var(--ease), transform .18s var(--ease);
   }
   .set-vitrini__ok[hidden] { display: none; }
+  .set-vitrini__konum { display: none; }
   .set-vitrini__ok--sol { left: -16px; }
   .set-vitrini__ok--sag { right: -16px; }
   .set-vitrini__ok:hover {
@@ -94,6 +96,50 @@ const kayar = setler.length > 1;
     .set-vitrini__ok--sol { left: 6px; }
     .set-vitrini__ok--sag { right: 6px; }
   }
+  @media (max-width: 699px) {
+    .set-vitrini { padding-block: 17px 13px; }
+    .set-vitrini .bolum-bas { margin-bottom: 10px; }
+    .set-vitrini .bolum-bas h2 { font-size: clamp(1.375rem, 5vw, 1.75rem); }
+    .set-vitrini .bolum-bas__link { min-height: 44px; font-size: .8125rem; }
+    .set-vitrini__sahne { display: grid; grid-template-columns: minmax(0, 1fr) 44px 44px; gap: 4px 8px; overflow-x: clip; }
+    .set-vitrini__ray {
+      grid-column: 1 / -1;
+      grid-row: 1;
+      align-items: flex-start;
+      height: var(--set-vitrin-yukseklik, auto);
+      overflow-y: hidden;
+    }
+    .set-vitrini__ok {
+      position: static;
+      grid-row: 2;
+      width: 44px;
+      height: 44px;
+      transform: none;
+      box-shadow: none;
+    }
+    .set-vitrini__ok--sol { grid-column: 2; }
+    .set-vitrini__ok--sag { grid-column: 3; }
+    .set-vitrini__ok:hover { transform: none; }
+    .set-vitrini__konum:not([hidden]) { display: block; grid-column: 1; grid-row: 2; color: var(--ink-2); font-size: .8125rem; }
+    .set-vitrini :global(.set-kart) { padding: 11px; }
+    .set-vitrini :global(.set-kart__ad) { font-size: clamp(1.25rem, 5vw, 1.625rem); }
+    .set-vitrini :global(.set-kart__bas > p),
+    .set-vitrini :global(.set-kart__foto) { display: none; }
+    .set-vitrini :global(.birlikte) { margin-top: 8px; border-width: 1px; box-shadow: none; }
+    .set-vitrini :global(.birlikte__serit) { padding: 7px 9px; gap: 4px 8px; font-size: .8125rem; }
+    .set-vitrini :global(.birlikte__serit-yuzde) { font-size: .6875rem; }
+    .set-vitrini :global(.birlikte__urunler) { grid-template-columns: repeat(auto-fit, minmax(min(100%, 86px), 1fr)); gap: 8px; padding: 8px 8px 0; }
+    .set-vitrini :global(.birlikte__urunler--ikili) {
+      --set-urun-araligi: 24px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--set-urun-araligi);
+    }
+    .set-vitrini :global(.birlikte__gorsel) { max-height: clamp(74px, 23vw, 118px); }
+    .set-vitrini :global(.birlikte__ad),
+    .set-vitrini :global(.birlikte__fiyat) { font-size: .8125rem; }
+    .set-vitrini :global(.birlikte__alt) { margin: 8px; padding-top: 8px; gap: 6px; }
+    .set-vitrini :global(.birlikte__fiyat-buyuk) { font-size: 1.25rem; }
+  }
   @media (min-width: 1320px) {
     .set-vitrini__ok--sol { left: -24px; }
     .set-vitrini__ok--sag { right: -24px; }
@@ -102,6 +148,7 @@ const kayar = setler.length > 1;
 
 <script>
   const azHareket = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const mobil = window.matchMedia('(max-width: 699px)');
   const OTOMATIK_SURE = 6_800;
 
   for (const vitrin of document.querySelectorAll<HTMLElement>('[data-set-vitrini]')) {
@@ -109,6 +156,7 @@ const kayar = setler.length > 1;
     const ray = vitrin.querySelector<HTMLElement>('[data-set-ray]');
     const oncekiBtn = vitrin.querySelector<HTMLButtonElement>('[data-set-onceki]');
     const sonrakiBtn = vitrin.querySelector<HTMLButtonElement>('[data-set-sonraki]');
+    const konum = vitrin.querySelector<HTMLElement>('[data-set-konum]');
     const slaytlar = [...vitrin.querySelectorAll<HTMLElement>('[data-set-slayt]')];
     const toplam = slaytlar.length;
     if (!sahne || !ray || toplam < 2) continue;
@@ -140,14 +188,22 @@ const kayar = setler.length > 1;
     let dokunuyor = false;
     let gorunur = !('IntersectionObserver' in window);
 
+    const yuksekligiEsitle = () => {
+      if (!mobil.matches) return;
+      const yukseklik = slaytlar[aktif]?.offsetHeight ?? 0;
+      if (yukseklik > 0) ray.style.setProperty('--set-vitrin-yukseklik', `${yukseklik}px`);
+    };
+
     const guncelle = (indeks: number) => {
       aktif = ((indeks % toplam) + toplam) % toplam;
+      if (konum) konum.textContent = `Set ${aktif + 1} / ${toplam}`;
       slaytlar.forEach((s, i) => {
         const secili = i === aktif;
         s.querySelectorAll<HTMLElement>('a, button').forEach((el) => {
           el.tabIndex = secili ? 0 : -1;
         });
       });
+      yuksekligiEsitle();
     };
 
     const klondanSifiraAl = () => {
@@ -223,7 +279,7 @@ const kayar = setler.length > 1;
 
     const planla = () => {
       durdur();
-      if (azHareket || duraklatildiMi()) return;
+      if (azHareket || mobil.matches || duraklatildiMi()) return;
       otoZaman = window.setTimeout(() => {
         if (!duraklatildiMi()) git(aktif + 1, 'ileri');
         planla();
@@ -342,10 +398,17 @@ const kayar = setler.length > 1;
       klonaGidiyor = false;
       hedefIndeks = undefined;
       ray.scrollTo({ left: aktif * ray.clientWidth, behavior: 'instant' });
+      yuksekligiEsitle();
     }, { passive: true });
+    mobil.addEventListener('change', planla);
+    if ('ResizeObserver' in window) {
+      const boyutlar = new ResizeObserver(yuksekligiEsitle);
+      slaytlar.forEach((slayt) => boyutlar.observe(slayt));
+    }
 
     if (oncekiBtn) oncekiBtn.hidden = false;
     if (sonrakiBtn) sonrakiBtn.hidden = false;
+    if (konum) konum.hidden = false;
     guncelle(0);
     planla();
   }

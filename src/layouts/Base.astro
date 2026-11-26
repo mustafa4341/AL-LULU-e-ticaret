@@ -123,13 +123,20 @@ const vitrinGecisi = !onizleme && !geriYol.startsWith('/yonetim');
     )}
 
     {Astro.locals.yonetici && !onizleme && (
-      <div class="yonetici-serit" style={k.site.tadilat.aktif ? 'background:#4A2506;color:#FFE4B5' : undefined}>
+      <div class:list={['yonetici-serit', { 'yonetici-serit--musteri': Astro.locals.musteriGorunumu }]} style={k.site.tadilat.aktif ? 'background:#4A2506;color:#FFE4B5' : undefined}>
         <Ikon ad="ayar" boyut={14} />
         {k.site.tadilat.aktif && (
           <strong style="color:#FFB04D">🛠️ SİTE TADİLATTA (Müşteriler bakım ekranını görüyor) ·</strong>
         )}
         {Astro.locals.musteriGorunumu ? (
-          <span>Müşteri görünümü (taslak ürünler ve setler gizli) · <a href={`/yonetim/gorunum?m=0&d=${encodeURIComponent(geriYol)}`}>Yönetici görünümüne dön</a></span>
+          <span>
+            <span class="yonetici-serit__uzun">Müşteri görünümü (taslak ürünler ve setler gizli) · </span>
+            <span class="yonetici-serit__kisa">Müşteri önizleme · </span>
+            <a href={`/yonetim/gorunum?m=0&d=${encodeURIComponent(geriYol)}`}>
+              <span class="yonetici-serit__uzun">Yönetici görünümüne dön</span>
+              <span class="yonetici-serit__kisa">Yöneticiye dön</span>
+            </a>
+          </span>
         ) : (
           <span>Yönetici görünümü · <a href={`/yonetim/gorunum?m=1&d=${encodeURIComponent(geriYol)}`}>Müşteri gibi gör</a> · <a href="/yonetim">Yönetim Paneli</a></span>
         )}

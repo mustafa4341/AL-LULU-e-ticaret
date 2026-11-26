@@ -2,6 +2,7 @@
 import Fiyat from '../Fiyat.astro';
 import Ikon from '../Ikon.astro';
 import { markaliUrunAdi } from '../../lib/urunKimlik';
+import { formatTL } from '../../lib/fiyat';
 import type { IkonAdi } from '../../lib/sema';
 
 const k = Astro.locals.katalog;
@@ -10,7 +11,33 @@ const teklifler: { id: string; ton: string; etiket?: string; ikon?: IkonAdi }[] 
   { id: heroId, ton: 'kil' },
   { id: 'fissler-buhar-aparati-22', etiket: 'Buharda pişirme', ton: 'zeytin', ikon: 'tencere' },
 ];
+const stoktakiUrunler = k.tumUrunler()
+  .filter((urun) => urun.durum === 'yayinda' && k.stoktaMi(urun) && k.anaGorsel(urun))
+  .slice(0, 4);
 ---
+{stoktakiUrunler.length > 0 && (
+  <section class="container mobil-urunler" aria-labelledby="mobil-urun-baslik">
+    <div class="mobil-urunler__bas">
+      <h2 id="mobil-urun-baslik">Stoktaki ürünler</h2>
+      <a href="/urunler">Tüm ürünler <Ikon ad="sag" boyut={14} /></a>
+    </div>
+    <ul class="mobil-urunler__ray">
+      {stoktakiUrunler.map((urun) => {
+        const gorsel = k.anaGorsel(urun)!;
+        const fiyat = k.fiyatBilgisi(urun);
+        return (
+          <li>
+            <a class="mobil-urun" href={`/urun/${urun.id}`}>
+              <img src={gorsel.src} alt="" width="150" height="120" loading="lazy" decoding="async" />
+              <span>{markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd })}</span>
+              <strong>{fiyat.sepette && <small>Sepette </small>}{formatTL(fiyat.sepette?.fiyat ?? fiyat.fiyat)}</strong>
+            </a>
+          </li>
+        );
+      })}
+    </ul>
+  </section>
+)}
 <div class="container urun-bannerlari" aria-label="Vitrindeki ürünler">
   {teklifler.map(({ id, ton, etiket, ikon }, i) => {
     const urun = k.urunBul(id);
@@ -35,6 +62,7 @@ const teklifler: { id: string; ton: string; etiket?: string; ikon?: IkonAdi }[] 
 </div>
 
 <style>
+  .mobil-urunler { display: none; }
   .urun-bannerlari { display: grid; gap: 12px; padding-block: 0 18px; }
   .urun-banner { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, 36%); align-items: center; gap: 4px; border: 1px solid #e7c9bb; border-radius: var(--r-lg); overflow: clip; color: #522518; background: #f9e7db; }
   .urun-banner--zeytin { color: #303b25; border-color: #d6ddc5; background: #edf1e4; }
@@ -49,6 +77,55 @@ const teklifler: { id: string; ton: string; etiket?: string; ikon?: IkonAdi }[] 
   .urun-banner__incele { display: inline-block; font-size: .875rem; font-weight: 750; text-decoration: underline; text-underline-offset: 3px; }
   .urun-banner img { width: 100%; height: auto; aspect-ratio: 1; object-fit: contain; padding: 8%; mix-blend-mode: multiply; transition: transform .25s ease; }
   .urun-banner:hover img { transform: scale(1.04); }
+  @media (max-width: 699px) {
+    .urun-bannerlari { display: none; }
+    .mobil-urunler { display: block; padding-block: 0 14px; }
+    .mobil-urunler__bas { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .mobil-urunler__bas h2 { margin: 0; font-size: clamp(1.35rem, 5vw, 1.75rem); }
+    .mobil-urunler__bas > a {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      min-height: 44px;
+      color: var(--gold-ink);
+      font-size: .8125rem;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .mobil-urunler__ray {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: 45%;
+      gap: 8px;
+      margin: 0 calc(-1 * var(--gutter));
+      padding: 2px var(--gutter) 5px;
+      overflow-x: auto;
+      scroll-snap-type: x mandatory;
+      scroll-padding-inline: var(--gutter);
+      list-style: none;
+      scrollbar-width: thin;
+      scrollbar-color: #d7c6ac transparent;
+    }
+    .mobil-urunler__ray > li { scroll-snap-align: start; }
+    .mobil-urun {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 5px;
+      height: 100%;
+      padding: 7px 9px 9px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--ink);
+      text-decoration: none;
+    }
+    .mobil-urun img { display: block; width: 100%; height: clamp(82px, 24vw, 126px); object-fit: contain; background: #fff; }
+    .mobil-urun > span { font-size: .8125rem; font-weight: 650; line-height: 1.28; overflow-wrap: anywhere; }
+    .mobil-urun > strong { color: #a71931; font-size: 1rem; font-variant-numeric: tabular-nums; }
+    .mobil-urun > strong small { color: var(--ink-2); font-size: .6875rem; }
+    .mobil-urun:focus-visible { outline: 2px solid var(--gold-ink); outline-offset: -2px; }
+  }
   @media (min-width: 700px) { .urun-bannerlari { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
   @media (prefers-reduced-motion: reduce) { .urun-banner img { transition: none; } }
 </style>

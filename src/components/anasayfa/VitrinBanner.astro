@@ -85,7 +85,10 @@ const coklu = vitrinler.length > 1;
                 <strong>{formatTL(vitrin.fiyat.sepette?.fiyat ?? vitrin.fiyat.fiyat)}</strong>
               </div>}
               <div class="vitrin-banner__aksiyon">
-                <a href={vitrin.href} class="vitrin-banner__baglanti">{vitrin.baglanti} <Ikon ad="sag" boyut={17} /></a>
+                <a href={vitrin.href} class="vitrin-banner__baglanti">
+                  {vitrin.fiyat ? <><span class="vitrin-banner__baglanti-uzun">{vitrin.baglanti}</span><span class="vitrin-banner__baglanti-kisa">Ürünü incele</span></> : vitrin.baglanti}
+                  <Ikon ad="sag" boyut={17} />
+                </a>
                 {vitrin.durum && <span class="vitrin-banner__durum">{vitrin.durum}</span>}
               </div>
             </div>
@@ -463,6 +466,7 @@ const coklu = vitrinler.length > 1;
     transition: background-color .18s var(--ease), transform .18s var(--ease);
   }
   .vitrin-banner__baglanti:hover { background: #fff3da; }
+  .vitrin-banner__baglanti-kisa { display: none; }
   .vitrin-banner__baglanti:focus-visible { outline: 2px solid #fff5e5; outline-offset: 4px; }
   .vitrin-banner__fiyat { width: fit-content; display: grid; grid-template-columns: auto auto; align-items: baseline; gap: 0 8px; margin-top: 14px; padding: 8px 16px 10px; border-radius: 8px; background: #bb1831; color: #fff; }
   .vitrin-banner__fiyat span { font-size: .8125rem; font-weight: 700; }
@@ -559,10 +563,34 @@ const coklu = vitrinler.length > 1;
   }
 
   @media (max-width: 699px) {
+    .vitrin-banner { padding-block: 10px; }
     .vitrin-banner__panel { display: flex; flex-direction: column; }
-    .vitrin-banner__gorsel { height: clamp(185px, 54vw, 270px); flex: none; }
-    .vitrin-banner__metin { flex: 1; display: flex; flex-direction: column; background: #26261a; }
-    .vitrin-banner__aksiyon { margin-top: auto; padding-top: 20px; }
+    .vitrin-banner__gorsel { height: clamp(140px, 39vw, 218px); flex: none; }
+    .vitrin-banner__metin {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      padding: 12px 14px 15px;
+      background: #26261a;
+    }
+    .vitrin-banner__metin :is(h1, h2, .vitrin-banner__baslik) {
+      font-size: clamp(1.5rem, 5.5vw, 2rem);
+      line-height: 1.03;
+      text-wrap: initial;
+    }
+    .vitrin-banner__metin p:not(.vitrin-banner__baslik) { display: none; }
+    .vitrin-banner__fiyat { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; margin-top: 8px; padding: 4px 8px; }
+    .vitrin-banner__fiyat span, .vitrin-banner__fiyat s { font-size: .6875rem; }
+    .vitrin-banner__fiyat strong { font-size: 1.0625rem; }
+    .vitrin-banner__aksiyon { margin-top: auto; padding-top: 9px; gap: 4px 10px; }
+    .vitrin-banner__baglanti { min-height: 44px; padding: 6px 10px; gap: 5px; font-size: .8125rem; }
+    .vitrin-banner__baglanti-uzun { display: none; }
+    .vitrin-banner__baglanti-kisa { display: inline; }
+    .vitrin-banner__durum { font-size: .75rem; }
+    .vitrin-banner__ok { top: calc(clamp(140px, 39vw, 218px) / 2); }
+    .vitrin-banner__noktalar { top: calc(clamp(140px, 39vw, 218px) - 36px); bottom: auto; padding: 0 5px; }
+    .vitrin-banner__nokta { width: 26px; height: 28px; }
     .vitrin-banner__panel--urun .vitrin-banner__metin { background: #38131b; }
   }
 
