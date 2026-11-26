@@ -79,7 +79,7 @@ export function trendyolKarlilik(
       r.maliyet = birimMaliyet * r.adet;
       const kdv = kdvOrani(r.urunId);
       const satisKdvHaric = (r.brut - r.indirim - r.iade) / (1 + kdv / 100);
-      const kesintiKdvHaric = (r.komisyon + r.kargo) / KDV_KESINTI + r.diger;
+      const kesintiKdvHaric = (r.komisyon + r.kargo + r.diger) / KDV_KESINTI;
       r.netKar = Math.round(satisKdvHaric - kesintiKdvHaric - r.maliyet);
       r.marj = satisKdvHaric > 0 ? r.netKar / satisKdvHaric : undefined;
     }

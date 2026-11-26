@@ -11,6 +11,7 @@ import type { IkonAdi, Urun } from '../../../lib/sema';
 import { BOS_URUN, istanbulaYerel, urunFormu, urunGorselleri, yayinEksikleri } from '../../../lib/yonetimUrun';
 import { KANALLAR, KANAL_LISTESI, bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
 import { envanterAyarlariOku } from '../../../lib/pazaryeriDepo';
+import { stokDegisimiKuyrugaAl } from '../../../lib/pazaryeriSenkron';
 import Onizleme from '../../../components/yonetim/Onizleme.astro';
 import Sekmeler from '../../../components/yonetim/Sekmeler.astro';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
@@ -98,6 +99,7 @@ if (Astro.request.method === 'POST') {
             if (eksik.length) throw new DogrulamaHatasi([`Yayına almak için eksik: ${eksik.join(', ')}. Tamamlayıp tekrar "Kaydet ve yayınla"ya basın (ya da önce taslak olarak kaydedin).`]);
           }
         }, yeni ? 'Yeni ürün' : 'Panel: ürün düzenleme');
+        if (yeni || aday.stok !== sayi(f, 'eskiStok', aday.stok)) stokDegisimiKuyrugaAl('Ürün düzenleme stok güncellemesi');
         for (const s of silinecek) await gorselSil(s);
         const mesaj = aday.durum === 'yayinda'
           ? (yeni ? 'Ürün oluşturuldu ve yayında.' : 'Kaydedildi. Ürün yayında, müşteriler görebilir.')

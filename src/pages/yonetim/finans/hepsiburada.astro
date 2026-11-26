@@ -310,7 +310,7 @@ const tarifeEski = tarifeGun > 90;
       <form method="post"><button class="btn btn--cizgi btn--kucuk" name="eylem" value="komisyon-cek" type="submit" disabled={!['canli', 'test'].includes(apiDurumu)} title={['canli', 'test'].includes(apiDurumu) ? 'Hepsiburada Komisyon Bilgisi Sorgulama servisinden okunur' : 'Canlı Hepsiburada API bilgileri tanımlanınca çalışır'}><PIkon ad="yenile" boyut={16} />Komisyonları Hepsiburada’dan çek</button></form>
     </div>
     {!['canli', 'test'].includes(apiDurumu) && <p class="y-help">Hepsiburada bağlantısı kurulunca oranlar her gün kendiliğinden Hepsiburada’dan okunur. Şimdilik satıcı panelinde gördüğünüz oranlar kullanılıyor.</p>}
-    {!ayar.kargoFirmasi && <p class="y-uyari">Kargo firması seçilmemiş; kâr kargo düşülmeden hesaplanır. Aşağıdaki “Hepsiburada maliyet ayarları”ndan seçin.</p>}
+    {!ayar.kargoFirmasi && <p class="y-uyari">Kargo firması seçilmemiş; kargo ücreti bilinmediği için sahte net kâr gösterilmez. Aşağıdaki “Hepsiburada maliyet ayarları”ndan kargo firmasını seçin.</p>}
     <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
       <thead><tr><th>Ürün</th><th class="y-sayi">Komisyon</th><th class="y-sayi">Alış (KDV hariç)</th><th class="y-sayi">Hedef fiyat</th><th class="y-sayi">Satış başı net kâr</th><th class="y-sayi">Zararsız en düşük fiyat</th></tr></thead>
       <tbody>{komisyonSatirlari.map((r) => <tr>
@@ -318,7 +318,7 @@ const tarifeEski = tarifeGun > 90;
         <td data-etiket="Komisyon" class="y-sayi">{r.oranBp !== undefined ? yuzde(r.oranBp) : '—'}{r.vadeGun !== undefined && <small class="y-table-note">{r.vadeGun} gün vade</small>}</td>
         <td data-etiket="Alış" class="y-sayi">{r.maliyet !== undefined ? finansPara(r.maliyet) : <span class="muted">girilmedi</span>}</td>
         <td data-etiket="Hedef fiyat" class="y-sayi">{finansPara(r.fiyat)}</td>
-        <td data-etiket="Net kâr" class:list={['y-sayi', r.kar !== undefined && r.kar < 0 ? 'y-yazi-kirmizi' : '']}><strong>{r.kar !== undefined ? isaretli(r.kar) : '—'}</strong>{r.marj !== undefined && <small class="y-table-note">%{(r.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} marj</small>}</td>
+        <td data-etiket="Net kâr" class:list={['y-sayi', r.kar !== undefined && r.kar < 0 ? 'y-yazi-kirmizi' : '']}><strong>{r.kar !== undefined ? isaretli(r.kar) : (!ayar.kargoFirmasi && r.maliyet !== undefined ? 'Kargo seçilmedi' : '—')}</strong>{r.marj !== undefined && <small class="y-table-note">%{(r.marj * 100).toLocaleString('tr-TR', { maximumFractionDigits: 1 })} marj</small>}</td>
         <td data-etiket="En düşük fiyat" class="y-sayi">{r.basaBas !== undefined ? finansPara(r.basaBas) : '—'}</td>
       </tr>)}</tbody>
     </table></div>

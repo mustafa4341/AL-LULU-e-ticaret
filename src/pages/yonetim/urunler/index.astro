@@ -10,6 +10,7 @@ import { Katalog } from '../../../lib/katalog';
 import { YAYIN_ADLARI, stokSebebi, yTarih } from '../../../lib/yonetimRapor';
 import { KANALLAR, KANAL_LISTESI, bosAyarlar, kritikEsik } from '../../../lib/pazaryeri';
 import { envanterAyarlariGuncelle, envanterAyarlariOku, stokHareketleriOku } from '../../../lib/pazaryeriDepo';
+import { stokDegisimiKuyrugaAl } from '../../../lib/pazaryeriSenkron';
 import BilgiKutusu from '../../../components/yonetim/BilgiKutusu.astro';
 import { urunGtin } from '../../../lib/urunKimlik';
 import Ikon from '../../../components/Ikon.astro';
@@ -86,6 +87,7 @@ if (Astro.request.method === 'POST') {
       if (fiyat !== eskiFiyat) fiyatUygula(u, fiyat);
       u.sepetteIndirim = indirim;
     }, 'Panel: hızlı stok düzeltme');
+    if (sayi(f, 'stok', -1) !== sayi(f, 'eskiStok', -1)) stokDegisimiKuyrugaAl('Ürünler hızlı stok düzeltme');
     const q = new URLSearchParams({ filtre, q: soru, sira, ok: 'Fiyat ve stok kaydedildi.' });
     return Astro.redirect('/yonetim/urunler?' + q + '#u-' + duzenle, 303);
   } catch (e) {

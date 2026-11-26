@@ -112,7 +112,7 @@ export function satisHesabi(g: HesapGirdisi) {
   const kesintiKdv = kalemler.reduce((t, k) => t + k.kdv, 0);
   const stopaj = Math.round(kdvHaricSatis * g.stopajBp / 10_000);
   const hesabaYatan = g.fiyat - kesintiNet - kesintiKdv - stopaj;
-  const netKar = g.maliyet === undefined ? undefined : kdvHaricSatis - kesintiNet - g.maliyet;
+  const netKar = g.maliyet === undefined || kargo === undefined ? undefined : kdvHaricSatis - kesintiNet - g.maliyet;
   return {
     kdvHaricSatis, satisKdv, kalemler, kesintiNet, kesintiKdv, stopaj, hesabaYatan, netKar,
     kargoBulunamadi: kargo === undefined,

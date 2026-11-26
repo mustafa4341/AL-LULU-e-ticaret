@@ -15,8 +15,12 @@ export const GET: APIRoute = async ({ url }) => {
   const tur = url.searchParams.get('tur');
   if (tur === 'sablon') return csvYaniti([TRENDYOL_BASLIK], 'trendyol-hakedis-sablonu');
   const { bas, son } = donem(url.searchParams);
-  const [f, siparisler] = await Promise.all([finansOku(), siparisleriOku()]);
-  const r = raporla(f, siparisler, bas, son);
+  const [f, siparisler, pazaryeri] = await Promise.all([
+    finansOku(),
+    siparisleriOku(),
+    pazaryeriSiparisleriOku().catch(() => []),
+  ]);
+  const r = raporla(f, siparisler, bas, son, pazaryeri);
   const ad = bas + '_' + son;
   if (tur === 'pdf') {
     const kalan = kalanTutar(r);
@@ -32,7 +36,8 @@ export const GET: APIRoute = async ({ url }) => {
       ...(r.hepsiburada.length ? [{ ad: 'Hepsiburada hakediş (' + r.hepsiburada.length + ' kayıt)', tutar: finansPara(r.hepsiburadaBeklenen) } as OzetSatiri] : []),
       { ad: 'Giderler', tur: 'baslik' },
       ...Object.entries(r.kategori).filter(([, n]) => n > 0).map(([id, n]) => ({ ad: GIDER_KATEGORILERI[id as Gider['kategori']], tutar: '−' + finansPara(n), tur: 'alt' }) as OzetSatiri),
-      { ad: 'Toplam gider (' + r.giderler.length + ' kayıt)', tutar: '−' + finansPara(r.gider), tur: 'ara' },
+      ...(r.otoUrunMaliyeti > 0 ? [{ ad: 'Satılan ürün alış maliyeti (kayıtlı birim maliyetlerden)', tutar: '−' + finansPara(r.otoUrunMaliyeti), tur: 'alt' } as OzetSatiri] : []),
+      { ad: 'Toplam gider (' + r.giderler.length + ' kayıt)', tutar: '−' + finansPara(r.gider + r.otoUrunMaliyeti), tur: 'ara' },
       { ad: 'Kalan (tahmini)', tutar: finansPara(kalan), tur: 'sonuc' },
     ];
     const ayTablosu = aylar(bas, son);
@@ -41,21 +46,20 @@ export const GET: APIRoute = async ({ url }) => {
       logo: f.ayarlar.logo ? await logoDataUri() : '', satici: await saticiBilgisi(), satirlar,
       tablo: ayTablosu.length > 1 ? {
         // Kalan pazaryeri hakedişini de içerdiği için ayrı sütunda görünür: Satış − İade + Pazaryeri − Gider = Kalan (denetim AUD-024)
-        baslik: 'Aylara göre', kolonlar: ['Ay', 'Web satış', 'İade', 'Pazaryeri', 'Gider', 'Kalan'],
+        baslik: 'Aylara göre', kolonlar: ['Ay', 'Web satış', 'İade', 'Pazaryeri', 'Gider + Maliyet', 'Kalan'],
         satirlar: ayTablosu.map((a) => {
-          const x = raporla(f, siparisler, a.bas, a.son);
-          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.trendyolBeklenen + x.hepsiburadaBeklenen), finansPara(x.gider), finansPara(kalanTutar(x))];
+          const x = raporla(f, siparisler, a.bas, a.son, pazaryeri);
+          return [a.ad, finansPara(x.webSatis), finansPara(x.webIade), finansPara(x.trendyolBeklenen + x.hepsiburadaBeklenen), finansPara(x.gider + x.otoUrunMaliyeti), finansPara(kalanTutar(x))];
         }),
       } : undefined,
       notlar: [
-        ...(r.tahmini === undefined ? ['Dikkat: Bu dönem için “Ürün alış maliyeti” gideri girilmedi; kalan tutar ürün maliyeti düşülmeden hesaplanmıştır.'] : []),
+        ...(r.tahmini === undefined ? ['Dikkat: Bu dönem için “Ürün alış maliyeti” eksik; kalan tutar tüm ürün maliyetleri düşülmeden hesaplanmıştır.'] : []),
         'Satışlar ödeme tarihine, iade ve iptaller geri ödeme tarihine göre sayılır. Tutarlara KDV dahildir; KDV, banka tahsilatı ve muhasebe kârı ayrıca hesaplanır.',
         'Ayrıntılı listeler için Finans & Belgeler > Raporlar > Excel indir.',
       ],
     });
     return dosyaYaniti(await svgdenPdf(svgler, A4.w, A4.h, 150), 'application/pdf', 'finans-ozeti-' + ad + '.pdf');
   }
-  const pazaryeri = await pazaryeriSiparisleriOku().catch(() => []);
   const tablolar = muhasebeTablolari(f, siparisler, bas, son, pazaryeri);
   if (tur === 'excel') return dosyaYaniti(xlsxOlustur(tablolar), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'muhasebe-' + ad + '.xlsx');
   if (tur === 'zip') {

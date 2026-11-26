@@ -15,17 +15,46 @@ import { KANALLAR, KANAL_LISTESI, kanalHedefFiyati, kodNormal, type Kanal } from
 import { PazaryeriApiHatasi, kanalFiyatGonder, kanalFiyatSonucu, kanalStokOku, pazaryeriApiDurumu, trendyolTumIlanlar, type FiyatKalemi } from './pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from './pazaryeriDepo';
 import { finansOku } from './finansDepo';
+import { hbKategori, hedefFiyat, kategoriOnerisi } from './hepsiburadaTarife';
 import { urunGtin } from './urunKimlik';
 
 const TEKRAR_BEKLE_MS = 30 * 60_000;
 /** Otomatik çalışmada kanal fiyatının yarısından fazla düşüş gönderilmez (sitede yazım hatası olabilir); panelden onaylanır. */
 const OTOMATIK_EN_COK_DUSUS = 0.5;
 
+export type FiyatGuvenlikKontrolGirdisi = {
+  hedefTL: number;
+  mevcutTL?: number;
+  maliyetKurus?: number;
+  basaBasKurus?: number;
+};
+
+export type FiyatGuvenlikKontrolSonucu = {
+  riskli: boolean;
+  tur?: 'maliyet-alti' | 'basabas-alti' | 'buyuk-dusus';
+  mesaj?: string;
+};
+
+/** Zararına / başabaş altı veya >%50 düşen fiyatları tespit eder; açık onay olmadan pazaryerine gönderilmesini önler. */
+export function fiyatGuvenlikKontrolu(g: FiyatGuvenlikKontrolGirdisi): FiyatGuvenlikKontrolSonucu {
+  const hedefKurus = Math.round(g.hedefTL * 100);
+  if (g.maliyetKurus !== undefined && g.maliyetKurus > 0 && hedefKurus < g.maliyetKurus) {
+    return { riskli: true, tur: 'maliyet-alti', mesaj: 'alış maliyetinin altında' };
+  }
+  if (g.basaBasKurus !== undefined && g.basaBasKurus > 0 && hedefKurus < g.basaBasKurus) {
+    return { riskli: true, tur: 'basabas-alti', mesaj: 'zararsız alt sınırın (başabaş) altında' };
+  }
+  if (g.mevcutTL !== undefined && g.mevcutTL > 0 && g.hedefTL < g.mevcutTL * (1 - OTOMATIK_EN_COK_DUSUS)) {
+    return { riskli: true, tur: 'buyuk-dusus', mesaj: 'büyük düşüş (>%50)' };
+  }
+  return { riskli: false };
+}
+
 export type FiyatFarki = { urunId: string; ad: string; kod: string; kanalda?: number; site: number; neden?: string };
 export type KanalFiyatSonucu = {
   kanal: Kanal;
   gonderilen: FiyatFarki[];
-  /** Büyük düşüş: otomatik gönderilmedi, panelden "Fiyatı gönder" ile gönderilir */
+  /** Büyük düşüş veya zararına fiyat: onaysız gönderilmedi */
   onayBekleyen: FiyatFarki[];
   ayni: number;
   /** Az önce gönderildi, kanalın uygulaması bekleniyor */
@@ -39,6 +68,8 @@ export type KanalFiyatSonucu = {
 export type FiyatSecenegi = {
   /** Zamanlayıcı: yalnız otomatik fiyat takibi açık ürünler, büyük düşüş onaya kalır */
   otomatik?: boolean;
+  /** Panelden zararına / büyük indirimli fiyat bilerek onaylandıysa true */
+  zararinaOnay?: boolean;
   kanallar?: Kanal[];
   /** Panel düğmesi: yalnız bu ürünler (takip açık olmasa da) */
   urunIdler?: string[];
@@ -50,11 +81,11 @@ const yakin = (a: number | undefined, b: number) => a !== undefined && Math.abs(
 async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: number): Promise<KanalFiyatSonucu> {
   const sonuc: KanalFiyatSonucu = { kanal, gonderilen: [], onayBekleyen: [], ayni: 0, bekleyen: 0, bulunamayan: [], reddedilen: [] };
   const otomatik = !!s.otomatik;
-  const [ayar, magaza, maliyetler] = await Promise.all([
+  const [ayar, magaza, finans] = await Promise.all([
     envanterAyarlariOku(), magazaOku(true),
-    // Alış maliyeti (KDV hariç, kuruş): Finans › Hepsiburada hesaplayıcısında ürün için girilen. Okunamazsa sınır uygulanmaz.
-    finansOku().then((f) => f.hbUrunler, () => ({} as Record<string, { maliyet?: number }>)),
+    finansOku().catch(() => undefined),
   ]);
+  const maliyetler = finans?.hbUrunler ?? {};
   await fiyatSonuclariniOku(kanal, ayar.kanallar[kanal], new Map(magaza.urunler.map((u) => [u.id, `${u.marka} ${u.kisaAd}`])), sonuc);
   const k = ayar.kanallar[kanal];
   const urunler = new Map(magaza.urunler.map((u) => [u.id, u]));
@@ -78,10 +109,30 @@ async function kanalFiyatlariniEsitle(kanal: Kanal, s: FiyatSecenegi, simdi: num
     if (yakin(e.fiyat, hedef) && e.fiyatTarih && simdi - Date.parse(e.fiyatTarih) < TEKRAR_BEKLE_MS) { sonuc.bekleyen++; continue; }
     if (!(hedef > 0)) continue;
     const fark: FiyatFarki = { urunId, ad: `${u.marka} ${u.kisaAd}`, kod: e.kod!, kanalda: ilan.fiyat, site: hedef };
-    if (otomatik && ilan.fiyat !== undefined && hedef < ilan.fiyat * (1 - OTOMATIK_EN_COK_DUSUS)) { sonuc.onayBekleyen.push({ ...fark, neden: 'büyük düşüş' }); continue; }
-    // Zararına otomatik satış olmasın: KDV dahil hedef fiyat, KDV hariç alış maliyetinin altındaysa gönderilmez (denetim AUD-014)
-    const maliyet = maliyetler[urunId]?.maliyet;
-    if (otomatik && maliyet && hedef * 100 < maliyet) { sonuc.onayBekleyen.push({ ...fark, neden: 'alış maliyetinin altında' }); continue; }
+    const hbBilgi = maliyetler[urunId];
+    const maliyet = hbBilgi?.maliyet;
+    let basaBasKurus: number | undefined;
+    if (maliyet !== undefined) {
+      const urunKdv = k.ilanlar[urunId]?.kdv ?? hbBilgi?.kdv ?? 20;
+      const desi = hbBilgi?.desi ?? k.ilanlar[urunId]?.desi ?? 3;
+      const kargoFirmasi = finans?.hbAyar.kargoFirmasi || (kanal === 'trendyol' ? 'aras' : '');
+      if (kanal === 'trendyol' && e.komisyonBp !== undefined && kargoFirmasi) {
+        basaBasKurus = hedefFiyat({ oranBp: e.komisyonBp, komisyonKdvDahil: true, urunKdv, desi, kargoFirmasi, islemBedeli: 0, hizmetBedeli: 0, stopajBp: 100, maliyet }, 0);
+      } else if (kanal === 'hepsiburada' && kargoFirmasi) {
+        const hbOran = hbBilgi ? (hbBilgi.kategori === 'elle' ? hbBilgi.oranBp : hbKategori(hbBilgi.kategori)?.oranBp) : hbKategori(kategoriOnerisi(u.kategoriler))?.oranBp;
+        if (hbOran !== undefined) {
+          basaBasKurus = hedefFiyat({
+            oranBp: hbOran, komisyonKdvDahil: false, urunKdv, desi, kargoFirmasi,
+            islemBedeli: finans?.hbAyar.islemBedeli ?? 0, hizmetBedeli: finans?.hbAyar.hizmetBedeli ?? 0, stopajBp: finans?.hbAyar.stopajBp ?? 100, maliyet,
+          }, 0);
+        }
+      }
+    }
+    const kontrol = fiyatGuvenlikKontrolu({ hedefTL: hedef, mevcutTL: ilan.fiyat, maliyetKurus: maliyet, basaBasKurus });
+    if (kontrol.riskli && (otomatik || !s.zararinaOnay)) {
+      sonuc.onayBekleyen.push({ ...fark, neden: kontrol.mesaj });
+      continue;
+    }
     gonder.push({ ...fark, fiyat: hedef });
   }
   const istekId = gonder.length ? await kanalFiyatGonder(kanal, gonder, ilanlar, sinyal) : undefined;

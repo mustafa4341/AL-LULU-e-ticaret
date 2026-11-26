@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
+import { arkaPlanda } from './arkaPlan';
 import { DogrulamaHatasi, magazaOku, siparisleriOku, supabaseIstemci, webAyrilanAdetleri } from './depo';
-import { eslesmeyenVar, fazlaSatisVar, KANALLAR, KANAL_LISTESI, kanalHedefStok, type Kanal, type KanalAyari } from './pazaryeri';
+import { eslesmeyenVar, fazlaSatisVar, KANALLAR, KANAL_LISTESI, kanalHedefStok, type EnvanterAyarlari, type Kanal, type KanalAyari } from './pazaryeri';
 import {
   kanalSiparisAl, kanalStokGonder, kanalStokOku, kanalStokSonucu, otomatikStokYazmaAcik, pazaryeriApiDurumu,
   PazaryeriApiHatasi, pazaryeriOrtam, type StokKalemi,
@@ -268,8 +269,8 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
 
     if (otomatikStokYazmaAcik() && canliBagli.length) {
       const ayar = await envanterAyarlariOku();
-      // Yalnız canlı (production) kanallar gerçek depo stoğunu paylaşır; test (SIT) kanalı siparişleri stokDisi olarak izole çalışır.
-      const beklenen = KANAL_LISTESI.filter((k) => canliBagli.includes(k) || (pazaryeriApiDurumu(k) !== 'test' && (ayar.kanallar[k].stokBaslangic || Object.keys(ayar.kanallar[k].urunler).length)));
+      // Yalnız canlı (production) kanallar gerçek depo stoğunu paylaşır; test (SIT) ve kapalı kanallar canlı stoğu kilitlemez.
+      const beklenen = beklenenCanliKanallar(ayar);
       const aktarimTamam = (k: Kanal) => kanallar[k]?.siparis !== undefined && !ayar.kanallar[k].sonApiHata;
       const tumKanallarTamam = beklenen.every(aktarimTamam);
       // Bir kanalın siparişleri alınamadıysa ortak stok gerçekte olduğundan yüksek görünebilir: o turda stok ARTIŞI
@@ -329,4 +330,28 @@ export async function pazaryeriSenkron(tetikleyen: 'panel' | 'zamanlayici' | 'bi
       console.error('[pazaryeri] Senkronizasyon kilidi bırakılamadı.');
     }
   }
+}
+
+/**
+ * Ortak stok artışının güvenle gönderilebilmesi için sipariş aktarımı tam olması beklenen canlı kanallar:
+ * - 'canli' olan tüm kanallar
+ * - Daha önce canlı başlatılmış (stokBaslangic tanımlı) fakat ortam anahtarı eksik kalan ('eksik') kanallar
+ * Bilinçli kapatılmış ('kapali') ve test/SIT ('test') kanalları canlı kanalın stok artışını bloke etmez.
+ */
+export function beklenenCanliKanallar(
+  ayar: Pick<EnvanterAyarlari, 'kanallar'>,
+  durumBul: (k: Kanal) => ReturnType<typeof pazaryeriApiDurumu> = pazaryeriApiDurumu,
+): Kanal[] {
+  return KANAL_LISTESI.filter((k) => {
+    const durum = durumBul(k);
+    if (durum === 'canli') return true;
+    return durum === 'eksik' && Boolean(ayar.kanallar[k].stokBaslangic);
+  });
+}
+
+/** Panelde manuel stok değişikliği yapıldığında 5 dakikalık cron'u beklemeden canlı kanallara stok eşitlemesini kuyruğa alır. */
+export function stokDegisimiKuyrugaAl(sebep = 'manuel stok değişikliği sonrası pazaryeri stoğu'): void {
+  if (!otomatikStokYazmaAcik()) return;
+  if (!KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) === 'canli')) return;
+  arkaPlanda(pazaryeriSenkron('bildirim'), sebep);
 }

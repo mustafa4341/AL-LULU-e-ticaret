@@ -6,11 +6,12 @@ import { DogrulamaHatasi, magazaGuncelle, magazaOku } from '../../lib/depo';
 import { finansPara, paraOku } from '../../lib/finans';
 import { finansOku, hbUrunleriGuncelle } from '../../lib/finansDepo';
 import { metin } from '../../lib/form';
-import { fiyatOzeti, pazaryeriFiyatlariEsitle } from '../../lib/kanalFiyat';
+import { fiyatGuvenlikKontrolu, fiyatOzeti, pazaryeriFiyatlariEsitle } from '../../lib/kanalFiyat';
 import { KARGO_FIRMALARI, hbKategori, hedefFiyat, kargoUcreti, kategoriOnerisi, satisHesabi } from '../../lib/hepsiburadaTarife';
 import { bosAyarlar, kanalHedefFiyati } from '../../lib/pazaryeri';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
 import { envanterAyarlariGuncelle, envanterAyarlariOku } from '../../lib/pazaryeriDepo';
+import { stokDegisimiKuyrugaAl } from '../../lib/pazaryeriSenkron';
 import { tyKomisyonlariniGuncelle } from '../../lib/trendyolIceAktar';
 import { fiyatUygula } from '../../lib/urunIslem';
 import { ilanBekliyor } from '../../lib/trendyolIlanIslem';
@@ -54,6 +55,7 @@ if (Astro.request.method === 'POST') {
     }
 
     if (eylem === 'kaydet' || eylem === 'kaydet-ve-gonder' || eylem.startsWith('tek-gonder:')) {
+      const zararinaOnay = f.get('zararinaOnay') === 'on';
       const [mevcutMagaza, mevcutAyar, mevcutFinans] = await Promise.all([
         magazaOku(true),
         envanterAyarlariOku(),
@@ -65,6 +67,8 @@ if (Astro.request.method === 'POST') {
       const kanalDegisenler: { id: string; tyOzel?: number | null; hbOzel?: number | null }[] = [];
       const gonderilecekTy = new Set<string>();
       const gonderilecekHb = new Set<string>();
+      const riskUyarilari: string[] = [];
+      const kargoFirmasiKontrol = mevcutFinans.hbAyar.kargoFirmasi || 'aras';
 
       for (const u of yayindakiUrunler) {
         const id = u.id;
@@ -165,6 +169,47 @@ if (Astro.request.method === 'POST') {
           if (tyFarkli && mevcutAyar.kanallar.trendyol.urunler[id]?.kod) gonderilecekTy.add(id);
           if (hbFarkli && mevcutAyar.kanallar.hepsiburada.urunler[id]?.kod) gonderilecekHb.add(id);
         }
+
+        // 4. Zararına / başabaş altı veya >%50 düşüş güvenlik kilidi
+        if (!zararinaOnay) {
+          const guncelMaliyet = maliyetDegisenler.find((m) => m.id === id)?.maliyet ?? kayitliHb?.maliyet;
+          const guncelDesi = maliyetDegisenler.find((m) => m.id === id)?.desi ?? kayitliHb?.desi ?? 3;
+          const guncelKdv = kayitliHb?.kdv ?? mevcutAyar.kanallar.trendyol.ilanlar[id]?.kdv ?? 20;
+          if (yeniFiyat !== undefined) {
+            const webK = fiyatGuvenlikKontrolu({ hedefTL: yeniFiyat, mevcutTL: eskiWeb, maliyetKurus: guncelMaliyet });
+            if (webK.riskli) riskUyarilari.push(`${ad} (Web): ${yeniFiyat} TL — ${webK.mesaj}.`);
+          }
+          const tekTyMi = eylem === `tek-gonder:trendyol:${id}`;
+          if ((tyFarkli && tyOzel) || tekTyMi) {
+            const tyHedef = tyOzel ?? kanalHedefFiyati({ ...u, fiyat: yeniFiyat ?? u.fiyat }, mevcutAyar.kanallar.trendyol).hedef;
+            const tyOran = mevcutAyar.kanallar.trendyol.urunler[id]?.komisyonBp;
+            const tyBasaBas = guncelMaliyet !== undefined && tyOran !== undefined
+              ? hedefFiyat({ oranBp: tyOran, komisyonKdvDahil: true, urunKdv: guncelKdv, desi: guncelDesi, kargoFirmasi: kargoFirmasiKontrol, islemBedeli: 0, hizmetBedeli: 0, stopajBp: 100, maliyet: guncelMaliyet }, 0)
+              : undefined;
+            const tyMevcut = mevcutAyar.kanallar.trendyol.urunler[id]?.kanalFiyat ?? eskiTy ?? undefined;
+            const tyK = fiyatGuvenlikKontrolu({ hedefTL: tyHedef, mevcutTL: tyMevcut, maliyetKurus: guncelMaliyet, basaBasKurus: tyBasaBas });
+            if (tyK.riskli) riskUyarilari.push(`${ad} (Trendyol): ${tyHedef} TL — ${tyK.mesaj}${tyBasaBas ? ` (zararsız alt sınır: ${finansPara(tyBasaBas)})` : ''}.`);
+          }
+          const tekHbMi = eylem === `tek-gonder:hepsiburada:${id}`;
+          if ((hbFarkli && hbOzel) || tekHbMi) {
+            const hbHedef = hbOzel ?? kanalHedefFiyati({ ...u, fiyat: yeniFiyat ?? u.fiyat }, mevcutAyar.kanallar.hepsiburada).hedef;
+            const guncelHbOran = maliyetDegisenler.find((m) => m.id === id)?.oranBp
+              ?? (kayitliHb ? (kayitliHb.kategori === 'elle' ? kayitliHb.oranBp : hbKategori(kayitliHb.kategori)?.oranBp) : hbKategori(kategoriOnerisi(u.kategoriler))?.oranBp);
+            const hbBasaBas = guncelMaliyet !== undefined && guncelHbOran !== undefined && mevcutFinans.hbAyar.kargoFirmasi
+              ? hedefFiyat({ oranBp: guncelHbOran, komisyonKdvDahil: false, urunKdv: guncelKdv, desi: guncelDesi, kargoFirmasi: mevcutFinans.hbAyar.kargoFirmasi, islemBedeli: mevcutFinans.hbAyar.islemBedeli, hizmetBedeli: mevcutFinans.hbAyar.hizmetBedeli, stopajBp: mevcutFinans.hbAyar.stopajBp, maliyet: guncelMaliyet }, 0)
+              : undefined;
+            const hbMevcut = mevcutAyar.kanallar.hepsiburada.urunler[id]?.kanalFiyat ?? eskiHb ?? undefined;
+            const hbK = fiyatGuvenlikKontrolu({ hedefTL: hbHedef, mevcutTL: hbMevcut, maliyetKurus: guncelMaliyet, basaBasKurus: hbBasaBas });
+            if (hbK.riskli) riskUyarilari.push(`${ad} (Hepsiburada): ${hbHedef} TL — ${hbK.mesaj}${hbBasaBas ? ` (zararsız alt sınır: ${finansPara(hbBasaBas)})` : ''}.`);
+          }
+        }
+      }
+
+      if (riskUyarilari.length) {
+        throw new DogrulamaHatasi([
+          ...riskUyarilari,
+          'Yanlışlıkla zararına satışı önlemek için işlem durduruldu. Bu fiyatları bilerek uygulamak istiyorsanız tablonun altındaki “Zararına veya %50’den fazla indirimli fiyatı bilerek onaylıyorum” kutusunu işaretleyip tekrar kaydedin.',
+        ]);
       }
 
       // Kayıt 1: Web mağaza fiyatları ve ortak stok
@@ -183,6 +228,9 @@ if (Astro.request.method === 'POST') {
             if (d.yeniFiyat !== undefined) fiyatUygula(u, d.yeniFiyat);
           }
         }, `Fiyat ve Kâr Merkezi: ${webDegisenler.length} ürün`);
+        if (webDegisenler.some((d) => d.yeniStok !== undefined)) {
+          stokDegisimiKuyrugaAl('Fiyat ve Kâr Merkezi stok güncellemesi');
+        }
       }
 
       // Kayıt 2: Alış maliyeti, desi ve HB komisyonları
@@ -232,9 +280,10 @@ if (Astro.request.method === 'POST') {
       if (eylem.startsWith('tek-gonder:')) {
         const [, kanal, urunId] = eylem.split(':');
         if ((kanal === 'trendyol' || kanal === 'hepsiburada') && urunId) {
-          const [r] = await pazaryeriFiyatlariEsitle({ kanallar: [kanal], urunIdler: [urunId] });
+          const [r] = await pazaryeriFiyatlariEsitle({ kanallar: [kanal], urunIdler: [urunId], zararinaOnay });
           if (!r) parcalar.push(`${kanal === 'trendyol' ? 'Trendyol' : 'Hepsiburada'} API bağlantısı bu sunucuda kurulu değil; özel fiyat kaydedildi, canlı siteden gönderilir.`);
           else if (r.hata) throw new DogrulamaHatasi([r.hata]);
+          else if (r.onayBekleyen.length) parcalar.push(fiyatOzeti([r]).join(' '));
           else parcalar.push(r.gonderilen.length ? fiyatOzeti([r]).join(' ') : `${kanal === 'trendyol' ? 'Trendyol' : 'Hepsiburada'} fiyatı zaten güncel.`);
         }
       } else if (eylem === 'kaydet-ve-gonder') {
@@ -249,10 +298,10 @@ if (Astro.request.method === 'POST') {
         const hbHedefler = gonderilecekHb.size ? [...gonderilecekHb] : tumHbBagli;
         const istekler: Promise<Awaited<ReturnType<typeof pazaryeriFiyatlariEsitle>>>[] = [];
         if (tyHedefler.length && ['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) {
-          istekler.push(pazaryeriFiyatlariEsitle({ kanallar: ['trendyol'], urunIdler: tyHedefler }));
+          istekler.push(pazaryeriFiyatlariEsitle({ kanallar: ['trendyol'], urunIdler: tyHedefler, zararinaOnay }));
         }
         if (hbHedefler.length && pazaryeriApiDurumu('hepsiburada') === 'canli') {
-          istekler.push(pazaryeriFiyatlariEsitle({ kanallar: ['hepsiburada'], urunIdler: hbHedefler }));
+          istekler.push(pazaryeriFiyatlariEsitle({ kanallar: ['hepsiburada'], urunIdler: hbHedefler, zararinaOnay }));
         }
         if (!istekler.length) {
           parcalar.push('Kanal özel fiyatları kaydedildi (bu sunucuda canlı pazaryeri anahtarı olmadığı için API gönderimi canlı sitede yapılır).');
@@ -650,9 +699,15 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
       </div>
 
       <div class="fkm-alt-cubuk">
-        <p class="y-help" style="margin:0">
-          <strong>Kanallar birbirinden bağımsızdır:</strong> Web fiyatını değiştirmek Trendyol veya Hepsiburada fiyatını değiştirmez. Ortak stok ise tüm kanallara eşitlenir.
-        </p>
+        <div>
+          <p class="y-help" style="margin:0">
+            <strong>Kanallar birbirinden bağımsızdır:</strong> Web fiyatını değiştirmek Trendyol veya Hepsiburada fiyatını değiştirmez. Ortak stok ise tüm kanallara eşitlenir.
+          </p>
+          <label class="y-check" style="margin-top:8px;font-size:0.86rem">
+            <input type="checkbox" name="zararinaOnay" value="on" />
+            <span>Zararına (başabaş altı) veya %50’den fazla indirimli fiyatı bilerek onaylıyorum</span>
+          </label>
+        </div>
         <div class="fkm-aksiyonlar">
           <button type="submit" name="eylem" value="kaydet" class="btn btn--cizgi">
             <PIkon ad="tik" boyut={17} />Yalnızca Kaydet

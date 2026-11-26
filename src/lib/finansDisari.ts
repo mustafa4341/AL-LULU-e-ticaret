@@ -34,7 +34,7 @@ export function aylar(bas: string, son: string) {
  * böylece "Satışlar − İadeler" panelde görünen net satışla aynı çıkar.
  */
 export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string, son: string, pazaryeri: PazaryeriSiparisi[] = []) => {
-  const r = raporla(f, siparisler, bas, son);
+  const r = raporla(f, siparisler, bas, son, pazaryeri);
   const pySatirlari = pazaryeri
     .filter((s) => !Number.isNaN(Date.parse(s.tarih)) && aralikta(finansGunu(Date.parse(s.tarih)), bas, son))
     .sort((a, b) => a.tarih.localeCompare(b.tarih))
@@ -45,13 +45,13 @@ export const muhasebeTablolari = (f: Finans, siparisler: Siparis[], bas: string,
   const durum = (s: Siparis) => iadeEdildi(s) ? 'İade tamamlandı' : SIPARIS_DURUM_ADLARI[s.durum];
   const odemeTarihi = (s: Siparis) => s.gecmis.find((e) => e.durum === 'odendi')?.tarih;
   const aylik = aylar(bas, son).map((a) => {
-    const x = raporla(f, siparisler, a.bas, a.son);
+    const x = raporla(f, siparisler, a.bas, a.son, pazaryeri);
     return [a.ad, a.bas, a.son, x.satislar.length, tl(x.webSatis), tl(x.webIade), tl(x.webSatis - x.webIade), tl(x.trendyolBeklenen), tl(x.hepsiburadaBeklenen), tl(x.gider),
-      tl(kalanTutar(x)), x.tahmini === undefined ? 'Ürün alış maliyeti girilmedi; kalan kesin değil' : ''];
+      tl(x.otoUrunMaliyeti ?? 0), tl(kalanTutar(x)), x.tahmini === undefined ? 'Ürün alış maliyeti girilmedi; kalan kesin değil' : ''];
   });
   return [
     { ad: 'Aylık özet', kod: 'aylik', satirlar: [
-      ['Ay', 'Başlangıç', 'Bitiş', 'Satış adedi', 'Onaylı satış (TL)', 'İade/iptal (TL)', 'Net satış (TL)', 'Trendyol beklenen hakediş (TL)', 'Hepsiburada hakediş (TL)', 'Giderler (TL)', 'Tahmini kalan (TL)', 'Not'],
+      ['Ay', 'Başlangıç', 'Bitiş', 'Satış adedi', 'Onaylı satış (TL)', 'İade/iptal (TL)', 'Net satış (TL)', 'Trendyol beklenen hakediş (TL)', 'Hepsiburada hakediş (TL)', 'Giderler (TL)', 'Satılan ürün maliyeti (TL)', 'Tahmini kalan (TL)', 'Not'],
       ...aylik,
     ] },
     { ad: 'Satışlar', kod: 'satislar', satirlar: [

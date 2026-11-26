@@ -393,9 +393,10 @@ export function kanalSatisFiyati(u: Pick<Urun, 'fiyat' | 'sepetteIndirim' | 'fir
 export function kanalHedefFiyati(
   u: Pick<Urun, 'id' | 'fiyat' | 'sepetteIndirim' | 'firsat'>,
   kanalAyari?: Pick<KanalAyari, 'fiyatKurali' | 'urunler' | 'ilanlar'>,
-  simdi = Date.now(),
+  _simdi = Date.now(),
 ): { hedef: number; site: number; kaynak: 'ozel' | 'kural' | 'site' } {
-  const site = kanalSatisFiyati(u, simdi);
+  // Web sepet indirimi (sepetteIndirim) ve saatlik web fırsatı yalnız kendi web sitemize aittir; pazaryeri baz fiyatına sızmaz.
+  const site = Math.round(u.fiyat * 100) / 100;
   const ozel = kanalAyari?.urunler?.[u.id]?.ozelFiyat ?? kanalAyari?.ilanlar?.[u.id]?.fiyat;
   if (ozel !== undefined && ozel > 0) {
     return { hedef: Math.round(ozel * 100) / 100, site, kaynak: 'ozel' };
@@ -415,6 +416,8 @@ export const EnvanterAyarSema = z.object({
   /** Tüm ürünler için kritik stok eşiği (ürüne özel eşik yoksa) */
   kritikVarsayilan: z.number().int().min(0).max(100000).default(3),
   urunKritik: z.record(z.string(), z.number().int().min(0).max(100000)).default({}),
+  /** Mağaza sahibinin bilerek 0 stokta tuttuğu ürünler: rutin stok bitti uyarısı üretmez, ancak gerçek stok/sipariş hatalarını gizlemez */
+  bilerekStoktaYok: z.record(z.string(), z.boolean()).default({}),
   /** Pazaryeri ürün kodu (kodNormal) → mağaza ürün kimliği */
   eslesmeler: z.record(z.string(), z.string()).default({}),
   epostaBildirimi: z.boolean().default(true),
