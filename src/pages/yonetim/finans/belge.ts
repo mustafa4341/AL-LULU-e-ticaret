@@ -59,7 +59,8 @@ export const POST: APIRoute = async ({ request, redirect, url }) => {
     u.searchParams.delete('ok');
     u.searchParams.delete('hata');
     u.searchParams.set(hata ? 'hata' : 'ok', mesaj);
-    return redirect(u.pathname + u.search + (u.pathname.startsWith('/yonetim/siparisler/') ? '#belgeler' : ''), 303);
+    const hash = geri?.origin === url.origin && geri.hash ? geri.hash : (u.pathname.startsWith('/yonetim/siparisler/') ? '#belgeler' : '');
+    return redirect(u.pathname + u.search + hash, 303);
   };
   try {
     if (islem === 'gonderildi') {

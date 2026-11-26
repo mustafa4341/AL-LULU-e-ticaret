@@ -49,6 +49,8 @@ try {
   const hbTarife = await vite.ssrLoadModule('/src/lib/hepsiburadaTarife.ts');
   const finansMod = await vite.ssrLoadModule('/src/lib/finans.ts');
   const finansDisari = await vite.ssrLoadModule('/src/lib/finansDisari.ts');
+  const istekMod = await vite.ssrLoadModule('/src/lib/istek.ts');
+  const siparisMerkezi = await vite.ssrLoadModule('/src/lib/siparisMerkezi.ts');
 
   const magazaHam = JSON.parse(fs.readFileSync(path.join(repoKoku, 'veri', 'magaza.json'), 'utf8'));
 
@@ -187,6 +189,130 @@ try {
     ayar.kanallar.hepsiburada.stokBaslangic = '2026-11-01T00:00:00.000Z';
     const eksikAnahtar = pazaryeriSenkron.beklenenCanliKanallar(ayar, (k) => (k === 'trendyol' ? 'canli' : 'eksik'));
     assert.deepEqual(eksikAnahtar, ['trendyol', 'hepsiburada']);
+  });
+
+  // 7. FAZ 2.1: Tek-sahip geri yönlendirme yardımcısı (open-redirect güvenliği + sorgu koruma)
+  await test('Faz 2.1: yonetimGeriAdresi yalnız /yonetim içi adreslere izin vermeli ve dış yönlendirmeyi engellemeli', () => {
+    const originUrl = new URL('https://alluluhome.com/yonetim/finans/faturalar');
+    const icAdres = istekMod.yonetimGeriAdresi(
+      '/yonetim/siparisler?durum=islem&sec=trendyol-PKG1&ok=eski',
+      originUrl,
+      '/yonetim/finans/faturalar',
+      { tur: 'ok', mesaj: 'Fatura kaydedildi.' },
+    );
+    assert.equal(icAdres, '/yonetim/siparisler?durum=islem&sec=trendyol-PKG1&ok=Fatura+kaydedildi.');
+
+    const disSaldiri = istekMod.yonetimGeriAdresi(
+      'https://evil.example.com/yonetim/sahte',
+      originUrl,
+      '/yonetim/finans/faturalar',
+      { tur: 'hata', mesaj: 'Geçersiz' },
+    );
+    assert.equal(disSaldiri, '/yonetim/finans/faturalar?hata=Ge%C3%A7ersiz');
+  });
+
+  // 8. FAZ 2.2: Sipariş Merkezi — lojistik aşama ve 3 aşamalı fatura ayrımı + engellenen işlemler + SIT test izolasyonu + tarihsel kâr
+  await test('Faz 2.2: Sipariş Merkezi 3 kanalı tek modelde birleştirmeli, teslim edilmiş faturasız siparişi geriye çekmemeli ve sahte kâr üretmemeli', () => {
+    const finans = finansMod.FinansSema.parse({
+      belgeler: [], giderler: [], olaylar: [],
+      faturalar: [{
+        id: '11111111-1111-4111-8111-111111111111',
+        kanal: 'trendyol',
+        kayit: 'trendyol-PKG-TESLIM',
+        siparisNo: '119002',
+        no: 'GIB2026000000099',
+        tarih: '2026-11-25',
+        alici: 'Ayşe Yılmaz',
+        matrah: 100000,
+        kdv: 20000,
+        toplam: 120000,
+        iletim: { durum: 'hata', mesaj: 'Trendyol fatura servisi zaman aşımı' },
+        olusturma: '2026-11-25T12:00:00.000Z',
+      }],
+      hbUrunler: {
+        'fissler-buhar-aparati-22': { kategori: 'elle', desi: 2, kdv: 20, maliyet: 25000, oranBp: 900 },
+      },
+      trendyol: [{
+        id: 'TY-119002', tarih: '2026-11-25', brut: 120000, indirim: 0, iade: 0, komisyon: 12000, hizmet: 1200, kargo: 12000, diger: 0, stopaj: 1000, banka: 93800,
+      }],
+    });
+    const envanter = pazaryeri.bosAyarlar();
+
+    const webSiparis = [{
+      no: 'AL2026112601',
+      token: 'tok123',
+      tarih: '2026-11-26T09:00:00.000Z',
+      durum: 'kargoda',
+      musteri: { ad: 'Mehmet', soyad: 'Kaya', tel: '05551112233', eposta: 'm@example.com' },
+      teslimat: { il: 'İstanbul', ilce: 'Kadıköy', adres: 'Moda Cad. No:1' },
+      fatura: { tip: 'bireysel' },
+      kalemler: [{ tip: 'urun', id: 'fissler-buhar-aparati-22', ad: 'Buhar Aparatı', parcalar: [], adet: 1, birimFiyat: 900, indirim: 0, toplam: 900 }],
+      urunlerToplami: 900, setIndirimi: 0, sepetIndirimi: 0, kampanyaIndirimi: 0, kargo: 0, toplam: 900,
+      kargoFirma: 'Aras Kargo', kargoTakip: '1234567890', stokDusuldu: true,
+      gecmis: [{ durum: 'odendi', tarih: '2026-11-26T09:01:00.000Z' }, { durum: 'kargoda', tarih: '2026-11-26T10:00:00.000Z' }],
+    }];
+
+    const pySiparisler = [
+      // 1) Teslim edilmiş ama fatura iletimi hata vermiş Trendyol siparişi
+      {
+        id: 'trendyol-PKG-TESLIM', kanal: 'trendyol', siparisNo: '119002', paketNo: 'PKG-TESLIM',
+        tarih: '2026-11-25T08:00:00.000Z', hamDurum: 'Delivered', durum: 'teslim-edildi', toplam: 120000,
+        ilkAktarim: '2026-11-25T08:05:00.000Z', sonAktarim: '2026-11-25T15:00:00.000Z', kaynak: 'api', gecmis: [],
+        kalemler: [{ anahtar: 'K1', ad: 'Buhar Aparatı', adet: 1, urunId: 'fissler-buhar-aparati-22', tutar: 120000, durum: 'teslim-edildi', stok: 'dusuldu', dusulen: 1, eksik: 0 }],
+      },
+      // 2) Eşleşmeyen ürün içeren yeni Trendyol siparişi ("Toplamaya Başla" yerine "Ürünü Eşleştir" çıkmalı)
+      {
+        id: 'trendyol-PKG-ESLESMEYEN', kanal: 'trendyol', siparisNo: '119003', paketNo: 'PKG-ESLESMEYEN',
+        tarih: '2026-11-26T11:00:00.000Z', hamDurum: 'Created', durum: 'yeni', toplam: 199900,
+        ilkAktarim: '2026-11-26T11:01:00.000Z', sonAktarim: '2026-11-26T11:01:00.000Z', kaynak: 'api', gecmis: [],
+        kalemler: [{ anahtar: 'K2', ad: 'Bilinmeyen Tava', adet: 1, barkod: '999999', tutar: 199900, durum: 'yeni', stok: 'yok', dusulen: 0, eksik: 0 }],
+      },
+      // 3) Hepsiburada SIT/test siparişi ("İşlem Bekleyen" kuyruğuna girmemeli)
+      {
+        id: 'hepsiburada-HB-TEST', kanal: 'hepsiburada', siparisNo: 'HB-TEST-1',
+        tarih: '2026-11-26T11:30:00.000Z', hamDurum: 'Open', durum: 'yeni', toplam: 104900, stokDisi: true,
+        ilkAktarim: '2026-11-26T11:31:00.000Z', sonAktarim: '2026-11-26T11:31:00.000Z', kaynak: 'api', gecmis: [],
+        kalemler: [{ anahtar: 'HK1', ad: 'Buhar Aparatı', adet: 1, urunId: 'fissler-buhar-aparati-22', tutar: 104900, durum: 'yeni', stok: 'yok', dusulen: 0, eksik: 0 }],
+      },
+    ];
+
+    const simdi = Date.parse('2026-11-26T12:00:00.000Z');
+    const liste = siparisMerkezi.siparisMerkeziOlustur({
+      webSiparisleri: webSiparis,
+      pazaryeriSiparisleri: pySiparisler,
+      magaza: magazaHam,
+      finans,
+      envanter,
+      simdi,
+      kanalDurumuBul: (k) => (k === 'trendyol' ? 'canli' : 'test'),
+    });
+
+    const teslim = liste.find((x) => x.anahtar === 'trendyol-PKG-TESLIM');
+    assert.equal(teslim.asama, 'tamamlandi', 'Fatura iletim hatası lojistik aşamayı Tamamlandı’dan geriye çekmemeli');
+    assert.equal(teslim.fatura.asama, 'kaydedildi');
+    assert.equal(teslim.fatura.adimNo, 2);
+    assert.equal(teslim.islemBekliyorMu, true, 'Fatura iletimi hatalı sipariş İşlem Bekleyen listesinde görünmeli');
+    assert.equal(teslim.birincilIslem.kod, 'fatura-ilet');
+    assert.equal(teslim.kazanc.tahminiNetKar, 54000, 'Sipariş bazlı kesinleşen Trendyol net kârı 540 TL (54000 kr) olmalı');
+
+    const eslesmeyen = liste.find((x) => x.anahtar === 'trendyol-PKG-ESLESMEYEN');
+    assert.equal(eslesmeyen.birincilIslem.kod, 'urun-eslestir', 'Eşleşmeyen üründe Toplamaya Başla yerine önce Ürünü Eşleştir çıkmalı');
+    assert.equal(eslesmeyen.kazanc.tahminiNetKar, undefined, 'Eşleşmeyen/maliyetsiz siparişte sahte kâr üretilmemeli');
+
+    const hbTest = liste.find((x) => x.anahtar === 'hepsiburada-HB-TEST');
+    assert.equal(hbTest.entegrasyon.testSiparisi, true);
+    assert.equal(hbTest.islemBekliyorMu, false, 'SIT test siparişi canlı İşlem Bekleyen kuyruğunu kirletmemeli');
+
+    const webKargoda = liste.find((x) => x.anahtar === 'web:AL2026112601');
+    assert.equal(webKargoda.asama, 'kargoda');
+    assert.equal(webKargoda.fatura.asama, 'kesilecek');
+    assert.equal(webKargoda.islemBekliyorMu, true, 'Kargodaki faturasız web siparişi fatura için İşlem Bekleyen’de kalmalı');
+    // Katalogda güncel fiyat 1049 TL olsa bile sipariş tarihsel 900 TL üzerinden hesaplanmalı:
+    assert.equal(webKargoda.kazanc.musteriOdedigi, 90000);
+
+    assert.equal(siparisMerkezi.siparisSekmesiCoz(null), 'islem');
+    assert.equal(siparisMerkezi.siparisSekmesiCoz('odendi'), 'hazirlanacak');
+    assert.equal(siparisMerkezi.siparisSekmesiCoz('belgesiz'), 'faturasiz');
   });
 
   console.log(`\nSonuç: ${gecen} geçti, ${kalan} başarısız.`);

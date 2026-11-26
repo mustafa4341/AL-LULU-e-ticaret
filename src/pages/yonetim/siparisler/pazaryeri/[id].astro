@@ -7,6 +7,7 @@ import { pazaryeriDurumu } from '../../../../components/yonetim/pazaryeriGorunum
 import { DogrulamaHatasi, magazaOku, siparisleriOku, webAyrilanAdetleri } from '../../../../lib/depo';
 import { finansOku } from '../../../../lib/finansDepo';
 import { evet, metin } from '../../../../lib/form';
+import { yonetimGeriAdresi } from '../../../../lib/istek';
 import { KANALLAR, PY_DURUM_ADLARI, PY_DURUM_RENK, STOK_AKTIF, kalemIadeBekliyor, kurusTL, type PazaryeriSiparisi } from '../../../../lib/pazaryeri';
 import { pazaryeriGecmiseEkle, pazaryeriKalemIsle, pazaryeriSiparisiOku } from '../../../../lib/pazaryeriDepo';
 import { urunGtin } from '../../../../lib/urunKimlik';
@@ -32,8 +33,10 @@ if (!kayit && Astro.response.status !== 503) return Astro.redirect(siparisler + 
 
 const hatalar: string[] = [];
 if (kayit && Astro.request.method === 'POST') {
+  let geriHam = '';
   try {
     const f = await Astro.request.formData();
+    geriHam = metin(f, 'geri');
     const tur = metin(f, 'eylem');
     if (tur.startsWith('ty-')) {
       if (kayit.kanal !== 'trendyol' || !kayit.paketNo) throw new DogrulamaHatasi(['Bu işlem yalnız Trendyol paketlerinde yapılabilir.']);
@@ -69,7 +72,7 @@ if (kayit && Astro.request.method === 'POST') {
         if (e instanceof TypeError) throw new DogrulamaHatasi(['Fatura bağlantısını tam adres olarak girin (https://...).']);
         throw e;
       }
-      return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#trendyol-islem', 303);
+      return Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, Astro.url.pathname, { tur: 'ok', mesaj }, '#trendyol-islem'), 303);
     }
     if (tur.startsWith('hb-')) {
       if (kayit.kanal !== 'hepsiburada') throw new DogrulamaHatasi(['Bu işlem yalnız Hepsiburada siparişlerinde yapılabilir.']);
@@ -104,7 +107,7 @@ if (kayit && Astro.request.method === 'POST') {
         if (e instanceof TypeError) throw new DogrulamaHatasi(['Fatura bağlantısını tam adres olarak girin (https://...).']);
         throw e;
       }
-      return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#hepsiburada-islem', 303);
+      return Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, Astro.url.pathname, { tur: 'ok', mesaj }, '#hepsiburada-islem'), 303);
     }
     const kalem = metin(f, 'kalem');
     const surum = Number(metin(f, 'surum'));
@@ -129,9 +132,14 @@ if (kayit && Astro.request.method === 'POST') {
     } else {
       throw new DogrulamaHatasi(['Geçersiz sipariş işlemi.']);
     }
-    return Astro.redirect(Astro.url.pathname + '?ok=' + encodeURIComponent(mesaj) + '#urunler', 303);
+    return Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, Astro.url.pathname, { tur: 'ok', mesaj }, '#urunler'), 303);
   } catch (e) {
-    hatalar.push(...(e instanceof DogrulamaHatasi ? e.hatalar : ['Sipariş işlemi tamamlanamadı. Sayfayı yenileyip tekrar deneyin.']));
+    const liste = e instanceof DogrulamaHatasi ? e.hatalar : ['Sipariş işlemi tamamlanamadı. Sayfayı yenileyip tekrar deneyin.'];
+    if (geriHam) {
+      const donus = yonetimGeriAdresi(geriHam, Astro.url, '', { tur: 'hata', mesaj: liste.join(' ') });
+      if (donus.startsWith('/yonetim/')) return Astro.redirect(donus, 303);
+    }
+    hatalar.push(...liste);
   }
 }
 

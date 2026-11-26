@@ -11,6 +11,7 @@ import Yonetim from '../../../layouts/Yonetim.astro';
 import { magazaOku, siparisleriOku } from '../../../lib/depo';
 import { formatTL } from '../../../lib/fiyat';
 import { evet, istegeBagli, metin } from '../../../lib/form';
+import { yonetimGeriAdresi } from '../../../lib/istek';
 import { kargoFirmalari, siparisKargoBaglantisi } from '../../../lib/kargoTakip';
 import { siparisDurumGuncelle } from '../../../lib/urunIslem';
 import { BELGE_TURLERI, belgeGecerli } from '../../../lib/finans';
@@ -29,12 +30,14 @@ let forma: FormData | undefined;
 if (Astro.request.method === 'POST') {
   const f = await Astro.request.formData();
   forma = f;
+  const geriHam = metin(f, 'geri');
+  const varsayilanAdres = '/yonetim/siparisler/' + no;
   try {
     if (metin(f, 'eylem') === 'eposta') {
       const r = await epostaYenidenGonder(no, metin(f, 'epostaTur'), Astro.url.origin);
       if (r === 'hata') throw new Error('E-posta gönderilemedi. Ayrıntı aşağıdaki E-postalar bölümünde.');
       if (r === 'kapali') throw new Error('E-posta gönderimi kapalı (SMTP ayarları eksik).');
-      return Astro.redirect('/yonetim/siparisler/' + no + '?ok=' + encodeURIComponent('E-posta gönderildi.') + '#epostalar', 303);
+      return Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, varsayilanAdres, { tur: 'ok', mesaj: 'E-posta gönderildi.' }, '#epostalar'), 303);
     }
     const sonuc = await siparisDurumGuncelle({
       no, eylem: metin(f, 'eylem'), durum: metin(f, 'durum'),
@@ -42,10 +45,15 @@ if (Astro.request.method === 'POST') {
       yoneticiNotu: istegeBagli(f, 'yoneticiNotu'), iptalNotu: istegeBagli(f, 'iptalNotu'),
       odemeOnay: evet(f, 'odemeOnay'), iadeOnay: evet(f, 'iadeOnay'), origin: Astro.url.origin,
     });
-    return Astro.redirect('/yonetim/siparisler/' + no + '?ok=' + encodeURIComponent(sonuc.mesaj), 303);
+    return Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, varsayilanAdres, { tur: 'ok', mesaj: sonuc.mesaj }), 303);
   } catch (e) {
     const mesaj = (e as Error).message;
-    hatalar = [mesaj.startsWith('Supabase') ? 'Sipariş kaydedilemedi. Sayfayı yenileyerek tekrar deneyin.' : mesaj];
+    const temizMesaj = mesaj.startsWith('Supabase') ? 'Sipariş kaydedilemedi. Sayfayı yenileyerek tekrar deneyin.' : mesaj;
+    if (geriHam) {
+      const donus = yonetimGeriAdresi(geriHam, Astro.url, '', { tur: 'hata', mesaj: temizMesaj });
+      if (donus.startsWith('/yonetim/')) return Astro.redirect(donus, 303);
+    }
+    hatalar = [temizMesaj];
   }
 }
 /* Sayfanın geri kalan verisi aynı anda okunur (sırayla beklenince sayfa her biri için bir tur gecikiyordu) */

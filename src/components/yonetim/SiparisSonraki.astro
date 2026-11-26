@@ -4,13 +4,14 @@ import { kargoFirmalari } from '../../lib/kargoTakip';
 import { siradakiDurum } from '../../lib/siparisAkisi';
 import type { Siparis, SiteAyarlari } from '../../lib/sema';
 
-interface Props { siparis: Siparis; kargo: SiteAyarlari['kargo']; form?: FormData; action?: string }
-const { siparis, kargo, form, action } = Astro.props;
+interface Props { siparis: Siparis; kargo: SiteAyarlari['kargo']; form?: FormData; action?: string; geri?: string }
+const { siparis, kargo, form, action, geri } = Astro.props;
 const durum = siradakiDurum(siparis);
 const kargola = durum === 'kargoda';
 const adlar = { odendi: 'Ödemeyi onayla', hazirlaniyor: 'Hazırlamaya al', kargoda: 'Kargoya verildi', 'teslim-edildi': 'Teslim edildi olarak işaretle' };
 ---
-{durum && <form method="post" {action} data-editor={action && kargola ? '' : undefined} class:list={['y-sonraki', { 'y-sonraki--kargo': kargola }]}>
+{durum && <form method="post" {action} data-editor={action && kargola && !geri ? '' : undefined} class:list={['y-sonraki', { 'y-sonraki--kargo': kargola }]}>
+  {geri && <input type="hidden" name="geri" value={geri} />}
   <input type="hidden" name="eylem" value="durum" /><input type="hidden" name="durum" value={durum} />
   {durum === 'odendi' && <label class="y-secim"><input type="checkbox" name="odemeOnay" required />Ödemenin hesaba geçtiğini kontrol ettim.</label>}
   {kargola && <>

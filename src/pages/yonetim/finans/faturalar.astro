@@ -8,6 +8,7 @@ import { finansGunu, finansPara, gecerliGun, type FaturaKaydi } from '../../../l
 import { faturaDosyaKaydet, faturaEki, faturaGuncelle, faturaKaydet, finansOku } from '../../../lib/finansDepo';
 import { FATURA_KANAL_ADLARI, GENEL_TCKN, GIB_PORTAL, faturaAdaylari, sayiYaz, tlYaz, type FaturaAdayi, type FaturaKanali } from '../../../lib/faturaMerkezi';
 import { evet, metin } from '../../../lib/form';
+import { yonetimGeriAdresi } from '../../../lib/istek';
 import { pazaryeriApiDurumu } from '../../../lib/pazaryeriApi';
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from '../../../lib/pazaryeriDepo';
 import { faturaIlet } from '../../../lib/faturaIlet';
@@ -38,8 +39,12 @@ const waFaturaLinki = (a: FaturaAdayi, faturaNo: string) => {
 const ilet = (a: FaturaAdayi, k: FaturaKaydi, ek: { veri: Buffer; tur: string; ad: string } | undefined, zorla: boolean) => faturaIlet(a, k, ek, Astro.url.origin, zorla);
 
 if (Astro.request.method === 'POST') {
+  let geriHam = '';
   try {
     const f = await Astro.request.formData();
+    geriHam = metin(f, 'geri');
+    const don = (tur: 'ok' | 'hata', mesaj: string, varsayilan: string, varsayilanHash = '') =>
+      Astro.redirect(yonetimGeriAdresi(geriHam, Astro.url, varsayilan, { tur, mesaj }, varsayilanHash), 303);
     const eylem = metin(f, 'eylem');
     const { finans, adaylar } = await veriOku();
     if (eylem === 'kaydet') {
@@ -60,9 +65,9 @@ if (Astro.request.method === 'POST') {
       if (evet(f, 'ilet')) {
         const iletim = await ilet(a, kayit, ek && kayit.ek ? { ...ek, ad: kayit.ek.ad } : undefined, false);
         mesaj += ' ' + (iletim.mesaj ?? '');
-        if (iletim.durum === 'hata') return Astro.redirect(`${yol}?sec=${encodeURIComponent(a.anahtar)}&hata=${encodeURIComponent(mesaj)}#secili`, 303);
+        if (iletim.durum === 'hata') return don('hata', mesaj, `${yol}?sec=${encodeURIComponent(a.anahtar)}`, '#secili');
       }
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent(mesaj)}`, 303);
+      return don('ok', mesaj, yol);
     }
     if (eylem === 'trendyoldan-al') {
       if (!tyBagli) throw new Error('Bu işlem için Trendyol bağlantısı gerekir (canlı sitede çalışır).');
@@ -75,16 +80,18 @@ if (Astro.request.method === 'POST') {
           : 'Faturası beklenen Trendyol siparişi yok.';
       const dosyaNotu = r.dosyasiTamamlanan.length ? ` ${r.dosyasiTamamlanan.length} faturanın dosyası Trendyol’dan indirilip eklendi.` : '';
       const hata = r.hatalar.length ? ' Sorun: ' + r.hatalar.slice(0, 2).join(' · ') : '';
-      return Astro.redirect(`${yol}?${r.alinan.length || !hata ? 'ok' : 'hata'}=${encodeURIComponent(mesaj + dosyaNotu + hata)}${siparisNo ? '&sec=' + encodeURIComponent('trendyol:' + (adaylar.find((x) => x.kanal === 'trendyol' && x.siparisNo === siparisNo)?.kayit ?? '')) + '#secili' : ''}`, 303);
+      const varsayilan = `${yol}${siparisNo ? '?sec=' + encodeURIComponent('trendyol:' + (adaylar.find((x) => x.kanal === 'trendyol' && x.siparisNo === siparisNo)?.kayit ?? '')) : ''}`;
+      return don(r.alinan.length || !hata ? 'ok' : 'hata', mesaj + dosyaNotu + hata, varsayilan, siparisNo ? '#secili' : '');
     }
     const k = finans.faturalar.find((x) => x.id === metin(f, 'id'));
     if (!k) throw new Error('Fatura kaydı bulunamadı.');
+    const seciliVarsayilan = `${yol}?sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}`;
     if (eylem === 'no-duzelt') {
       const no = metin(f, 'no').toUpperCase().replace(/\s+/g, ' ');
       if (!/^[A-Z0-9][A-Z0-9 ./-]{0,39}$/.test(no)) throw new Error('Fatura numarasını faturada yazdığı gibi girin (ör. GIB2026000000012).');
       if (finans.faturalar.some((x) => x.id !== k.id && !x.iptal && x.no.toUpperCase() === no)) throw new Error('Bu fatura numarası başka bir siparişte kayıtlı.');
       await faturaGuncelle(k.id, (x) => { x.no = no; });
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent(`Fatura numarası ${no} olarak düzeltildi.`)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+      return don('ok', `Fatura numarası ${no} olarak düzeltildi.`, seciliVarsayilan, '#secili');
     }
     const a = adaylar.find((x) => x.kanal === k.kanal && x.kayit === k.kayit);
     if (eylem === 'dosya-yukle') {
@@ -95,30 +102,35 @@ if (Astro.request.method === 'POST') {
       if (a && evet(f, 'ilet')) {
         const iletim = await ilet(a, guncel, ek, true);
         mesaj += ' ' + (iletim.mesaj ?? '');
-        return Astro.redirect(`${yol}?${iletim.durum === 'hata' ? 'hata' : 'ok'}=${encodeURIComponent(mesaj)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+        return don(iletim.durum === 'hata' ? 'hata' : 'ok', mesaj, seciliVarsayilan, '#secili');
       }
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent(mesaj)}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+      return don('ok', mesaj, seciliVarsayilan, '#secili');
     }
     if (eylem === 'ilet') {
       if (!a) throw new Error('Siparişi bulamadım; faturayı elle iletin.');
       const ek = await faturaEki(k.id);
       const iletim = await ilet(a, k, ek && ek.kayit.ek ? { veri: ek.veri, tur: ek.kayit.ek.tur, ad: ek.kayit.ek.ad } : undefined, true);
-      return Astro.redirect(`${yol}?${iletim.durum === 'hata' ? 'hata' : 'ok'}=${encodeURIComponent(iletim.mesaj ?? 'Tamam.')}&sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}#secili`, 303);
+      return don(iletim.durum === 'hata' ? 'hata' : 'ok', iletim.mesaj ?? 'Tamam.', seciliVarsayilan, '#secili');
     }
     if (eylem === 'elle') {
       await faturaGuncelle(k.id, (x) => { x.iletim = { durum: 'elle', mesaj: 'Müşteriye / kanala iletildi olarak işaretlendi.', tarih: new Date().toISOString() }; });
       const donusDurum = metin(f, 'donusDurum');
-      const ekSorgu = donusDurum ? `&durum=${encodeURIComponent(donusDurum)}` : '';
-      return Astro.redirect(`${yol}?ok=${encodeURIComponent('Fatura 3. aşamaya (İletildi) taşındı.')}${ekSorgu}`, 303);
+      const varsayilanElle = donusDurum ? `${yol}?durum=${encodeURIComponent(donusDurum)}` : yol;
+      return don('ok', 'Fatura 3. aşamaya (İletildi) taşındı.', varsayilanElle);
     }
     if (eylem === 'iptal') {
       if (!evet(f, 'onay')) throw new Error('İptal için kutucuğu işaretleyin.');
       await faturaGuncelle(k.id, (x) => { x.iptal = true; });
-      return Astro.redirect(`${yol}?sec=${encodeURIComponent(k.kanal + ':' + k.kayit)}&ok=${encodeURIComponent('Kayıt iptal edildi. GİB portalında da faturayı iptal etmeyi unutmayın.')}#secili`, 303);
+      return don('ok', 'Kayıt iptal edildi. GİB portalında da faturayı iptal etmeyi unutmayın.', seciliVarsayilan, '#secili');
     }
     throw new Error('Geçersiz işlem.');
   } catch (e) {
-    hatalar.push(e instanceof Error && e.name !== 'ZodError' ? e.message : 'İşlem tamamlanamadı.');
+    const mesaj = e instanceof Error && e.name !== 'ZodError' ? e.message : 'İşlem tamamlanamadı.';
+    if (geriHam) {
+      const donus = yonetimGeriAdresi(geriHam, Astro.url, '', { tur: 'hata', mesaj });
+      if (donus.startsWith('/yonetim/')) return Astro.redirect(donus, 303);
+    }
+    hatalar.push(mesaj);
   }
 }
 
