@@ -315,6 +315,31 @@ try {
     assert.equal(siparisMerkezi.siparisSekmesiCoz('belgesiz'), 'faturasiz');
   });
 
+  // 9. FAZ 4: Akıllı stok uyarıları — bilerek 0 stoklu ürün rutin uyarı vermez ama gerçek stok sorununu asla gizlemez
+  await test('Faz 4: bilerekStoktaYok rutin 0 stok uyarısını susturmalı, fakat negatif stok veya pazaryerinde yanlış stok varsa ASLA gizlememeli', () => {
+    const ayar = pazaryeri.bosAyarlar();
+    ayar.kritikVarsayilan = 3;
+    ayar.urunKritik['ozel-esikli'] = 8;
+    ayar.bilerekStoktaYok['fissler-vitaquick-premium-6l'] = true;
+
+    const bilerekSifir = { id: 'fissler-vitaquick-premium-6l', durum: 'yayinda', stok: 0 };
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi(bilerekSifir, ayar), false, 'Bilerek 0 stokta tutulan ürün rutin uyarı üretmemeli');
+
+    // Aynı ürün Trendyol’da hâlâ bildirilen=2 stokta görünüyorsa gerçek aşırı satış riski vardır, gizlenemez!
+    ayar.kanallar.trendyol.urunler['fissler-vitaquick-premium-6l'] = { kod: 'BARKOD1', satista: true, bildirilen: 2 };
+    assert.deepEqual(pazaryeri.pazaryerindeYanlisStokKanallari(bilerekSifir, ayar), ['trendyol']);
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi(bilerekSifir, ayar), true, 'Pazaryerinde yanlış stok varken bilerekStoktaYok uyarıyı gizleyemez');
+
+    // Kanalda da 0 olunca tekrar sessizleşir, ama negatif stok her zaman uyarır:
+    ayar.kanallar.trendyol.urunler['fissler-vitaquick-premium-6l'].bildirilen = 0;
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi(bilerekSifir, ayar), false);
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi({ ...bilerekSifir, stok: -1 }, ayar), true, 'Negatif stok asla gizlenemez');
+
+    // Ürün bazlı özel eşik (8):
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi({ id: 'ozel-esikli', durum: 'yayinda', stok: 6 }, ayar), true);
+    assert.equal(pazaryeri.rutinStokUyarisiVarMi({ id: 'ozel-esikli', durum: 'yayinda', stok: 9 }, ayar), false);
+  });
+
   console.log(`\nSonuç: ${gecen} geçti, ${kalan} başarısız.`);
   if (kalan > 0) process.exitCode = 1;
 } finally {

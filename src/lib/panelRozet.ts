@@ -7,7 +7,7 @@
  */
 import { magazaOku, siparisleriOku } from './depo';
 import { envanterAyarlariOku, pazaryeriBekleyenSayisi } from './pazaryeriDepo';
-import { kritikEsik } from './pazaryeri';
+import { rutinStokUyarisiVarMi } from './pazaryeri';
 import { gonderilecek } from './yonetimRapor';
 
 export interface PanelRozeti { web: number; pazar: number; stok: number }
@@ -17,7 +17,7 @@ export async function panelRozetiOku(): Promise<PanelRozeti> {
     siparisleriOku().then((l) => l.filter((x) => !x.paytr?.test && gonderilecek(x)).length).catch(() => 0),
     pazaryeriBekleyenSayisi().catch(() => 0),
     Promise.all([magazaOku(), envanterAyarlariOku()])
-      .then(([m, envanter]) => m.urunler.filter((u) => u.durum === 'yayinda' && u.stok <= kritikEsik(envanter, u.id)).length)
+      .then(([m, envanter]) => m.urunler.filter((u) => rutinStokUyarisiVarMi(u, envanter)).length)
       .catch(() => 0),
   ]);
   return { web, pazar, stok };

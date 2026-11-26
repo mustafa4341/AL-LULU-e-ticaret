@@ -1,182 +1,389 @@
 ---
 import Yonetim from '../../layouts/Yonetim.astro';
-import { formatTL } from '../../lib/fiyat';
-import { iadeEdildi } from '../../lib/siparisAkisi';
-import { yTarih } from '../../lib/yonetimRapor';
-import { finansGunu, kalanTutar, raporla } from '../../lib/finans';
-import { KANALLAR, KANAL_LISTESI, PY_DURUM_ADLARI, PY_DURUM_RENK, kurusTL } from '../../lib/pazaryeri';
-import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
-import { kanalToplamlari } from '../../lib/kanalOzeti';
-import KanalOzeti from '../../components/yonetim/KanalOzeti.astro';
-import BilgiKutusu from '../../components/yonetim/BilgiKutusu.astro';
-import PIkon from '../../components/yonetim/PIkon.astro';
 import KanalLogo from '../../components/yonetim/KanalLogo.astro';
+import PIkon from '../../components/yonetim/PIkon.astro';
+import { finansGunu, kalanTutar, raporla } from '../../lib/finans';
+import { kanalToplamlari } from '../../lib/kanalOzeti';
 import { panelIsleriniOku } from '../../lib/panelIsleri';
+import { KANALLAR, KANAL_LISTESI, kurusTL } from '../../lib/pazaryeri';
+import { pazaryeriApiDurumu } from '../../lib/pazaryeriApi';
+import { yTarih } from '../../lib/yonetimRapor';
 
-const { magaza, siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, isler, pazarHazirlanacak } = await panelIsleriniOku();
+const {
+  magaza,
+  siparisler,
+  finans,
+  pazar,
+  envanter,
+  yedekGun,
+  hazirlanacak,
+  kargolanacak,
+  faturasiz,
+  kanalHatasi,
+  kanalGecikti,
+  tukenen,
+  kritikStok,
+  bilerekSifirSayisi,
+  isler,
+  pazarHazirlanacak,
+} = await panelIsleriniOku();
+
 const bugun = finansGunu();
-const bugunRapor = raporla(finans, siparisler, bugun, bugun, pazar);
-const ayRapor = raporla(finans, siparisler, bugun.slice(0, 7) + '-01', bugun, pazar);
+const ayBaslangici = bugun.slice(0, 7) + '-01';
+const ayRapor = raporla(finans, siparisler, ayBaslangici, bugun, pazar);
 const ayKalan = kalanTutar(ayRapor);
-
-const ayOzeti = kanalToplamlari(siparisler, pazar, bugun.slice(0, 7) + '-01', bugun);
+const ayOzeti = kanalToplamlari(siparisler, pazar, ayBaslangici, bugun);
 const bugunOzeti = kanalToplamlari(siparisler, pazar, bugun, bugun);
 const tarihBaslik = new Intl.DateTimeFormat('tr-TR', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/Istanbul' }).format(new Date());
-const durumYazi = (s: (typeof siparisler)[number]) => iadeEdildi(s) ? ['İade edildi', 'gri'] : s.durum === 'iptal' ? ['İptal', 'gri']
-  : s.durum === 'odeme-bekliyor' ? ['Ödeme bekleniyor', 'turuncu'] : s.durum === 'odendi' ? ['Hazırlanacak', 'turuncu']
-  : s.durum === 'hazirlaniyor' ? ['Kargoya verilecek', 'turuncu'] : s.durum === 'kargoda' ? ['Kargoda', 'yesil'] : ['Teslim edildi', 'yesil'];
-const katalogUrun = (id?: string) => id ? magaza.urunler.find((u) => u.id === id) : undefined;
-/* Sıradaki / güncel siparişler: üç kanal birlikte, en yeni 8 (iki ayrı uzun liste yerine tek birleşik liste) */
-const sonSiparisler = [
-  ...siparisler.slice(0, 8).map((s) => {
-    const [d, r] = durumYazi(s);
-    const ilk = s.kalemler[0];
-    const u = katalogUrun(ilk?.tip === 'set' ? ilk.parcalar[0]?.urunId : ilk?.id);
-    const urunMetni = s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join(', ');
-    return {
-      tarih: s.tarih, no: s.no, url: '/yonetim/siparisler/' + s.no, kanal: 'web', kanalAd: 'Web sitesi',
-      musteri: `${s.musteri.ad} ${s.musteri.soyad}`, tutar: formatTL(s.toplam), durum: d!, renk: r!,
-      gorsel: u?.gorseller[0]?.src, urunMetni,
-    };
-  }),
-  ...pazar.slice(0, 8).map((s) => {
-    const ilk = s.kalemler[0];
-    const u = katalogUrun(ilk?.urunId);
-    const urunMetni = s.kalemler.map((k) => `${k.adet} × ${k.ad}`).join(', ');
-    return {
-      tarih: s.tarih, no: s.siparisNo, url: '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(s.id), kanal: s.kanal, kanalAd: KANALLAR[s.kanal],
-      musteri: s.musteri ?? '—', tutar: kurusTL(s.toplam), durum: PY_DURUM_ADLARI[s.durum], renk: PY_DURUM_RENK[s.durum],
-      gorsel: u?.gorseller[0]?.src, urunMetni,
-    };
-  }),
-].sort((a, b) => Date.parse(b.tarih) - Date.parse(a.tarih)).slice(0, 8);
-const ayBaslangici = bugun.slice(0, 7) + '-01';
-const satisAdresi = (baslangic: string, kanal = 'tumu') => '/yonetim/siparisler?' + new URLSearchParams({ durum: 'tumu', kanal, baslangic, bitis: bugun });
-const kanalAdresi = (k: string) => satisAdresi(ayBaslangici, k);
-const pazaryeriKurulu = KANAL_LISTESI.some((k) => pazaryeriApiDurumu(k) !== 'kapali' || envanter.kanallar[k].stokBaslangic) || pazar.length > 0;
-const hazirAdet = hazirlanacak.length + kargolanacak.length + KANAL_LISTESI.reduce((n, k) => n + pazarHazirlanacak(k), 0);
-const acil = isler.filter((x) => x.ton === 'kirmizi');
-const stokUyarilari = [...tukenen, ...kritikStok];
+
 const tadilat = Astro.locals.katalog?.site.tadilat.aktif;
+const bagliKanallar = KANAL_LISTESI.filter((k) => ['canli', 'test'].includes(pazaryeriApiDurumu(k)));
+const canliSiparisToplami = hazirlanacak.length + kargolanacak.length + KANAL_LISTESI.reduce((n, k) => n + pazarHazirlanacak(k), 0);
+const stokUyariToplami = tukenen.length + kritikStok.length;
+const acilIsler = isler.filter((x) => x.ton === 'kirmizi');
+const rutinIsler = isler.filter((x) => x.ton !== 'kirmizi');
+
+/* Otomasyon ayarları ve son çalışma geçmişi (eski /yonetim/isler ekranından sıfır işlev kaybıyla birleştirildi) */
+const ot = envanter.otomasyon;
+const simdiMs = Date.now();
+const sonrakiCalismaTarihi = (() => {
+  const d = new Date(simdiMs);
+  d.setSeconds(0, 0);
+  const dk = d.getMinutes();
+  const kalan = ((1 - (dk % 5)) + 5) % 5 || 5;
+  d.setMinutes(dk + kalan);
+  return yTarih.format(d);
+})();
+
+const OTOMASYON_AYARLARI = [
+  ['yeniSiparisBildir', 'Yeni Trendyol / Hepsiburada siparişinde e-posta gönder', 'Web siparişleri zaten e-postayla bildirilir.'],
+  ['otoToplama', 'Yeni Trendyol siparişini hemen “toplanıyor” yap', 'Müşteri iptali kapanır ve kargo barkodu oluşur. Stoksuz ürün satmıyorsanız açabilirsiniz.'],
+  ['faturaYenidenDene', 'İletilemeyen faturaları otomatik tekrar dene', 'Kaydedilmiş ancak Trendyol’a veya müşteriye gidememiş faturalar 30 dakikada bir yeniden denenir.'],
+  ['gunlukIsler', 'Her gün Trendyol hakedişini ve komisyon/ilan onaylarını yenile', 'Finans ve Fiyat/Kâr tablosu güncel kalır.'],
+  ['otoBagla', 'Aynı barkodlu Trendyol ilanlarını otomatik bağla (yalnız stok ortak)', 'Fiyatlara dokunulmaz; yalnız ortak depo stoğu bağlanır.'],
+  ['otoFiyat', 'Otomatik fiyat takibi açık ürünlerin kanal fiyatını hedefte tut', 'Yalnız fiyat takibi açtığınız ürünlerde çalışır; zararına / >%50 düşüşler onaya bırakılır.'],
+] as const;
+
+const ozetSatiriCoz = (satir: string) => {
+  const parcalar = satir.split(' · ');
+  const ilk = parcalar[0]?.trim() ?? '';
+  const saatMi = /^\d{2}:\d{2}$/.test(ilk);
+  const saat = saatMi ? ilk : (ot.sonCalisma ? yTarih.format(new Date(ot.sonCalisma)) : '—');
+  const govde = (saatMi ? parcalar.slice(1) : parcalar).join(' · ').trim() || satir;
+  const kucuk = govde.toLocaleLowerCase('tr-TR');
+  const kanal: 'trendyol' | 'hepsiburada' | 'sistem' =
+    kucuk.includes('trendyol') && !kucuk.includes('hepsiburada') ? 'trendyol'
+      : kucuk.includes('hepsiburada') && !kucuk.includes('trendyol') ? 'hepsiburada'
+        : 'sistem';
+  const hatali = kucuk.includes('hata') || kucuk.includes('alınamadı') || kucuk.includes('gönderilemedi') || kucuk.includes('kabul etmedi');
+  const ton: 'yesil' | 'turuncu' | 'kirmizi' = hatali ? 'kirmizi' : kucuk.includes('onay') ? 'turuncu' : 'yesil';
+  const sonuc = hatali ? 'Hata' : ton === 'turuncu' ? 'Kontrol' : 'Başarılı';
+  const url = kucuk.includes('fatura') ? '/yonetim/siparisler?durum=faturasiz'
+    : kanal === 'trendyol' ? '/yonetim/siparisler/kanallar?gorunum=trendyol'
+      : kanal === 'hepsiburada' ? '/yonetim/siparisler/kanallar?gorunum=hepsiburada'
+        : '/yonetim/siparisler/kanallar';
+  return { saat, kanal, sonuc, ton, aciklama: govde, url };
+};
+
+const sonIslemler = ot.sonOzet.map(ozetSatiriCoz);
+const hataliOtomasyonSayisi = sonIslemler.filter((s) => s.ton === 'kirmizi').length;
+const logFiltre = Astro.url.searchParams.get('log') === 'hatalar' ? 'hatalar' : 'tumu';
+const gorunenLoglar = logFiltre === 'hatalar' ? sonIslemler.filter((s) => s.ton === 'kirmizi') : sonIslemler;
 ---
-<Yonetim baslik="İş Merkezi" altBaslik={`${tarihBaslik} · Siparişler, stok, kanallar ve satışlar tek ekranda.`} aktif="ozet">
+
+<Yonetim
+  baslik="İş Merkezi"
+  altBaslik={`${tarihBaslik} · Şimdi yapılması gereken işler, kanal sağlığı ve otomasyonlar tek ekranda.`}
+  aktif="ozet"
+  basari={Astro.url.searchParams.get('ok')}
+  hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}
+>
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a class="btn btn--cizgi" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={18} />Fiyat ve Kâr Tablosu</a>
-    <a class="btn btn--cizgi" href="/yonetim/servis-kontrol" data-astro-prefetch="false"><PIkon ad="hedef" boyut={18} />Servis Tanılama</a>
-    <a class="btn btn--sepet" href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={18} />Bugünkü işler</a>
+    <a class="btn btn--cizgi" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={17} />Fiyat, Stok ve Kâr</a>
+    <a class="btn btn--sepet" href="/yonetim/siparisler"><PIkon ad="sepet" boyut={17} />Siparişleri İşle ({canliSiparisToplami})</a>
   </div>
 
-  <section class="y-kart">
-    <div class="y-kart__bas"><h2><PIkon ad="takvim-tik" /> Bugün ne yapmalıyım?</h2><a class="y-link" href="/yonetim/isler">Tüm görevler</a></div>
-    <div class="y-metrics y-merkez-gorevler">
-      <a class="y-metric y-metric--turuncu" href="/yonetim/siparisler?durum=kuyruk&amp;kanal=tumu"><PIkon ad="kutu" /><strong>{hazirAdet}</strong><span>Sipariş kuyruğu</span><small>Hazırlanacak ve kargolanacak · tüm kanallar</small></a>
-      <a class="y-metric y-metric--yesil" href="/yonetim/siparisler?durum=hazirlaniyor&amp;kanal=web"><PIkon ad="kargo" /><strong>{kargolanacak.length}</strong><span>Kargoya verilecek</span><small>Hazırlanmış web siparişi</small></a>
-      <a class="y-metric y-metric--kirmizi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" /><strong>{faturasiz.length}</strong><span>Faturası kesilecek</span><small>GİB'de düzenlenip kaydedilmeli</small></a>
-      <a class="y-metric y-metric--altin" href="/yonetim/urunler?filtre=kritik"><PIkon ad="uyari" /><strong>{stokUyarilari.length}</strong><span>Stok uyarısı</span><small>{tukenen.length} tükendi · {kritikStok.length} azaldı</small></a>
-      <a class="y-metric y-metric--mavi" href="/yonetim/isler#acil-isler"><PIkon ad="kalkan" /><strong>{acil.length}</strong><span>Acil görev</span><small>Önce bunlara bakın</small></a>
-    </div>
-  </section>
-
-  {!pazaryeriKurulu && <BilgiKutusu baslik="Pazaryeri bağlantı rehberi" anahtar="genel-pazaryeri" ton="ipucu" acik={false}>
-    <p>Mağaza bağlantısı, stok başlangıcı ve otomatik eşitleme durumunu <a class="y-link" href="/yonetim/siparisler/kanallar">Satış kanalları</a> ekranından yönetin.</p>
-  </BilgiKutusu>}
-
-  <div class="y-merkez-izgara">
-    <section class="y-kart">
-      <div class="y-kart__bas"><h2><PIkon ad="pano" /> Görev kuyruğu</h2><a class="y-link" href="/yonetim/isler">Tüm işleri gör</a></div>
-      {isler.length === 0 ? <p class="y-bos-satir"><PIkon ad="tik-daire" boyut={20} />Bekleyen iş yok. Her şey yolunda.</p> : <ul class="y-satir-liste">
-        {isler.slice(0, 5).map((x) => <li><a href={x.url}>
-          <i class:list={['y-ton-nokta', 'y-ton-nokta--' + x.ton]} aria-hidden="true"></i>
-          <span class="y-satir__ana"><strong title={x.ad}>{x.ad}</strong></span>
-          <b class:list={['y-chip', 'y-chip--' + x.ton]}>{x.sayi}</b>
-        </a></li>)}
-      </ul>}
-      {isler.length > 5 && <p class="y-kart-dipnot">+{isler.length - 5} görev daha · <a class="y-link" href="/yonetim/isler">Tüm işleri gör</a></p>}
-      <p class="y-kart-dipnot"><PIkon ad="veritabani" boyut={16} />
-        Veri yedeği: {yedekGun === undefined ? 'henüz alınmadı' : yedekGun === 0 ? 'bugün alındı' : yedekGun + ' gün önce alındı'} ·
-        <a class="y-link" href="/yonetim/yedek">Yedek indir (ZIP)</a>
-      </p>
-    </section>
-    <section class="y-kart">
-      <div class="y-kart__bas"><h2><PIkon ad="zincir" /> Kanal durumu</h2><a class="y-link" href="/yonetim/siparisler/kanallar">Kanalları yönet</a></div>
-      <ul class="y-satir-liste">
-        <li><a href="/yonetim/siparisler?durum=tumu&amp;kanal=web">
-          <KanalLogo kanal="web" />
-          <span class="y-satir__ana"><strong>Web sitesi</strong><small>alluluhome.com</small></span>
-          <b class:list={['y-chip', 'y-chip--nokta', tadilat ? 'y-chip--turuncu' : 'y-chip--yesil']}>{tadilat ? 'Bakımda' : 'Yayında'}</b>
-        </a></li>
-        {KANAL_LISTESI.map((k) => {
-          const son = envanter.kanallar[k].sonApi;
-          const api = pazaryeriApiDurumu(k);
-          const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi']
-            // API anahtarı silinmiş/eksikse eski "son çekim" tarihi bağlı gibi göstermesin (denetim AUD-029)
-            // Anahtar hiç tanımlı değilse (ör. Hepsiburada canlı bilgisi bekleniyor) bu bir hata değildir: gri; yarım/hatalı anahtar kırmızı
-            : api === 'eksik' ? ['Ayarı hatalı', 'kirmizi']
-            : api === 'kapali' ? (son ? ['Bağlı değil', 'gri'] : ['Kurulum bekliyor', 'gri'])
-            : kanalGecikti.includes(k) ? [son ? 'Eşitleme gecikti' : 'İlk eşitleme bekleniyor', 'turuncu']
-            : api === 'test' ? ['Test', 'gri'] : !son ? ['İlk çekim bekleniyor', 'turuncu'] : ['Bağlı', 'yesil'];
-          return <li><a href={'/yonetim/siparisler/kanallar#' + k}>
-            <KanalLogo kanal={k} />
-            <span class="y-satir__ana"><strong>{KANALLAR[k]}</strong><small>Son çekim: {son ? yTarih.format(new Date(son)) : 'henüz yok'}</small></span>
-            <b class:list={['y-chip', 'y-chip--nokta', 'y-chip--' + ton]}>{durum}</b>
-          </a></li>;
-        })}
+  {/* 1. ÜST KRİTİK SORUNLAR ŞERİDİ (Yalnızca kırmızı acil sorun varsa görünür) */}
+  {acilIsler.length > 0 && (
+    <section class="y-kart im-acil-kart" id="acil-isler" aria-label="Öncelikli kritik uyarılar">
+      <div class="y-kart__bas">
+        <h2><PIkon ad="uyari" /> Önce Çözülmesi Gereken Kritik Sorunlar ({acilIsler.length})</h2>
+      </div>
+      <ul class="y-satir-liste y-is-satirlari">
+        {acilIsler.map((x) => (
+          <li>
+            <a href={x.url} class="is-kirmizi">
+              {x.kanal && x.kanal !== 'web' ? (
+                <KanalLogo kanal={x.kanal} />
+              ) : (
+                <span class="y-ton-ikon y-ton-ikon--kirmizi" aria-hidden="true"><PIkon ad="uyari" boyut={19} /></span>
+              )}
+              <span class="y-satir__ana">
+                <strong>{x.ad}</strong>
+                {x.aciklama && <small class="is-aciklama">{x.aciklama}</small>}
+              </span>
+              <span class="is-sag-aksiyon">
+                <b class="y-chip y-chip--kirmizi">{typeof x.sayi === 'number' ? `${x.sayi} kayıt` : x.sayi}</b>
+                <span class="btn btn--sepet btn--kucuk">{x.eylem ?? 'Şimdi Çöz'} →</span>
+              </span>
+            </a>
+          </li>
+        ))}
       </ul>
     </section>
-    <section class="y-kart">
-      <div class="y-kart__bas"><h2><PIkon ad="katman" /> Stok uyarıları</h2><a class="y-link" href="/yonetim/urunler?filtre=kritik">Tümünü gör</a></div>
-      {stokUyarilari.length ? <ul class="y-satir-liste y-satir-liste--uyari">{stokUyarilari.slice(0, 4).map((u) => <li><a href={'/yonetim/urunler/' + u.id + '?bolum=fiyat'} class:list={{ 'is-azalan': u.stok > 0 }}>
-        <span class="y-satir-gorsel">{u.gorseller[0] ? <img src={u.gorseller[0].src} alt="" loading="lazy" /> : <PIkon ad="kutu" boyut={20} />}</span>
-        <span class="y-satir__ana"><strong title={`${u.marka} ${u.kisaAd}`}>{u.marka} {u.kisaAd}</strong><small class:list={[u.stok === 0 ? 'y-yazi-kirmizi' : 'y-yazi-turuncu']}>{u.stok === 0 ? 'Tükendi · sitede “stokta yok”' : `${u.stok} adet kaldı`}</small></span>
-        <b class:list={['y-chip', u.stok === 0 ? 'y-chip--kirmizi' : 'y-chip--turuncu']}>{u.stok === 0 ? 'Tükendi' : 'Azaldı'}</b>
-      </a></li>)}</ul> : <p class="y-bos-satir"><PIkon ad="tik-daire" boyut={20} />Kritik stok uyarısı yok.</p>}
-      {stokUyarilari.length > 4 && <p class="y-kart-dipnot">+{stokUyarilari.length - 4} ürün daha · <a class="y-link" href="/yonetim/urunler?filtre=kritik">Listeyi aç</a></p>}
-    </section>
+  )}
+
+  {/* 2. BUGÜNKÜ OPERASYON ÖZETİ (4 Net Eylem Kartı) */}
+  <div class="y-metrics im-metrikler">
+    <a class="y-metric y-metric--turuncu" href="/yonetim/siparisler?durum=islem">
+      <PIkon ad="sepet" />
+      <span>Hazırlanacak / Kargolanacak</span>
+      <strong>{canliSiparisToplami} sipariş</strong>
+      <small>Web {hazirlanacak.length + kargolanacak.length} · Pazaryeri {KANAL_LISTESI.reduce((n, k) => n + pazarHazirlanacak(k), 0)}</small>
+    </a>
+    <a class="y-metric y-metric--altin" href="/yonetim/siparisler?durum=faturasiz">
+      <PIkon ad="fatura" />
+      <span>Faturası Bekleyen (1-2/3)</span>
+      <strong>{faturasiz.length} sipariş</strong>
+      <small>Sipariş panelinden kesip kaydedin</small>
+    </a>
+    <a class="y-metric" href="/yonetim/urunler?filtre=kritik">
+      <PIkon ad="kutu" />
+      <span>Stok Uyarısı</span>
+      <strong>{stokUyariToplami} ürün</strong>
+      <small>
+        {tukenen.length} tükendi · {kritikStok.length} azaldı
+        {bilerekSifirSayisi > 0 ? ` (${bilerekSifirSayisi} bilerek 0)` : ''}
+      </small>
+    </a>
+    <a class="y-metric y-metric--yesil" href="/yonetim/finans">
+      <PIkon ad="para" />
+      <span>Bugün / Bu Ay Satış</span>
+      <strong>{kurusTL(bugunOzeti.toplam.kurus)}</strong>
+      <small>Bu ay: {kurusTL(ayOzeti.toplam.kurus)} · Tahmini kalan: {kurusTL(ayKalan)}</small>
+    </a>
   </div>
 
-  <section class="y-kart">
-    <div class="y-kart__bas"><h2><PIkon ad="grafik" /> Satış özeti</h2><a class="y-link" href="/yonetim/finans">Finans ve belgeler</a></div>
-    <div class="y-metrics y-metrics--finans y-merkez-satis">
-      <a class="y-metric" href={satisAdresi(bugun)}><PIkon ad="trend" /><span>Bugünkü satış · tüm kanallar</span><strong>{kurusTL(bugunOzeti.toplam.kurus)}</strong><small>{bugunOzeti.toplam.adet} sipariş{bugunRapor.webIade > 0 ? ' · web iadesi ' + kurusTL(bugunRapor.webIade) : ''}</small></a>
-      <a class="y-metric" href={satisAdresi(ayBaslangici)}><PIkon ad="grafik" /><span>Bu ay satış · tüm kanallar</span><strong>{kurusTL(ayOzeti.toplam.kurus)}</strong><small>{ayOzeti.toplam.adet} sipariş</small></a>
-      <a class="y-metric" href="/yonetim/finans?sekme=giderler"><PIkon ad="cuzdan" /><span>Bu ay gider</span><strong>{kurusTL(ayRapor.gider)}</strong><small>{ayRapor.giderler.length} kayıt</small></a>
-      <a class="y-metric" href="/yonetim/finans?sekme=ozet#ay-hesabi"><PIkon ad="para" /><span>Bu ay kalan (tahmini · web)</span><strong>{kurusTL(ayKalan)}</strong>
-        <small class:list={{ 'y-uyari-kucuk': ayRapor.tahmini === undefined }}>{ayRapor.tahmini === undefined ? 'Ürün maliyeti girilmedi' : 'Giderler düşüldü'}</small></a>
+  {/* 3. ORTA BÖLÜM: SİZE KALAN İŞLER + KANAL SAĞLIĞI */}
+  <div class="im-orta-izgara">
+    <section class="y-kart">
+      <div class="y-kart__bas">
+        <h2><PIkon ad="takvim-tik" /> Bugün Yapılacak İşler</h2>
+        <span class="y-help">{rutinIsler.length} görev</span>
+      </div>
+      {rutinIsler.length > 0 ? (
+        <ul class="y-satir-liste y-is-satirlari">
+          {rutinIsler.map((x) => (
+            <li>
+              <a href={x.url} class={'is-' + x.ton}>
+                {x.kanal && x.kanal !== 'web' ? (
+                  <KanalLogo kanal={x.kanal} />
+                ) : (
+                  <span class:list={['y-ton-ikon', 'y-ton-ikon--' + x.ton]} aria-hidden="true">
+                    <PIkon ad={x.ton === 'turuncu' ? 'saat' : 'bilgi'} boyut={18} />
+                  </span>
+                )}
+                <span class="y-satir__ana">
+                  <strong>{x.ad}</strong>
+                  {x.aciklama && <small class="is-aciklama">{x.aciklama}</small>}
+                </span>
+                <span class="is-sag-aksiyon">
+                  <b class:list={['y-chip', 'y-chip--' + x.ton]}>{typeof x.sayi === 'number' ? `${x.sayi}` : x.sayi}</b>
+                  <span class="is-eylem-etiket">{x.eylem ?? 'Aç'} →</span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      ) : acilIsler.length === 0 ? (
+        <p class="y-bos-satir"><PIkon ad="tik-daire" boyut={20} />Şu an bekleyen sipariş, fatura veya stok göreviniz yok. Her şey yolunda.</p>
+      ) : (
+        <p class="y-help" style="margin:0">Yukarıdaki kritik uyarılar dışında rutin görev bulunmuyor.</p>
+      )}
+    </section>
+
+    <aside class="im-yan-sutun">
+      <section class="y-kart">
+        <div class="y-kart__bas">
+          <h2><PIkon ad="zincir" /> Satış Kanalları Sağlığı</h2>
+          <a class="y-link" href="/yonetim/siparisler/kanallar">Yönet →</a>
+        </div>
+        <ul class="y-satir-liste">
+          <li>
+            <a href="/yonetim/siparisler?kanal=web&durum=islem">
+              <KanalLogo kanal="web" />
+              <span class="y-satir__ana">
+                <strong>Web Sitesi</strong>
+                <small>{magaza.site.url.replace(/^https?:\/\//, '')}</small>
+              </span>
+              <b class:list={['y-chip', 'y-chip--nokta', tadilat ? 'y-chip--turuncu' : 'y-chip--yesil']}>
+                {tadilat ? 'Bakımda' : 'Yayında'}
+              </b>
+            </a>
+          </li>
+          {KANAL_LISTESI.map((k) => {
+            const son = envanter.kanallar[k].sonApi;
+            const api = pazaryeriApiDurumu(k);
+            const [durum, ton] = kanalHatasi.includes(k) ? ['Hata var', 'kirmizi']
+              : api === 'eksik' ? ['Ayarı eksik', 'kirmizi']
+              : api === 'test' ? ['Test (SIT)', 'gri']
+              : api === 'kapali' ? (son ? ['Canlı sunucuda aktif', 'yesil'] : ['Kurulum bekliyor', 'gri'])
+              : kanalGecikti.includes(k) ? ['Eşitleme gecikti', 'turuncu']
+              : !son ? ['İlk çekim bekleniyor', 'turuncu']
+              : ['Canlı · Bağlı', 'yesil'];
+            return (
+              <li>
+                <a href={`/yonetim/siparisler/kanallar?gorunum=${k}`}>
+                  <KanalLogo kanal={k} />
+                  <span class="y-satir__ana">
+                    <strong>{KANALLAR[k]}</strong>
+                    <small>Son çekim: {son ? yTarih.format(new Date(son)) : 'henüz yok'}</small>
+                  </span>
+                  <b class:list={['y-chip', 'y-chip--nokta', 'y-chip--' + ton]}>{durum}</b>
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+
+        <div class="im-kisayollar">
+          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/servis-kontrol" data-astro-prefetch="false">Servis Tanılama</a>
+          <a class="btn btn--cizgi btn--kucuk" href="/yonetim/yedek">
+            Veri Yedeği İndir {yedekGun !== undefined ? `(${yedekGun}g)` : ''}
+          </a>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  {/* 4. ALTTA OTOMASYON KONTROLÜ, AYARLARI VE ÇALIŞMA GEÇMİŞİ */}
+  <section class="y-kart im-otomasyon" id="otomasyon">
+    <div class="im-otomasyon__ust">
+      <div>
+        <div class="im-otomasyon__baslik">
+          <h2><PIkon ad="simsek" /> Otomatik Kontroller ve Arka Plan İşleri</h2>
+          <span class:list={['y-chip', 'y-chip--nokta', bagliKanallar.length ? 'y-chip--yesil' : 'y-chip--gri']}>
+            {bagliKanallar.length ? '5 dk’da bir otomatik çalışıyor' : 'Yerel ortam / kanal bekliyor'}
+          </span>
+          {hataliOtomasyonSayisi > 0 && (
+            <span class="y-chip y-chip--kirmizi">{hataliOtomasyonSayisi} hata kaydı</span>
+          )}
+        </div>
+        <p class="y-help" style="margin:4px 0 0">
+          Son çalışma: <strong>{ot.sonCalisma ? yTarih.format(new Date(ot.sonCalisma)) : 'Henüz çalışmadı'}</strong>
+          {' · '}Sonraki: <strong>{sonrakiCalismaTarihi}</strong>
+        </p>
+      </div>
+
+      <form method="post" action="/yonetim/isler" data-tek-gonder>
+        <input type="hidden" name="geri" value="/yonetim#otomasyon" />
+        <button class="btn btn--sepet" name="eylem" value="hepsi" type="submit">
+          <PIkon ad="yenile" boyut={17} /> Şimdi Çalıştır
+        </button>
+      </form>
     </div>
-    <KanalOzeti ozet={ayOzeti} donem="Bu ay" adres={kanalAdresi} />
-  </section>
 
-  <section class="y-kart" aria-label="Hızlı işlemler">
-    <div class="y-kart__bas"><h2><PIkon ad="simsek" /> Hızlı işlemler</h2></div>
-    <div class="y-hizli-islemler">
-      <a class="btn btn--sepet" href="/yonetim/fiyatlar"><PIkon ad="etiket" boyut={19} />Fiyat ve kâr tablosu</a>
-      <a class="btn btn--cizgi" href="/yonetim/siparisler?durum=islem"><PIkon ad="sepet" boyut={19} />Siparişleri işle</a>
-      <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-ilanlar"><PIkon ad="zincir" boyut={19} />Trendyol ilanları</a>
-      <a class="btn btn--cizgi" href="/yonetim/siparisler/trendyol-urunler"><PIkon ad="gonder" boyut={19} />Trendyol’a ürün gönder</a>
-      <a class="btn btn--cizgi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" boyut={19} />Fatura kaydı</a>
-      <a class="btn btn--cizgi" href="/yonetim/urunler/yeni"><PIkon ad="kutu" boyut={19} />Yeni ürün</a>
-      <a class="btn btn--cizgi" href="/yonetim/finans?sekme=raporlar"><PIkon ad="indir" boyut={19} />Muhasebeci raporu</a>
+    <div class="im-otomasyon__alt">
+      <details class="im-detay">
+        <summary>
+          <span><PIkon ad="ayar" boyut={16} /> Otomatik İş Ayarları (6 Kural)</span>
+          <small class="muted">{OTOMASYON_AYARLARI.filter(([k]) => ot[k]).length} / 6 açık</small>
+        </summary>
+        <form method="post" action="/yonetim/isler" class="im-ayar-form" data-tek-gonder>
+          <input type="hidden" name="geri" value="/yonetim#otomasyon" />
+          <input type="hidden" name="eylem" value="ayarlar" />
+          <div class="im-ayar-izgara">
+            {OTOMASYON_AYARLARI.map(([k, ad, aciklama]) => (
+              <label class="y-secim im-ayar-kutu">
+                <input type="checkbox" name={k} checked={ot[k]} />
+                <span><strong>{ad}</strong><small>{aciklama}</small></span>
+              </label>
+            ))}
+          </div>
+          <div style="margin-top:10px">
+            <button class="btn btn--cizgi btn--kucuk" type="submit"><PIkon ad="tik" boyut={15} /> Otomasyon Ayarlarını Kaydet</button>
+          </div>
+        </form>
+      </details>
+
+      <details class="im-detay" open={hataliOtomasyonSayisi > 0 || Astro.url.searchParams.has('log')}>
+        <summary>
+          <span><PIkon ad="gecmis" boyut={16} /> Son Otomatik Çalışma Geçmişi ({sonIslemler.length})</span>
+          <small class="muted">{hataliOtomasyonSayisi > 0 ? `${hataliOtomasyonSayisi} hatalı işlem var` : 'Son 20 özet kaydı'}</small>
+        </summary>
+        <div style="margin-top:10px">
+          {sonIslemler.length > 0 ? (
+            <>
+              <div class="sp-buton-grup" style="display:flex;gap:6px;margin-bottom:8px">
+                <a class:list={['btn', 'btn--kucuk', logFiltre === 'tumu' ? 'btn--sepet' : 'btn--cizgi']} href="/yonetim?log=tumu#otomasyon">
+                  Tümü ({sonIslemler.length})
+                </a>
+                <a class:list={['btn', 'btn--kucuk', logFiltre === 'hatalar' ? 'btn--sepet' : 'btn--cizgi']} href="/yonetim?log=hatalar#otomasyon">
+                  Yalnız Hatalar ({hataliOtomasyonSayisi})
+                </a>
+              </div>
+              {gorunenLoglar.length > 0 ? (
+                <div class="y-tablo-kap y-tablo-kap--kart">
+                  <table class="y-tablo">
+                    <thead>
+                      <tr><th>Saat</th><th>Kanal</th><th>Sonuç</th><th>Açıklama</th><th class="y-sayi">Ekran</th></tr>
+                    </thead>
+                    <tbody>
+                      {gorunenLoglar.map((s) => (
+                        <tr>
+                          <td data-etiket="Saat" class="y-nowrap">{s.saat}</td>
+                          <td data-etiket="Kanal">
+                            {s.kanal === 'sistem'
+                              ? <span class="y-chip y-chip--gri">Sistem</span>
+                              : <span class:list={['kanal-etiket', 'kanal-etiket--' + s.kanal]}>{KANALLAR[s.kanal]}</span>}
+                          </td>
+                          <td data-etiket="Sonuç"><span class:list={['y-chip', 'y-chip--' + s.ton]}>{s.sonuc}</span></td>
+                          <td data-etiket="Açıklama">{s.aciklama}</td>
+                          <td data-etiket="Ekran" class="y-sayi y-nowrap"><a class="y-link" href={s.url}>Aç →</a></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p class="y-help" style="margin:0">Kayıtlı hata bulunmuyor.</p>
+              )}
+            </>
+          ) : (
+            <p class="y-help" style="margin:0">Henüz kaydedilmiş otomatik işlem özeti yok.</p>
+          )}
+        </div>
+      </details>
     </div>
   </section>
-
-  <section class="y-kart">
-    <div class="y-kart__bas"><h2><PIkon ad="gecmis" /> Sıradaki ve güncel sipariş akışı</h2><a class="y-link" href="/yonetim/siparisler?durum=tumu">Tüm siparişler</a></div>
-    {sonSiparisler.length ? <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-      <thead><tr><th>Sipariş no</th><th>Ürün</th><th>Kanal</th><th>Müşteri</th><th class="y-sayi">Tutar</th><th>Durum</th><th>Tarih</th><th class="y-islem"><span class="visually-hidden">Aç</span></th></tr></thead>
-      <tbody>{sonSiparisler.map((s) => <tr>
-        <td data-etiket="Sipariş" class="y-nowrap y-siparis-no"><a class="y-link" href={s.url}><strong>{s.no}</strong></a></td>
-        <td data-etiket="Ürün"><a class="y-urun-ozet" href={s.url} title={s.urunMetni}>
-          {s.gorsel ? <img src={s.gorsel} alt="" width="36" height="36" loading="lazy" decoding="async" /> : <span class="y-kalem-gorsel--yok" aria-hidden="true"><PIkon ad="kutu" boyut={18} /></span>}
-          <span>{s.urunMetni}</span>
-        </a></td>
-        <td data-etiket="Kanal"><span class:list={['kanal-etiket', 'kanal-etiket--' + s.kanal]}>{s.kanalAd}</span></td>
-        <td data-etiket="Müşteri">{s.musteri}</td>
-        <td data-etiket="Tutar" class="y-sayi y-nowrap"><strong>{s.tutar}</strong></td>
-        <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + s.renk]}>{s.durum}</span></td>
-        <td data-etiket="Tarih" class="y-nowrap">{yTarih.format(new Date(s.tarih))}</td>
-        <td class="y-islem"><a class="y-satir-ok" href={s.url} aria-label={s.no + ' siparişini aç'}><PIkon ad="sag" boyut={18} /></a></td>
-      </tr>)}</tbody>
-    </table></div> : <p class="y-bos-satir"><PIkon ad="sepet" boyut={20} />Henüz sipariş yok.</p>}
-  </section>
-
 </Yonetim>
+
+<style>
+  .im-acil-kart { border-color: #efb9b2; background: #fff9f8; margin-bottom: 16px; }
+  .im-metrikler { grid-template-columns: repeat(4, minmax(0, 1fr)); margin-bottom: 18px; }
+  .im-orta-izgara { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(300px, 1fr); gap: 18px; align-items: start; margin-bottom: 18px; }
+  .im-orta-izgara .y-kart { margin-bottom: 0; }
+  .im-kisayollar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--y-border); }
+  .im-otomasyon__ust { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--y-border); }
+  .im-otomasyon__baslik { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .im-otomasyon__baslik h2 { margin: 0 !important; }
+  .im-otomasyon__alt { display: grid; gap: 10px; margin-top: 12px; }
+  .im-detay { border: 1px solid var(--y-border); border-radius: 12px; padding: 10px 13px; background: var(--y-surface-2); }
+  .im-detay > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-weight: 650; font-size: 14px; }
+  .im-detay > summary > span { display: inline-flex; align-items: center; gap: 6px; }
+  .im-ayar-form { margin-top: 12px; }
+  .im-ayar-izgara { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .im-ayar-kutu { align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: #fff; border: 1px solid var(--y-border); }
+  .im-ayar-kutu span { display: grid; gap: 2px; }
+  .im-ayar-kutu small { color: var(--y-muted); font-size: 12px; line-height: 1.35; }
+  .is-aciklama { display: block; color: var(--y-muted); font-size: 12.5px; margin-top: 2px; }
+  .is-sag-aksiyon { display: inline-flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .is-eylem-etiket { font-size: 12.5px; font-weight: 650; color: var(--y-gold-ink); white-space: nowrap; }
+  @media (max-width: 1020px) {
+    .im-metrikler { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .im-orta-izgara, .im-ayar-izgara { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 560px) {
+    .im-metrikler { grid-template-columns: 1fr; }
+  }
+</style>

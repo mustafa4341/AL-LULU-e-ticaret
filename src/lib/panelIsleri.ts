@@ -6,7 +6,7 @@ import { finansOku } from './finansDepo';
 import { belgeGecerli, finansPara, hakEdis } from './finans';
 import { YEDEK_ARALIGI_GUN, sonYedekTarihi } from './yedek';
 import { tumYorumlar } from './yorum';
-import { KANALLAR, KANAL_LISTESI, bosAyarlar, kritikEsik, type Kanal } from './pazaryeri';
+import { KANALLAR, KANAL_LISTESI, bosAyarlar, pazaryerindeYanlisStokKanallari, rutinStokUyarisiVarMi, type Kanal } from './pazaryeri';
 import { envanterAyarlariOku, pazaryeriSiparisleriOku } from './pazaryeriDepo';
 import { pazaryeriApiDurumu } from './pazaryeriApi';
 import { pazaryeriDurumu } from '../components/yonetim/pazaryeriGorunumu';
@@ -32,11 +32,14 @@ export async function panelIsleriniOku() {
   const iptalKargo = siparisler.filter((s) => s.durum === 'iptal' && s.kargoTakip);
   const belgeHatasi = finans.belgeler.filter((b) => b.durum === 'hata');
   const trendyolBekleyen = finans.trendyol.filter((x) => x.banka === undefined);
-  const tukenen = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0);
-  const kritikStok = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok > 0 && u.stok <= kritikEsik(envanter, u.id));
+  const negatifVeyaYanlisStok = m.urunler.filter((u) => u.stok < 0 || pazaryerindeYanlisStokKanallari(u, envanter).length > 0);
+  const tukenen = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0 && !envanter.bilerekStoktaYok[u.id]);
+  const bilerekSifirSayisi = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok === 0 && envanter.bilerekStoktaYok[u.id] && pazaryerindeYanlisStokKanallari(u, envanter).length === 0).length;
+  const kritikStok = m.urunler.filter((u) => u.durum === 'yayinda' && u.stok > 0 && rutinStokUyarisiVarMi(u, envanter));
   const simdi = Date.now();
   const urunIdleri = new Set(m.urunler.map((u) => u.id));
-  const pazarDurum = pazar.map((s) => ({ s, d: pazaryeriDurumu(s, simdi, urunIdleri) }));
+  const canliPazar = pazar.filter((s) => !s.stokDisi && pazaryeriApiDurumu(s.kanal) !== 'test');
+  const pazarDurum = canliPazar.map((s) => ({ s, d: pazaryeriDurumu(s, simdi, urunIdleri) }));
   const pazarHazirlanacak = (k: Kanal) => pazarDurum.filter(({ s, d }) => s.kanal === k && (d.hazirlanacak || d.hazirlaniyor)).length;
   const pazarKontrol = pazarDurum.filter(({ d }) => d.uyari.some((u) => u.renk === 'kirmizi')).length;
   const kanalHatasi = KANAL_LISTESI.filter((k) => envanter.kanallar[k].sonApiHata || envanter.kanallar[k].sonStokHata);
@@ -51,16 +54,17 @@ export async function panelIsleriniOku() {
 
   type Is = { ad: string; sayi: number | string; url: string; ton: 'turuncu' | 'kirmizi' | 'gri'; aciklama?: string; eylem?: string; kanal?: 'web' | 'trendyol' | 'hepsiburada' };
   const isler: Is[] = ([
-    { ad: 'Ödeme alındı, stok ayrılamadı', aciklama: 'Siparişi açıp stoğu ayırın veya geri ödemeyi doğrulayıp iptal edin.', eylem: 'Stoğu Ayır', kanal: 'web', sayi: stokUyusmazligi.length, url: stokUyusmazligi.length === 1 ? '/yonetim/siparisler/' + stokUyusmazligi[0]!.no : '/yonetim/siparisler?durum=odendi', ton: 'kirmizi' },
-    { ad: 'İptal edildi ama kargo takip numarası var', aciklama: 'Gönderiyi kargo firmasından durdurup siparişi kontrol edin.', eylem: 'Siparişi Kontrol Et', kanal: 'web', sayi: iptalKargo.length, url: iptalKargo.length === 1 ? '/yonetim/siparisler/' + iptalKargo[0]!.no : '/yonetim/siparisler?durum=iptal', ton: 'kirmizi' },
-    { ad: 'Hazırlanacak web siparişleri', aciklama: 'Siparişi açıp hazırlamaya alın.', eylem: 'Siparişleri Hazırla', kanal: 'web', sayi: hazirlanacak.length, url: '/yonetim/siparisler?durum=odendi&kanal=web', ton: 'turuncu' },
+    { ad: 'Ödeme alındı, stok ayrılamadı', aciklama: 'Siparişi açıp stoğu ayırın veya geri ödemeyi doğrulayıp iptal edin.', eylem: 'Stoğu Ayır', kanal: 'web', sayi: stokUyusmazligi.length, url: stokUyusmazligi.length === 1 ? '/yonetim/siparisler?durum=kontrol&sec=' + encodeURIComponent('web:' + stokUyusmazligi[0]!.no) : '/yonetim/siparisler?durum=kontrol&kanal=web', ton: 'kirmizi' },
+    { ad: 'Negatif stok veya pazaryerinde yanlış stok adedi', aciklama: 'Depoda 0/eksi olan ürün pazaryerinde hâlâ stoklu görünüyor; aşırı satışı önlemek için hemen eşitleyin.', eylem: 'Hemen Eşitle', sayi: negatifVeyaYanlisStok.length, url: '/yonetim/fiyatlar', ton: 'kirmizi' },
+    { ad: 'İptal edildi ama kargo takip numarası var', aciklama: 'Gönderiyi kargo firmasından durdurup siparişi kontrol edin.', eylem: 'Siparişi Kontrol Et', kanal: 'web', sayi: iptalKargo.length, url: iptalKargo.length === 1 ? '/yonetim/siparisler?durum=iptal&sec=' + encodeURIComponent('web:' + iptalKargo[0]!.no) : '/yonetim/siparisler?durum=iptal', ton: 'kirmizi' },
+    { ad: 'Hazırlanacak web siparişleri', aciklama: 'Sipariş çalışma panelinden tek tıkla hazırlamaya alın.', eylem: 'Siparişleri Hazırla', kanal: 'web', sayi: hazirlanacak.length, url: '/yonetim/siparisler?durum=hazirlanacak&kanal=web', ton: 'turuncu' },
     { ad: 'Kargoya verilecek web siparişleri', aciklama: 'Paketi teslim edin ve kargo takip numarasını kaydedin.', eylem: 'Kargoya Ver', kanal: 'web', sayi: kargolanacak.length, url: '/yonetim/siparisler?durum=hazirlaniyor&kanal=web', ton: 'turuncu' },
-    { ad: 'Belgesi hazırlanmamış siparişler', aciklama: 'Sipariş özeti veya paket içi fişi oluşturun.', eylem: 'Belgeleri Hazırla', kanal: 'web', sayi: belgesiz.length, url: '/yonetim/siparisler?durum=belgesiz&kanal=web', ton: 'turuncu' },
-    { ad: 'Faturası kesilecek siparişler', aciklama: 'GİB e-Arşiv Portalı’nda düzenlenen faturayı panelde kaydedin.', eylem: 'Kesilecek Faturaları Aç', sayi: faturasiz.length, url: '/yonetim/finans/faturalar', ton: 'turuncu' },
-    { ad: 'Hepsiburada’ya yüklenecek faturalar', sayi: faturaIletilmedi.filter((x) => x.kanal === 'hepsiburada' && x.fatura?.iletim.durum === 'bekliyor').length, url: '/yonetim/finans/faturalar?durum=iletilecek&kanal=hepsiburada', ton: 'turuncu', aciklama: 'PDF’i satıcı paneline yükleyip panelde “Yükledim” olarak işaretleyin.', eylem: 'Faturaları Yükle', kanal: 'hepsiburada' },
-    { ad: 'Faturası müşteriye iletilmedi', aciklama: 'Kesilen ancak müşteriye veya pazaryerine henüz iletilmeyen faturalar.', eylem: 'İletilecek Faturaları Aç', sayi: faturaIletilmedi.length, url: '/yonetim/finans/faturalar?durum=iletilecek', ton: 'turuncu' },
-    { ad: 'Hata veren belgeler (yeniden dene)', aciklama: 'Belge oluşturma veya e-posta gönderim hatasını kontrol edin.', eylem: 'Belgeleri Aç', sayi: belgeHatasi.length, url: '/yonetim/finans?sekme=belgeler', ton: 'kirmizi' },
-    { ad: 'Ödemesi kontrol edilecek (havale/EFT)', aciklama: 'Banka hesabını kontrol edip ödemeyi onaylayın.', eylem: 'Ödemeyi Kontrol Et', kanal: 'web', sayi: odemeKontrol.length, url: '/yonetim/siparisler?durum=odeme-bekliyor&kanal=web', ton: 'turuncu' },
+    { ad: 'Faturası kesilecek siparişler (1/3)', aciklama: 'GİB e-Arşiv faturasını sipariş çalışma panelinden veya Fatura Merkezi’nden kaydedin.', eylem: 'Faturaları Kes', sayi: faturasiz.length, url: '/yonetim/siparisler?durum=faturasiz', ton: 'turuncu' },
+    { ad: 'Hepsiburada’ya yüklenecek faturalar (2/3)', sayi: faturaIletilmedi.filter((x) => x.kanal === 'hepsiburada' && x.fatura?.iletim.durum === 'bekliyor').length, url: '/yonetim/siparisler?durum=faturasiz&kanal=hepsiburada', ton: 'turuncu', aciklama: 'PDF’i satıcı paneline yükleyip sipariş panelinde “3/3 Tamamla” işaretleyin.', eylem: 'Faturaları Yükle', kanal: 'hepsiburada' },
+    { ad: 'Faturası müşteriye / kanala iletilmedi (2/3)', aciklama: 'Kaydedilen ancak iletimi tamamlanmayan veya hata veren faturalar.', eylem: 'İletimi Tamamla', sayi: faturaIletilmedi.length, url: '/yonetim/siparisler?durum=faturasiz', ton: faturaIletilmedi.some((x) => x.fatura?.iletim.durum === 'hata') ? 'kirmizi' : 'turuncu' },
+    { ad: 'İç sipariş belgesi hazırlanmamış web siparişleri', aciklama: 'İsteğe bağlı koli içi fiş veya sipariş özeti oluşturun.', eylem: 'Siparişleri Gör', kanal: 'web', sayi: belgesiz.length, url: '/yonetim/siparisler?durum=islem&kanal=web', ton: 'gri' },
+    { ad: 'Hata veren belgeler (yeniden dene)', aciklama: 'Belge oluşturma hatasını kontrol edin.', eylem: 'Belgeleri Aç', sayi: belgeHatasi.length, url: '/yonetim/finans?sekme=belgeler', ton: 'kirmizi' },
+    { ad: 'Ödemesi kontrol edilecek (havale/EFT)', aciklama: 'Banka hesabını kontrol edip ödemeyi onaylayın.', eylem: 'Ödemeyi Onayla', kanal: 'web', sayi: odemeKontrol.length, url: '/yonetim/siparisler?durum=odeme-bekleyen&kanal=web', ton: 'turuncu' },
     { ad: 'Ödemesi beklenen Trendyol hakedişi', aciklama: 'Vadesi gelen Trendyol hakediş kayıtlarını inceleyin.', eylem: 'Hakedişleri Aç', kanal: 'trendyol', sayi: trendyolBekleyen.length ? finansPara(trendyolBekleyen.reduce((t, x) => t + hakEdis(x), 0)) : 0, url: '/yonetim/finans?sekme=trendyol', ton: 'gri' },
     ...kanalHatasi.map((k) => ({ ad: `${KANALLAR[k]} bağlantısında / stok eşitlemesinde sorun var`, aciklama: envanter.kanallar[k].sonApiHata || envanter.kanallar[k].sonStokHata, eylem: 'Tanıla ve Onar', kanal: k, sayi: '!', url: '/yonetim/servis-kontrol#' + k, ton: 'kirmizi' as const })),
     { ad: 'Trendyol’da çift ilan (aynı ürün iki ilanla satışta)', aciklama: 'Depodaki tek adet iki ilandan satılabilir. Kalacak ilanı seçin; fazlasının stoğu 0 yapılır.', eylem: 'Çift İlanları Çöz', kanal: 'trendyol', sayi: envanter.kanallar.trendyol.ciftIlanlar?.length ?? 0, url: '/yonetim/siparisler/trendyol-ilanlar#cift', ton: 'kirmizi' },
@@ -83,5 +87,5 @@ export async function panelIsleriniOku() {
   ] satisfies Is[]).filter((x) => x.sayi !== 0);
   const oncelik = { kirmizi: 0, turuncu: 1, gri: 2 };
   isler.sort((a, b) => oncelik[a.ton] - oncelik[b.ton]);
-  return { magaza: m, siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, isler, pazarHazirlanacak };
+  return { magaza: m, siparisler, finans, pazar, envanter, yedekGun, hazirlanacak, kargolanacak, faturasiz, kanalHatasi, kanalGecikti, tukenen, kritikStok, bilerekSifirSayisi, negatifVeyaYanlisStok, isler, pazarHazirlanacak };
 }

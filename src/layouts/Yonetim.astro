@@ -51,10 +51,9 @@ const sayfa = bolumMenu?.[1];
 const mobilAdlar = { ozet: 'İşler', siparisler: 'Siparişler', urunler: 'Ürünler', kanallar: 'Kanallar' };
 /* Alt menü: [ad, adres, kanal işareti (isteğe bağlı)] */
 const altMenu: Partial<Record<MenuBolumu, [string, string, string?][]>> = {
-  ozet: [['Bugünkü işler', '/yonetim/isler']],
-  siparisler: [['Tüm siparişler', '/yonetim/siparisler'], ['Hazırlık ve paketleme', '/yonetim/siparisler/hazirlik']],
+  siparisler: [['Sipariş kuyruğu', '/yonetim/siparisler'], ['Barkodlu toplu hazırlık', '/yonetim/siparisler/hazirlik']],
   urunler: [
-    ['Fiyat ve kâr tablosu', '/yonetim/fiyatlar'],
+    ['Fiyat, stok ve kâr tablosu', '/yonetim/fiyatlar'],
     ['Tüm ürünler', '/yonetim/urunler'],
     ['Toplu Excel indir / yükle', '/yonetim/urunler/toplu'],
     ['Setler', '/yonetim/setler'],
@@ -130,7 +129,7 @@ const baglantiYazisi = baglanti === 'bagli' ? 'Veritabanı bağlı' : baglanti =
           <div>
             <strong>Yardım ve kısayollar</strong>
             <p><kbd>Ctrl</kbd> + <kbd>K</kbd> ile her sayfadan arama açılır.</p>
-            <a href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={17} /><span>Bugünkü işler<small>Otomatik işler ve size kalanlar</small></span></a>
+            <a href="/yonetim#otomasyon"><PIkon ad="takvim-tik" boyut={17} /><span>İş Merkezi &amp; Otomasyon<small>Yapılacak işler ve arka plan kontrolleri</small></span></a>
             <a href="/yonetim/siparisler/kanallar"><PIkon ad="zincir" boyut={17} /><span>Satış kanalları<small>Bağlantı, eşitleme ve stok eşleştirme</small></span></a>
             <a href="/yonetim/yedek"><PIkon ad="indir" boyut={17} /><span>Veri yedeği indir<small>Tüm kayıtlar tek ZIP dosyasında</small></span></a>
             <p class:list={['y-baglanti-satir', 'is-' + baglanti]}><i></i>{baglantiYazisi}</p>
@@ -140,9 +139,9 @@ const baglantiYazisi = baglanti === 'bagli' ? 'Veritabanı bağlı' : baglanti =
           <summary class="y-ust-ikon" aria-label={dikkat ? `${dikkat} konu dikkat bekliyor` : 'Bildirimler'} title="Dikkat bekleyenler"><PIkon ad="zil" boyut={20} />{dikkat > 0 && <b class="y-ust-sayi">{dikkat > 99 ? '99+' : dikkat}</b>}</summary>
           <div>
             <strong>Dikkat bekleyenler</strong>
-            <a href="/yonetim/siparisler?durum=kuyruk&amp;kanal=tumu"><PIkon ad="sepet" boyut={17} /><span>{bekleyen ? `${bekleyen} sipariş hazırlanacak / kargolanacak` : 'Hazırlanacak sipariş yok'}<small>Web {bekleyenWeb} · Pazaryeri {bekleyenPazar}</small></span>{bekleyen > 0 && <b class="y-chip y-chip--turuncu">{bekleyen}</b>}</a>
+            <a href="/yonetim/siparisler?durum=islem"><PIkon ad="sepet" boyut={17} /><span>{bekleyen ? `${bekleyen} sipariş hazırlanacak / kargolanacak` : 'Hazırlanacak sipariş yok'}<small>Web {bekleyenWeb} · Pazaryeri {bekleyenPazar}</small></span>{bekleyen > 0 && <b class="y-chip y-chip--turuncu">{bekleyen}</b>}</a>
             <a href="/yonetim/urunler?filtre=kritik"><PIkon ad="uyari" boyut={17} /><span>{stokUyari ? `${stokUyari} ürün stok uyarısında` : 'Stok uyarısı yok'}<small>Tükenen veya uyarı eşiğine inen yayındaki ürünler</small></span>{stokUyari > 0 && <b class="y-chip y-chip--kirmizi">{stokUyari}</b>}</a>
-            <a href="/yonetim/isler"><PIkon ad="takvim-tik" boyut={17} /><span>Bugünkü işlerin tamamı<small>Fatura, iade, eşleştirme ve otomatik işler</small></span></a>
+            <a href="/yonetim"><PIkon ad="takvim-tik" boyut={17} /><span>İş Merkezi’nin tamamı<small>Fatura, iade, eşleştirme ve otomatik işler</small></span></a>
           </div>
         </details>
         <details class="y-ust-menu y-account">

@@ -447,6 +447,38 @@ export const bosAyarlar = (): EnvanterAyarlari => EnvanterAyarSema.parse({});
 
 export const kritikEsik = (a: EnvanterAyarlari, urunId: string) => a.urunKritik[urunId] ?? a.kritikVarsayilan;
 
+/**
+ * Pazaryerinde stok 0 olması gerekirken hâlâ >0 bildirilen (aşırı satış riski taşıyan) kanalları döner.
+ * Bu gerçek bir senkronizasyon sorunudur; `bilerekStoktaYok` olsa bile ASLA gizlenmez.
+ */
+export function pazaryerindeYanlisStokKanallari(
+  u: Pick<Urun, 'id' | 'stok'>,
+  envanter: EnvanterAyarlari,
+): Kanal[] {
+  if (u.stok > 0) return [];
+  return KANAL_LISTESI.filter((k) => {
+    const kayit = envanter.kanallar[k].urunler[u.id];
+    return Boolean(kayit?.kod && kayit.satista !== false && (kayit.bildirilen ?? 0) > 0);
+  });
+}
+
+/**
+ * Rutin stok uyarısı kontrolü:
+ * - Negatif stok (`u.stok < 0`) veya pazaryerinde yanlış stok (`bildirilen > 0` iken `u.stok <= 0`) her zaman uyarır.
+ * - Mağaza sahibinin `bilerekStoktaYok` işaretlediği 0 stoklu ürün rutin "tükendi" görevi üretmez.
+ * - Diğer yayındaki ürünlerde `u.stok <= kritikEsik` ise uyarır.
+ */
+export function rutinStokUyarisiVarMi(
+  u: Pick<Urun, 'id' | 'durum' | 'stok'>,
+  envanter: EnvanterAyarlari,
+): boolean {
+  if (u.stok < 0) return true;
+  if (pazaryerindeYanlisStokKanallari(u, envanter).length > 0) return true;
+  if (u.durum !== 'yayinda') return false;
+  if (u.stok === 0 && envanter.bilerekStoktaYok[u.id]) return false;
+  return u.stok <= kritikEsik(envanter, u.id);
+}
+
 /* ---------------- Excel / CSV sütunları ---------------- */
 
 export const ALANLAR = {
