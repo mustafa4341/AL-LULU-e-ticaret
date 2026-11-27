@@ -121,6 +121,8 @@ export async function atomikYaz(dosya: string, veri: string): Promise<void> {
 
 /* ---------------- Mağaza ---------------- */
 let magazaOnbellek: { mtime: number; zaman: number; veri: Magaza } | undefined;
+const yedekMagazalar = new WeakSet<Magaza>();
+export const magazaYedektenMi = (veri: Magaza): boolean => yedekMagazalar.has(veri);
 const ONBELLEK_SURE_MS = 1000;
 let bulutOkumaHatasi = false;
 export const supabaseDurumu = () => !supabaseBagliMi() ? 'yerel' : bulutOkumaHatasi ? 'hata' : 'bagli';
@@ -174,6 +176,7 @@ async function magazaOkuIc(kayitIcin: boolean): Promise<Magaza> {
   const st = await fs.stat(MAGAZA);
   if (magazaOnbellek && magazaOnbellek.mtime === st.mtimeMs && magazaOnbellek.mtime > 0) return magazaOnbellek.veri;
   const veri = MagazaSema.parse(JSON.parse(await fs.readFile(MAGAZA, 'utf8')));
+  if (sb) yedekMagazalar.add(veri);
   sakla({ mtime: st.mtimeMs, zaman: Date.now(), veri });
   return veri;
 }

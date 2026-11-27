@@ -1,6 +1,6 @@
 import { defineMiddleware } from 'astro:middleware';
 import { Katalog } from './lib/katalog';
-import { magazaOku, satisAdetleri } from './lib/depo';
+import { magazaOku, magazaYedektenMi, satisAdetleri } from './lib/depo';
 import { CEREZ, girisYolu, oturumGecerli } from './lib/oturum';
 import { PAYTR_BILDIRIM, PAYTR_ORIGIN } from './lib/paytr';
 import { panelRozetiOku } from './lib/panelRozet';
@@ -62,7 +62,19 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     // Panel sayfasında yan menüdeki sipariş sayısı şimdiden istenir; sayfa verisiyle aynı anda gelir
     if (panel && yonetici && ctx.request.method === 'GET') ctx.locals.panelRozet = panelRozetiOku();
     // Mağaza ve satış adetleri aynı anda okunur (sırayla beklemek her sayfayı bir tur yavaşlatıyordu)
-    const [magaza, satislar] = await Promise.all([magazaOku(), satisAdetleri()]);
+    const katalogDosyasi = yol === '/sitemap.xml' || yol === '/llms.txt'
+      || yol === '/urun-akisi.xml' || yol === '/urun-akisi-jpg.xml';
+    const [magaza, satislar] = await Promise.all([magazaOku(), katalogDosyasi ? undefined : satisAdetleri()]);
+    const vitrin = yol === '/' || yol === '/urunler' || yol === '/setler'
+      || yol.startsWith('/urun/') || yol.startsWith('/kategori/');
+    if ((katalogDosyasi || (vitrin && (!yonetici || musteriGorunumu))) && magazaYedektenMi(magaza)) {
+      const yanit = new Response('Ürün bilgilerine geçici olarak ulaşılamıyor. Lütfen tekrar deneyin.', {
+        status: 503,
+        headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '60' },
+      });
+      ortakBasliklar(yanit);
+      return yanit;
+    }
     const katalog = new Katalog(magaza, satislar, !musteriGorunumu && yonetici);
     ctx.locals.katalog = katalog;
 
@@ -84,6 +96,10 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
   }
 
   const yanit = await next();
+  if (yonetici && yanit.headers.get('Content-Type')?.startsWith('text/html')) {
+    yanit.headers.set('Cache-Control', 'private, no-store');
+    yanit.headers.set('X-Robots-Tag', 'noindex');
+  }
   if (panel || yol.startsWith('/odeme') || yol.startsWith('/siparis') || yol === '/tadilat') {
     yanit.headers.set('Cache-Control', 'no-store');
     yanit.headers.set('X-Robots-Tag', 'noindex');

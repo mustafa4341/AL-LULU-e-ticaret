@@ -116,7 +116,7 @@ const sssVerisi = urunSSS.length ? {
   mainEntity: urunSSS.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
 } : undefined;
 ---
-<Base baslik={`${seoAd} | ${site.ad}`} aciklama={metaAciklama(urun.ozet || seoAd)} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd }), `/urun/${urun.id}`]]} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
+<Base baslik={`${seoAd} | ${site.ad}`} aciklama={metaAciklama(urun.ozet || seoAd)} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd }), `/urun/${urun.id}`]]} indekslenmesin={urun.durum !== 'yayinda'} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
   <div class="container">
     <nav aria-label="Konum" class="kirinti-kap--urun">
       <ol class="kirinti">

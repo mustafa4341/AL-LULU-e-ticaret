@@ -60,6 +60,6 @@ ${YASAL_SAYFALAR.map((y) => `- [${y.baslik}](${kok}/yasal/${y.yol})`).join('\n')
 - [Satıcı bilgileri](${kok}/bilgi)
 `;
   return new Response(metin, {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'public, max-age=3600' },
+    headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-cache' },
   });
 };
