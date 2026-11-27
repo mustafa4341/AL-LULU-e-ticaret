@@ -9,7 +9,7 @@
  * (bu sitede) son 10 günde uygulanan en düşük fiyat olabilir (Ticari Reklam Yön. m.14/3 ve 14/5, RG 01.07.2026/33297).
  * Google fiyat düşüşünü kendi fiyat geçmişinden zaten hesaplar.
  */
-import type { APIRoute } from 'astro';
+import type { APIContext, APIRoute } from 'astro';
 import { markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
 import { urunSatisOzeti } from '../lib/urunTanitim';
 
@@ -38,7 +38,7 @@ const GOOGLE_URUN_KATEGORI: Readonly<Record<string, number>> = {
   'zwilling-king-30-parca-catal-kasik': 5647,
 };
 
-export const GET: APIRoute = async ({ locals, site: astroSite }) => {
+export function urunAkisi({ locals, site: astroSite }: APIContext, hedef: 'google' | 'karsilastirma'): Response {
   const k = locals.katalog;
   const s = k.site;
   const kok = (astroSite ?? new URL(s.url)).origin;
@@ -56,7 +56,12 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     const kargoUcreti = odenecek >= kargo.ucretsizEsik ? 0 : kargo.ucret;
     const cumle = (v: string) => { const t = v.replace(/\*+/g, '').replace(/\s*\|\s*/g, ': ').trim(); return /[.!?]$/.test(t) ? t : t + '.'; };
     const ad = markaliUrunAdi(u);
-    const aciklama = [urunSatisOzeti(u), ...u.oneCikanBilgiler.map((o) => o.metin)].filter(Boolean).map(cumle).join(' ');
+    const satisOzeti = urunSatisOzeti(u);
+    const metinler = hedef === 'google' ? [satisOzeti] : [satisOzeti, ...u.oneCikanBilgiler.map((o) => o.metin)];
+    const aciklama = x((metinler.filter(Boolean).map(cumle).join(' ') || ad).slice(0, 5000));
+    const aciklamaSatiri = hedef === 'google' && satisOzeti !== u.ozet.trim()
+      ? `      <g:structured_description><g:digital_source_type>trained_algorithmic_media</g:digital_source_type><g:content>${aciklama}</g:content></g:structured_description>`
+      : `      <g:description>${aciklama}</g:description>`;
     // Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa (lib/urunKimlik.ts)
     const gtin = urunGtin(u);
     const mpn = urunMpn(u);
@@ -69,7 +74,7 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
       '    <item>',
       `      <g:id>${x(u.id)}</g:id>`,
       `      <g:title>${x(ad.slice(0, 150))}</g:title>`,
-      `      <g:description>${x((aciklama || ad).slice(0, 5000))}</g:description>`,
+      aciklamaSatiri,
       `      <g:link>${x(`${kok}/urun/${u.id}`)}</g:link>`,
       `      <g:image_link>${x(gorseller[0])}</g:image_link>`,
       ...(ekGorseller ? [ekGorseller] : []),
@@ -105,4 +110,6 @@ ${ogeler.join('\n')}
 </rss>
 `;
   return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-cache' } });
-};
+}
+
+export const GET: APIRoute = (ctx) => urunAkisi(ctx, 'google');
