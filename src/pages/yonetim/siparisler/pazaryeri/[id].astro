@@ -392,21 +392,11 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
             )}
 
             {tyIslemAcik && s.kargoTakip && ['Picking', 'Invoiced'].includes(s.hamDurum) ? (
-              tyOrtakEtiketVar(s.kargoFirma) ? (
-                <form method="post" data-indirme class="y-aksiyon-karo">
-                  <button class="y-aksiyon-karo__ic" type="submit" name="eylem" value="ty-etiket">
-                    <PIkon ad="indir" boyut={22} />
-                    <strong>ZPL Etiket İndir</strong>
-                    <small>Termal yazıcı barkodu</small>
-                  </button>
-                </form>
-              ) : (
-                <a class="y-aksiyon-karo" href={Astro.url.pathname + '/etiket'} target="_blank" rel="noopener">
-                  <PIkon ad="belge" boyut={22} />
-                  <strong>Kargo Etiketi Yazdır</strong>
-                  <small>{s.kargoFirma || 'Kargo'} barkodu</small>
-                </a>
-              )
+              <a class="y-aksiyon-karo" href={Astro.url.pathname + '/etiket?kagit=a4'} target="_blank" rel="noopener">
+                <PIkon ad="yazici" boyut={22} />
+                <strong>Kargo Etiketi Yazdır</strong>
+                <small>{s.kargoFirma ? s.kargoFirma.replace(/\s*Marketplace\s*/gi, '') : 'Trendyol'} barkodlu fiş</small>
+              </a>
             ) : (
               <a class="y-aksiyon-karo" href={faturaAdresi}>
                 <PIkon ad="fatura" boyut={22} />
@@ -443,6 +433,13 @@ const iadeBekleyenAdet = s ? s.kalemler.filter((k) => !s.stokDisi && k.urunId &&
                   <label class="y-alan" style="flex:1">Yalnız fatura numarası bildir<input name="faturaNo" maxlength="16" placeholder="ABC2026000000123" required /></label>
                   <button class="btn btn--cizgi btn--kucuk" type="submit">“Faturalandı” işaretle</button>
                 </form>}
+                {s.kargoTakip && tyOrtakEtiketVar(s.kargoFirma) && (
+                  <form method="post" data-indirme>
+                    <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="ty-etiket">
+                      <PIkon ad="indir" boyut={15} /> Ham ZPL Dosyası İndir (Zebra termal yazıcılar için)
+                    </button>
+                  </form>
+                )}
               </div>
             </details>
           )}

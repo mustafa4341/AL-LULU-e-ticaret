@@ -156,8 +156,22 @@ const hazirAraliklar = (() => {
   return [['Bu ay', bugun.slice(0, 7) + '-01', bugun], ['Geçen ay', gecen + '-01', gecenSon], ['Bu yıl', y + '-01-01', bugun]] as const;
 })();
 const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyor' ? 'turuncu' : d === 'iptal' ? 'gri' : 'yesil';
+const SEKME_BASLIKLARI: Record<string, [string, string]> = {
+  ozet: ['Finans Özeti ve Net Kazanç', 'Onaylı web satışları, kesinleşen pazaryeri hakedişleri, ürün alış maliyetleri ve dış giderlerden cebinize kalan net tutarı takip edin.'],
+  belgeler: ['Koli ve Sipariş Belgeleri', 'Web siparişleri için paket içi fiş, sipariş özeti, toplama listesi ve iade formlarını tek tıkla üretin.'],
+  giderler: ['Dış Giderler ve Maliyet', 'Kargo faturası, koli/paketleme, reklam ve muhasebe gibi dış giderlerinizi fişleriyle birlikte kaydedin.'],
+  trendyol: ['Trendyol Cari Hakediş ve Mutabakat', 'Trendyol’dan yatan net ödemeleri, komisyon/kargo kesintilerini ve vade bekleyen alacakları kontrol edin.'],
+  raporlar: ['Muhasebe Raporları ve Arşiv', 'Mali müşavirinize hazır Excel paketi, resmi fatura/belge ZIP arşivi ve yönetici dönem özetini indirin.'],
+};
+const [sayfaBaslik, sayfaAltBaslik] = SEKME_BASLIKLARI[sekme] ?? ['Finans ve Belgeler', 'Gelir, gider, belge ve muhasebe kayıtlarını takip edin.'];
 ---
-<Yonetim baslik="Finans ve Belgeler" altBaslik="Gelir, gider, belge ve muhasebe kayıtlarını takip edin." aktif="finans" basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
+<Yonetim baslik={sayfaBaslik} altBaslik={sayfaAltBaslik} aktif="finans" genis basari={q0.get('ok')} hatalar={[...hatalar, ...(q0.get('hata') ? [q0.get('hata')!] : [])]}>
+  <div slot="ust-sag" class="y-ust-aksiyonlar">
+    <a class="btn btn--cizgi" href="/yonetim/finans/faturalar"><PIkon ad="fatura" boyut={17} />Faturalar (e-Arşiv)</a>
+    <a class="btn btn--cizgi" href={'?sekme=giderler&ay=' + bugun.slice(0, 7) + '#gider-form-kart'}><PIkon ad="arti" boyut={17} />Gider Ekle</a>
+    <a class="btn btn--sepet" href={disari('excel', ayDonemi.bas, ayDonemi.son)}><PIkon ad="indir" boyut={17} />Muhasebe Excel (.XLSX)</a>
+  </div>
+
   <nav class="y-sekmeler y-finans-nav" aria-label="Finans bölümleri">
     <a href={'?sekme=ozet&ay=' + ay} aria-current={sekme === 'ozet' ? 'page' : undefined}>Finans Özeti</a>
     <a href="/yonetim/finans/faturalar">Faturalar (e-Arşiv)</a>
@@ -300,18 +314,50 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
     </section>
 
     <section class="y-kart">
-      <h2><PIkon ad="grafik" /> Son 6 ay</h2>
-      <div class="y-tablo-kap y-tablo-kap--kart"><table class="y-tablo">
-        <thead><tr><th>Ay</th><th class="y-sayi">Web satış</th><th class="y-sayi">Pazaryeri (Brüt)</th><th class="y-sayi">İade</th><th class="y-sayi">Maliyet + Gider</th><th class="y-sayi">Kalan (Tahmini)</th></tr></thead>
-        <tbody>{son6.map((a) => <tr class:list={{ 'is-secili': a.bas.slice(0, 7) === ay }}>
-          <td data-etiket="Ay"><a class="y-link" href={'?sekme=ozet&ay=' + a.bas.slice(0, 7)}>{a.ad}</a></td>
-          <td data-etiket="Web satış" class="y-sayi">{finansPara(a.r.webSatis)}</td>
-          <td data-etiket="Pazaryeri (Brüt)" class="y-sayi">{finansPara(a.py.toplam)}</td>
-          <td data-etiket="İade" class="y-sayi">{finansPara(a.r.webIade)}</td>
-          <td data-etiket="Maliyet + Gider" class="y-sayi">−{finansPara(a.r.gider + a.r.otoUrunMaliyeti)}</td>
-          <td data-etiket="Kalan" class="y-sayi"><strong>{finansPara(kalan(a.r))}</strong>{a.r.tahmini === undefined && <span class="y-uyari-kucuk" title="Ürün maliyeti girilmedi"> *</span>}</td>
-        </tr>)}</tbody>
-      </table></div>
+      <div class="y-kart__bas">
+        <div>
+          <h2><PIkon ad="grafik" /> Son 6 Ayın Gelir, Maliyet ve Net Kalan Tablosu</h2>
+          <p class="y-kart__alt">Aylara göre onaylı web satışı, pazaryeri brüt siparişi, toplam maliyet/gider ve tahmini kalan.</p>
+        </div>
+      </div>
+      <div class="y-tablo-kap y-tablo-kap--kart fn-tablo-kap">
+        <table class="y-tablo fn-tablo">
+          <thead>
+            <tr class="fn-grup-baslik">
+              <th>Dönem</th>
+              <th colspan="3" class="fn-bolge-satis">Satışlar ve İadeler</th>
+              <th class="fn-bolge-gider">Maliyet &amp; Gider</th>
+              <th class="fn-bolge-net">Cebe Kalan</th>
+            </tr>
+            <tr>
+              <th>Ay</th>
+              <th class="y-sayi fn-bolge-satis">Web Satış</th>
+              <th class="y-sayi">Pazaryeri (Brüt)</th>
+              <th class="y-sayi">Web İade</th>
+              <th class="y-sayi fn-bolge-gider">Ürün Maliyeti + Gider</th>
+              <th class="y-sayi fn-bolge-net">Tahmini Net Kalan</th>
+            </tr>
+          </thead>
+          <tbody>
+            {son6.map((a) => {
+              const k = kalan(a.r);
+              return (
+                <tr class:list={{ 'is-secili': a.bas.slice(0, 7) === ay }}>
+                  <td data-etiket="Ay"><a class="fn-ay-link" href={'?sekme=ozet&ay=' + a.bas.slice(0, 7)}>{a.ad}</a></td>
+                  <td data-etiket="Web satış" class="y-sayi fn-bolge-satis"><strong>{finansPara(a.r.webSatis)}</strong></td>
+                  <td data-etiket="Pazaryeri (Brüt)" class="y-sayi">{finansPara(a.py.toplam)}</td>
+                  <td data-etiket="İade" class="y-sayi">{a.r.webIade > 0 ? `−${finansPara(a.r.webIade)}` : '0 TL'}</td>
+                  <td data-etiket="Maliyet + Gider" class="y-sayi fn-bolge-gider">−{finansPara(a.r.gider + a.r.otoUrunMaliyeti)}</td>
+                  <td data-etiket="Kalan" class:list={['y-sayi', 'fn-bolge-net', k < 0 ? 'is-zarar' : 'is-kar']}>
+                    <strong class="fn-net-deger">{finansPara(k)}</strong>
+                    {a.r.tahmini === undefined && <span class="y-uyari-kucuk" title="Ürün maliyeti girilmedi"> *</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
       {son6.some((a) => a.r.tahmini === undefined) && <p class="y-help">* Ürün alış maliyeti girilmemiş ay; kalan kesin değildir.</p>}
     </section>
     </div><div>
@@ -339,30 +385,102 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
   </>}
 
   {sekme === 'belgeler' && <>
-    <div class="y-veri-not" style="margin-bottom:14px">
+    <div class="y-metrics y-metrics--finans">
+      <div class="y-metric">
+        <PIkon ad="belge" />
+        <span>Düzenlenen Koli Belgesi</span>
+        <strong>{finans.belgeler.length}</strong>
+        <small>Özet, paket içi fiş, toplama ve iade formu</small>
+      </div>
+      <div class:list={['y-metric', belgeGerekenler.length > 0 ? 'y-metric--turuncu' : 'y-metric--yesil']}>
+        <PIkon ad="kutu" />
+        <span>Belgesi Bekleyen Web Siparişi</span>
+        <strong>{belgeGerekenler.length}</strong>
+        <small>{belgeGerekenler.length > 0 ? 'Koli içi fişi henüz üretilmemiş' : 'Tüm onaylı siparişlerin belgesi hazır'}</small>
+      </div>
+      <a class="y-metric y-metric--altin" href="/yonetim/finans/faturalar">
+        <PIkon ad="fatura" />
+        <span>Resmî e-Arşiv Faturalar</span>
+        <strong>{finans.faturalar.filter((f) => !f.iptal).length}</strong>
+        <small>Vergi faturası kesmek için Faturalar’ı açın →</small>
+      </a>
+      <div class="y-metric">
+        <PIkon ad="ayar" />
+        <span>Şablon Görünümü</span>
+        <strong>{ayar.logo ? 'Logolu' : 'Sade'}</strong>
+        <small>{ayar.barkod ? 'Sipariş barkodu açık' : 'Barkod kapalı'} · A4 PDF</small>
+      </div>
+    </div>
+
+    <div class="y-veri-not" style="margin-bottom:16px">
       <PIkon ad="bilgi" boyut={18} />
       <p>
-        <strong>Sipariş belgeleri ile resmî e-Arşiv faturalar farklıdır</strong>
-        Bu ekrandaki belgeler (<em>Sipariş özeti, Paket içi sipariş fişi, Paketleme listesi, İade talep formu</em>) koli hazırlığı ve müşteri bilgilendirmesi içindir; resmî vergi faturası yerine geçmez. GİB e-Arşiv faturalarını kaydetmek ve müşteriye/pazaryerine iletmek için <a class="y-link" href="/yonetim/finans/faturalar"><strong>Faturalar</strong></a> sekmesini kullanın.
+        <strong>Koli belgeleri ile resmî e-Arşiv faturalar farklıdır:</strong> Bu ekrandaki belgeler (<em>Paket içi sipariş fişi, Sipariş özeti, Paketleme listesi, İade talep formu</em>) koli hazırlığı ve müşteri bilgilendirmesi içindir; resmî vergi faturası yerine geçmez. GİB e-Arşiv faturaları için <a class="y-link" href="/yonetim/finans/faturalar"><strong>Faturalar (e-Arşiv)</strong></a> ekranını kullanın.
       </p>
     </div>
 
     <div class="fn-iki-sutun">
       <div class="fn-sutun">
+        <section class="y-kart">
+          <div class="y-kart__bas">
+            <div>
+              <h2><PIkon ad="arti" /> Hızlı Belge Oluştur (Web Siparişi)</h2>
+              <p class="y-kart__alt">Bir web siparişi seçip koli içi fiş, sipariş özeti veya toplama listesini anında PDF olarak indirin.</p>
+            </div>
+          </div>
+          {siparisler.length ? (
+            <form method="post" action="/yonetim/finans/belge" class="y-izgara">
+              <input type="hidden" name="islem" value="olustur" />
+              <input type="hidden" name="geri" value="/yonetim/finans?sekme=belgeler" />
+              <div class="y-izgara y-izgara--2">
+                <label class="y-alan">Web Siparişi Seçin
+                  <select name="no" required>
+                    {siparisler.slice(0, 50).map((s) => (
+                      <option value={s.no}>{s.no} · {s.musteri.ad} {s.musteri.soyad} ({finansPara(Math.round(s.toplam * 100))})</option>
+                    ))}
+                  </select>
+                </label>
+                <label class="y-alan">Belge Türü
+                  <select name="tur" required>
+                    <option value="fis">Paket içi sipariş fişi (koliye konur)</option>
+                    <option value="ozet">Sipariş özeti (tutarlı müşteri belgesi)</option>
+                    <option value="paket">Paketleme / toplama listesi (depo için)</option>
+                    <option value="iade">İade talep formu</option>
+                  </select>
+                </label>
+              </div>
+              <div class="y-izgara y-izgara--2" style="align-items:end">
+                <label class="y-alan">Belge Üzerine Not (İsteğe bağlı)
+                  <input name="not" maxlength="300" placeholder="Ör. Güzel günlerde kullanmanızı dileriz." />
+                </label>
+                <label class="y-secim" style="min-height:46px;align-items:center">
+                  <input type="checkbox" name="fiyatGizle" value="1" />
+                  <span>Fiyatları gizle (hediye paketi için)</span>
+                </label>
+              </div>
+              <div>
+                <button class="btn btn--sepet" type="submit" style="width:100%;justify-content:center">
+                  <PIkon ad="belge" boyut={18} /> PDF Belgeyi Oluştur ve İndir
+                </button>
+              </div>
+            </form>
+          ) : <p class="muted">Belge oluşturmak için en az bir web siparişi bulunmalıdır.</p>}
+        </section>
+
         {belgeGerekenler.length > 0 && (
           <section class="y-kart fn-uyari-kart">
             <div class="y-kart__bas">
               <div>
-                <h2><PIkon ad="uyari" /> Belgesi hazırlanmamış {belgeGerekenler.length} onaylı web siparişi</h2>
-                <p class="y-kart__alt">Koli hazırlığı için tek tıkla sipariş detayına gidip veya aşağıdaki formdan belge oluşturabilirsiniz.</p>
+                <h2><PIkon ad="uyari" /> Belgesi Hazırlanmamış {belgeGerekenler.length} Onaylı Web Siparişi</h2>
+                <p class="y-kart__alt">Koli hazırlığı için siparişin çalışma panelinden veya yukarıdaki formdan belge üretebilirsiniz.</p>
               </div>
             </div>
             <ul class="y-task-list">
               {belgeGerekenler.slice(0, 8).map((s) => (
                 <li>
-                  <a href={'/yonetim/siparisler/' + s.no + '#belgeler'}>
+                  <a href={'/yonetim/siparisler?sec=' + encodeURIComponent('web:' + s.no)}>
                     <span><strong>{s.no}</strong> · {s.musteri.ad} {s.musteri.soyad}</span>
-                    <span>Belge oluştur ›</span>
+                    <span>Siparişi aç ›</span>
                   </a>
                 </li>
               ))}
@@ -378,20 +496,22 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
             </div>
             <a class="btn btn--cizgi btn--kucuk" href="/yonetim/finans/faturalar"><PIkon ad="fatura" boyut={16} />Resmî Faturalar</a>
           </div>
-          <form class="y-toolbar" method="get" style="margin-bottom:12px">
+          <form class="y-toolbar" method="get" style="margin-bottom:14px">
             <input type="hidden" name="sekme" value="belgeler" />
             <input type="search" class="y-girdi" name="q" value={q} placeholder="Belge no, sipariş no veya belge türü ara…" aria-label="Belge ara" style="flex:1" />
             <button class="btn btn--cizgi" type="submit">Ara</button>
             {q && <a class="y-link" href="?sekme=belgeler">Temizle</a>}
           </form>
           {belgeler.length ? (
-            <div class="y-tablo-kap">
-              <table class="y-tablo">
-                <thead><tr><th>Belge no</th><th>Sipariş</th><th>Tür</th><th>Tarih</th><th>Durum</th><th class="y-sayi">İşlem</th></tr></thead>
+            <div class="y-tablo-kap fn-tablo-kap">
+              <table class="y-tablo fn-tablo">
+                <thead>
+                  <tr><th>Belge No</th><th>Sipariş</th><th>Belge Türü</th><th>Tarih</th><th>Durum</th><th class="y-sayi">İşlem</th></tr>
+                </thead>
                 <tbody>{belgeler.map((b) => (
                   <tr>
                     <td data-etiket="Belge no" class="y-nowrap"><strong>{b.belgeNo ?? '—'}</strong></td>
-                    <td data-etiket="Sipariş"><a class="y-link" href={'/yonetim/siparisler/' + b.siparisNo + '#belgeler'}>{b.siparisNo}</a></td>
+                    <td data-etiket="Sipariş"><a class="y-link" href={'/yonetim/siparisler/' + b.siparisNo + '#belgeler'}><strong>{b.siparisNo}</strong></a></td>
                     <td data-etiket="Tür">
                       <strong>{BELGE_TURLERI[b.tur]}</strong>
                       {b.fiyatGizle && <small class="y-table-note">Fiyatsız (hediye / koli içi)</small>}
@@ -399,48 +519,19 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
                     <td data-etiket="Tarih" class="y-nowrap">{yTarih.format(new Date(b.olusturma))}</td>
                     <td data-etiket="Durum"><span class:list={['y-chip', 'y-chip--' + durumSinifi(b.durum)]}>{BELGE_DURUMLARI[b.durum]}</span></td>
                     <td class="y-sayi y-nowrap">{['duzenlendi', 'gonderildi', 'iptal'].includes(b.durum)
-                      ? <div class="fn-satir-butonlar"><a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Görüntüle</a><a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/belge?id=' + b.id}>PDF</a></div>
+                      ? <div class="fn-satir-butonlar"><a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/belge?goster=1&id=' + b.id} target="_blank" rel="noopener">Görüntüle</a><a class="btn btn--cizgi btn--kucuk" href={'/yonetim/finans/belge?id=' + b.id}>PDF İndir</a></div>
                       : <a class="y-link" href={'/yonetim/siparisler/' + b.siparisNo + '#belgeler'}>Yeniden dene</a>}</td>
                   </tr>
                 ))}</tbody>
               </table>
             </div>
-          ) : <p class="muted">{q ? 'Aramaya uygun belge yok.' : 'Henüz belge düzenlenmedi. Aşağıdaki “Hızlı Belge Oluştur” kartından veya sipariş detayından başlayabilirsiniz.'}</p>}
-        </section>
-
-        <section class="y-kart">
-          <div class="y-kart__bas">
-            <div>
-              <h2><PIkon ad="arti" /> Hızlı Belge Oluştur</h2>
-              <p class="y-kart__alt">Bir web siparişi seçip koli içi fiş, sipariş özeti veya toplama listesini anında PDF olarak üretin.</p>
+          ) : (
+            <div class="fn-bos-kutu">
+              <PIkon ad="belge" boyut={24} />
+              <strong>{q ? 'Aramaya uygun belge bulunamadı.' : 'Henüz oluşturulmuş koli içi sipariş belgesi yok.'}</strong>
+              <p>Yukarıdaki “Hızlı Belge Oluştur” kartından bir web siparişi seçerek saniyeler içinde A4 PDF belgenizi hazırlayabilirsiniz.</p>
             </div>
-          </div>
-          {siparisler.length ? (
-            <form method="post" action="/yonetim/finans/belge" class="y-izgara">
-              <input type="hidden" name="islem" value="olustur" />
-              <input type="hidden" name="geri" value="/yonetim/finans?sekme=belgeler" />
-              <div class="y-izgara y-izgara--2">
-                <label class="y-alan">Sipariş seçin
-                  <select name="no" required>
-                    {siparisler.slice(0, 50).map((s) => (
-                      <option value={s.no}>{s.no} · {s.musteri.ad} {s.musteri.soyad} ({finansPara(Math.round(s.toplam * 100))})</option>
-                    ))}
-                  </select>
-                </label>
-                <label class="y-alan">Belge türü
-                  <select name="tur" required>
-                    <option value="fis">Paket içi sipariş fişi (koliye konur)</option>
-                    <option value="ozet">Sipariş özeti (tutarlı müşteri belgesi)</option>
-                    <option value="paket">Paketleme / toplama listesi (depo için)</option>
-                    <option value="iade">İade talep formu</option>
-                  </select>
-                </label>
-              </div>
-              <label class="y-secim"><input type="checkbox" name="fiyatGizle" value="1" />Fiyatları gizle (hediye paketi için)</label>
-              <label class="y-alan">Belge notu (isteğe bağlı)<input name="not" maxlength="300" placeholder="Ör. Güzel günlerde kullanmanızı dileriz." /></label>
-              <div class="y-modal__alt"><button class="btn btn--sepet" type="submit"><PIkon ad="belge" boyut={17} />Belgeyi Oluştur ve İndir</button></div>
-            </form>
-          ) : <p class="muted">Belge oluşturmak için en az bir web siparişi bulunmalıdır.</p>}
+          )}
         </section>
       </div>
 
@@ -571,9 +662,9 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
           )}
 
           {giderler.length ? (
-            <div class="y-tablo-kap">
-              <table class="y-tablo">
-                <thead><tr><th>Tarih</th><th>Kategori</th><th>Açıklama</th><th>Fiş / Fatura</th><th class="y-sayi">Tutar</th><th class="y-sayi">İşlem</th></tr></thead>
+            <div class="y-tablo-kap fn-tablo-kap">
+              <table class="y-tablo fn-tablo">
+                <thead><tr><th>Tarih</th><th>Kategori</th><th>Açıklama</th><th>Fiş / Fatura</th><th class="y-sayi fn-bolge-gider">Tutar</th><th class="y-sayi">İşlem</th></tr></thead>
                 <tbody>{giderler.map((g) => (
                   <tr class:list={{ 'is-secili': duzenGider?.id === g.id }}>
                     <td data-etiket="Tarih" class="y-nowrap">{new Intl.DateTimeFormat('tr-TR', { dateStyle: 'medium', timeZone: 'UTC' }).format(new Date(g.tarih))}</td>
@@ -736,16 +827,21 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
             </div>
           </div>
           {rapor.trendyol.length ? (
-            <div class="y-tablo-kap">
-              <table class="y-tablo">
+            <div class="y-tablo-kap fn-tablo-kap">
+              <table class="y-tablo fn-tablo">
                 <thead>
+                  <tr class="fn-grup-baslik">
+                    <th colspan="2">Kayıt ve Tarih</th>
+                    <th colspan="3" class="fn-bolge-satis">Satış ve Trendyol Kesintileri</th>
+                    <th colspan="2" class="fn-bolge-net">Net Hakediş ve Banka</th>
+                  </tr>
                   <tr>
                     <th>Kayıt / Sipariş</th>
                     <th>Tarih</th>
-                    <th class="y-sayi">Brüt</th>
-                    <th class="y-sayi">Komisyon & Kargo</th>
+                    <th class="y-sayi fn-bolge-satis">Brüt</th>
+                    <th class="y-sayi">Komisyon &amp; Kargo</th>
                     <th class="y-sayi">Diğer / Stopaj</th>
-                    <th class="y-sayi">Net Hakediş</th>
+                    <th class="y-sayi fn-bolge-net">Net Hakediş</th>
                     <th class="y-sayi">Banka / Durum</th>
                   </tr>
                 </thead>
@@ -1188,4 +1284,36 @@ const durumSinifi = (d: string) => d === 'hata' ? 'kirmizi' : d === 'hazirlaniyo
   .fn-rozet--zip { background: #fef3c7; color: #92400e; }
   .fn-rozet--csv { background: #e0ecff; color: #1d4ed8; }
   .fn-rozet--canli { background: #f3e8ff; color: #6b21a8; }
+
+  /* Ferah Finans Tabloları (Kârlılık Tablosu Estetiği) */
+  .fn-tablo-kap { border-radius: 14px; border: 1px solid #e4d9ca; }
+  .fn-tablo { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .fn-tablo th, .fn-tablo td { padding: 15px 15px !important; vertical-align: middle; }
+  .fn-grup-baslik th {
+    padding: 8px 15px !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: #6b5d4f !important;
+    background: #f6f1e9 !important;
+    border-bottom: 1px solid #e6dccf;
+    text-align: left;
+  }
+  .fn-grup-baslik .fn-bolge-gider { background: #fff3f1 !important; color: #9a2419 !important; text-align: right; }
+  .fn-grup-baslik .fn-bolge-net { background: #eaf6ee !important; color: #155e34 !important; text-align: right; }
+  .fn-bolge-satis { border-left: 1.5px solid #ebe2d5; }
+  .fn-bolge-gider { border-left: 2px solid #f2d5d0; color: #8c2318; }
+  .fn-bolge-net { border-left: 2px solid #dce8df; }
+  .fn-bolge-net.is-kar { background: #f3fbf5; }
+  .fn-bolge-net.is-zarar { background: #fef4f3; }
+  .fn-net-deger { font-size: 16px; font-weight: 800; color: #0c6e36; }
+  .fn-bolge-net.is-zarar .fn-net-deger { color: #b42318; }
+  .fn-ay-link { font-size: 15px; font-weight: 750; color: #241a11; text-decoration: none; }
+  .fn-ay-link:hover { color: #8c5820; text-decoration: underline; }
+
+  @media (max-width: 1024px) {
+    .fn-grup-baslik { display: none; }
+    .fn-bolge-satis, .fn-bolge-gider, .fn-bolge-net { border-left: 0; background: transparent; }
+  }
 </style>

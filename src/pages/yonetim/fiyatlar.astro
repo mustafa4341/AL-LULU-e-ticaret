@@ -522,13 +522,20 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
       <div class="y-tablo-kap">
         <table class="y-tablo fkm-tablo">
           <thead>
+            <tr class="fkm-grup-baslik">
+              <th colspan="2">Ürün ve Ortak Depo</th>
+              <th class="fkm-bolge-maliyet">Maliyet ve Kargo</th>
+              {gosterWeb && <th class="fkm-bolge-web">Web Mağazası</th>}
+              {gosterTy && <th class="fkm-bolge-ty">Trendyol Kanalı</th>}
+              {gosterHb && <th class="fkm-bolge-hb">Hepsiburada Kanalı</th>}
+            </tr>
             <tr>
               <th>Ürün</th>
               <th class="y-sayi">Ortak Stok</th>
-              <th class="y-sayi">Alış (KDV hrç) &amp; Desi</th>
-              {gosterWeb && <th class="fkm-sutun-web"><KanalLogo kanal="web" /> Web Sitesi Fiyatı</th>}
-              {gosterTy && <th class="fkm-sutun-ty"><KanalLogo kanal="trendyol" /> Trendyol Fiyatı</th>}
-              {gosterHb && <th class="fkm-sutun-hb"><KanalLogo kanal="hepsiburada" /> Hepsiburada Fiyatı</th>}
+              <th class="y-sayi fkm-bolge-maliyet">Alış (KDV hrç) &amp; Desi</th>
+              {gosterWeb && <th class="fkm-sutun-web fkm-bolge-web"><KanalLogo kanal="web" boyut="kucuk" /> Web Sitesi Fiyatı</th>}
+              {gosterTy && <th class="fkm-sutun-ty fkm-bolge-ty"><KanalLogo kanal="trendyol" boyut="kucuk" /> Trendyol Fiyatı</th>}
+              {gosterHb && <th class="fkm-sutun-hb fkm-bolge-hb"><KanalLogo kanal="hepsiburada" boyut="kucuk" /> Hepsiburada Fiyatı</th>}
             </tr>
           </thead>
           <tbody>
@@ -548,16 +555,17 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
                   data-hb-stopaj={finans.hbAyar.stopajBp}
                 >
                   <td data-etiket="Ürün" class="fkm-urun">
-                    <div class="y-tablo-urun">
-                      <span class="y-tablo-urun__gorsel">
-                        {u.gorseller[0] && <img src={u.gorseller[0].src} alt="" width="40" height="40" loading="lazy" />}
-                      </span>
-                      <div>
-                        <a class="y-link" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}><strong>{u.marka} {u.kisaAd}</strong></a>
-                        <small class="y-table-note">
-                          {u.sku || 'SKU yok'}
-                          {u.durum !== 'yayinda' && <span class="y-chip y-chip--gri" style="margin-left:6px">Taslak</span>}
-                        </small>
+                    <div class="fkm-urun-kart">
+                      <a class="fkm-foto" href={'/yonetim/urunler/' + encodeURIComponent(u.id)} tabindex="-1" aria-hidden="true">
+                        {u.gorseller[0] ? <img src={u.gorseller[0].src} alt="" width="56" height="56" loading="lazy" decoding="async" /> : <PIkon ad="kutu" boyut={20} />}
+                      </a>
+                      <div class="fkm-urun-bilgi">
+                        <span class="fkm-marka">{u.marka}</span>
+                        <a class="fkm-ad" href={'/yonetim/urunler/' + encodeURIComponent(u.id)}>{u.kisaAd}</a>
+                        <div class="fkm-alt-etiketler">
+                          <span class="fkm-sku">{u.sku || 'SKU yok'}</span>
+                          {u.durum !== 'yayinda' && <span class="y-chip y-chip--gri">Taslak</span>}
+                        </div>
                       </div>
                     </div>
                   </td>
@@ -903,25 +911,66 @@ const gosterHb = gorunum === 'tumu' || gorunum === 'hepsiburada';
 </script>
 
 <style>
-  .fkm-ust-cubuk { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+  .fkm-ust-cubuk { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
   .fkm-kart { padding-bottom: 0; }
-  .fkm-tablo th, .fkm-tablo td { vertical-align: top; }
-  .fkm-urun { min-width: 210px; }
-  .fkm-kutu { width: 104px; min-height: 36px; padding: 6px 8px; font-weight: 600; text-align: right; }
-  .fkm-kutu--dar { width: 72px; }
-  .fkm-kutu--desi { width: 54px; }
-  .fkm-kutu--kucuk { width: 82px; min-height: 29px; padding: 3px 6px; font-size: 12.5px; }
-  .fkm-onceki-satir { display: flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 11.5px; color: var(--ink-3); }
-  .fkm-kutu--oran { width: 52px; min-height: 28px; padding: 3px 6px; font-size: 12.5px; }
+  .fkm-tablo th, .fkm-tablo td { padding: 13px 9px !important; vertical-align: middle; }
+  .fkm-grup-baslik th {
+    padding: 8px 9px !important;
+    font-size: 11px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: #6b5d4f !important;
+    background: #f6f1e9 !important;
+    border-bottom: 1px solid #e6dccf;
+    text-align: left;
+  }
+  .fkm-grup-baslik .fkm-bolge-web { background: #f7f0e2 !important; color: #6e5226 !important; }
+  .fkm-grup-baslik .fkm-bolge-ty { background: #fff1e5 !important; color: #a84800 !important; }
+  .fkm-grup-baslik .fkm-bolge-hb { background: #ffefe5 !important; color: #b53d00 !important; }
+  .fkm-bolge-maliyet { border-left: 1.5px solid #ebe2d5; }
+  .fkm-bolge-web { border-left: 2px solid #e8dcc8; }
+  .fkm-bolge-ty { border-left: 2px solid #f4d6bd; }
+  .fkm-bolge-hb { border-left: 2px solid #f5d0bc; }
+
+  .fkm-urun { min-width: 175px; }
+  .fkm-urun-kart { display: flex; align-items: center; gap: 10px; }
+  .fkm-foto {
+    width: 48px;
+    height: 48px;
+    border-radius: 10px;
+    border: 1px solid #e5dacb;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    color: #8c7d6e;
+  }
+  .fkm-foto img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+  .fkm-urun-bilgi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fkm-marka { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a7967; }
+  .fkm-ad { font-size: 14.5px; font-weight: 750; color: #241a11; text-decoration: none; line-height: 1.25; }
+  .fkm-ad:hover { color: #8c4f19; text-decoration: underline; }
+  .fkm-alt-etiketler { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; }
+  .fkm-sku { font-size: 11px; font-weight: 600; color: #5f5244; background: #f4efe8; border-radius: 5px; padding: 1px 5px; }
+
+  .fkm-kutu { width: 96px; min-height: 38px; padding: 6px 8px; font-size: 14px; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+  .fkm-kutu--dar { width: 68px; }
+  .fkm-kutu--desi { width: 52px; }
+  .fkm-kutu--kucuk { width: 82px; min-height: 30px; padding: 3px 6px; font-size: 12.5px; }
+  .fkm-onceki-satir { display: flex; align-items: center; gap: 4px; margin-top: 5px; font-size: 11.5px; color: var(--ink-3); }
+  .fkm-kutu--oran { width: 52px; min-height: 29px; padding: 3px 5px; font-size: 12.5px; }
   .fkm-kutu--uyari { border-color: #d97706; background: #fffbeb; }
-  .fkm-alis-grup { display: flex; gap: 6px; justify-content: flex-end; align-items: flex-end; }
-  .fkm-mini-etiket { display: grid; gap: 2px; font-size: 11px; color: var(--ink-3); text-align: right; }
-  .fkm-kanal-hucre { min-width: 195px; }
-  .fkm-durum-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 6px; min-height: 26px; }
-  .fkm-fiyat-satir { display: flex; align-items: center; gap: 5px; }
-  .fkm-birim { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-  .fkm-oran-etiket { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
-  .fkm-kar-satir { margin-top: 5px; font-size: 12.5px; line-height: 1.4; }
+  .fkm-alis-grup { display: flex; gap: 5px; justify-content: flex-end; align-items: flex-end; }
+  .fkm-mini-etiket { display: grid; gap: 2px; font-size: 11px; font-weight: 600; color: var(--ink-3); text-align: right; }
+  .fkm-kanal-hucre { min-width: 170px; vertical-align: top !important; }
+  .fkm-durum-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin-bottom: 7px; min-height: 28px; }
+  .fkm-fiyat-satir { display: flex; align-items: center; gap: 6px; }
+  .fkm-birim { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+  .fkm-oran-etiket { display: inline-flex; align-items: center; gap: 3px; font-size: 12.5px; font-weight: 650; color: var(--ink-2); }
+  .fkm-kar-satir { margin-top: 6px; font-size: 13px; line-height: 1.42; }
   .fkm-sutun-web, .fkm-sutun-ty, .fkm-sutun-hb { white-space: nowrap; }
   .fkm-alt-cubuk {
     position: sticky;

@@ -200,30 +200,105 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
     <button class="btn btn--cizgi" type="submit"><PIkon ad="filtre" boyut={17} />Uygula</button>
   </form>
   {filtre === 'barkod' && <p class="y-help">Yayındaki ürünlerin barkodunu Detaylar → Teknik özellikler bölümüne “Barkod (EAN)” olarak girin.</p>}
-  {liste.length ? <div class="y-liste-detay" data-panel-secim>
-  <div class="y-liste-ana y-tablo-kap y-tablo-kap--kart urun-tablo"><table class="y-tablo"><thead><tr><th>Ürün</th><th>Fiyat</th><th>İndirim</th><th>Depo stoku</th><th>Durum</th><th>İşlem</th></tr></thead><tbody>
-    {liste.map((u) => { const fiyat = k.fiyatBilgisi(u); return (
-      <tr id={'u-' + u.id}>
-        <td class="urun-hucre"><div class="y-tablo-urun"><span class="y-tablo-urun__gorsel">{u.gorseller[0] && <img src={u.gorseller[0].src} alt="" loading="lazy" />}</span><span><a class="y-link" href={'/yonetim/urunler/' + u.id}>{u.marka} {u.kisaAd}</a><small class="y-table-note">{u.gorseller.length ? u.sku : 'Fotoğraf eksik'}</small></span></div></td>
-        <td class="y-nowrap" data-etiket="Fiyat">{fiyatGirilmedi(u) ? <span class="y-stok-rozet y-stok-rozet--kritik">Fiyat girilmedi</span> : <strong>{formatTL(u.fiyat)}</strong>}{fiyat.onceki && <small class="y-table-note"><s>{formatTL(fiyat.onceki)}</s></small>}</td>
-        <td data-etiket="İndirim">{fiyat.yuzde ? <span>%{fiyat.yuzde} fiyat indirimi</span> : null}{fiyat.sepette && <small class="y-table-note">Sepette %{fiyat.sepette.yuzde} · {formatTL(fiyat.sepette.fiyat)}</small>}{!fiyat.yuzde && !fiyat.sepette && '—'}</td>
-        <td data-etiket="Depo stoku" class="y-stok-hucre"><span class={'y-stok-rozet y-stok-rozet--' + stokGorunumu(u)[1]} title={stokYazisi(u)}>{stokGorunumu(u)[0]}</span>{u.durum === 'yayinda' && <small class="y-table-note">Uyarı eşiği: {esik(u.id)} adet</small>}</td><td data-etiket="Durum"><span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>{u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}</td>
-        <td class="urun-islem"><div class="y-row-actions">
-          <a class="btn btn--cizgi" href={url(duzenle === u.id ? undefined : u.id)} data-astro-prefetch="false" data-panel-sec={'urun-hizli-' + u.id} aria-controls={'urun-hizli-' + u.id} aria-expanded={duzenle === u.id ? 'true' : 'false'}>Hızlı düzenle</a>
-          <details class="y-row-menu y-row-menu--sag"><summary aria-label="Ürün işlemleri">•••</summary><div>
-          <a href={'/yonetim/urunler/' + u.id}>Ürünü düzenle</a>
-          {skuGecerli(u.sku) && <a href={'/yonetim/finans/etiket?sku=' + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi</a>}
-          <form method="post" class="y-satir-form">
-            <input type="hidden" name="id" value={u.id} />
-            {u.durum === 'yayinda'
-              ? <button class="btn btn--cizgi btn--kucuk" name="eylem" value="gizle" data-onayla={`"${u.kisaAd}" yayından kaldırılsın mı? Sitede görünmez olur, silinmez.`}>Yayından kaldır</button>
-              : <button class="btn btn--kucuk y-yayinla-btn" name="eylem" value="yayinla">Yayına al</button>}
-            <button class="y-link y-link--tehlike" name="eylem" value="sil" data-onayla={`"${u.marka} ${u.kisaAd}" KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.`}>Sil</button>
-          </form>
-          </div></details></div></td>
-      </tr>
-    ); })}
-  </tbody></table></div>
+  {liste.length ? <div class="y-liste-detay ur-calisma-duzeni" data-panel-secim>
+  <div class="y-liste-ana y-tablo-kap y-tablo-kap--kart urun-tablo">
+    <table class="y-tablo ur-tablo">
+      <thead>
+        <tr class="ur-grup-baslik">
+          <th>Ürün ve Kimlik</th>
+          <th colspan="2" class="ur-bolge-fiyat">Vitrin Fiyatı ve Kampanya</th>
+          <th class="ur-bolge-stok">Ortak Depo ve Kanallar</th>
+          <th colspan="2" class="ur-bolge-islem">Yayın ve İşlem</th>
+        </tr>
+        <tr>
+          <th>Ürün</th>
+          <th class="y-sayi ur-bolge-fiyat">Web Fiyatı</th>
+          <th>İndirim Avantajı</th>
+          <th class="ur-bolge-stok">Depo Stoku &amp; Eşleşme</th>
+          <th class="ur-bolge-islem">Durum</th>
+          <th class="y-sayi">İşlem</th>
+        </tr>
+      </thead>
+      <tbody>
+        {liste.map((u) => {
+          const fiyat = k.fiyatBilgisi(u);
+          const tyBagli = Boolean(envanter.kanallar.trendyol.urunler[u.id]?.kod && envanter.kanallar.trendyol.urunler[u.id]?.satista !== false);
+          const hbBagli = Boolean(envanter.kanallar.hepsiburada.urunler[u.id]?.kod && envanter.kanallar.hepsiburada.urunler[u.id]?.satista !== false);
+          const gtin = urunGtin(u);
+          return (
+            <tr id={'u-' + u.id} class:list={{ 'is-inceleme': duzenle === u.id }}>
+              <td class="urun-hucre">
+                <div class="ur-urun">
+                  <a class="ur-foto" href={'/yonetim/urunler/' + u.id} tabindex="-1" aria-hidden="true">
+                    {u.gorseller[0] ? <img src={u.gorseller[0].src} alt="" width="58" height="58" loading="lazy" decoding="async" /> : <PIkon ad="kutu" boyut={22} />}
+                  </a>
+                  <div class="ur-bilgi">
+                    <span class="ur-marka">{u.marka}</span>
+                    <a class="ur-ad" href={'/yonetim/urunler/' + u.id}>{u.kisaAd}</a>
+                    <div class="ur-etiketler">
+                      <span class="ur-etiket">{u.gorseller.length ? (u.sku || 'SKU yok') : '⚠ Fotoğraf eksik'}</span>
+                      {gtin && gtin !== u.sku && <span class="ur-etiket">Barkod: {gtin}</span>}
+                    </div>
+                  </div>
+                </div>
+              </td>
+
+              <td class="y-sayi y-nowrap ur-bolge-fiyat" data-etiket="Fiyat">
+                {fiyatGirilmedi(u) ? (
+                  <span class="y-stok-rozet y-stok-rozet--kritik">Fiyat girilmedi</span>
+                ) : (
+                  <strong class="ur-fiyat">{formatTL(u.fiyat)}</strong>
+                )}
+                {fiyat.onceki && <small class="ur-eski-fiyat"><s>{formatTL(fiyat.onceki)}</s></small>}
+              </td>
+
+              <td data-etiket="İndirim">
+                {fiyat.yuzde ? (
+                  <span class="ur-indirim-rozet">%{fiyat.yuzde} fiyat indirimi</span>
+                ) : null}
+                {fiyat.sepette && (
+                  <small class="y-table-note" style="margin-top:4px">Sepette %{fiyat.sepette.yuzde} · <strong>{formatTL(fiyat.sepette.fiyat)}</strong></small>
+                )}
+                {!fiyat.yuzde && !fiyat.sepette && <span class="muted">—</span>}
+              </td>
+
+              <td data-etiket="Depo stoku" class="y-stok-hucre ur-bolge-stok">
+                <span class={'y-stok-rozet y-stok-rozet--' + stokGorunumu(u)[1]} title={stokYazisi(u)}>{stokGorunumu(u)[0]}</span>
+                <div class="ur-kanal-durum">
+                  {tyBagli && <span class="ur-kanal-etiket is-ty">TY Bağlı</span>}
+                  {hbBagli && <span class="ur-kanal-etiket is-hb">HB Bağlı</span>}
+                  {u.durum === 'yayinda' && <small class="ur-esik-not">Eşik: {esik(u.id)}</small>}
+                </div>
+              </td>
+
+              <td data-etiket="Durum" class="ur-bolge-islem">
+                <span class={'y-yayin-rozet y-yayin-rozet--' + u.durum}>{YAYIN_ADLARI[u.durum]}</span>
+                {u.durum !== 'yayinda' && <small class="y-table-note">Müşteri görmüyor</small>}
+              </td>
+
+              <td class="urun-islem y-sayi">
+                <div class="y-row-actions" style="justify-content:flex-end">
+                  <a class="btn btn--cizgi btn--kucuk" href={url(duzenle === u.id ? undefined : u.id)} data-astro-prefetch="false" data-panel-sec={'urun-hizli-' + u.id} aria-controls={'urun-hizli-' + u.id} aria-expanded={duzenle === u.id ? 'true' : 'false'}>Hızlı düzenle</a>
+                  <details class="y-row-menu y-row-menu--sag"><summary aria-label="Ürün işlemleri">•••</summary><div>
+                    <a href={'/yonetim/urunler/' + u.id}>Ürünü düzenle</a>
+                    <a href={'/yonetim/fiyatlar#f-' + encodeURIComponent(u.id)}>3 kanal fiyat &amp; kâr</a>
+                    {skuGecerli(u.sku) && <a href={'/yonetim/finans/etiket?sku=' + encodeURIComponent(u.sku)} target="_blank" rel="noopener">SKU etiketi</a>}
+                    <form method="post" class="y-satir-form">
+                      <input type="hidden" name="id" value={u.id} />
+                      {u.durum === 'yayinda'
+                        ? <button class="btn btn--cizgi btn--kucuk" name="eylem" value="gizle" data-onayla={`"${u.kisaAd}" yayından kaldırılsın mı? Sitede görünmez olur, silinmez.`}>Yayından kaldır</button>
+                        : <button class="btn btn--kucuk y-yayinla-btn" name="eylem" value="yayinla">Yayına al</button>}
+                      <button class="y-link y-link--tehlike" name="eylem" value="sil" data-onayla={`"${u.marka} ${u.kisaAd}" KALICI olarak silinsin mi? Fotoğrafları da silinir, geri alınamaz.`}>Sil</button>
+                    </form>
+                  </div></details>
+                </div>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
   <aside class="y-kart y-liste-secim y-urun-secim" aria-label="Hızlı ürün düzenleme">
     <div data-panel-bos hidden={acikEditor}>
       <h2><PIkon ad="kalem" /> Hızlı düzenleme</h2>
@@ -388,9 +463,74 @@ const skuGecerli = (sku: string) => /^[ -~]{1,55}$/.test(sku);
   .y-urun-alt-izgara > .y-kart { margin: 0; }
   .y-kaydir-kutu { max-height: 290px; overflow: auto; padding-right: 4px; }
   @media (max-width: 1080px) { .y-urun-alt-izgara { grid-template-columns: 1fr; } }
-  .urun-tablo .urun-hucre { min-width: 220px; white-space: normal; overflow-wrap: break-word; }
+  .urun-tablo { border-radius: 15px; border: 1px solid #e4d9ca; }
+  .ur-tablo { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .ur-tablo th, .ur-tablo td { padding: 16px 15px !important; vertical-align: middle; }
+  .ur-grup-baslik th {
+    padding: 8px 15px !important;
+    font-size: 11.5px !important;
+    font-weight: 800 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.04em !important;
+    color: #6b5d4f !important;
+    background: #f6f1e9 !important;
+    border-bottom: 1px solid #e6dccf;
+    text-align: left;
+  }
+  .ur-grup-baslik .ur-bolge-stok { background: #eaf6ee !important; color: #155e34 !important; }
+  .ur-grup-baslik .ur-bolge-islem { background: #f7f0e2 !important; color: #6e5226 !important; }
+  .ur-bolge-fiyat { border-left: 1.5px solid #ebe2d5; }
+  .ur-bolge-stok { border-left: 2px solid #dce8df; background: #fafdfb; }
+  .ur-bolge-islem { border-left: 1.5px solid #ebe2d5; }
+
+  .ur-urun { display: flex; align-items: center; gap: 14px; min-width: 230px; }
+  .ur-foto {
+    width: 58px;
+    height: 58px;
+    border-radius: 12px;
+    border: 1px solid #e5dacb;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex-shrink: 0;
+    color: #8c7d6e;
+  }
+  .ur-foto img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+  .ur-bilgi { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .ur-marka { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #8a7967; }
+  .ur-ad { font-size: 15.5px; font-weight: 750; color: #241a11; text-decoration: none; line-height: 1.28; }
+  .ur-ad:hover { color: #8c4f19; text-decoration: underline; }
+  .ur-etiketler { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 4px; }
+  .ur-etiket { font-size: 12px; font-weight: 600; color: #5f5244; background: #f4efe8; border-radius: 6px; padding: 2px 7px; }
+
+  .ur-fiyat { display: block; font-size: 16.5px; font-weight: 800; color: #21180f; font-variant-numeric: tabular-nums; }
+  .ur-eski-fiyat { display: block; font-size: 13px; color: #8a7c6d; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .ur-indirim-rozet {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: #fff1ed;
+    border: 1px solid #f5cdc3;
+    color: #a62b17;
+    font-size: 12.5px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+  .ur-kanal-durum { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 6px; }
+  .ur-kanal-etiket { font-size: 11px; font-weight: 750; padding: 2px 6px; border-radius: 5px; }
+  .ur-kanal-etiket.is-ty { background: #fff1e5; color: #b85000; }
+  .ur-kanal-etiket.is-hb { background: #ffefe5; color: #c24100; }
+  .ur-esik-not { font-size: 12px; color: #75685a; }
+
+  .urun-tablo .urun-hucre { min-width: 240px; white-space: normal; overflow-wrap: break-word; }
   .urun-tablo :is(td[data-etiket="İndirim"], td[data-etiket="Depo stoku"], td[data-etiket="Durum"], small.y-table-note) { white-space: normal; overflow-wrap: break-word; }
   .urun-tablo .urun-islem { width: 1%; white-space: nowrap; }
+  @media (max-width: 1024px) {
+    .ur-grup-baslik { display: none; }
+    .ur-bolge-fiyat, .ur-bolge-stok, .ur-bolge-islem { border-left: 0; background: transparent; }
+  }
   .stok-defteri li { display: grid; grid-template-columns: 9.5rem minmax(0, 1fr); justify-content: start; align-items: baseline; text-align: left; }
   .stok-defteri li > span:first-child { color: var(--ink-3); white-space: nowrap; }
   @media (max-width: 600px) { .stok-defteri li { grid-template-columns: minmax(0, 1fr); gap: 2px; } }

@@ -95,6 +95,7 @@ const gorunenLoglar = logFiltre === 'hatalar' ? sonIslemler.filter((s) => s.ton 
   baslik="İş Merkezi"
   altBaslik={`${tarihBaslik} · Şimdi yapılması gereken işler, kanal sağlığı ve otomasyonlar tek ekranda.`}
   aktif="ozet"
+  genis
   basari={Astro.url.searchParams.get('ok')}
   hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}
 >

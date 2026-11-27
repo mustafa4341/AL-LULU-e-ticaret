@@ -509,7 +509,7 @@ export async function tySoruCevapla(soruId: number, metin: string) {
 export type TyEtiketBilgisi = {
   siparisNo: string; paketNo: string; kargoFirma?: string; kargoTakip?: string; gondericiNo?: string; durum?: string;
   alici: { ad?: string; adres?: string; mahalle?: string; ilce?: string; il?: string; postaKodu?: string };
-  kalemler: { ad: string; adet: number; barkod?: string }[];
+  kalemler: { ad: string; adet: number; barkod?: string; stokKodu?: string }[];
 };
 
 /**
@@ -530,7 +530,12 @@ export async function tyEtiketBilgisi(siparisNo: string, paketNo: string): Promi
       adres: yazi(a.fullAddress) ?? ([yazi(a.address1), yazi(a.address2)].filter(Boolean).join(' ') || undefined),
       mahalle: yazi(a.neighborhood), ilce: yazi(a.district), il: yazi(a.city), postaKodu: yazi(a.postalCode),
     },
-    kalemler: dizi(p.lines).map((l) => ({ ad: yazi(l.productName) ?? 'Ürün', adet: tam(l.quantity) ?? 1, barkod: yazi(l.barcode) })),
+    kalemler: dizi(p.lines).map((l) => ({
+      ad: yazi(l.productName) ?? 'Ürün',
+      adet: tam(l.quantity) ?? 1,
+      barkod: yazi(l.barcode),
+      stokKodu: yazi(l.merchantSku),
+    })),
   };
 }
 

@@ -120,8 +120,6 @@ const sayilar = Object.fromEntries(
 
 const seciliDigerSekme = DIGER_SEKMELER.find((d) => d.id === sekme);
 
-/* Eğer `sec` ile istenen sipariş işlem tamamlandığı için mevcut sekmeden çıktıysa (ör. faturası 3/3 olduysa),
-   kullanıcı sonucu sağ panelde görebilsin diye görünür listeye korunarak eklenir. */
 const filtrelenmis = kanalVeAramaUygun.filter((s) => siparisSekmeyeUyar(s, sekme));
 if (secParam && !filtrelenmis.some((x) => x.anahtar === secParam)) {
   const seciliKayit = tumKayitlar.find((x) => x.anahtar === secParam);
@@ -173,16 +171,16 @@ const acikIndeks = secParam
 ---
 
 <Yonetim
-  baslik="Siparişler"
-  altBaslik="Web sitesi, Trendyol ve Hepsiburada siparişlerini tek kuyruktan hazırlayın, faturalandırın ve kargolayın."
+  baslik="Sipariş Kuyruğu ve Operasyon"
+  altBaslik="Web sitesi, Trendyol ve Hepsiburada siparişlerini tek ekrandan hazırlayın, barkodlu kargo fişini yazdırın ve faturasını tamamlayın."
   aktif="siparisler"
   basari={Astro.url.searchParams.get('ok')}
   hatalar={Astro.url.searchParams.get('hata') ? [Astro.url.searchParams.get('hata')!] : []}
   genis
 >
   <div slot="ust-sag" class="y-ust-aksiyonlar">
-    <a href="/yonetim/siparisler/hazirlik" class="btn btn--cizgi"><PIkon ad="barkod" boyut={17} />Toplu Hazırlık</a>
-    <a href="/yonetim/siparisler/kanallar" class="btn btn--cizgi"><PIkon ad="zincir" boyut={17} />Satış Kanalları</a>
+    <a href="/yonetim/siparisler/hazirlik" class="btn btn--cizgi"><PIkon ad="barkod" boyut={17} />Barkodlu Toplu Hazırlık</a>
+    <a href="/yonetim/finans/faturalar" class="btn btn--cizgi"><PIkon ad="fatura" boyut={17} />Faturalar{sayilar.faturasiz > 0 ? ` (${sayilar.faturasiz})` : ''}</a>
     <button type="button" class="btn btn--sepet" data-y-dialog="barkod-oku"><PIkon ad="buyutec" boyut={17} />Barkod / No ile Aç</button>
   </div>
 
@@ -202,6 +200,34 @@ const acikIndeks = secParam
     </form>
   </dialog>
 
+  {/* SAYFA BAŞI ÖZET KARTLARI */}
+  <div class="y-metrics y-metrics--finans">
+    <a class:list={['y-metric', sayilar.islem > 0 ? 'y-metric--turuncu' : 'y-metric--yesil']} href={filtreAdresi('islem')}>
+      <PIkon ad="simsek" />
+      <span>İşlem Bekleyen Sipariş</span>
+      <strong>{sayilar.islem}</strong>
+      <small>{sayilar.hazirlanacak} hazırlanacak · {sayilar.kontrol > 0 ? `${sayilar.kontrol} kontrol bekliyor` : 'sorunlu kayıt yok'}</small>
+    </a>
+    <a class:list={['y-metric', sayilar['kargoya-hazir'] > 0 ? 'y-metric--altin' : '']} href={filtreAdresi('kargoya-hazir')}>
+      <PIkon ad="yazici" />
+      <span>Etiket &amp; Kargoya Hazır</span>
+      <strong>{sayilar['kargoya-hazir']}</strong>
+      <small>Barkodlu kargo fişi basılıp şubeye verilecek</small>
+    </a>
+    <a class:list={['y-metric', sayilar.faturasiz > 0 ? 'y-metric--kirmizi' : 'y-metric--yesil']} href={filtreAdresi('faturasiz')}>
+      <PIkon ad="fatura" />
+      <span>Faturası Bekleyen</span>
+      <strong>{sayilar.faturasiz}</strong>
+      <small>GİB e-Arşiv kesilecek veya kanala iletilecek</small>
+    </a>
+    <a class="y-metric y-metric--mavi" href={filtreAdresi('kargoda')}>
+      <PIkon ad="kargo" />
+      <span>Kargoda / Yolda</span>
+      <strong>{sayilar.kargoda}</strong>
+      <small>Teslim tamamlanan: {sayilar.tamamlandi} sipariş</small>
+    </a>
+  </div>
+
   {!pazaryeri && (
     <p class="y-uyari-satir" role="alert">
       <Ikon ad="kalkan" boyut={16} />
@@ -218,7 +244,7 @@ const acikIndeks = secParam
     </div>
   )}
 
-  {/* 1. SADELEŞTİRİLMİŞ 6 ANA AŞAMA ÇUBUĞU + DİĞER DURUMLAR MENÜSÜ */}
+  {/* 1. 6 ANA AŞAMA ÇUBUĞU + DİĞER GÖRÜNÜMLER */}
   <div class="sm-sekme-cubugu">
     <nav class="y-filtreler sm-ana-sekmeler" aria-label="Sipariş aşamaları">
       {ANA_SEKMELER.map((t) => (
@@ -275,14 +301,22 @@ const acikIndeks = secParam
     <button class="btn btn--cizgi" type="submit">Uygula</button>
   </form>
 
-  {/* 3. BİRLEŞİK SİPARİŞ TABLOSU + SAĞ ÇALIŞMA PANELİ */}
+  {/* 3. FERAH SİPARİŞ TABLOSU + SAĞ ÇALIŞMA PANELİ */}
   {gorunen.length > 0 ? (
     <>
       <div class="y-liste-detay sm-calisma-duzeni" data-panel-secim>
         <div class="y-liste-ana">
-          <div class="y-tablo-kap y-tablo-kap--kart">
+          <div class="y-tablo-kap y-tablo-kap--kart sm-tablo-kap">
             <table class="y-tablo y-siparis-tablo sm-tablo">
               <thead>
+                <tr class="sm-grup-baslik">
+                  <th class="y-sec"></th>
+                  <th>Sipariş ve Kanal</th>
+                  <th class="sm-bolge-urun">Ürün ve Alıcı</th>
+                  <th class="sm-bolge-kar">Satış ve Net Kazanç</th>
+                  <th class="sm-bolge-asama sm-gizle-acikken">Aşama ve Bekleyen İşler</th>
+                  <th class="sm-bolge-islem sm-gizle-acikken">Sıradaki İşlem</th>
+                </tr>
                 <tr>
                   <th class="y-sec">
                     {webSecilebilir && (
@@ -291,13 +325,11 @@ const acikIndeks = secParam
                       </label>
                     )}
                   </th>
-                  <th>Sipariş &amp; Kanal</th>
-                  <th>Ürün &amp; Adet</th>
-                  <th>Müşteri</th>
-                  <th class="y-sayi">Tutar</th>
-                  <th>Sipariş Aşaması</th>
-                  <th>Eksik / Bekleyen İş</th>
-                  <th class="y-sayi">Sıradaki İşlem</th>
+                  <th>Sipariş No &amp; Tarih</th>
+                  <th class="sm-bolge-urun">Sipariş İçeriği &amp; Müşteri</th>
+                  <th class="y-sayi sm-bolge-kar">Tutar &amp; Net Kâr</th>
+                  <th class="sm-bolge-asama sm-gizle-acikken">Durum &amp; Eksikler</th>
+                  <th class="y-sayi sm-bolge-islem sm-gizle-acikken">İşlem</th>
                 </tr>
               </thead>
               <tbody>
@@ -305,6 +337,11 @@ const acikIndeks = secParam
                   const panelId = 'siparis-hizli-' + i;
                   const seciliMi = i === acikIndeks;
                   const secAdresi = `${sayfaBazAdresi}&sec=${encodeURIComponent(s.anahtar)}`;
+                  const tyEtiketHazir = Boolean(
+                    s.py && s.py.kanal === 'trendyol' && s.py.kargoTakip
+                    && !s.entegrasyon.testSiparisi
+                    && !['Cancelled', 'UnSupplied', 'Returned'].includes(s.py.hamDurum),
+                  );
                   return (
                     <tr data-satir={s.kanal === 'web' ? s.no : undefined} class:list={{ 'is-inceleme': seciliMi, 'sm-satir--test': s.entegrasyon.testSiparisi }}>
                       <td class="y-sec">
@@ -316,68 +353,86 @@ const acikIndeks = secParam
                       </td>
 
                       <td data-etiket="Sipariş" class="y-siparis-no">
-                        <div class="sm-no-satir">
+                        <div class="sm-no-ust">
                           <KanalLogo kanal={s.kanal} boyut="kucuk" />
-                          <a class="y-link sm-no-link" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId}>
-                            <strong>{s.no}</strong>
+                          <a class="sm-no-link" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId}>
+                            {s.no}
                           </a>
-                          <button type="button" class="y-kopya" data-kopyala={s.no} title="Numarayı kopyala" aria-label={s.no + ' kopyala'}>
-                            <svg width="12" height="12" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+                          <button type="button" class="y-kopya" data-kopyala={s.no} title="Sipariş numarasını kopyala" aria-label={s.no + ' kopyala'}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
                           </button>
                         </div>
-                        <small class="y-table-note">
-                          {s.kanalAdi} · {yTarih.format(new Date(s.tarih))}
-                          {s.paketNo && s.paketNo !== s.no ? ` · Pkt ${s.paketNo}` : ''}
-                        </small>
+                        <div class="sm-no-alt">
+                          <span>{s.kanalAdi} · {yTarih.format(new Date(s.tarih))}</span>
+                          {s.paketNo && s.paketNo !== s.no && <span class="sm-paket-etiket">Pkt {s.paketNo}</span>}
+                        </div>
+                        {/* Panel açıkken aşama özeti burada kompakt rozet olarak görünür */}
+                        <div class="sm-acikken-durum">
+                          <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
+                          {s.eksikIsler[0] && <span class:list={['y-chip', 'y-chip--' + s.eksikIsler[0].renk]}>{s.eksikIsler[0].etiket}</span>}
+                        </div>
                       </td>
 
-                      <td data-etiket="Ürünler" class="y-urunler">
-                        <a class="y-urun-ozet" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId} title={s.kalemOzeti}>
-                          {s.ilkGorsel ? (
-                            <img src={s.ilkGorsel} alt="" width="36" height="36" loading="lazy" decoding="async" />
-                          ) : (
-                            <span class="y-kalem-gorsel--yok" aria-hidden="true"><Ikon ad="kutu" boyut={17} /></span>
-                          )}
-                          <span>{s.kalemOzeti}</span>
+                      <td data-etiket="Ürün & Müşteri" class="y-urunler sm-bolge-urun">
+                        <a class="sm-urun-kart" href={secAdresi} data-astro-prefetch="false" data-panel-sec={panelId}>
+                          <span class="sm-urun-foto">
+                            {s.ilkGorsel ? (
+                              <img src={s.ilkGorsel} alt="" width="56" height="56" loading="lazy" decoding="async" />
+                            ) : (
+                              <Ikon ad="kutu" boyut={20} />
+                            )}
+                          </span>
+                          <span class="sm-urun-bilgi">
+                            <strong class="sm-urun-ad">{s.kalemOzeti}</strong>
+                            <span class="sm-musteri-satir">
+                              <PIkon ad="kullanici" boyut={13} />
+                              <span>{s.musteriAdi}{s.konum ? ` · ${s.konum}` : ''}</span>
+                            </span>
+                          </span>
                         </a>
                       </td>
 
-                      <td data-etiket="Müşteri">
-                        <span class="sm-musteri">{s.musteriAdi}</span>
-                        {s.konum && <small class="y-table-note">{s.konum}</small>}
-                      </td>
-
-                      <td data-etiket="Tutar" class="y-sayi y-nowrap">
-                        <strong>{kurusTL(s.tutarKurus)}</strong>
-                        {s.kazanc.tahminiNetKar !== undefined && (
-                          <small class:list={['y-table-note', s.kazanc.tahminiNetKar < 0 ? 'y-yazi-kirmizi' : 'y-yazi-yesil']}>
+                      <td data-etiket="Tutar & Net Kâr" class:list={['y-sayi', 'sm-bolge-kar', s.kazanc.tahminiNetKar !== undefined ? (s.kazanc.tahminiNetKar < 0 ? 'is-zarar' : 'is-kar') : '']}>
+                        <strong class="sm-tutar">{kurusTL(s.tutarKurus)}</strong>
+                        {s.kazanc.tahminiNetKar !== undefined ? (
+                          <span class:list={['sm-kar-etiket', s.kazanc.tahminiNetKar < 0 ? 'is-zarar' : 'is-kar']}>
                             Net {s.kazanc.tahminiNetKar < 0 ? '−' : '+'}{kurusTL(Math.abs(s.kazanc.tahminiNetKar))}
-                          </small>
-                        )}
-                      </td>
-
-                      <td data-etiket="Aşama">
-                        <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
-                        {s.entegrasyon.etiket && <small class="y-table-note">{s.entegrasyon.etiket}</small>}
-                      </td>
-
-                      <td data-etiket="Bekleyen İş">
-                        {s.eksikIsler.length > 0 ? (
-                          <div class="durum-ozeti">
-                            {s.eksikIsler.slice(0, 2).map((ek) => (
-                              <span class:list={['y-chip', 'y-chip--' + ek.renk]}>{ek.etiket}</span>
-                            ))}
-                            {s.eksikIsler.length > 2 && <small class="muted">+{s.eksikIsler.length - 2}</small>}
-                          </div>
-                        ) : s.entegrasyon.testSiparisi ? (
-                          <span class="muted">Test kaydı</span>
+                          </span>
                         ) : (
-                          <span class="y-chip y-chip--yesil">Tamamlandı</span>
+                          <small class="sm-not">Maliyet girilmedi</small>
                         )}
                       </td>
 
-                      <td class="y-sayi y-islem">
-                        <div class="y-row-actions">
+                      <td data-etiket="Durum & Eksikler" class="sm-bolge-asama sm-gizle-acikken">
+                        <div class="sm-durum-yigin">
+                          <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
+                          {s.eksikIsler.length > 0 ? (
+                            <div class="durum-ozeti">
+                              {s.eksikIsler.map((ek) => (
+                                <span class:list={['y-chip', 'y-chip--' + ek.renk]}>{ek.etiket}</span>
+                              ))}
+                            </div>
+                          ) : s.entegrasyon.testSiparisi ? (
+                            <span class="muted">Test kaydı</span>
+                          ) : (
+                            <span class="y-chip y-chip--yesil">Tüm adımlar tamam</span>
+                          )}
+                        </div>
+                      </td>
+
+                      <td class="y-sayi y-islem sm-bolge-islem sm-gizle-acikken">
+                        <div class="sm-islem-butonlar">
+                          {tyEtiketHazir && (
+                            <a
+                              class="btn btn--cizgi btn--kucuk sm-etiket-kisa"
+                              href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(s.py!.id)}/etiket?kagit=a4`}
+                              target="_blank"
+                              rel="noopener"
+                              title="Trendyol barkodlu kargo etiketini aç ve yazdır"
+                            >
+                              <PIkon ad="yazici" boyut={15} /> Etiket
+                            </a>
+                          )}
                           <a
                             class:list={[
                               'btn',
@@ -420,7 +475,7 @@ const acikIndeks = secParam
           <div data-panel-bos hidden={acikIndeks >= 0}>
             <h2><PIkon ad="simsek" /> Sipariş Çalışma Paneli</h2>
             <p class="y-help">
-              Listeden ayrılmadan hazırlama, etiket, 3 aşamalı fatura, kargo ve kâr işlemlerini yapmak için satırdaki işlem düğmesine tıklayın.
+              Listeden ayrılmadan hazırlama, barkodlu kargo fişi, 3 aşamalı fatura ve kâr kontrolü için satırdaki işlem düğmesine tıklayın.
             </p>
           </div>
           {gorunen.map((s, i) => (
@@ -502,35 +557,181 @@ const acikIndeks = secParam
   .sm-diger-menu.is-secili > summary { border-color: #c69749; background: #fffaf0; color: var(--y-ink); }
   .sm-diger-uyari { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; background: var(--y-kirmizi); color: #fff; font-size: 11px; }
   .sm-diger-liste { position: absolute; right: 0; top: calc(100% + 6px); min-width: 245px; padding: 6px; border-radius: 12px; background: #fff; border: 1px solid var(--y-border); box-shadow: 0 12px 28px rgba(28, 21, 15, 0.14); z-index: 45; display: grid; gap: 2px; }
-  .sm-diger-liste a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--y-ink); font-size: 13px; font-weight: 550; }
+  .sm-diger-liste a { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border-radius: 8px; text-decoration: none; color: var(--y-ink); font-size: 13.5px; font-weight: 550; }
   .sm-diger-liste a:hover, .sm-diger-liste a[aria-current="page"] { background: var(--y-surface-2); font-weight: 700; }
-  .sm-diger-liste b { font-size: 12px; color: var(--y-muted); font-variant-numeric: tabular-nums; }
-  .sm-toolbar { margin-bottom: 14px; }
-  .y-siparis-no { white-space: normal; overflow-wrap: anywhere; }
-  .sm-no-satir { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .sm-no-link { text-decoration: none; font-variant-numeric: tabular-nums; }
-  .sm-musteri { font-weight: 600; display: block; }
+  .sm-diger-liste b { font-size: 12.5px; color: var(--y-muted); font-variant-numeric: tabular-nums; }
+  .sm-toolbar { margin-bottom: 16px; }
+
+  /* Kârlılık tablosu estetiğinde ferah Sipariş Kuyruğu */
+  .sm-tablo-kap { border-radius: 15px; border: 1px solid #e4d9ca; overflow-x: auto; }
+  .sm-tablo { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .sm-tablo th, .sm-tablo td { padding: 15px 14px; vertical-align: middle; }
+  .sm-grup-baslik th {
+    padding: 8px 14px;
+    font-size: 11.5px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #6b5d4f;
+    background: #f6f1e9;
+    border-bottom: 1px solid #e6dccf;
+    text-align: left;
+  }
+  .sm-grup-baslik .sm-bolge-kar { background: #eaf6ee; color: #155e34; text-align: right; }
+  .sm-grup-baslik .sm-bolge-islem { background: #f7f0e2; color: #6e5226; text-align: right; }
+  .sm-bolge-urun { border-left: 1.5px solid #eee5d9; }
+  .sm-bolge-kar { border-left: 2px solid #dce8df; white-space: nowrap; }
+  .sm-bolge-kar.is-kar { background: #f4fbf6; }
+  .sm-bolge-kar.is-zarar { background: #fef4f3; }
+  .sm-bolge-asama { border-left: 1.5px solid #eee5d9; }
+  .sm-bolge-islem { border-left: 2px solid #ebe2d5; background: #fcfaf5; }
+
+  .sm-tablo tr.is-inceleme td { background: #fdf4e4 !important; }
+  .sm-tablo tr.is-inceleme td:first-child { box-shadow: inset 4px 0 0 #b0844c; }
+
+  /* Sipariş No Hücresi */
+  .sm-no-ust { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .sm-no-link {
+    font-size: 15.5px;
+    font-weight: 800;
+    color: #23190f;
+    text-decoration: none;
+    font-variant-numeric: tabular-nums;
+  }
+  .sm-no-link:hover { color: #8c5820; text-decoration: underline; }
+  .sm-no-alt {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: #6e6050;
+  }
+  .sm-paket-etiket {
+    background: #f3ede4;
+    border-radius: 6px;
+    padding: 1px 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #5b4d3f;
+  }
+  .sm-acikken-durum { display: none; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+
+  /* Ürün & Müşteri Hücresi */
+  .sm-urun-kart {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    text-decoration: none;
+    color: inherit;
+    min-width: 210px;
+  }
+  .sm-urun-foto {
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    border: 1px solid #e5dacb;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: none;
+    color: #8c7d6e;
+  }
+  .sm-urun-foto img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+  .sm-urun-bilgi { display: grid; gap: 4px; min-width: 0; }
+  .sm-urun-ad {
+    font-size: 15px;
+    font-weight: 750;
+    color: #241a11;
+    line-height: 1.32;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .sm-urun-kart:hover .sm-urun-ad { color: #8c5820; text-decoration: underline; }
+  .sm-musteri-satir {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 13px;
+    font-weight: 550;
+    color: #6b5d4e;
+  }
+
+  /* Tutar & Net Kâr Hücresi */
+  .sm-tutar {
+    display: block;
+    font-size: 16.5px;
+    font-weight: 800;
+    color: #21180f;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  .sm-kar-etiket {
+    display: inline-block;
+    margin-top: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 12.5px;
+    font-weight: 750;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  .sm-kar-etiket.is-kar { background: #d9f4e2; color: #0b5e2e; }
+  .sm-kar-etiket.is-zarar { background: #fde2e0; color: #9e1c13; }
+  .sm-not { display: block; font-size: 12px; color: #7a6c5d; margin-top: 3px; }
+
+  /* Durum ve İşlem Hücreleri */
+  .sm-durum-yigin { display: grid; gap: 6px; justify-items: start; }
+  .durum-ozeti { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
+  .sm-islem-butonlar { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; flex-wrap: wrap; }
+  .sm-etiket-kisa { white-space: nowrap !important; }
   .sm-satir--test { opacity: 0.76; }
-  :global(.y-panel) .y-tablo.y-siparis-tablo td small.y-table-note { white-space: normal; overflow-wrap: anywhere; }
-  .durum-ozeti { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
-  .durum-ozeti .y-chip { white-space: normal; }
-  .sayfa-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 10px 0; }
+  .sayfa-alt { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin: 12px 0; }
   .sayfa-alt .y-help { margin: 0; }
   .siparis-kanal-uyari { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 14px; background: var(--y-turuncu-zemin); color: var(--y-turuncu); border-color: #efd5a4; }
   .siparis-kanal-uyari > span { flex: 1 1 280px; }
 
-  @media (min-width: 1100px) {
+  /* Sağ çalışma paneli açıkken sol listeyi ferah tutan Master-Detail düzeni */
+  @media (min-width: 1120px) {
     .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) {
-      grid-template-columns: minmax(0, 1fr) minmax(400px, 42%) !important;
+      grid-template-columns: minmax(420px, 46%) minmax(500px, 54%) !important;
+      gap: 20px;
     }
-    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo :is(th, td):nth-child(4),
-    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo :is(th, td):nth-child(6) {
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-gizle-acikken {
       display: none;
     }
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-acikken-durum {
+      display: flex;
+    }
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-urun-kart {
+      min-width: 0;
+    }
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-urun-foto {
+      width: 46px;
+      height: 46px;
+    }
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo th,
+    .sm-calisma-duzeni:has([data-panel-kayit]:not([hidden])) .sm-tablo td {
+      padding: 13px 11px;
+    }
     .sm-calisma-paneli {
-      max-height: calc(100dvh - var(--y-top-height) - 32px);
+      padding: 22px 24px !important;
+      max-height: calc(100dvh - var(--y-top-height) - 28px);
       overflow-y: auto;
       overscroll-behavior: contain;
+      border-color: #decbb2 !important;
+      box-shadow: 0 12px 34px rgba(42, 28, 19, 0.1) !important;
     }
+  }
+
+  @media (max-width: 1024px) {
+    .sm-grup-baslik { display: none; }
+    .sm-bolge-urun, .sm-bolge-kar, .sm-bolge-asama, .sm-bolge-islem { border-left: 0; background: transparent; }
+    .sm-islem-butonlar { flex-wrap: wrap; justify-content: flex-start; }
   }
 </style>

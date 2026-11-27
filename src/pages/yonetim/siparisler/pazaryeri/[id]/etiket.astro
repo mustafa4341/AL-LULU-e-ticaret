@@ -1,46 +1,89 @@
 ---
 /**
- * Trendyol paketi için yazdırılabilir kargo etiketi (DHL eCommerce, Yurtiçi, Sürat, PTT... "Trendyol öder" dışındaki
- * ortak etiketsiz firmalar). Barkod = Trendyol'un verdiği kargo takip numarası (Code 128). Alıcı adresi Trendyol'dan
- * o an okunur, sitede saklanmaz. ?kagit=etiket → 10×10 cm etiket yazıcısı; varsayılan A4 (normal yazıcı, kesip yapıştır).
- * Trendyol Express ve Aras'ta resmi ortak etiket (ZPL) kullanılır; bu sayfa onlarda etiket basmaz.
+ * Trendyol siparişi için doğrudan yazdırılabilir resmî kargo fişi / barkod etiketi.
+ * Barkod = Trendyol API'den anlık çekilen `cargoTrackingNumber` (Code-128).
+ * Tüm kargo firmalarında (Trendyol Express, DHL eCommerce, Aras, Yurtiçi, Sürat, PTT, Kolay Gelsin vb.)
+ * çalışır; A4 kargo cebi boyutu (varsayılan), 10×15 cm ve 10×10 cm termal etiket boyutlarını destekler.
  */
 import { code128Svg } from '../../../../../lib/barkod';
 import { magazaOku } from '../../../../../lib/depo';
 import { PazaryeriApiHatasi, pazaryeriApiDurumu } from '../../../../../lib/pazaryeriApi';
 import { pazaryeriSiparisiOku } from '../../../../../lib/pazaryeriDepo';
-import { tyEtiketBilgisi, tyOrtakEtiketVar, type TyEtiketBilgisi } from '../../../../../lib/trendyolApi';
+import { tyEtiketBilgisi, type TyEtiketBilgisi } from '../../../../../lib/trendyolApi';
 
 const id = Astro.params.id ?? '';
-const geri = '/yonetim/siparisler/pazaryeri/' + encodeURIComponent(id);
-const etiketKagidi = Astro.url.searchParams.get('kagit') === 'etiket';
+const geri = '/yonetim/siparisler?sec=' + encodeURIComponent(id);
+const kagitParam = Astro.url.searchParams.get('kagit');
+const kagit: 'a4' | '10x15' | 'etiket' = kagitParam === 'etiket' ? 'etiket' : kagitParam === '10x15' ? '10x15' : 'a4';
+const otoYazdir = Astro.url.searchParams.get('yazdir') === '1';
+
 Astro.response.headers.set('Cache-Control', 'no-store');
 Astro.response.headers.set('X-Robots-Tag', 'noindex, nofollow');
 Astro.response.headers.set('Referrer-Policy', 'no-referrer');
 
 let hata: string | undefined;
 let bilgi: TyEtiketBilgisi | undefined;
+let onizlemeNotu: string | undefined;
+
 const kayit = /^trendyol-\d{1,20}$/.test(id) ? await pazaryeriSiparisiOku(id).catch(() => undefined) : undefined;
-if (!kayit?.paketNo) hata = 'Trendyol paketi bulunamadı.';
-else if (!['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) hata = 'Trendyol bağlantısı kurulmamış.';
-else {
-  try { bilgi = await tyEtiketBilgisi(kayit.siparisNo, kayit.paketNo); }
-  catch (e) { hata = e instanceof PazaryeriApiHatasi ? e.message : 'Paket bilgisi Trendyol’dan okunamadı. Biraz sonra tekrar deneyin.'; }
+if (!kayit?.paketNo) {
+  hata = 'Trendyol paketi bulunamadı.';
+} else if (['canli', 'test'].includes(pazaryeriApiDurumu('trendyol'))) {
+  try {
+    bilgi = await tyEtiketBilgisi(kayit.siparisNo, kayit.paketNo);
+  } catch (e) {
+    hata = e instanceof PazaryeriApiHatasi ? e.message : 'Paket bilgisi Trendyol’dan okunamadı. Biraz sonra tekrar deneyin.';
+  }
+} else if (kayit.kargoTakip) {
+  /* Yerel test / geliştirme sunucusunda canlı API anahtarı yoksa veritabanındaki takip numarasıyla önizleme üretir */
+  onizlemeNotu = 'Yerel önizleme modu: Canlı alluluhome.com üzerinde açık adres bilgileri doğrudan Trendyol API’den anlık çekilir.';
+  bilgi = {
+    siparisNo: kayit.siparisNo,
+    paketNo: kayit.paketNo,
+    kargoFirma: kayit.kargoFirma,
+    kargoTakip: kayit.kargoTakip,
+    durum: kayit.hamDurum,
+    alici: {
+      ad: kayit.musteri,
+      adres: [kayit.ilce, kayit.il].filter(Boolean).join(' / ') || 'Teslimat adresi canlı sunucuda Trendyol’dan okunur',
+      ilce: kayit.ilce,
+      il: kayit.il,
+    },
+    kalemler: kayit.kalemler.map((k) => ({ ad: k.ad, adet: k.adet, barkod: k.barkod, stokKodu: k.stokKodu })),
+  };
+} else {
+  hata = 'Trendyol API bağlantısı bu ortamda tanımlı değil; etiketi canlı panel (alluluhome.com) üzerinden yazdırın.';
 }
-if (bilgi && !bilgi.kargoTakip) hata = 'Kargo takip numarası henüz oluşmadı. Önce siparişte “Toplamaya başla”ya basın, birkaç dakika sonra tekrar deneyin.';
-if (bilgi && ['Cancelled', 'UnSupplied', 'UnPacked'].includes(bilgi.durum ?? '')) hata = 'Bu paket iptal edilmiş ya da bölünmüş. Etiket basmayın; siparişin yeni paketini açın.';
-if (bilgi && !hata && tyOrtakEtiketVar(bilgi.kargoFirma)) hata = `Bu paket ${bilgi.kargoFirma} ile gidiyor. Bu firmada Trendyol’un hazır etiketi kullanılır: sipariş sayfasındaki “Kargo etiketini indir” düğmesini kullanın.`;
+
+if (bilgi && !bilgi.kargoTakip) {
+  hata = 'Kargo takip barkodu henüz oluşmadı. Önce siparişte “Toplamaya Başla” düğmesine basın; birkaç saniye içinde barkod oluşur.';
+}
+if (bilgi && ['Cancelled', 'UnSupplied', 'UnPacked'].includes(bilgi.durum ?? '')) {
+  hata = 'Bu paket iptal edilmiş veya bölünmüş durumda. Bu etiketi kullanmayın; siparişin güncel paketini kontrol edin.';
+}
 
 const magaza = bilgi && !hata ? await magazaOku() : undefined;
 const satici = magaza?.site.satici;
-let barkod = '';
-// Barkoda çevrilemeyen takip numarası sayfayı çökertmesin (denetim AUD-023)
-try { barkod = bilgi?.kargoTakip && !hata ? code128Svg(bilgi.kargoTakip, 30) : ''; }
-catch { hata = 'Kargo takip numarası barkoda çevrilemedi. Etiketi Trendyol satıcı panelinden ya da kargo firmasından alın.'; }
-const takipGrup = (bilgi?.kargoTakip ?? '').replace(/(\d{4})(?=\d)/g, '$1 ');
-const tarih = new Date().toLocaleDateString('tr-TR', { timeZone: 'Europe/Istanbul' });
+const gondericiUnvan = satici?.unvan && !satici.unvan.includes('[') ? satici.unvan : (magaza?.site.ad || 'AL LULU HOME');
+let barkodSvg = '';
+try {
+  barkodSvg = bilgi?.kargoTakip && !hata ? code128Svg(bilgi.kargoTakip, kagit === 'etiket' ? 28 : 42) : '';
+} catch {
+  hata = 'Kargo takip numarası barkoda çevrilemedi. Etiketi Trendyol satıcı panelinden alabilirsiniz.';
+}
+
+const kargoTemizAd = (ad?: string) => (ad ?? 'Trendyol Anlaşmalı Kargo').replace(/\s*Marketplace\s*/gi, '').trim();
+const texMi = /trendyol\s*express|^tex\b/i.test(kargoTemizAd(bilgi?.kargoFirma));
 const urunler = bilgi?.kalemler ?? [];
-const buyuk = (s?: string) => s?.toLocaleUpperCase('tr');
+const tamAdres = [
+  bilgi?.alici.adres,
+  bilgi?.alici.mahalle && !bilgi.alici.adres?.toLocaleLowerCase('tr').includes(bilgi.alici.mahalle.toLocaleLowerCase('tr'))
+    ? bilgi.alici.mahalle
+    : undefined,
+].filter(Boolean).join(' · ');
+const sehirSatiri = [bilgi?.alici.ilce, bilgi?.alici.il].filter(Boolean).join('/');
+const sayfaBoyutu = kagit === 'etiket' ? '100mm 100mm' : kagit === '10x15' ? '100mm 150mm' : 'A4 portrait';
+const sayfaKenar = kagit === 'a4' ? '10mm' : '0';
 ---
 <!doctype html>
 <html lang="tr">
@@ -48,86 +91,419 @@ const buyuk = (s?: string) => s?.toLocaleUpperCase('tr');
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="robots" content="noindex, nofollow" />
-  <title>{bilgi ? `Kargo etiketi ${bilgi.siparisNo}` : 'Kargo etiketi'}</title>
+  <title>{bilgi ? `Trendyol Kargo Etiketi · ${bilgi.siparisNo}` : 'Trendyol Kargo Etiketi'}</title>
   <style is:inline set:html={`
-    @page { size: ${etiketKagidi ? '100mm 100mm' : 'A4'}; margin: ${etiketKagidi ? '0' : '10mm'}; }
+    @page { size: ${sayfaBoyutu}; margin: ${sayfaKenar}; }
     :root { color-scheme: light; }
     * { box-sizing: border-box; }
-    body { margin: 0; background: #f3efe6; color: #000; font: 14px/1.3 Arial, Helvetica, sans-serif; }
-    .arac { max-width: 760px; margin: 0 auto; padding: 16px; display: grid; gap: 12px; }
-    .arac h1 { font-size: 20px; margin: 0; }
-    .arac p { margin: 0; }
-    .dugmeler { display: flex; flex-wrap: wrap; gap: 8px; }
-    .dugme { display: inline-flex; align-items: center; min-height: 44px; padding: 0 16px; border-radius: 10px; border: 1px solid #30291f; background: #fff; color: #30291f; font: 600 15px Arial, sans-serif; text-decoration: none; cursor: pointer; }
-    .dugme--ana { background: #30291f; color: #fff; }
-    .dugme[aria-current="page"] { outline: 3px solid #aa812e; }
-    .not { background: #fff7e6; border: 1px solid #e9d5a4; border-radius: 10px; padding: 10px 12px; font-size: 14px; }
-    .hata { background: #fdecec; border-color: #f0b9b9; color: #8a1c1c; }
-    .sayfa { display: flex; justify-content: center; padding: 0 16px 24px; }
-    .etiket { width: 100mm; height: 100mm; background: #fff; border: 1px dashed #777; padding: 3.5mm; display: grid; grid-template-rows: auto auto auto 1fr auto; gap: 1.8mm; overflow: hidden; }
-    .ust { display: flex; justify-content: space-between; align-items: baseline; border-bottom: .5mm solid #000; padding-bottom: 1.2mm; }
-    .ust strong { font-size: 15pt; letter-spacing: .5pt; }
-    .ust span { font-size: 10pt; font-weight: 700; text-align: right; }
-    .barkod svg { display: block; width: 93mm; height: 21mm; }
-    .takip { text-align: center; font: 700 13pt/1 "Courier New", monospace; letter-spacing: 1pt; margin-top: .8mm; }
-    .kutu { border: .3mm solid #000; padding: 1.5mm 2mm; }
-    .kutu b { display: block; font-size: 7pt; letter-spacing: .6pt; }
-    .alici .ad { font-size: 12pt; font-weight: 700; }
-    .alici .adres { font-size: 9.5pt; }
-    .alici .il { font-size: 11.5pt; font-weight: 700; }
-    .gonderici { font-size: 8pt; }
-    .alt { font-size: 7.5pt; border-top: .3mm solid #000; padding-top: 1mm; display: grid; gap: .5mm; }
-    /* Ürün adı kesilmez (ör. "4,5 L" ile "6 L" ayrımı görünsün), en fazla 2 satır; barkod yanında */
-    .alt .urun { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-    .alt .urun small { font-size: 6.5pt; }
+    body {
+      margin: 0;
+      background: #f4efe7;
+      color: #111;
+      font: 13px/1.38 Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    /* Üst ekran araç çubuğu (yazdırırken gizlenir) */
+    .arac {
+      max-width: 820px;
+      margin: 0 auto;
+      padding: 18px 20px 14px;
+      display: grid;
+      gap: 12px;
+    }
+    .arac-ust {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .arac h1 { font-size: 20px; font-weight: 800; margin: 0; color: #21180f; }
+    .dugmeler { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .dugme {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 42px;
+      padding: 0 16px;
+      border-radius: 10px;
+      border: 1px solid #d5c7b4;
+      background: #fff;
+      color: #261c12;
+      font: 650 14px Inter, Arial, sans-serif;
+      text-decoration: none;
+      cursor: pointer;
+    }
+    .dugme:hover { background: #faf5ed; }
+    .dugme--ana { background: #3b281b; border-color: #3b281b; color: #fff; font-weight: 700; }
+    .dugme--ana:hover { background: #523826; }
+    .dugme[aria-current="page"] { border-color: #b0844c; background: #fff8ec; color: #6e4919; font-weight: 750; box-shadow: 0 0 0 2px rgba(176,132,76,.22); }
+    .bilgi-not {
+      background: #fffaf0;
+      border: 1px solid #ead5b0;
+      border-radius: 11px;
+      padding: 10px 14px;
+      font-size: 13.5px;
+      color: #4a3a28;
+    }
+    .hata-kutu {
+      background: #fef2f2;
+      border: 1px solid #f2b8b5;
+      color: #991b1b;
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 14.5px;
+      font-weight: 600;
+    }
+
+    /* Etiket sahnesi */
+    .sahne {
+      display: flex;
+      justify-content: center;
+      padding: 6px 20px 36px;
+    }
+
+    /* Standart A4 Kargo Fişi (Kargo cebine tam oturan yarım A4 yatay düzen — Trendyol şablonu) */
+    .fis {
+      background: #fff;
+      color: #000;
+      border: 1px dashed #8a8a8a;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
+    }
+    .fis--a4 {
+      width: 190mm;
+      padding: 6.5mm 7mm;
+      display: grid;
+      gap: 4mm;
+    }
+    .fis--10x15 {
+      width: 100mm;
+      min-height: 148mm;
+      padding: 4mm;
+      display: grid;
+      gap: 3mm;
+      align-content: start;
+    }
+    .fis--etiket {
+      width: 100mm;
+      height: 100mm;
+      padding: 3mm;
+      display: grid;
+      gap: 2mm;
+      align-content: start;
+      overflow: hidden;
+    }
+
+    /* 1) Üst kargo dikkat şeridi */
+    .dikkat-kutu {
+      display: flex;
+      align-items: center;
+      gap: 2.5mm;
+      border: 0.35mm solid #222;
+      border-radius: 1.4mm;
+      padding: 2mm 3mm;
+      font-size: 8.8pt;
+      font-weight: 700;
+      line-height: 1.25;
+    }
+    .dikkat-kutu svg { flex: none; width: 4.5mm; height: 4.5mm; }
+
+    /* 2) Marka & Kargo Firması Başlığı */
+    .marka-satir {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 4mm;
+      padding: 0.5mm 0 1mm;
+    }
+    .ty-logo {
+      position: relative;
+      display: inline-block;
+      font: 800 26pt/0.95 Inter, Arial, Helvetica, sans-serif;
+      letter-spacing: -0.8pt;
+      color: #000;
+      padding-top: 2.5mm;
+    }
+    .ty-logo__com {
+      position: absolute;
+      top: 0;
+      right: 0;
+      background: #111;
+      color: #fff;
+      font: 700 7.5pt/1 Inter, Arial, sans-serif;
+      letter-spacing: 0;
+      padding: 0.7mm 1.8mm;
+      border-radius: 2mm;
+    }
+    .kargo-marka {
+      text-align: right;
+      font-weight: 800;
+      font-size: 13pt;
+      line-height: 1.05;
+      color: #111;
+    }
+    .kargo-marka small {
+      display: block;
+      font-weight: 500;
+      font-size: 9.5pt;
+      letter-spacing: 0.2pt;
+    }
+
+    /* 3) Yan yana Alıcı Bilgileri ve Kargo Barkodu kutuları */
+    .orta-izgara {
+      display: grid;
+      grid-template-columns: 1.08fr 1fr;
+      gap: 3.5mm;
+      align-items: stretch;
+    }
+    .fis--10x15 .orta-izgara,
+    .fis--etiket .orta-izgara {
+      grid-template-columns: 1fr;
+      gap: 2mm;
+    }
+
+    .kutu {
+      border: 0.35mm solid #222;
+      border-radius: 1.6mm;
+      padding: 3mm 3.5mm;
+    }
+    .kutu-baslik {
+      font-size: 9.5pt;
+      font-weight: 800;
+      margin: 0 0 2.2mm;
+      color: #000;
+    }
+
+    .alici-tablo {
+      display: grid;
+      grid-template-columns: 23mm minmax(0, 1fr);
+      gap: 1.4mm 2mm;
+      font-size: 9pt;
+      line-height: 1.32;
+    }
+    .alici-tablo dt {
+      font-weight: 700;
+      color: #111;
+    }
+    .alici-tablo dd {
+      margin: 0;
+      color: #000;
+      overflow-wrap: anywhere;
+    }
+    .alici-il {
+      display: block;
+      margin-top: 1mm;
+      font-weight: 800;
+      font-size: 9.8pt;
+    }
+
+    .barkod-kutu {
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .barkod-sarici {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 1.5mm 1mm 0.5mm;
+      flex: 1;
+    }
+    .barkod-sarici svg {
+      display: block;
+      width: 100%;
+      max-width: 82mm;
+      height: 26mm;
+    }
+    .barkod-no {
+      margin-top: 1.5mm;
+      text-align: center;
+      font: 800 12pt/1.1 Inter, "Courier New", monospace;
+      letter-spacing: 0.8pt;
+      color: #000;
+    }
+
+    /* 4) Alt Ürün ve Gönderici Bilgileri */
+    .urun-kutu {
+      padding: 2.6mm 3.5mm;
+    }
+    .urun-ust {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 3mm;
+      margin-bottom: 1.6mm;
+    }
+    .gonderici-not {
+      font-size: 8pt;
+      color: #222;
+    }
+    .urun-liste {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 8.6pt;
+    }
+    .urun-liste th {
+      text-align: left;
+      font-size: 7.8pt;
+      font-weight: 700;
+      border-bottom: 0.25mm solid #555;
+      padding: 0 1.5mm 1mm 0;
+    }
+    .urun-liste td {
+      padding: 1.2mm 1.5mm 0.8mm 0;
+      vertical-align: top;
+      border-bottom: 0.2mm solid #ddd;
+    }
+    .urun-liste tr:last-child td { border-bottom: 0; }
+    .urun-adet { text-align: right; white-space: nowrap; font-weight: 800; }
+
+    /* 10x10 kompakt uyarlamalar */
+    .fis--etiket .dikkat-kutu { font-size: 6.8pt; padding: 1.2mm 2mm; }
+    .fis--etiket .ty-logo { font-size: 17pt; padding-top: 1.8mm; }
+    .fis--etiket .ty-logo__com { font-size: 5.8pt; padding: 0.4mm 1.2mm; }
+    .fis--etiket .kargo-marka { font-size: 9.5pt; }
+    .fis--etiket .kutu { padding: 1.8mm 2.2mm; }
+    .fis--etiket .kutu-baslik { font-size: 7.8pt; margin-bottom: 1mm; }
+    .fis--etiket .barkod-sarici svg { height: 16mm; max-width: 88mm; }
+    .fis--etiket .barkod-no { font-size: 9.5pt; margin-top: 0.8mm; }
+    .fis--etiket .alici-tablo { font-size: 7.4pt; grid-template-columns: 18mm minmax(0, 1fr); gap: 0.6mm 1.5mm; }
+    .fis--etiket .alici-il { font-size: 8pt; margin-top: 0.4mm; }
+    .fis--etiket .urun-kutu { padding: 1.5mm 2.2mm; }
+    .fis--etiket .urun-liste { font-size: 7pt; }
+
+    .fis--10x15 .ty-logo { font-size: 21pt; }
+    .fis--10x15 .barkod-sarici svg { height: 22mm; max-width: 88mm; }
+
     @media print {
       body { background: #fff; }
-      .arac { display: none; }
-      .sayfa { padding: 0; justify-content: flex-start; }
-      .etiket { border: ${etiketKagidi ? '0' : '.2mm dashed #999'}; }
+      .arac { display: none !important; }
+      .sahne { padding: 0; justify-content: flex-start; }
+      .fis { box-shadow: none; border: ${kagit === 'a4' ? '0.25mm dashed #888' : '0'}; }
     }
   `} />
 </head>
 <body>
   <div class="arac">
-    <h1>Kargo etiketi</h1>
-    {hata ? <p class="not hata" role="alert">{hata}</p> : <>
-      <p class="not">Etiketi yazdırıp paketin üstüne yapıştırın; kargo görevlisi barkodu okutur. Normal yazıcıda A4 kâğıda basılır: kesik çizgiden kesip bantlayın. Etiket yazıcınız varsa (10×10 cm) “Etiket yazıcısı”nı seçin.</p>
-      <div class="dugmeler">
-        <button class="dugme dugme--ana" type="button" data-yazdir>Yazdır</button>
-        <a class="dugme" href="?kagit=a4" aria-current={etiketKagidi ? undefined : 'page'}>Normal yazıcı (A4)</a>
-        <a class="dugme" href="?kagit=etiket" aria-current={etiketKagidi ? 'page' : undefined}>Etiket yazıcısı (10×10 cm)</a>
-      </div>
-    </>}
-    <p><a class="dugme" href={geri}>← Siparişe dön</a></p>
+    <div class="arac-ust">
+      <h1>Trendyol Kargo Barkodu ve Etiketi</h1>
+      <a class="dugme" href={geri}>← Siparişlere Dön</a>
+    </div>
+
+    {hata ? (
+      <div class="hata-kutu" role="alert">{hata}</div>
+    ) : (
+      <>
+        {onizlemeNotu && <div class="bilgi-not">{onizlemeNotu}</div>}
+        <div class="bilgi-not">
+          Bu kargo fişi doğrudan Trendyol’dan çekilen <strong>{bilgi?.kargoTakip}</strong> kargo barkoduyla oluşturulmuştur. Yazdırıp kargo poşetinin cebine koymanız veya koliye yapıştırmanız yeterlidir; şube görevlisi barkodu okuttuğunda sipariş otomatik <strong>“Kargoda”</strong> durumuna geçer.
+        </div>
+        <div class="dugmeler">
+          <button class="dugme dugme--ana" type="button" data-yazdir>🖨 Şimdi Yazdır</button>
+          <a class="dugme" href="?kagit=a4" aria-current={kagit === 'a4' ? 'page' : undefined}>Standart Kargo Fişi (A4)</a>
+          <a class="dugme" href="?kagit=10x15" aria-current={kagit === '10x15' ? 'page' : undefined}>Termal Etiket (10×15 cm)</a>
+          <a class="dugme" href="?kagit=etiket" aria-current={kagit === 'etiket' ? 'page' : undefined}>Kare Etiket (10×10 cm)</a>
+        </div>
+      </>
+    )}
   </div>
 
-  {bilgi && !hata && <main class="sayfa">
-    <section class="etiket" aria-label="Kargo etiketi">
-      <div class="ust"><strong>TRENDYOL</strong><span>{bilgi.kargoFirma ?? 'Kargo'}</span></div>
-      <div class="barkod">
-        <Fragment set:html={barkod} />
-        <div class="takip">{takipGrup}</div>
-      </div>
-      <div class="kutu alici">
-        <b>ALICI</b>
-        <div class="ad">{bilgi.alici.ad ?? kayit?.musteri ?? '—'}</div>
-        <div class="adres">{[bilgi.alici.adres, bilgi.alici.mahalle && !bilgi.alici.adres?.includes(bilgi.alici.mahalle) ? bilgi.alici.mahalle : undefined].filter(Boolean).join(' ')}</div>
-        <div class="il">{[buyuk(bilgi.alici.ilce), buyuk(bilgi.alici.il)].filter(Boolean).join(' / ')}{bilgi.alici.postaKodu && ` · ${bilgi.alici.postaKodu}`}</div>
-      </div>
-      <div class="kutu gonderici">
-        <b>GÖNDERİCİ</b>
-        {satici?.unvan || 'Al Lulu Home'}{satici?.adres && ` · ${satici.adres}`}{magaza?.site.telefonGorunen && ` · ${magaza.site.telefonGorunen}`}
-      </div>
-      <div class="alt">
-        <div>Sipariş <strong>{bilgi.siparisNo}</strong> · Paket {bilgi.paketNo}{bilgi.gondericiNo && bilgi.gondericiNo !== bilgi.kargoTakip && ` · Gönderi no ${bilgi.gondericiNo}`} · {tarih}</div>
-        {urunler.slice(0, 4).map((u) => <div class="urun"><strong>{u.adet} ×</strong> {u.ad}{u.barkod && <small> · {u.barkod}</small>}</div>)}
-        {urunler.length > 4 && <div><strong>+ {urunler.length - 4} ürün daha</strong> — tam liste sipariş sayfasında</div>}
-      </div>
-    </section>
-  </main>}
-  <script>
+  {bilgi && !hata && (
+    <main class="sahne">
+      <section class:list={['fis', `fis--${kagit}`]} aria-label="Trendyol kargo etiketi">
+        <div class="dikkat-kutu">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+            <path d="M12 3L2 20h20L12 3z" stroke-linejoin="round" />
+            <path d="M12 9v5M12 17.5h.01" stroke-linecap="round" />
+          </svg>
+          <span>Kargo şirketinin dikkatine, bu bir trendyol.com gönderisidir. Trendyol anlaşmasına uygun işlem yapabilirsiniz.</span>
+        </div>
+
+        <div class="marka-satir">
+          <div class="ty-logo" aria-label="trendyol.com">
+            trendyol<span class="ty-logo__com">.com</span>
+          </div>
+          <div class="kargo-marka">
+            {texMi ? (
+              <>trendyol<small>express</small></>
+            ) : (
+              <>{kargoTemizAd(bilgi.kargoFirma)}<small>Anlaşmalı Gönderi</small></>
+            )}
+          </div>
+        </div>
+
+        <div class="orta-izgara">
+          {/* Kargo Barkodu (10x10 / 10x15 dikey modda üstte görünmesi için mobilde/termalde net okunur) */}
+          <div class="kutu alici-kutu">
+            <h2 class="kutu-baslik">Alıcı Bilgileri</h2>
+            <dl class="alici-tablo">
+              <dt>Sipariş No</dt>
+              <dd>: {bilgi.siparisNo}</dd>
+
+              <dt>Ad Soyad</dt>
+              <dd>: <strong>{(bilgi.alici.ad ?? kayit?.musteri ?? '—').toLocaleUpperCase('tr')}</strong></dd>
+
+              <dt>Adres</dt>
+              <dd>
+                : {tamAdres || '—'}
+                {sehirSatiri && <span class="alici-il">{sehirSatiri}{bilgi.alici.postaKodu ? ` · ${bilgi.alici.postaKodu}` : ''}</span>}
+              </dd>
+
+              <dt>Paket No</dt>
+              <dd>: {bilgi.paketNo}</dd>
+            </dl>
+          </div>
+
+          <div class="kutu barkod-kutu">
+            <h2 class="kutu-baslik">Kargo Barkodu</h2>
+            <div class="barkod-sarici">
+              <Fragment set:html={barkodSvg} />
+              <div class="barkod-no">{bilgi.kargoTakip}</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="kutu urun-kutu">
+          <div class="urun-ust">
+            <h2 class="kutu-baslik" style="margin:0">Ürün Bilgileri</h2>
+            <span class="gonderici-not">Gönderici: <strong>{gondericiUnvan}</strong></span>
+          </div>
+          <table class="urun-liste">
+            <thead>
+              <tr>
+                <th>Ürün Adı</th>
+                <th>Barkod / Stok Kodu</th>
+                <th style="text-align:right">Adet</th>
+              </tr>
+            </thead>
+            <tbody>
+              {urunler.slice(0, kagit === 'etiket' ? 2 : 6).map((u) => (
+                <tr>
+                  <td>{u.ad}</td>
+                  <td>{[u.barkod, u.stokKodu && u.stokKodu !== u.barkod ? u.stokKodu : undefined].filter(Boolean).join(' · ') || '—'}</td>
+                  <td class="urun-adet">{u.adet} Adet</td>
+                </tr>
+              ))}
+              {urunler.length > (kagit === 'etiket' ? 2 : 6) && (
+                <tr>
+                  <td colspan="3"><strong>+ {urunler.length - (kagit === 'etiket' ? 2 : 6)} kalem daha</strong> (paket toplamı: {urunler.reduce((t, x) => t + x.adet, 0)} adet)</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  )}
+
+  <script is:inline define:vars={{ otoYazdir }}>
     document.querySelector('[data-yazdir]')?.addEventListener('click', () => window.print());
+    if (otoYazdir) {
+      window.addEventListener('load', () => setTimeout(() => window.print(), 250));
+    }
   </script>
 </body>
 </html>

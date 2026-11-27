@@ -86,7 +86,7 @@ const gecmis = [...s.gecmis].reverse().map((g) => ({
 }));
 /* GA4 "purchase": yalnızca ödemesi gerçekten onaylanmış, test olmayan siparişte; iptal/iade edilmişse gönderilmez.
    Aynı sipariş numarası bu cihazda bir kez gönderilir (GA4 de transaction_id ile tekrarı ayıklar). */
-const gaSatinAlma = odendi && !s.paytr?.test && !iade
+const gaSatinAlma = odendi && !iade && (!s.paytr || (!s.paytr.test && s.paytr.sonuc === 'odendi'))
   ? JSON.stringify({
       transaction_id: s.no, currency: 'TRY', value: s.kalemler.reduce((toplam, x) => toplam + x.toplam, 0), shipping: s.kargo,
       items: s.kalemler.map((x) => ({

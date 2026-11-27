@@ -1,13 +1,8 @@
 ---
 /**
  * Siparişler ekranındaki sağ çalışma paneli (Slide-over Workspace).
- * Mağaza sahibinin sipariş listesinden ayrılmadan:
- *  - Hazırlama / Toplamaya Başla / Paketle
- *  - Kargo etiketi, barkodla paketleme, takip numarası ve iç belgeler
- *  - 3 aşamalı e-Arşiv fatura (1. GİB Kopyala -> 2. Kaydet -> 3. İlet)
- *  - Eşleşmeyen ürün bağlama, stok açığı tamamlama, iade depo kontrolü
- *  - Sipariş bazlı gerçek kazanç / hakediş / mutabakat ve zaman çizelgesi
- * işlemlerini yürütmesini sağlar. Tüm mutasyonlar mevcut tek-sahip POST uçlarına `geri` ile döner.
+ * Ferah kart yapısı, tek satır kırılmayan "Kopyala" düğmeleri, tüm Trendyol kargoları için
+ * birebir barkodlu kargo fişi yazdırma ve 3 aşamalı GİB e-Arşiv fatura akışı içerir.
  */
 import Ikon from '../Ikon.astro';
 import KanalLogo from './KanalLogo.astro';
@@ -76,6 +71,10 @@ const tyIslemAcik = Boolean(
   py && py.kanal === 'trendyol' && py.paketNo && !s.entegrasyon.testSiparisi && tyBagli
   && !['Cancelled', 'UnSupplied', 'Returned'].includes(py.hamDurum),
 );
+const tyEtiketBasilir = Boolean(
+  py && py.kanal === 'trendyol' && py.kargoTakip && !s.entegrasyon.testSiparisi
+  && !['Cancelled', 'UnSupplied', 'Returned'].includes(py.hamDurum),
+);
 const hbIslemAcik = Boolean(
   py && py.kanal === 'hepsiburada' && !s.entegrasyon.testSiparisi && hbBagli
   && !['iptal', 'iade', 'teslim-edilemedi', 'onay-bekliyor'].includes(py.durum),
@@ -114,22 +113,22 @@ const varsayilanSekme = s.birincilIslem.sekme;
 ---
 
 <section id={panelId} class="sp-panel" data-panel-kayit data-siparis-anahtar={s.anahtar} hidden={!acik}>
-  {/* 1. ÜST ÖZET VE GEÇİŞ ÇUBUĞU */}
+  {/* 1. FERAH ÜST KİMLİK VE GEÇİŞ ÇUBUĞU */}
   <header class="sp-ust">
     <div class="sp-ust__kimlik">
-      <KanalLogo kanal={s.kanal} boyut="kucuk" />
-      <div>
+      <KanalLogo kanal={s.kanal} boyut="orta" />
+      <div class="sp-ust__metin">
         <div class="sp-ust__no-satir">
           <h2>{s.no}</h2>
-          <button type="button" class="y-kopya" data-kopyala={s.no} title="Sipariş numarasını kopyala" aria-label={s.no + ' kopyala'}>
-            <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9h10v10H9zM5 15V5h10" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+          <button type="button" class="y-kopya" data-kopyala={s.no} title="Sipariş numarasını kopyala">
+            Kopyala
           </button>
           {s.entegrasyon.etiket && <span class="y-chip y-chip--gri">{s.entegrasyon.etiket}</span>}
         </div>
-        <small class="muted">
+        <p class="sp-ust__alt">
           {s.kanalAdi} · {yTarih.format(new Date(s.tarih))}
           {s.paketNo && s.paketNo !== s.no ? ` · Paket ${s.paketNo}` : ''}
-        </small>
+        </p>
       </div>
     </div>
 
@@ -144,15 +143,15 @@ const varsayilanSekme = s.birincilIslem.sekme;
         </button>
       </div>
       <a class="y-icon-button" href={s.detayHref} title="Tam sayfa sipariş detayını aç" aria-label={s.no + ' tam detay sayfası'}>
-        <PIkon ad="dis-baglanti" boyut={16} />
+        <PIkon ad="dis-baglanti" boyut={17} />
       </a>
       <a href={kapatAdresi} class="y-icon-button" data-astro-prefetch="false" data-panel-kapat title="Paneli kapat" aria-label="Paneli kapat">
-        <Ikon ad="kapat" boyut={17} />
+        <Ikon ad="kapat" boyut={18} />
       </a>
     </div>
   </header>
 
-  {/* 2. TEK BAKIŞTA AŞAMA ÇİZGİSİ VE TUTAR */}
+  {/* 2. DURUM ROZETLERİ, TUTAR VE NET KAZANÇ ÖZETİ */}
   <div class="sp-ozet-serit">
     <div class="sp-ozet-serit__sol">
       <span class:list={['y-chip', 'y-chip--' + s.asamaRenk]}>{s.asamaEtiketi}</span>
@@ -161,22 +160,30 @@ const varsayilanSekme = s.birincilIslem.sekme;
         <span class:list={['y-chip', 'y-chip--' + s.stok.renk]}>{s.stok.etiket}</span>
       )}
     </div>
-    <strong class="sp-tutar">{kurusTL(s.tutarKurus)}</strong>
+    <div class="sp-ozet-serit__sag">
+      <strong class="sp-tutar">{kurusTL(s.tutarKurus)}</strong>
+      {s.kazanc.tahminiNetKar !== undefined && (
+        <span class:list={['sp-net-rozet', s.kazanc.tahminiNetKar < 0 ? 'is-zarar' : 'is-kar']}>
+          Net {s.kazanc.tahminiNetKar < 0 ? '−' : '+'}{kurusTL(Math.abs(s.kazanc.tahminiNetKar))}
+        </span>
+      )}
+    </div>
   </div>
 
+  {/* AŞAMA ADIM ÇUBUĞU */}
   <ol class="sp-adimlar" aria-label="Sipariş aşamaları">
     {s.adimlar.map((a) => (
       <li class:list={['sp-adim', 'is-' + a.durum]}>
-        <span class="sp-adim__nokta" aria-hidden="true"></span>
+        <span class="sp-adim__nokta" aria-hidden="true">{a.durum === 'tamam' ? '✓' : ''}</span>
         <span class="sp-adim__ad">{a.ad}</span>
       </li>
     ))}
   </ol>
 
-  {/* 3. UYARILAR VE TEK BİRİNCİL EYLEM KUTUSU */}
+  {/* 3. UYARILAR VE SIRADAKİ İŞLEM KUTUSU */}
   {s.uyarilar.length > 0 && (
     <div class="sp-uyari-kutusu" role="status">
-      <PIkon ad="uyari" boyut={17} />
+      <PIkon ad="uyari" boyut={18} />
       <ul>{s.uyarilar.map((u) => <li>{u}</li>)}</ul>
     </div>
   )}
@@ -188,8 +195,18 @@ const varsayilanSekme = s.birincilIslem.sekme;
       <small>{s.birincilIslem.aciklama}</small>
     </div>
 
-    {/* Doğrudan tek tıkla çalışabilen birincil aksiyonlar (ek girdi istemeyenler) hemen burada; girdi isteyenler altındaki ilgili karta odaklanır */}
     <div class="sp-birincil__aksiyon">
+      {tyEtiketBasilir && s.asama === 'kargoya-hazir' && (
+        <a
+          class="btn btn--sepet"
+          href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py!.id)}/etiket?kagit=a4`}
+          target="_blank"
+          rel="noopener"
+        >
+          <PIkon ad="yazici" boyut={17} /> Kargo Etiketini Yazdır
+        </a>
+      )}
+
       {s.birincilIslem.kod === 'ty-toplama' && tyIslemAcik && !stokEngeli ? (
         <form method="post" action={s.detayHref} data-tek-gonder>
           <input type="hidden" name="geri" value={geriAdresi} />
@@ -215,11 +232,11 @@ const varsayilanSekme = s.birincilIslem.sekme;
       ) : s.birincilIslem.odak ? (
         <button
           type="button"
-          class="btn btn--sepet"
+          class:list={['btn', tyEtiketBasilir && s.asama === 'kargoya-hazir' ? 'btn--cizgi' : 'btn--sepet']}
           data-sp-odak={`${panelId}-${s.birincilIslem.odak}`}
           data-sp-hedef-sekme={s.birincilIslem.sekme}
         >
-          {s.birincilIslem.etiket} ↓
+          {tyEtiketBasilir && s.asama === 'kargoya-hazir' ? 'Fatura Bölümüne İn ↓' : `${s.birincilIslem.etiket} ↓`}
         </button>
       ) : (
         <a class="btn btn--cizgi" href={s.detayHref}>Tam Detayı Aç →</a>
@@ -227,16 +244,16 @@ const varsayilanSekme = s.birincilIslem.sekme;
     </div>
   </div>
 
-  {/* 4. İÇERİK SEKMELERİ: İŞLEMLER | KAZANÇ | GEÇMİŞ */}
+  {/* 4. İÇERİK SEKMELERİ: İŞLEMLER | KAZANÇ | MÜŞTERİ & GEÇMİŞ */}
   <div class="sp-sekmeler" role="tablist" aria-label="Sipariş çalışma bölümleri">
     <button type="button" role="tab" aria-selected={varsayilanSekme === 'islemler' ? 'true' : 'false'} data-sp-sekme="islemler">
-      <PIkon ad="kutu" boyut={15} /> İşlemler
+      <PIkon ad="kutu" boyut={16} /> İşlemler
     </button>
     <button type="button" role="tab" aria-selected={varsayilanSekme === 'kazanc' ? 'true' : 'false'} data-sp-sekme="kazanc">
-      <PIkon ad="para" boyut={15} /> Kazanç
+      <PIkon ad="para" boyut={16} /> Kazanç &amp; Kâr
     </button>
     <button type="button" role="tab" aria-selected={varsayilanSekme === 'gecmis' ? 'true' : 'false'} data-sp-sekme="gecmis">
-      <PIkon ad="gecmis" boyut={15} /> Müşteri &amp; Geçmiş
+      <PIkon ad="gecmis" boyut={16} /> Müşteri &amp; Geçmiş
     </button>
   </div>
 
@@ -245,7 +262,7 @@ const varsayilanSekme = s.birincilIslem.sekme;
     {/* A) ÜRÜN LİSTESİ + EŞLEŞTİRME / STOK / İADE KONTROLÜ */}
     <div class="sp-kart" id={`${panelId}-eslestir`}>
       <div class="sp-kart__bas">
-        <h3><PIkon ad="kutu" boyut={15} /> Sipariş Kalemleri ({s.toplamAdet} adet)</h3>
+        <h3><PIkon ad="kutu" boyut={17} /> Sipariş Kalemleri ({s.toplamAdet} adet)</h3>
         {s.paketleHref && (
           <a class="btn btn--cizgi btn--kucuk" href={s.paketleHref}>
             <PIkon ad="barkod" boyut={15} /> Barkodla Paketle
@@ -257,23 +274,24 @@ const varsayilanSekme = s.birincilIslem.sekme;
         {s.kalemler.map((k) => (
           <li class="sp-kalem">
             <div class="sp-kalem__satir">
-              {k.gorsel ? (
-                <img src={k.gorsel} alt="" width="40" height="40" loading="lazy" />
-              ) : (
-                <span class="y-kalem-gorsel--yok"><Ikon ad="kutu" boyut={16} /></span>
-              )}
+              <span class="sp-kalem__foto">
+                {k.gorsel ? (
+                  <img src={k.gorsel} alt="" width="56" height="56" loading="lazy" />
+                ) : (
+                  <Ikon ad="kutu" boyut={20} />
+                )}
+              </span>
               <div class="sp-kalem__bilgi">
                 <strong>{k.ad}</strong>
-                <small>
-                  {k.adet} adet × {kurusTL(k.birimKurus)}
-                  {k.sku ? ` · ${k.sku}` : ''}
-                  {k.barkod && k.barkod !== k.sku ? ` · Barkod: ${k.barkod}` : ''}
-                </small>
+                <div class="sp-kalem__alt">
+                  <span>{k.adet} adet × {kurusTL(k.birimKurus)}</span>
+                  {k.sku && <span class="sp-mini-rozet">SKU: {k.sku}</span>}
+                  {k.barkod && k.barkod !== k.sku && <span class="sp-mini-rozet">Barkod: {k.barkod}</span>}
+                </div>
               </div>
               <b class="sp-kalem__tutar">{kurusTL(k.toplamKurus)}</b>
             </div>
 
-            {/* Pazaryeri eşleşmeyen ürün bağlama formu */}
             {py && k.eslesmeyen && (
               <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
                 <input type="hidden" name="geri" value={geriAdresi} />
@@ -291,7 +309,6 @@ const varsayilanSekme = s.birincilIslem.sekme;
               </form>
             )}
 
-            {/* Pazaryeri eksik stok tamamlama */}
             {py && k.eksikStok > 0 && (
               <form method="post" action={s.detayHref} class="sp-alt-form sp-alt-form--uyari" data-tek-gonder>
                 <input type="hidden" name="geri" value={geriAdresi} />
@@ -302,7 +319,6 @@ const varsayilanSekme = s.birincilIslem.sekme;
               </form>
             )}
 
-            {/* Pazaryeri iade depo kontrolü */}
             {py && k.iadeBekliyor && (
               <form method="post" action={s.detayHref} class="sp-alt-form" id={`${panelId}-iade`} data-tek-gonder>
                 <input type="hidden" name="geri" value={geriAdresi} />
@@ -326,10 +342,10 @@ const varsayilanSekme = s.birincilIslem.sekme;
       </ul>
     </div>
 
-    {/* B) HAZIRLAMA, KARGO VE ETİKET İŞLEMLERİ (KANAL GERÇEKLERİNE GÖRE) */}
+    {/* B) HAZIRLAMA, KARGO ETİKETİ VE GÖNDERİM */}
     <div class="sp-kart" id={`${panelId}-durum`}>
       <div class="sp-kart__bas">
-        <h3><PIkon ad="kargo" boyut={15} /> Hazırlama, Etiket ve Kargo</h3>
+        <h3><PIkon ad="kargo" boyut={17} /> Hazırlama ve Barkodlu Kargo Etiketi</h3>
         {s.kargo.takipUrl && (
           <a class="y-link" href={s.kargo.takipUrl} target="_blank" rel="noopener">Kargo Takibi ↗</a>
         )}
@@ -348,18 +364,21 @@ const varsayilanSekme = s.birincilIslem.sekme;
             <SiparisSonraki siparis={web} kargo={kargoAyar} action={s.detayHref} geri={geriAdresi} />
           )}
           {web.kargoTakip && (
-            <p class="sp-bilgi-satir">
-              <span>Kargo: <strong>{web.kargoFirma || kargoAyar.firma}</strong> · <code>{web.kargoTakip}</code></span>
-              <button type="button" class="y-kopya" data-kopyala={web.kargoTakip} title="Takip numarasını kopyala">Kopyala</button>
-            </p>
+            <div class="sp-kopya-satir">
+              <div>
+                <span class="sp-kopya-etiket">Kargo ({web.kargoFirma || kargoAyar.firma})</span>
+                <code class="sp-kod">{web.kargoTakip}</code>
+              </div>
+              <button type="button" class="y-kopya" data-kopyala={web.kargoTakip}>Kopyala</button>
+            </div>
           )}
           {!webIptalMi && (
             <div class="sp-buton-grup">
-              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=etiket`} target="_blank" rel="noopener">
-                <PIkon ad="yazici" boyut={15} /> 10×15 Etiket
+              <a class="btn btn--sepet btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=a4`} target="_blank" rel="noopener">
+                <PIkon ad="yazici" boyut={15} /> A4 Kargo Etiketi
               </a>
-              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=a4`} target="_blank" rel="noopener">
-                <PIkon ad="yazici" boyut={15} /> A4 Etiket
+              <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=etiket`} target="_blank" rel="noopener">
+                <PIkon ad="barkod" boyut={15} /> 10×15 Etiket
               </a>
               <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/etiket?no=${encodeURIComponent(web.no)}&bicim=a4&tur=toplama`} target="_blank" rel="noopener">
                 <PIkon ad="liste" boyut={15} /> Toplama Fişi
@@ -373,10 +392,13 @@ const varsayilanSekme = s.birincilIslem.sekme;
       {py && py.kanal === 'trendyol' && (
         <div class="sp-kanal-blok" id={`${panelId}-kanal`}>
           {py.kargoTakip ? (
-            <p class="sp-bilgi-satir">
-              <span>Kargo Kodu ({py.kargoFirma || 'Trendyol'}): <code>{py.kargoTakip}</code></span>
+            <div class="sp-kopya-satir">
+              <div>
+                <span class="sp-kopya-etiket">Trendyol Kargo Barkodu ({(py.kargoFirma || 'Trendyol').replace(/\s*Marketplace\s*/gi, '')})</span>
+                <code class="sp-kod">{py.kargoTakip}</code>
+              </div>
               <button type="button" class="y-kopya" data-kopyala={py.kargoTakip}>Kopyala</button>
-            </p>
+            </div>
           ) : (
             <p class="y-help" style="margin:0">“Toplamaya Başla” bildirildikten sonra Trendyol kargo barkodunu oluşturur.</p>
           )}
@@ -389,29 +411,34 @@ const varsayilanSekme = s.birincilIslem.sekme;
                 </button>
               </form>
             )}
-            {tyIslemAcik && py.kargoTakip && tyOrtakEtiketVar(py.kargoFirma) && (
-              <form method="post" action={s.detayHref}>
-                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="ty-etiket">
-                  <PIkon ad="yazici" boyut={15} /> Termal Etiket (ZPL) İndir
-                </button>
-              </form>
-            )}
-            {tyIslemAcik && py.kargoTakip && !tyOrtakEtiketVar(py.kargoFirma) && (
+            {tyEtiketBasilir && (
               <>
                 <a class="btn btn--sepet btn--kucuk" href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py.id)}/etiket?kagit=a4`} target="_blank" rel="noopener">
-                  <PIkon ad="yazici" boyut={15} /> A4 Barkodlu Etiket Yazdır
+                  <PIkon ad="yazici" boyut={15} /> Trendyol Kargo Etiketi Yazdır (A4)
+                </a>
+                <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py.id)}/etiket?kagit=10x15`} target="_blank" rel="noopener">
+                  <PIkon ad="barkod" boyut={15} /> 10×15 Etiket
                 </a>
                 <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/siparisler/pazaryeri/${encodeURIComponent(py.id)}/etiket?kagit=etiket`} target="_blank" rel="noopener">
-                  <PIkon ad="barkod" boyut={15} /> 10×10 Etiket
+                  10×10 Etiket
                 </a>
               </>
+            )}
+            {tyIslemAcik && py.kargoTakip && tyOrtakEtiketVar(py.kargoFirma) && (
+              <form method="post" action={s.detayHref}>
+                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="ty-etiket" title="Zebra termal yazıcılar için ham ZPL dosyası">
+                  ZPL
+                </button>
+              </form>
             )}
             <a class="btn btn--cizgi btn--kucuk" href={KANAL_PANELI.trendyol} target="_blank" rel="noopener">
               Trendyol Paneli ↗
             </a>
           </div>
-          {py.kargoTakip && !tyOrtakEtiketVar(py.kargoFirma) && (
-            <small class="muted">Barkodlu kargo etiketini doğrudan buradan A4 veya 10×10 cm yazdırabilirsiniz; kargo görevlisi barkodu okutunca sipariş otomatik “Kargoda” olur.</small>
+          {tyEtiketBasilir && (
+            <small class="sp-aciklama">
+              Trendyol’un barkodu ve alıcı adresiyle kargo cebine uygun resmî gönderi fişi açılır; şubede okutulduğunda sipariş otomatik <strong>“Kargoda”</strong> olur.
+            </small>
           )}
         </div>
       )}
@@ -420,15 +447,18 @@ const varsayilanSekme = s.birincilIslem.sekme;
       {py && py.kanal === 'hepsiburada' && (
         <div class="sp-kanal-blok" id={`${panelId}-kanal`}>
           {py.kargoTakip && (
-            <p class="sp-bilgi-satir">
-              <span>Kargo ({py.kargoFirma || 'Hepsiburada'}): <code>{py.kargoTakip}</code></span>
+            <div class="sp-kopya-satir">
+              <div>
+                <span class="sp-kopya-etiket">Kargo Barkodu ({py.kargoFirma || 'Hepsiburada'})</span>
+                <code class="sp-kod">{py.kargoTakip}</code>
+              </div>
               <button type="button" class="y-kopya" data-kopyala={py.kargoTakip}>Kopyala</button>
-            </p>
+            </div>
           )}
           {hbIslemAcik && s.asama === 'hazirlanacak' && (
             <form method="post" action={s.detayHref} class="sp-satir-form" data-tek-gonder>
               <input type="hidden" name="geri" value={geriAdresi} />
-              <input class="y-girdi" name="desi" inputmode="decimal" placeholder="Desi (opsiyonel)" style="max-width:130px" />
+              <input class="y-girdi" name="desi" inputmode="decimal" placeholder="Desi (opsiyonel)" style="max-width:140px" />
               <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="hb-paketle" disabled={stokEngeli}>
                 Kargoya Hazırla (Paketle)
               </button>
@@ -437,8 +467,8 @@ const varsayilanSekme = s.birincilIslem.sekme;
           <div class="sp-buton-grup">
             {hbIslemAcik && hbOrtakEtiketVar(py.kargoFirma) && (
               <form method="post" action={s.detayHref}>
-                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="hb-etiket">
-                  <PIkon ad="yazici" boyut={15} /> Kargo Etiketi (PDF) İndir
+                <button class="btn btn--sepet btn--kucuk" type="submit" name="eylem" value="hb-etiket">
+                  <PIkon ad="yazici" boyut={15} /> HB Kargo Etiketi (PDF) İndir
                 </button>
               </form>
             )}
@@ -488,100 +518,110 @@ const varsayilanSekme = s.birincilIslem.sekme;
       )}
     </div>
 
-    {/* C) 3 AŞAMALI RESMÎ FATURA AKIŞI (1. KESİLECEK -> 2. KAYDEDİLDİ -> 3. İLETİLDİ) */}
+    {/* C) 3 AŞAMALI RESMÎ FATURA AKIŞI */}
     {s.fatura.asama !== 'gerekmez' && (
       <div class="sp-kart sp-fatura-kart" id={`${panelId}-fatura`}>
         <div class="sp-kart__bas">
-          <h3><PIkon ad="fatura" boyut={15} /> e-Arşiv Fatura (3 Aşamalı)</h3>
+          <h3><PIkon ad="fatura" boyut={17} /> Resmî e-Arşiv Fatura</h3>
           <span class:list={['y-chip', 'y-chip--' + s.fatura.renk]}>{s.fatura.etiket}</span>
         </div>
 
         <ol class="sp-fatura-adimlar" aria-label="Fatura aşamaları">
           <li class:list={{ 'is-tamam': s.fatura.adimNo > 1, 'is-aktif': s.fatura.adimNo === 1 }}>1. GİB’de Kes</li>
-          <li class:list={{ 'is-tamam': s.fatura.adimNo > 2, 'is-aktif': s.fatura.adimNo === 2 }}>2. Kaydet</li>
+          <li class:list={{ 'is-tamam': s.fatura.adimNo > 2, 'is-aktif': s.fatura.adimNo === 2 }}>2. Panele Kaydet</li>
           <li class:list={{ 'is-tamam': s.fatura.adimNo === 3 }}>3. İletildi</li>
         </ol>
 
-        {/* AŞAMA 1: GİB KOPYALA + KAYDET FORMU */}
         {s.fatura.asama === 'kesilecek' && faturaAdayi && (
           <div class="sp-fatura-govde">
             <div class="sp-gib-kutu">
               <div class="sp-gib-baslik">
-                <strong>1. Adım: GİB e-Arşiv Bilgileri</strong>
+                <div>
+                  <strong>1. Adım: GİB e-Arşiv Bilgilerini Kopyalayın</strong>
+                  <small class="sp-aciklama">Her satırı tek tıkla kopyalayıp GİB portalına yapıştırın.</small>
+                </div>
                 <a class="btn btn--cizgi btn--kucuk" href={GIB_PORTAL} target="_blank" rel="noopener">GİB Portalını Aç ↗</a>
               </div>
+
               {faturaAdayi.eksikler.length > 0 && (
                 <p class="y-uyari" style="margin:4px 0">Eksik bilgi: {faturaAdayi.eksikler.join('; ')}</p>
               )}
-              <dl class="sp-kopya-liste">
-                <div>
-                  <dt>{faturaAdayi.alici.tip === 'kurumsal' ? 'Unvan' : 'Ad Soyad'}</dt>
-                  <dd>
-                    <span>{faturaAdayi.alici.firma || faturaAdayi.alici.ad || '—'}</span>
-                    {(faturaAdayi.alici.firma || faturaAdayi.alici.ad) && (
-                      <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.firma || faturaAdayi.alici.ad}>Kopyala</button>
-                    )}
-                  </dd>
+
+              <div class="sp-kopya-izgara">
+                <div class="sp-kopya-satir">
+                  <div>
+                    <span class="sp-kopya-etiket">{faturaAdayi.alici.tip === 'kurumsal' ? 'Firma Unvanı' : 'Alıcı Ad Soyad'}</span>
+                    <strong>{faturaAdayi.alici.firma || faturaAdayi.alici.ad || '—'}</strong>
+                  </div>
+                  {(faturaAdayi.alici.firma || faturaAdayi.alici.ad) && (
+                    <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.firma || faturaAdayi.alici.ad}>Kopyala</button>
+                  )}
                 </div>
-                <div>
-                  <dt>{faturaAdayi.alici.tip === 'kurumsal' ? 'VKN / VD' : 'TCKN'}</dt>
-                  <dd>
-                    <span>
+
+                <div class="sp-kopya-satir">
+                  <div>
+                    <span class="sp-kopya-etiket">{faturaAdayi.alici.tip === 'kurumsal' ? 'Vergi No / Vergi Dairesi' : 'TC Kimlik No'}</span>
+                    <strong>
                       {faturaAdayi.alici.tip === 'kurumsal'
                         ? `${faturaAdayi.alici.vergiNo || '—'} (${faturaAdayi.alici.vergiDairesi || '—'})`
                         : `${faturaAdayi.alici.tckn || GENEL_TCKN}${faturaAdayi.alici.tcknBilinmiyor ? ' (genel)' : ''}`}
-                    </span>
-                    <button
-                      type="button"
-                      class="y-kopya"
-                      data-kopyala={faturaAdayi.alici.tip === 'kurumsal' ? (faturaAdayi.alici.vergiNo || '') : (faturaAdayi.alici.tckn || GENEL_TCKN)}
-                    >
-                      Kopyala
-                    </button>
-                  </dd>
+                    </strong>
+                  </div>
+                  <button
+                    type="button"
+                    class="y-kopya"
+                    data-kopyala={faturaAdayi.alici.tip === 'kurumsal' ? (faturaAdayi.alici.vergiNo || '') : (faturaAdayi.alici.tckn || GENEL_TCKN)}
+                  >
+                    Kopyala
+                  </button>
                 </div>
+
                 {faturaAdayi.alici.adres && (
-                  <div>
-                    <dt>Adres</dt>
-                    <dd>
+                  <div class="sp-kopya-satir">
+                    <div>
+                      <span class="sp-kopya-etiket">Teslimat / Fatura Adresi</span>
                       <span>{faturaAdayi.alici.adres}</span>
-                      <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.adres}>Kopyala</button>
-                    </dd>
+                    </div>
+                    <button type="button" class="y-kopya" data-kopyala={faturaAdayi.alici.adres}>Kopyala</button>
                   </div>
                 )}
-                <div>
-                  <dt>Fatura Notu</dt>
-                  <dd>
+
+                <div class="sp-kopya-satir">
+                  <div>
+                    <span class="sp-kopya-etiket">Fatura Açıklama Notu</span>
                     <span>{faturaAdayi.aciklama}</span>
-                    <button type="button" class="y-kopya" data-kopyala={faturaAdayi.aciklama}>Kopyala</button>
-                  </dd>
+                  </div>
+                  <button type="button" class="y-kopya" data-kopyala={faturaAdayi.aciklama}>Kopyala</button>
                 </div>
-              </dl>
+              </div>
 
               <div class="sp-fatura-satirlar">
                 {faturaAdayi.satirlar.map((st) => (
-                  <div class="sp-fatura-satir">
-                    <span>{st.adet}× {st.ad} <small class="muted">(KDV %{st.kdvOrani})</small></span>
-                    <span>
-                      KDV hrç birim: <strong>{sayiYaz(st.birimHaric)}</strong>
-                      <button type="button" class="y-kopya" data-kopyala={sayiYaz(st.birimHaric)}>Kopyala</button>
-                    </span>
+                  <div class="sp-kopya-satir sp-kopya-satir--kalem">
+                    <div>
+                      <span class="sp-kopya-etiket">{st.adet}× {st.ad} (KDV %{st.kdvOrani})</span>
+                      <span>KDV Hariç Birim Fiyat: <strong>{sayiYaz(st.birimHaric)} TL</strong></span>
+                    </div>
+                    <button type="button" class="y-kopya" data-kopyala={sayiYaz(st.birimHaric)}>Birim Fiyatı Kopyala</button>
                   </div>
                 ))}
                 <div class="sp-fatura-toplam">
-                  <span>KDV Hariç: {tlYaz(faturaAdayi.toplam.matrah)} TL · KDV: {tlYaz(faturaAdayi.toplam.kdv)} TL</span>
-                  <strong>Genel Toplam: {finansPara(faturaAdayi.toplam.genel)}</strong>
+                  <span>KDV Hariç: <strong>{tlYaz(faturaAdayi.toplam.matrah)} TL</strong> · KDV: <strong>{tlYaz(faturaAdayi.toplam.kdv)} TL</strong></span>
+                  <strong class="sp-genel-toplam">Toplam: {finansPara(faturaAdayi.toplam.genel)}</strong>
                 </div>
               </div>
             </div>
 
             {s.kanal === 'trendyol' && tyBagli && (
-              <form method="post" action="/yonetim/finans/faturalar" class="sp-alt-form" data-tek-gonder>
+              <form method="post" action="/yonetim/finans/faturalar" class="sp-alt-form sp-alt-form--mavi" data-tek-gonder>
                 <input type="hidden" name="geri" value={geriAdresi} />
                 <input type="hidden" name="siparisNo" value={s.no} />
-                <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="trendyoldan-al">
-                  <PIkon ad="indir" boyut={15} /> Faturayı Trendyol Panelinden Yüklediysem Çek
-                </button>
+                <div class="sp-satir-arasi">
+                  <span>Faturayı zaten Trendyol satıcı paneline yüklediniz mi?</span>
+                  <button class="btn btn--cizgi btn--kucuk" type="submit" name="eylem" value="trendyoldan-al">
+                    <PIkon ad="indir" boyut={15} /> Trendyol’dan Şimdi Çek
+                  </button>
+                </div>
               </form>
             )}
 
@@ -589,16 +629,16 @@ const varsayilanSekme = s.birincilIslem.sekme;
               <input type="hidden" name="geri" value={geriAdresi} />
               <input type="hidden" name="eylem" value="kaydet" />
               <input type="hidden" name="anahtar" value={faturaAdayi.anahtar} />
-              <strong>2. Adım: Kestiğiniz Faturayı Kaydedin</strong>
+              <strong style="font-size:14.5px">2. Adım: Kestiğiniz Faturayı Kaydedin</strong>
               <div class="sp-ikili">
-                <label class="y-alan">Fatura No
+                <label class="y-alan">Fatura Numarası (16 hane)
                   <input class="y-girdi" name="no" required maxlength="40" placeholder="GIB2026000000012" autocomplete="off" />
                 </label>
-                <label class="y-alan">Tarih
+                <label class="y-alan">Fatura Tarihi
                   <input class="y-girdi" type="date" name="tarih" value={bugun} max={bugun} required />
                 </label>
               </div>
-              <label class="y-alan">Fatura PDF / Görsel (en fazla 4 MB)
+              <label class="y-alan">Fatura PDF / Görsel Dosyası (en fazla 4 MB)
                 <input type="file" name="dosya" accept="application/pdf,image/jpeg,image/png" />
               </label>
               {s.kanal !== 'hepsiburada' && (
@@ -607,22 +647,23 @@ const varsayilanSekme = s.birincilIslem.sekme;
                   <span>{s.kanal === 'trendyol' ? 'Kaydedince Trendyol’a otomatik yükle' : 'Kaydedince müşteriye e-posta ile gönder'}</span>
                 </label>
               )}
-              <button class="btn btn--sepet btn--kucuk" type="submit">
-                <PIkon ad="tik" boyut={15} /> Faturayı Kaydet{s.kanal !== 'hepsiburada' ? ' ve İlet' : ''}
+              <button class="btn btn--sepet" type="submit">
+                <PIkon ad="tik" boyut={16} /> Faturayı Kaydet{s.kanal !== 'hepsiburada' ? ' ve İlet' : ''}
               </button>
             </form>
           </div>
         )}
 
-        {/* AŞAMA 2 VE 3: KAYDEDİLMİŞ FATURA YÖNETİMİ VE İLETİM */}
+        {/* AŞAMA 2 VE 3: KAYDEDİLMİŞ FATURA YÖNETİMİ */}
         {kesilenFatura && (
           <div class="sp-fatura-govde">
-            <div class="sp-bilgi-satir">
-              <span>
-                <strong>{kesilenFatura.no}</strong> · {kesilenFatura.tarih.split('-').reverse().join('.')} · {finansPara(kesilenFatura.toplam)}
-              </span>
+            <div class="sp-kopya-satir">
+              <div>
+                <span class="sp-kopya-etiket">Kayıtlı Fatura</span>
+                <strong>{kesilenFatura.no}</strong> · {kesilenFatura.tarih.split('-').reverse().join('.')} · <strong>{finansPara(kesilenFatura.toplam)}</strong>
+              </div>
               {kesilenFatura.ek ? (
-                <a class="y-link" href={`/yonetim/finans/fatura-dosya?id=${encodeURIComponent(kesilenFatura.id)}`} target="_blank" rel="noopener">
+                <a class="btn btn--cizgi btn--kucuk" href={`/yonetim/finans/fatura-dosya?id=${encodeURIComponent(kesilenFatura.id)}`} target="_blank" rel="noopener">
                   PDF Aç ↗
                 </a>
               ) : faturaKanalLinki(kesilenFatura) ? (
@@ -698,10 +739,10 @@ const varsayilanSekme = s.birincilIslem.sekme;
       </div>
     )}
 
-    {/* D) WEB İÇ SİPARİŞ BELGELERİ VE İADE / İPTAL (KATLANIR) */}
+    {/* D) WEB İÇ SİPARİŞ BELGELERİ VE İADE / İPTAL */}
     {web && !s.entegrasyon.testSiparisi && (
       <details class="sp-detay-kart">
-        <summary><PIkon ad="belge" boyut={15} /> Koli İçi Belgeler ve İptal / İade İşlemleri</summary>
+        <summary><PIkon ad="belge" boyut={16} /> Koli İçi Belgeler ve İptal / İade İşlemleri</summary>
         <div class="sp-detay-icerik">
           <div class="sp-belgeler">
             {(['ozet', 'fis', 'paket', 'iade'] as BelgeTuru[]).filter((t) => !webIptalMi || t === 'iade').map((t) => {
@@ -764,7 +805,7 @@ const varsayilanSekme = s.birincilIslem.sekme;
   <div class="sp-icerik" data-sp-icerik="kazanc" hidden={varsayilanSekme !== 'kazanc'}>
     <div class="sp-kart">
       <div class="sp-kart__bas">
-        <h3><PIkon ad="para" boyut={15} /> Sipariş Ekonomisi ve Net Kâr</h3>
+        <h3><PIkon ad="para" boyut={17} /> Sipariş Ekonomisi ve Net Kâr</h3>
         <span class="y-chip y-chip--gri">
           {s.kazanc.kaynak === 'kesinlesen-ekstre' ? 'Kesinleşen Ekstre' : s.kazanc.kaynak === 'web-hesabi' ? 'Web Satışı' : s.kazanc.kaynak === 'tahmini-tarife' ? 'Tarife Tahmini' : 'Bilgi'}
         </span>
@@ -785,7 +826,7 @@ const varsayilanSekme = s.birincilIslem.sekme;
         </div>
 
         <div class="sp-hesap__vurgulu">
-          <dt>Tahmini Net Kâr (KDV hariç)</dt>
+          <dt>Cebe Kalan Tahmini Net Kâr</dt>
           <dd class:list={[s.kazanc.tahminiNetKar !== undefined ? (s.kazanc.tahminiNetKar < 0 ? 'y-yazi-kirmizi' : 'y-yazi-yesil') : 'muted']}>
             {s.kazanc.tahminiNetKar !== undefined ? (
               <strong>
@@ -824,17 +865,17 @@ const varsayilanSekme = s.birincilIslem.sekme;
   {/* ==================== SEKME 3: MÜŞTERİ, NOT VE GEÇMİŞ ==================== */}
   <div class="sp-icerik" data-sp-icerik="gecmis" hidden={varsayilanSekme !== 'gecmis'}>
     <div class="sp-kart">
-      <h3><PIkon ad="kullanici" boyut={15} /> Müşteri ve Teslimat</h3>
-      <p style="margin:0"><strong>{s.musteriAdi}</strong></p>
+      <h3><PIkon ad="kullanici" boyut={17} /> Müşteri ve Teslimat</h3>
+      <p style="margin:0;font-size:15.5px"><strong>{s.musteriAdi}</strong></p>
       {s.telefon && <small class="sp-iletisim"><a class="y-link" href={'tel:' + s.telefon}>{s.telefon}</a></small>}
       {s.eposta && <small class="sp-iletisim"><a class="y-link" href={'mailto:' + s.eposta}>{s.eposta}</a></small>}
-      <small class="muted" style="display:block;margin-top:4px">{s.adres || s.konum || 'Adres satıcı panelinde'}</small>
+      <p class="sp-aciklama" style="margin:4px 0 0">{s.adres || s.konum || 'Açık teslimat adresi kargo etiketinde ve satıcı panelinde görünür.'}</p>
       {web?.teslimat.not && <p class="sp-musteri-notu"><strong>Müşteri notu:</strong> {web.teslimat.not}</p>}
     </div>
 
     {web && (
       <div class="sp-kart">
-        <h3><PIkon ad="kalem" boyut={15} /> Mağaza İç Notu</h3>
+        <h3><PIkon ad="kalem" boyut={17} /> Mağaza İç Notu</h3>
         <form method="post" action={s.detayHref} class="sp-alt-form" data-tek-gonder>
           <input type="hidden" name="geri" value={geriAdresi} />
           <input type="hidden" name="eylem" value="not" />
@@ -846,7 +887,7 @@ const varsayilanSekme = s.birincilIslem.sekme;
 
     <div class="sp-kart">
       <div class="sp-kart__bas">
-        <h3><PIkon ad="gecmis" boyut={15} /> İşlem Zaman Çizelgesi</h3>
+        <h3><PIkon ad="gecmis" boyut={17} /> İşlem Zaman Çizelgesi</h3>
         <a class="y-link" href={s.detayHref}>Tam Sayfa Detay →</a>
       </div>
       {gecmisListesi.length ? (
@@ -867,88 +908,239 @@ const varsayilanSekme = s.birincilIslem.sekme;
 </section>
 
 <style>
-  .sp-panel { display: grid; gap: 11px; }
-  .sp-ust { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 10px; border-bottom: 1px solid var(--y-border); }
-  .sp-ust__kimlik { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
-  .sp-ust__no-satir { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
-  .sp-ust__no-satir h2 { margin: 0 !important; font-size: 17px !important; line-height: 1.2; }
-  .sp-ust__sag { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; }
-  .sp-gecis { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--y-border); border-radius: 9px; background: var(--y-surface-2); }
-  .sp-gecis__sira { font-size: 11.5px; font-weight: 600; color: var(--y-muted); padding: 0 4px; font-variant-numeric: tabular-nums; }
-  .sp-ozet-serit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-  .sp-ozet-serit__sol { display: flex; flex-wrap: wrap; gap: 5px; }
-  .sp-tutar { font-size: 18px; font-variant-numeric: tabular-nums; color: var(--y-ink); }
-  .sp-adimlar { list-style: none; margin: 0; padding: 8px 10px; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; background: var(--y-surface-2); border: 1px solid var(--y-border); border-radius: 11px; }
-  .sp-adim { display: grid; justify-items: center; text-align: center; gap: 4px; font-size: 10.5px; color: var(--y-muted); line-height: 1.15; }
-  .sp-adim__nokta { width: 9px; height: 9px; border-radius: 999px; background: #d6cec2; border: 2px solid #fff; box-shadow: 0 0 0 1px #cdc3b4; }
-  .sp-adim.is-tamam { color: var(--y-yesil); font-weight: 600; }
-  .sp-adim.is-tamam .sp-adim__nokta { background: var(--y-yesil); box-shadow: 0 0 0 1px var(--y-yesil); }
-  .sp-adim.is-aktif { color: var(--y-ink); font-weight: 700; }
-  .sp-adim.is-aktif .sp-adim__nokta { background: var(--y-gold, #b88a44); transform: scale(1.2); box-shadow: 0 0 0 2px rgba(184, 138, 68, 0.28); }
-  .sp-uyari-kutusu { display: flex; align-items: flex-start; gap: 8px; padding: 9px 11px; border-radius: 10px; background: #fff4f2; border: 1px solid #f0c2bc; color: var(--y-kirmizi); font-size: 12.5px; }
-  .sp-uyari-kutusu ul { margin: 0; padding-left: 16px; display: grid; gap: 3px; }
-  .sp-birincil { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 13px; border-radius: 12px; border: 1px solid #e7d3b3; background: #fffaf1; }
+  .sp-panel { display: grid; gap: 15px; }
+  .sp-ust {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--y-border);
+  }
+  .sp-ust__kimlik { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .sp-ust__metin { min-width: 0; }
+  .sp-ust__no-satir { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .sp-ust__no-satir h2 { margin: 0 !important; font-size: 19.5px !important; font-weight: 800; line-height: 1.2; letter-spacing: -0.02em; }
+  .sp-ust__alt { margin: 3px 0 0; font-size: 13.5px; color: var(--y-muted); }
+  .sp-ust__sag { display: inline-flex; align-items: center; gap: 5px; flex-shrink: 0; }
+  .sp-gecis { display: inline-flex; align-items: center; gap: 2px; padding: 2px 4px; border: 1px solid var(--y-border); border-radius: 10px; background: var(--y-surface-2); }
+  .sp-gecis__sira { font-size: 12.5px; font-weight: 700; color: var(--y-ink-2); padding: 0 5px; font-variant-numeric: tabular-nums; }
+
+  .sp-ozet-serit { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+  .sp-ozet-serit__sol { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sp-ozet-serit__sag { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sp-tutar { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--y-ink); white-space: nowrap; }
+  .sp-net-rozet {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 13px;
+    font-weight: 750;
+    white-space: nowrap;
+  }
+  .sp-net-rozet.is-kar { background: #d9f4e2; color: #0b5e2e; }
+  .sp-net-rozet.is-zarar { background: #fde2e0; color: #9e1c13; }
+
+  .sp-adimlar {
+    list-style: none;
+    margin: 0;
+    padding: 11px 12px;
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+    background: var(--y-surface-2);
+    border: 1px solid var(--y-border);
+    border-radius: 13px;
+  }
+  .sp-adim { display: grid; justify-items: center; text-align: center; gap: 5px; font-size: 11.5px; color: var(--y-muted); line-height: 1.2; }
+  .sp-adim__nokta {
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: #e2d9cc;
+    color: #fff;
+    font-size: 10.5px;
+    font-weight: 800;
+    display: inline-grid;
+    place-items: center;
+  }
+  .sp-adim.is-tamam { color: var(--y-yesil); font-weight: 650; }
+  .sp-adim.is-tamam .sp-adim__nokta { background: var(--y-yesil); }
+  .sp-adim.is-aktif { color: var(--y-ink); font-weight: 800; }
+  .sp-adim.is-aktif .sp-adim__nokta { background: #b0844c; box-shadow: 0 0 0 3px rgba(176, 132, 76, 0.24); }
+
+  .sp-uyari-kutusu { display: flex; align-items: flex-start; gap: 10px; padding: 12px 14px; border-radius: 12px; background: #fff4f2; border: 1px solid #f0c2bc; color: var(--y-kirmizi); font-size: 13.5px; }
+  .sp-uyari-kutusu ul { margin: 0; padding-left: 16px; display: grid; gap: 4px; }
+
+  .sp-birincil {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 15px 16px;
+    border-radius: 14px;
+    border: 1.5px solid #e5cda8;
+    background: #fffaf0;
+  }
   .sp-birincil.is-uyari { border-color: #f0c2bc; background: #fff6f5; }
   .sp-birincil.is-ikincil, .sp-birincil.is-bilgi { border-color: var(--y-border); background: var(--y-surface-2); }
-  .sp-birincil__metin { display: grid; gap: 2px; flex: 1 1 200px; }
-  .sp-birincil__ust { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--y-gold-ink); }
-  .sp-birincil__metin strong { font-size: 14.5px; }
-  .sp-birincil__metin small { font-size: 12.5px; color: var(--y-ink-2); line-height: 1.35; }
-  .sp-sekmeler { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 11px; background: var(--y-surface-2); border: 1px solid var(--y-border); }
-  .sp-sekmeler button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-height: 35px; padding: 5px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--y-muted); font-size: 12.5px; font-weight: 650; cursor: pointer; }
-  .sp-sekmeler button[aria-selected="true"] { background: #fff; color: var(--y-ink); box-shadow: 0 1px 2px rgba(28, 21, 15, 0.08); }
-  .sp-icerik { display: grid; gap: 10px; }
+  .sp-birincil__metin { display: grid; gap: 3px; flex: 1 1 210px; }
+  .sp-birincil__ust { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; color: var(--y-gold-ink); }
+  .sp-birincil__metin strong { font-size: 16px; color: var(--y-ink); }
+  .sp-birincil__metin small { font-size: 13.5px; color: var(--y-ink-2); line-height: 1.4; }
+  .sp-birincil__aksiyon { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+
+  .sp-sekmeler {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 5px;
+    padding: 5px;
+    border-radius: 12px;
+    background: #f2ece3;
+    border: 1px solid var(--y-border);
+  }
+  .sp-sekmeler button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 40px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: 9px;
+    background: transparent;
+    color: #5c4d3d;
+    font-size: 13.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .sp-sekmeler button[aria-selected="true"] {
+    background: #fff;
+    color: var(--y-ink);
+    box-shadow: 0 2px 6px rgba(28, 21, 15, 0.09);
+  }
+
+  .sp-icerik { display: grid; gap: 14px; }
   .sp-icerik[hidden] { display: none !important; }
-  .sp-kart { padding: 11px 13px; border: 1px solid var(--y-border); border-radius: 12px; background: #fff; display: grid; gap: 8px; scroll-margin-top: 16px; }
+  .sp-kart {
+    padding: 16px 18px;
+    border: 1px solid #e5dbce;
+    border-radius: 14px;
+    background: #fff;
+    display: grid;
+    gap: 12px;
+    scroll-margin-top: 16px;
+  }
   .sp-kart.is-vurgulu { outline: 2px solid #c69749; background: #fffdf8; }
   .sp-kart__bas { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
-  .sp-kart h3 { display: inline-flex; align-items: center; gap: 6px; margin: 0 !important; font-size: 13.5px !important; font-weight: 750; color: var(--y-ink); }
-  .sp-kalemler { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-  .sp-kalem { padding-top: 8px; border-top: 1px solid var(--y-border); display: grid; gap: 8px; }
+  .sp-kart h3 { display: inline-flex; align-items: center; gap: 8px; margin: 0 !important; font-size: 15.5px !important; font-weight: 800; color: var(--y-ink); }
+
+  /* Ürün Kalemleri */
+  .sp-kalemler { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .sp-kalem { padding-top: 10px; border-top: 1px solid var(--y-border); display: grid; gap: 10px; }
   .sp-kalem:first-child { padding-top: 0; border-top: 0; }
-  .sp-kalem__satir { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; align-items: center; gap: 9px; font-size: 13px; }
-  .sp-kalem__satir img { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; border: 1px solid var(--y-border); background: #fff; }
-  .sp-kalem__bilgi { min-width: 0; }
-  .sp-kalem__bilgi strong { display: block; line-height: 1.3; }
-  .sp-kalem__bilgi small { display: block; font-size: 12px; color: var(--y-muted); }
-  .sp-kalem__tutar { font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .sp-alt-form { display: grid; gap: 8px; padding: 10px; border-radius: 10px; background: var(--y-surface-2); border: 1px solid var(--y-border); }
+  .sp-kalem__satir { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+  .sp-kalem__foto {
+    width: 56px;
+    height: 56px;
+    border-radius: 11px;
+    border: 1px solid #e5dacb;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    color: #8c7d6e;
+  }
+  .sp-kalem__foto img { width: 100%; height: 100%; object-fit: contain; padding: 3px; }
+  .sp-kalem__bilgi { min-width: 0; display: grid; gap: 4px; }
+  .sp-kalem__bilgi strong { display: block; font-size: 15px; line-height: 1.32; color: #241a11; }
+  .sp-kalem__alt { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--y-muted); }
+  .sp-mini-rozet { background: #f4efe8; border-radius: 6px; padding: 2px 7px; font-size: 12px; font-weight: 600; color: #5f5244; }
+  .sp-kalem__tutar { font-size: 16px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; color: #21180f; }
+
+  /* Kırılmayan Kopyalama Satırları (GİB ve Kargo Kodu) */
+  .sp-kopya-izgara { display: grid; gap: 8px; }
+  .sp-kopya-satir {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #fff;
+    border: 1px solid #e6ddd0;
+    font-size: 14px;
+    line-height: 1.38;
+  }
+  .sp-kopya-satir--kalem { background: #fcf9f4; }
+  .sp-kopya-etiket {
+    display: block;
+    font-size: 11.5px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: #7d6e5d;
+    margin-bottom: 2px;
+  }
+  .sp-kod {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 14.5px;
+    font-weight: 700;
+    color: #1f160e;
+  }
+
+  .sp-alt-form { display: grid; gap: 10px; padding: 13px 14px; border-radius: 12px; background: var(--y-surface-2); border: 1px solid var(--y-border); }
   .sp-alt-form--uyari { background: #fff8f6; border-color: #f0c2bc; }
-  .sp-kanal-blok { display: grid; gap: 8px; }
+  .sp-alt-form--mavi { background: #f3f8fe; border-color: #cde0f5; }
+  .sp-satir-arasi { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; font-weight: 600; color: #1f4b7a; }
+  .sp-kanal-blok { display: grid; gap: 10px; }
   .sp-satir-form { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
-  .sp-buton-grup { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-  .sp-bilgi-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; margin: 0; padding: 7px 9px; border-radius: 9px; background: var(--y-surface-2); font-size: 12.5px; }
-  .sp-fatura-adimlar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; font-size: 11.5px; font-weight: 650; }
-  .sp-fatura-adimlar li { padding: 5px 7px; border-radius: 8px; text-align: center; background: var(--y-surface-2); color: var(--y-muted); border: 1px solid var(--y-border); }
-  .sp-fatura-adimlar li.is-aktif { background: #fff6e6; color: var(--y-gold-ink); border-color: #e6c994; }
-  .sp-fatura-adimlar li.is-tamam { background: #edf8f1; color: var(--y-yesil); border-color: #bfe3cc; }
-  .sp-fatura-govde { display: grid; gap: 9px; }
-  .sp-gib-kutu { padding: 9px 10px; border-radius: 10px; background: var(--y-surface-2); border: 1px solid var(--y-border); display: grid; gap: 7px; font-size: 12.5px; }
-  .sp-gib-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; }
-  .sp-kopya-liste { margin: 0; display: grid; gap: 5px; }
-  .sp-kopya-liste > div { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 6px; align-items: baseline; }
-  .sp-kopya-liste dt { color: var(--y-muted); font-size: 11.5px; font-weight: 600; }
-  .sp-kopya-liste dd { margin: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px; overflow-wrap: anywhere; }
-  .sp-fatura-satirlar { border-top: 1px dashed var(--y-border); padding-top: 6px; display: grid; gap: 4px; }
-  .sp-fatura-satir, .sp-fatura-toplam { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; }
-  .sp-fatura-toplam { padding-top: 4px; border-top: 1px solid var(--y-border); }
-  .sp-ikili { display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
-  .sp-detay-kart { border: 1px solid var(--y-border); border-radius: 12px; background: #fff; padding: 9px 12px; }
-  .sp-detay-kart > summary { cursor: pointer; font-size: 13px; font-weight: 650; display: flex; align-items: center; gap: 6px; }
-  .sp-detay-icerik { margin-top: 10px; display: grid; gap: 10px; }
-  .sp-belgeler { display: grid; gap: 6px; }
-  .sp-belge-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px; font-size: 12.5px; padding: 6px 8px; border-radius: 8px; background: var(--y-surface-2); }
-  .sp-hesap { margin: 0; display: grid; gap: 6px; font-size: 13px; }
-  .sp-hesap > div { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--y-border); }
+  .sp-buton-grup { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .sp-aciklama { display: block; font-size: 13px; color: #6e6152; line-height: 1.45; }
+
+  .sp-fatura-adimlar { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; font-size: 12.5px; font-weight: 700; }
+  .sp-fatura-adimlar li { padding: 7px 8px; border-radius: 9px; text-align: center; background: var(--y-surface-2); color: var(--y-muted); border: 1px solid var(--y-border); }
+  .sp-fatura-adimlar li.is-aktif { background: #fff5e3; color: var(--y-gold-ink); border-color: #e2c28b; }
+  .sp-fatura-adimlar li.is-tamam { background: #eaf7ef; color: var(--y-yesil); border-color: #bce2c9; }
+  .sp-fatura-govde { display: grid; gap: 12px; }
+  .sp-gib-kutu { padding: 13px 14px; border-radius: 12px; background: #faf6ef; border: 1px solid #e6dccf; display: grid; gap: 10px; }
+  .sp-gib-baslik { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+  .sp-gib-baslik strong { display: block; font-size: 14.5px; }
+  .sp-fatura-satirlar { display: grid; gap: 8px; padding-top: 4px; }
+  .sp-fatura-toplam {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: #f3eadc;
+    font-size: 13.5px;
+  }
+  .sp-genel-toplam { font-size: 15.5px; color: #21180f; }
+  .sp-ikili { display: grid; grid-template-columns: 1.3fr 1fr; gap: 10px; }
+
+  .sp-detay-kart { border: 1px solid var(--y-border); border-radius: 12px; background: #fff; padding: 12px 14px; }
+  .sp-detay-kart > summary { cursor: pointer; font-size: 14px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .sp-detay-icerik { margin-top: 12px; display: grid; gap: 10px; }
+  .sp-belgeler { display: grid; gap: 8px; }
+  .sp-belge-satir { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 13.5px; padding: 8px 10px; border-radius: 9px; background: var(--y-surface-2); }
+
+  .sp-hesap { margin: 0; display: grid; gap: 8px; font-size: 14px; }
+  .sp-hesap > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 7px; border-bottom: 1px solid var(--y-border); }
   .sp-hesap > div:last-child { border-bottom: 0; padding-bottom: 0; }
   .sp-hesap dt { color: var(--y-ink-2); }
   .sp-hesap dd { margin: 0; font-variant-numeric: tabular-nums; text-align: right; }
-  .sp-hesap__vurgulu { padding: 8px 10px !important; border-radius: 9px; background: var(--y-surface-2); border: 1px solid var(--y-border) !important; }
-  .sp-iletisim { display: block; margin-top: 2px; }
-  .sp-musteri-notu { margin: 6px 0 0; padding: 7px 9px; border-radius: 8px; background: #fff4e4; font-size: 12.5px; }
-  .sp-zaman-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; font-size: 12.5px; }
-  .sp-zaman-listesi li { padding-left: 10px; border-left: 2px solid var(--y-border); display: grid; gap: 2px; }
-  .sp-zaman-listesi p { margin: 0 !important; color: var(--y-ink-2); font-size: 12px; }
+  .sp-hesap__vurgulu { padding: 11px 13px !important; border-radius: 10px; background: #f5efe5; border: 1px solid #e2d4c0 !important; font-size: 15px; }
+
+  .sp-iletisim { display: block; margin-top: 3px; font-size: 13.5px; }
+  .sp-musteri-notu { margin: 8px 0 0; padding: 9px 11px; border-radius: 9px; background: #fff4e4; font-size: 13.5px; }
+  .sp-zaman-listesi { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; font-size: 13.5px; }
+  .sp-zaman-listesi li { padding-left: 12px; border-left: 2.5px solid #dfd3c3; display: grid; gap: 2px; }
+  .sp-zaman-listesi p { margin: 0 !important; color: var(--y-ink-2); font-size: 13px; }
+
   @media (max-width: 560px) {
     .sp-adimlar { grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 8px; }
     .sp-ikili { grid-template-columns: 1fr; }
