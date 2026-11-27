@@ -64,10 +64,18 @@ export const onRequest = defineMiddleware(async (ctx, next) => {
     // Mağaza ve satış adetleri aynı anda okunur (sırayla beklemek her sayfayı bir tur yavaşlatıyordu)
     const katalogDosyasi = yol === '/sitemap.xml' || yol === '/llms.txt'
       || yol === '/urun-akisi.xml' || yol === '/urun-akisi-jpg.xml';
-    const [magaza, satislar] = await Promise.all([magazaOku(), katalogDosyasi ? undefined : satisAdetleri()]);
     const vitrin = yol === '/' || yol === '/urunler' || yol === '/setler'
       || yol.startsWith('/urun/') || yol.startsWith('/kategori/');
-    if ((katalogDosyasi || (vitrin && (!yonetici || musteriGorunumu))) && magazaYedektenMi(magaza)) {
+    const guncelKatalogGerekli = katalogDosyasi || (vitrin && (!yonetici || musteriGorunumu));
+    const [magaza, satislar] = await Promise.all([
+      magazaOku().catch((hata: unknown) => {
+        if (!guncelKatalogGerekli) throw hata;
+        console.error('[Katalog] Mağaza verisi okunamadı:', hata);
+        return null;
+      }),
+      katalogDosyasi ? undefined : satisAdetleri(),
+    ]);
+    if (!magaza || (guncelKatalogGerekli && magazaYedektenMi(magaza))) {
       const yanit = new Response('Ürün bilgilerine geçici olarak ulaşılamıyor. Lütfen tekrar deneyin.', {
         status: 503,
         headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': '60' },

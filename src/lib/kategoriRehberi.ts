@@ -23,6 +23,10 @@ export const KATEGORI_REHBERI: Record<string, { baslik: string; metin: string }>
     baslik: 'İpli doğrayıcıda hazne boyu nasıl seçilir?',
     metin: 'Sos, ot ve az miktarda soğan için küçük bir hazne yeterli olabilir. Sebzeleri daha büyük porsiyonlarla hazırlıyorsanız hazne hacmini ve üreticinin dolum sınırını karşılaştırın. Hazne, bıçak ve ipli kapağın temizlik talimatlarına ayrı ayrı bakın.',
   },
+  saklama: {
+    baslik: 'Cam kavanozda hacim ve kapak seçimi',
+    metin: '500 ml kavanozlar küçük porsiyonları ayrı tutmaya, 1 litrelik kavanozlar ise bakliyat gibi hacimli gıdaları saklamaya uygundur. Dörtlü setlerde her kavanozun kapasitesini kontrol edin. İki parçalı kapağı takarken iç diski kavanoz ağzına yerleştirin, ardından dış halkayı vidalayın.',
+  },
   temizlik: {
     baslik: 'Sıkıştırılmış havlu alırken hangi ölçülere bakmalı?',
     metin: 'Sıkıştırılmış havluda paketteki adet ile havlunun açıldıktan sonraki boyutunu ayrı ayrı kontrol edin. Seyahatte paket boyutu, kullanımda ise açılmış havlunun ölçüsü önemlidir. Kullanıma hazırlama ve atma talimatlarını ambalajdan okuyun.',

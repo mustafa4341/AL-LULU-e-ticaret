@@ -8,6 +8,7 @@ import { Katalog } from '../lib/katalog';
 import { ODEME_BAGLI } from '../lib/altyapi';
 import { YASAL_SAYFALAR } from '../lib/yasal';
 import { markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
+import { urunSatisOzeti } from '../lib/urunTanitim';
 
 export const GET: APIRoute = async ({ locals, site: astroSite }) => {
   const k = new Katalog(locals.katalog.magaza);
@@ -24,7 +25,7 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     const ozellik = u.teknik.filter(([a]) => !/barkod|ean|gtin/i.test(a)).slice(0, 8).map(([a, d]) => `${a}: ${d}`).join('; ');
     const pisirme = u.pisirme.slice(0, 8).map((p) => `${p.yemek} ${p.sure}${p.kademe ? ` (${/^\d$/.test(p.kademe.trim()) ? `${p.kademe.trim()}. kademe` : p.kademe})` : ''}`).join('; ');
     return [
-      `- [${markaliUrunAdi(u)}](${kok}/urun/${u.id}): ${tek(u.ozet)}`,
+      `- [${markaliUrunAdi(u)}](${kok}/urun/${u.id}): ${tek(urunSatisOzeti(u))}`,
       `  Fiyat: ${formatTL(fiyat)} (KDV dahil)${kargoUcretsiz ? ', kargo ücretsiz' : ''}. ${k.stoktaMi(u) ? 'Stokta.' : 'Şu an stokta yok.'}${u.garanti ? ` Garanti: ${u.garanti}.` : ''}${mpn ? ` Üretici model kodu (MPN): ${mpn}.` : ''}${gtin ? ` Barkod (EAN/GTIN): ${gtin}.` : ''}`,
       ...(ozellik ? [`  Özellikler: ${ozellik}`] : []),
       ...(u.kutuIcerigi.length ? [`  Kutu içeriği: ${u.kutuIcerigi.map(tek).join('; ')}`] : []),

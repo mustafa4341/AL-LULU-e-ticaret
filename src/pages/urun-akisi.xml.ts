@@ -11,6 +11,7 @@
  */
 import type { APIRoute } from 'astro';
 import { markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
+import { urunSatisOzeti } from '../lib/urunTanitim';
 
 const x = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!);
 const tl = (n: number) => `${n.toFixed(2)} TRY`;
@@ -34,6 +35,7 @@ const GOOGLE_URUN_KATEGORI: Readonly<Record<string, number>> = {
   'tefal-ingenio-essential-4-parca': 4721,
   'tefal-easy-cook-clean-tava-seti-24-28': 4721,
   'fissler-buhar-aparati-22': 4529,
+  'zwilling-king-30-parca-catal-kasik': 5647,
 };
 
 export const GET: APIRoute = async ({ locals, site: astroSite }) => {
@@ -42,16 +44,19 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
   const kok = (astroSite ?? new URL(s.url)).origin;
   const kargo = s.kargo;
 
-  const ogeler = k.tumUrunler().filter((u) => u.durum === 'yayinda' && u.gorseller.length).map((u) => {
-    const b = k.fiyatBilgisi(u);
+  const simdi = Date.now();
+  const ogeler = k.tumUrunler().filter((u) => u.durum === 'yayinda' && u.gorseller.length).flatMap((u) => {
+    const b = k.fiyatBilgisi(u, simdi);
     const odenecek = b.sepette?.fiyat ?? b.fiyat;
+    if (!Number.isFinite(odenecek) || odenecek <= 0) return [];
     const katId = u.kategoriler[0]!;
     const kat = k.kategoriBul(katId);
     const gKat = GOOGLE_URUN_KATEGORI[u.id] ?? GOOGLE_KATEGORI[katId];
     const gorseller = u.gorseller.map((g) => new URL(g.src, kok).href);
     const kargoUcreti = odenecek >= kargo.ucretsizEsik ? 0 : kargo.ucret;
     const cumle = (v: string) => { const t = v.replace(/\*+/g, '').replace(/\s*\|\s*/g, ': ').trim(); return /[.!?]$/.test(t) ? t : t + '.'; };
-    const aciklama = [u.ozet, ...u.oneCikanBilgiler.map((o) => o.metin)].filter(Boolean).map(cumle).join(' ');
+    const ad = markaliUrunAdi(u);
+    const aciklama = [urunSatisOzeti(u), ...u.oneCikanBilgiler.map((o) => o.metin)].filter(Boolean).map(cumle).join(' ');
     // Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa (lib/urunKimlik.ts)
     const gtin = urunGtin(u);
     const mpn = urunMpn(u);
@@ -63,8 +68,8 @@ export const GET: APIRoute = async ({ locals, site: astroSite }) => {
     return [
       '    <item>',
       `      <g:id>${x(u.id)}</g:id>`,
-      `      <g:title>${x(markaliUrunAdi(u))}</g:title>`,
-      `      <g:description>${x(aciklama)}</g:description>`,
+      `      <g:title>${x(ad.slice(0, 150))}</g:title>`,
+      `      <g:description>${x((aciklama || ad).slice(0, 5000))}</g:description>`,
       `      <g:link>${x(`${kok}/urun/${u.id}`)}</g:link>`,
       `      <g:image_link>${x(gorseller[0])}</g:image_link>`,
       ...(ekGorseller ? [ekGorseller] : []),
@@ -99,5 +104,5 @@ ${ogeler.join('\n')}
   </channel>
 </rss>
 `;
-  return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'public, max-age=1800' } });
+  return new Response(xml, { headers: { 'Content-Type': 'application/xml; charset=utf-8', 'Cache-Control': 'no-cache' } });
 };

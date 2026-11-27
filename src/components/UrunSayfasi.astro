@@ -17,6 +17,7 @@ import { formatTL } from '../lib/fiyat';
 import { ODEME_BAGLI, SMS_BAGLI, hizmeteUygunSSS } from '../lib/altyapi';
 import { gtinAlani, markaliUrunAdi, urunGtin, urunMpn } from '../lib/urunKimlik';
 import { metaAciklama } from '../lib/seo';
+import { urunSatisOzeti } from '../lib/urunTanitim';
 import { ozet, urunYorumlari } from '../lib/yorum';
 
 const k = Astro.locals.katalog;
@@ -30,8 +31,13 @@ const stokta = k.stoktaMi(urun);
 const oneriSet = k.urunuIcerenSetler(urun.id)[0];
 const oneriSetFiyati = oneriSet ? k.setFiyati(oneriSet) : undefined;
 const tamamlayicilar = Astro.locals.vitrinOnizleme ? k.birlikteIyiGiderOnizleme(urun) : k.birlikteIyiGiderler(urun);
-const benzerUrunler = kat ? k.kategoriUrunleri(kat.id)
-  .filter((u) => u.id !== urun.id && k.stoktaMi(u) && !tamamlayicilar.some((item) => item.id === u.id)).slice(0, 4) : [];
+const benzerAdaylar = k.tumUrunler().filter((u) =>
+  u.id !== urun.id && k.stoktaMi(u) && !tamamlayicilar.some((item) => item.id === u.id),
+);
+const ayniKategori = benzerAdaylar.filter((u) => u.kategoriler.some((id) => urun.kategoriler.includes(id)));
+const marka = urun.marka.toLocaleLowerCase('tr');
+const ayniMarka = benzerAdaylar.filter((u) => u.marka.toLocaleLowerCase('tr') === marka);
+const benzerUrunler = [...new Set([...ayniKategori, ...ayniMarka])].slice(0, 4);
 const stokMetni = urun.stok <= 3 ? 'Stokta son ' + urun.stok + ' adet' : 'Stokta · hemen gönderime hazır';
 const soruUrl = k.whatsapp(`Merhaba, ${urun.marka} ${urun.kisaAd} hakkında bir sorum var.`);
 const stokHaberUrl = k.whatsapp(`${urun.kisaAd} stoğa girince haber verir misiniz?`);
@@ -46,7 +52,9 @@ const teknikIlk = urun.teknik.slice(0, TEKNIK_ACIK);
 const teknikKalan = urun.teknik.slice(TEKNIK_ACIK);
 /* Barkod yalnız panelde "Barkod (EAN)" teknik satırı girilmiş ve kontrol hanesi doğruysa kullanılır (lib/urunKimlik.ts) */
 const gtin = urunGtin(urun);
+const mpn = urunMpn(urun);
 const seoAd = markaliUrunAdi(urun);
+const satisOzeti = urunSatisOzeti(urun);
 const urunSSS = hizmeteUygunSSS(urun.sss);
 const kok = (Astro.site ?? new URL(site.url)).origin;
 const urunUrl = new URL(`/urun/${urun.id}`, kok).href;
@@ -63,9 +71,9 @@ const yapisalVeri = {
   name: seoAd,
   brand: { '@type': 'Brand', name: urun.marka },
   sku: urun.sku || undefined,
-  mpn: urunMpn(urun),
+  mpn,
   ...(gtin ? { [gtinAlani(gtin)]: gtin } : {}),
-  description: urun.ozet,
+  description: satisOzeti || seoAd,
   url: urunUrl,
   mainEntityOfPage: urunUrl,
   ...(kat ? { category: kat.ad } : {}),
@@ -95,11 +103,7 @@ const yapisalVeri = {
         transitTime: { '@type': 'QuantitativeValue', minValue: site.kargo.teslimGun[0], maxValue: site.kargo.teslimGun[1], unitCode: 'DAY' },
       },
     },
-    hasMerchantReturnPolicy: {
-      '@type': 'MerchantReturnPolicy', applicableCountry: 'TR',
-      returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow', merchantReturnDays: site.iadeGun,
-      returnMethod: 'https://schema.org/ReturnByMail', returnFees: 'https://schema.org/FreeReturn',
-    },
+    hasMerchantReturnPolicy: { '@id': `${kok}/#iade-politikasi` },
   },
   ...(puanOzet.adet ? {
     aggregateRating: { '@type': 'AggregateRating', ratingValue: String(puanOzet.ortalama), reviewCount: puanOzet.adet, bestRating: '5', worstRating: '1' },
@@ -116,7 +120,7 @@ const sssVerisi = urunSSS.length ? {
   mainEntity: urunSSS.map((m) => ({ '@type': 'Question', name: m.soru, acceptedAnswer: { '@type': 'Answer', text: m.cevap } })),
 } : undefined;
 ---
-<Base baslik={`${seoAd} | ${site.ad}`} aciklama={metaAciklama(urun.ozet || seoAd)} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd }), `/urun/${urun.id}`]]} indekslenmesin={urun.durum !== 'yayinda'} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
+<Base baslik={`${seoAd} | ${site.ad}`} aciklama={metaAciklama(satisOzeti || seoAd)} gorsel={urun.gorseller[0]?.src} aktif={urun.kategoriler[0]} yapisalVeri={sssVerisi ? [yapisalVeri, sssVerisi] : yapisalVeri} ogTuru="product" urunMeta={{ id: urun.id, marka: urun.marka, fiyat: gosterilenFiyat, stokta, gtin }} kirinti={[...(kat ? [[kat.ad, `/kategori/${kat.id}`] as [string, string]] : []), [markaliUrunAdi({ marka: urun.marka, ad: urun.kisaAd }), `/urun/${urun.id}`]]} indekslenmesin={urun.durum !== 'yayinda'} altCubuk={stokta} ozelDuyuru={rozet.serit ? `Bu üründe kargo bedava · Hafta içi ${site.kargo.kesimSaati}:00'e kadar aynı gün kargoda` : undefined}>
   <div class="container">
     <nav aria-label="Konum" class="kirinti-kap--urun">
       <ol class="kirinti">
@@ -141,8 +145,8 @@ const sssVerisi = urunSSS.length ? {
           </div>
         )}
         <p class="urun-eyebrow"><a href={kat ? `/kategori/${kat.id}` : '/urunler'}><span>{urun.marka}</span>{hacim && <> · {hacim}</>}</a></p>
-        <h1 class="urun-ad" id="urun-adi">{urun.ad}</h1>
-        {urun.ozet && urun.oneCikanBilgiler.length === 0 && <p class="urun-deger">{urun.ozet}</p>}
+        <h1 class="urun-ad" id="urun-adi">{seoAd}</h1>
+        {satisOzeti && <p class="urun-deger">{satisOzeti}</p>}
         {guvenSatiri.length > 0 && (
           <ul class="urun-guven-satir" aria-label="Güvenceler">{guvenSatiri.map((g) => <li><Ikon ad="tik" boyut={14} />{g}</li>)}</ul>
         )}
@@ -198,10 +202,11 @@ const sssVerisi = urunSSS.length ? {
           <Ikon ad="sag" boyut={18} />
         </a>
 
-        {urun.sku && <p class="urun-model">Model kodu: {urun.sku}</p>}
+        {(mpn || urun.sku) && <p class="urun-model">{mpn ? 'Üretici model kodu' : 'Stok kodu'}: {mpn || urun.sku}</p>}
         <ul class="guvenceler">
           <li><Ikon ad="kalkan" boyut={18} /><span>Orijinal ürün, adınıza faturalı gönderim</span></li>
           {urun.garanti && <li><Ikon ad="belge" boyut={18} /><span>{urun.garanti} garanti · <a href="/yasal/garanti-kosullari">Garanti koşulları</a></span></li>}
+          <li><Ikon ad="kargo" boyut={18} /><span><a href="/yasal/teslimat-ve-kargo">Teslimat</a> ve <a href="/yasal/iptal-iade-kosullari">iade koşulları</a></span></li>
           <li><Ikon ad={ODEME_BAGLI() ? 'kilit' : 'belge'} boyut={18} /><span>{odemeSatiri}</span></li>
         </ul>
       </div>

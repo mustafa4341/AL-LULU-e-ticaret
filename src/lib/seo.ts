@@ -101,7 +101,7 @@ export function magazaVerisi(site: SiteAyarlari): Record<string, unknown>[] {
       // Panelde girilen sosyal medya hesapları: Google'a "bu hesaplar bu mağazanın" bilgisi
       ...(() => { const sameAs = Object.values(site.sosyal ?? {}).filter((x) => /^https:\/\//.test(x)); return sameAs.length ? { sameAs } : {}; })(),
       hasMerchantReturnPolicy: {
-        '@type': 'MerchantReturnPolicy', applicableCountry: 'TR',
+        '@type': 'MerchantReturnPolicy', '@id': `${url}/#iade-politikasi`, applicableCountry: 'TR',
         returnPolicyCategory: 'https://schema.org/MerchantReturnFiniteReturnWindow', merchantReturnDays: site.iadeGun,
         returnMethod: 'https://schema.org/ReturnByMail', returnFees: 'https://schema.org/FreeReturn',
         merchantReturnLink: `${url}/yasal/iptal-iade-kosullari`,

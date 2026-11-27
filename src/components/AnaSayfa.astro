@@ -25,7 +25,7 @@ const aciklama = 'Fissler düdüklü tencere ve buhar aparatları, Tefal tava ve
   gorsel="/img/vitrin/secim.webp"
   aktif="ana"
   yapisalVeri={[
-    ...magazaVerisi(k.site),
+    ...magazaVerisi({ ...k.site, url: (Astro.site ?? new URL(k.site.url)).origin }),
     // Ana sayfadaki "Aklınızdaki sorular" bölümü görünüyorsa aynı soru-cevaplar
     ...(k.anaSayfa.bolumler.includes('sss') && sss.length ? [{
       '@context': 'https://schema.org', '@type': 'FAQPage',
