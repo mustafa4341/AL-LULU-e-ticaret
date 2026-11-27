@@ -107,6 +107,21 @@ const vitrinGecisi = !onizleme && !geriYol.startsWith('/yonetim');
       window.dataLayer = window.dataLayer || [];
       function gtag(){ window.dataLayer.push(arguments); } /* GTM yalnızca "arguments" nesnesini komut sayar */
       gtag('consent', 'default', { ad_storage: 'denied', ad_user_data: 'denied', ad_personalization: 'denied', analytics_storage: 'denied', wait_for_update: 500 });
+      const gizliYol = (yol) => yol.startsWith('/siparis/') ? '/siparis'
+        : yol === '/siparis-takip' ? '/siparis-takip'
+          : yol === '/odeme' || yol.startsWith('/odeme/') ? '/odeme' : null;
+      const olcum = {};
+      const ozelYol = gizliYol(location.pathname);
+      if (ozelYol) {
+        olcum.page_location = location.origin + ozelYol;
+        olcum.page_title = location.pathname.startsWith('/odeme') ? 'Güvenli ödeme' : 'Sipariş takibi';
+      }
+      if (document.referrer) {
+        const kaynak = new URL(document.referrer);
+        const yol = kaynak.origin === location.origin && gizliYol(kaynak.pathname);
+        if (yol) olcum.page_referrer = kaynak.origin + yol;
+      }
+      if (Object.keys(olcum).length) gtag('set', olcum);
     </script>}
     {jsonLd.map((v) => <script type="application/ld+json" set:html={JSON.stringify(v).replace(/</g, '\\u003c')} />)}
   </head>

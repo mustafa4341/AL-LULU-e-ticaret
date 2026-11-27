@@ -55,6 +55,7 @@ const { gtm } = Astro.props;
     s.async = true;
     s.src = 'https://www.googletagmanager.com/gtm.js?id=' + encodeURIComponent(gtm);
     document.head.appendChild(s);
+    document.dispatchEvent(new Event('allulu:analitik-izin'));
   }
   function analitikCerezleriSil() {
     for (const c of document.cookie.split(';')) {
